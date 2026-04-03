@@ -1,0 +1,10 @@
+linters:
+  default: standard
+  enable:
+    - misspell
+    - gofmt
+
+issues:
+  exclude-dirs:
+    - dist
+    - bin

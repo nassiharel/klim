@@ -1,0 +1,64 @@
+version: 2
+
+project_name: clim
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: clim
+    main: ./cmd/clim
+    binary: clim
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/nassiharel/clim/internal/build.Version={{.Version}}
+      - -X github.com/nassiharel/clim/internal/build.Commit={{.ShortCommit}}
+      - -X github.com/nassiharel/clim/internal/build.Date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: ['zip']
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ .Tag }}-devel"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+release:
+  github:
+    owner: nassiharel
+    name: clim
+  prerelease: auto
+  name_template: "v{{ .Version }}"
