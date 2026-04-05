@@ -205,6 +205,18 @@ func (p PackageIDs) BestInstallCmd() string {
 	return p.InstallCmd(p.BestInstallSource())
 }
 
+// SourcesForOS returns the package manager sources relevant to the current OS.
+func SourcesForOS() []InstallSource {
+	switch runtime.GOOS {
+	case "windows":
+		return []InstallSource{SourceWinget, SourceChoco, SourceScoop, SourceNPM}
+	case "darwin":
+		return []InstallSource{SourceBrew, SourceNPM}
+	default: // linux
+		return []InstallSource{SourceApt, SourceSnap, SourceBrew, SourceNPM}
+	}
+}
+
 // StatusString compares installed vs latest and returns a display string.
 func StatusString(installed, latest string) string {
 	if installed == "" {

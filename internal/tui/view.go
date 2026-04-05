@@ -301,12 +301,9 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		b.WriteString("  " + dimVersion.Render("Recommended developer tool") + "\n\n")
 	}
 
-	// Install commands for all available sources.
-	b.WriteString("  " + detailLabelStyle.Render("Install:") + "\n")
-	for _, src := range []registry.InstallSource{
-		registry.SourceWinget, registry.SourceChoco, registry.SourceBrew,
-		registry.SourceApt, registry.SourceSnap, registry.SourceNPM,
-	} {
+	// Install commands — only for the current OS.
+	b.WriteString("\n  " + detailLabelStyle.Render("Install:") + "\n")
+	for _, src := range registry.SourcesForOS() {
 		if cmd := tool.Packages.InstallCmd(src); cmd != "" {
 			b.WriteString("    " + sourceStyle.Render(pad(string(src), 8)) + detailCmdStyle.Render(cmd) + "\n")
 		}
