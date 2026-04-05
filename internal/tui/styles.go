@@ -7,6 +7,7 @@ import (
 var (
 	// Colors.
 	primaryColor   = lipgloss.Color("39")  // Blue
+	successColor   = lipgloss.Color("42")  // Green
 	dimColor       = lipgloss.Color("241") // Gray
 	highlightColor = lipgloss.Color("15")  // White/bright
 	warningColor   = lipgloss.Color("214") // Orange/Yellow
@@ -36,6 +37,10 @@ var (
 
 	// Loading / dim text.
 	loadingStyle = lipgloss.NewStyle().Foreground(dimColor)
+
+	// Status styles.
+	upToDateStyle  = lipgloss.NewStyle().Foreground(successColor)
+	upgradableStyle = lipgloss.NewStyle().Foreground(warningColor)
 
 	// Border.
 	borderStyle = lipgloss.NewStyle().

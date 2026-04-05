@@ -90,8 +90,9 @@ func ScanPATH(cfg config.Config) ([]registry.Tool, error) {
 
 			seen[lowerName] = true
 			tools = append(tools, registry.Tool{
-				Name: name,
-				Path: resolved,
+				Name:        name,
+				DisplayName: displayName(name),
+				Path:        resolved,
 			})
 		}
 	}
@@ -102,4 +103,13 @@ func ScanPATH(cfg config.Config) ([]registry.Tool, error) {
 	})
 
 	return tools, nil
+}
+
+// displayName returns the human-friendly display name for a binary,
+// using the known tools registry. Falls back to the binary name itself.
+func displayName(name string) string {
+	if kt, ok := registry.LookupKnown(name); ok && kt.DisplayName != "" {
+		return kt.DisplayName
+	}
+	return name
 }

@@ -9,12 +9,18 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/clim/internal/latest"
 )
 
 // ToolRow represents a single row in the TUI table.
 type ToolRow struct {
-	Name string
-	Path string
+	Name          string
+	DisplayName   string
+	Path          string
+	Version       string // "" = still loading, "—" = not detectable
+	LatestVersion string // "" = no source or still loading
+	VersionDone   bool
+	LatestDone    bool
 }
 
 // Model is the Bubbletea model for the interactive TUI.
@@ -27,17 +33,19 @@ type Model struct {
 	filterInput   textinput.Model
 	filtering     bool
 	filterText    string
-	filteredIndex []int // maps visible row -> index in tools
+	filteredIndex []int
 
 	// Loading state.
-	loading bool
+	scanning bool // Phase 1: PATH scan in progress
+	pending  int  // Phase 2: count of pending version/latest ops
 
 	// Layout.
 	width  int
 	height int
 
-	// Config.
-	cfg config.Config
+	// Dependencies.
+	cfg   config.Config
+	cache *latest.Cache
 
 	// Quitting.
 	quitting bool
@@ -55,14 +63,15 @@ func NewModel(cfg config.Config) Model {
 	return Model{
 		spinner:     s,
 		filterInput: ti,
-		loading:     true,
+		scanning:    true,
 		cfg:         cfg,
+		cache:       latest.DefaultCache(),
 		width:       80,
 		height:      24,
 	}
 }
 
-// Init fires off the PATH scan command.
+// Init fires off the PATH scan (Phase 1).
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
@@ -78,18 +87,62 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 
 	case scanResultMsg:
-		m.loading = false
+		// Phase 1 complete: populate tool rows and kick off Phase 2.
+		m.scanning = false
 		if msg.err != nil {
 			return m, nil
 		}
+
 		m.tools = make([]ToolRow, len(msg.tools))
+		var cmds []tea.Cmd
+
 		for i, t := range msg.tools {
 			m.tools[i] = ToolRow{
-				Name: t.Name,
-				Path: t.Path,
+				Name:        t.Name,
+				DisplayName: t.DisplayName,
+				Path:        t.Path,
+			}
+			// Fire version detection for each tool.
+			m.pending++
+			idx := i
+			path := t.Path
+			cmds = append(cmds, func() tea.Msg { return detectVersionCmd(idx, path)() })
+
+			// Fire latest-version check for known tools.
+			name := t.Name
+			m.pending++
+			cmds = append(cmds, func() tea.Msg { return checkLatestCmd(idx, name, m.cache)() })
+		}
+
+		m.applyFilter()
+		return m, tea.Batch(cmds...)
+
+	case versionResultMsg:
+		if msg.index < len(m.tools) {
+			row := &m.tools[msg.index]
+			row.VersionDone = true
+			if msg.version != "" {
+				row.Version = msg.version
+			} else {
+				row.Version = "—"
 			}
 		}
-		m.applyFilter()
+		m.pending--
+		if m.pending <= 0 {
+			m.cache.Save()
+		}
+		return m, nil
+
+	case latestResultMsg:
+		if msg.index < len(m.tools) {
+			row := &m.tools[msg.index]
+			row.LatestDone = true
+			row.LatestVersion = msg.version
+		}
+		m.pending--
+		if m.pending <= 0 {
+			m.cache.Save()
+		}
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -98,8 +151,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
-		// Delegate to spinner while loading.
-		if m.loading {
+		if m.scanning || m.pending > 0 {
 			var cmd tea.Cmd
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
@@ -109,7 +161,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the full TUI using the alt screen.
+// View renders the full TUI.
 func (m Model) View() tea.View {
 	v := tea.NewView(m.renderView())
 	v.AltScreen = true
@@ -131,7 +183,6 @@ func Run(cfg config.Config) error {
 // --- Private helpers ---
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// When filtering, delegate to the text input.
 	if m.filtering {
 		switch msg.String() {
 		case "esc":
@@ -156,33 +207,27 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
-
 	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
 		}
-
 	case "down", "j":
 		if m.cursor < len(m.filteredIndex)-1 {
 			m.cursor++
 		}
-
 	case "home", "g":
 		m.cursor = 0
-
 	case "end", "G":
 		m.cursor = max(0, len(m.filteredIndex)-1)
-
 	case "/":
 		m.filtering = true
 		return m, m.filterInput.Focus()
-
 	case "r":
-		// Refresh — re-scan PATH.
-		m.loading = true
+		m.scanning = true
 		m.tools = nil
 		m.filteredIndex = nil
 		m.cursor = 0
+		m.pending = 0
 		return m, tea.Batch(
 			m.spinner.Tick,
 			func() tea.Msg { return scanPATHCmd(m.cfg)() },
@@ -192,7 +237,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// applyFilter updates the filteredIndex based on the current filter text.
 func (m *Model) applyFilter() {
 	if m.filterText == "" {
 		m.filteredIndex = make([]int, len(m.tools))
@@ -205,12 +249,11 @@ func (m *Model) applyFilter() {
 	filter := strings.ToLower(m.filterText)
 	m.filteredIndex = nil
 	for i, row := range m.tools {
-		if strings.Contains(strings.ToLower(row.Name), filter) {
+		if strings.Contains(strings.ToLower(row.DisplayName), filter) ||
+			strings.Contains(strings.ToLower(row.Name), filter) {
 			m.filteredIndex = append(m.filteredIndex, i)
 		}
 	}
-
-	// Clamp cursor.
 	if m.cursor >= len(m.filteredIndex) {
 		m.cursor = max(0, len(m.filteredIndex)-1)
 	}
