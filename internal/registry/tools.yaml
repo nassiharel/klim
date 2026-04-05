@@ -1,0 +1,437 @@
+# clim — Tool Definitions
+# Edit this file to add, remove, or configure tools.
+# Set enabled: false to hide a tool from clim.
+
+tools:
+  # --- Version Control ---
+  - name: git
+    display_name: Git
+    category: VCS
+    enabled: true
+    binary_names: [git]
+    packages:
+      winget: "Git.Git"
+      choco: "git"
+      brew: "git"
+      apt: "git"
+
+  - name: gh
+    display_name: GitHub CLI
+    category: VCS
+    enabled: true
+    binary_names: [gh]
+    packages:
+      winget: "GitHub.cli"
+      choco: "gh"
+      brew: "gh"
+      apt: "gh"
+
+  # --- Cloud CLIs ---
+  - name: az
+    display_name: Azure CLI
+    category: Cloud
+    enabled: true
+    binary_names: [az]
+    packages:
+      winget: "Microsoft.AzureCLI"
+      choco: "azure-cli"
+      brew: "azure-cli"
+      apt: "azure-cli"
+
+  - name: azd
+    display_name: Azure Dev CLI
+    category: Cloud
+    enabled: true
+    binary_names: [azd]
+    packages:
+      winget: "Microsoft.Azd"
+      brew: "azure/azd/azd"
+
+  - name: aws
+    display_name: AWS CLI
+    category: Cloud
+    enabled: true
+    binary_names: [aws]
+    packages:
+      winget: "Amazon.AWSCLI"
+      choco: "awscli"
+      brew: "awscli"
+
+  - name: gcloud
+    display_name: Google Cloud CLI
+    category: Cloud
+    enabled: true
+    binary_names: [gcloud]
+    packages:
+      brew: "google-cloud-sdk"
+      snap: "google-cloud-cli"
+
+  # --- Containers & Orchestration ---
+  - name: docker
+    display_name: Docker
+    category: Containers
+    enabled: true
+    binary_names: [docker]
+    packages:
+      winget: "Docker.DockerDesktop"
+      brew: "docker"
+      apt: "docker.io"
+
+  - name: docker-compose
+    display_name: Docker Compose
+    category: Containers
+    enabled: true
+    binary_names: [docker-compose]
+    packages:
+      brew: "docker-compose"
+
+  - name: kubectl
+    display_name: kubectl
+    category: Containers
+    enabled: true
+    binary_names: [kubectl]
+    packages:
+      winget: "Kubernetes.kubectl"
+      choco: "kubernetes-cli"
+      brew: "kubernetes-cli"
+      snap: "kubectl"
+
+  - name: helm
+    display_name: Helm
+    category: Containers
+    enabled: true
+    binary_names: [helm]
+    packages:
+      winget: "Helm.Helm"
+      choco: "kubernetes-helm"
+      brew: "helm"
+      snap: "helm"
+
+  - name: k9s
+    display_name: K9s
+    category: Containers
+    enabled: true
+    binary_names: [k9s]
+    packages:
+      choco: "k9s"
+      brew: "derailed/k9s/k9s"
+
+  - name: kubelogin
+    display_name: Kubelogin
+    category: Containers
+    enabled: true
+    binary_names: [kubelogin]
+    packages:
+      brew: "Azure/kubelogin/kubelogin"
+
+  - name: kind
+    display_name: kind
+    category: Containers
+    enabled: true
+    binary_names: [kind]
+    packages:
+      choco: "kind"
+      brew: "kind"
+
+  - name: minikube
+    display_name: Minikube
+    category: Containers
+    enabled: true
+    binary_names: [minikube]
+    packages:
+      winget: "Kubernetes.minikube"
+      choco: "minikube"
+      brew: "minikube"
+
+  - name: skaffold
+    display_name: Skaffold
+    category: Containers
+    enabled: true
+    binary_names: [skaffold]
+    packages:
+      choco: "skaffold"
+      brew: "skaffold"
+
+  - name: istioctl
+    display_name: Istio CLI
+    category: Containers
+    enabled: true
+    binary_names: [istioctl]
+    packages:
+      brew: "istioctl"
+
+  - name: argocd
+    display_name: Argo CD CLI
+    category: Containers
+    enabled: true
+    binary_names: [argocd]
+    packages:
+      brew: "argocd"
+
+  - name: flux
+    display_name: Flux CLI
+    category: Containers
+    enabled: true
+    binary_names: [flux]
+    packages:
+      brew: "fluxcd/tap/flux"
+
+  # --- Infrastructure as Code ---
+  - name: terraform
+    display_name: Terraform
+    category: IaC
+    enabled: true
+    binary_names: [terraform]
+    packages:
+      winget: "Hashicorp.Terraform"
+      choco: "terraform"
+      brew: "terraform"
+      snap: "terraform"
+
+  - name: pulumi
+    display_name: Pulumi
+    category: IaC
+    enabled: true
+    binary_names: [pulumi]
+    packages:
+      winget: "Pulumi.Pulumi"
+      choco: "pulumi"
+      brew: "pulumi"
+
+  - name: terragrunt
+    display_name: Terragrunt
+    category: IaC
+    enabled: true
+    binary_names: [terragrunt]
+    packages:
+      choco: "terragrunt"
+      brew: "terragrunt"
+
+  - name: kustomize
+    display_name: Kustomize
+    category: IaC
+    enabled: true
+    binary_names: [kustomize]
+    packages:
+      choco: "kustomize"
+      brew: "kustomize"
+
+  - name: ansible
+    display_name: Ansible
+    category: IaC
+    enabled: true
+    binary_names: [ansible]
+    packages:
+      brew: "ansible"
+      apt: "ansible"
+
+  - name: vagrant
+    display_name: Vagrant
+    category: IaC
+    enabled: true
+    binary_names: [vagrant]
+    packages:
+      winget: "Hashicorp.Vagrant"
+      choco: "vagrant"
+      brew: "vagrant"
+
+  - name: packer
+    display_name: Packer
+    category: IaC
+    enabled: true
+    binary_names: [packer]
+    packages:
+      winget: "Hashicorp.Packer"
+      choco: "packer"
+      brew: "packer"
+
+  - name: consul
+    display_name: Consul
+    category: IaC
+    enabled: true
+    binary_names: [consul]
+    packages:
+      choco: "consul"
+      brew: "consul"
+
+  - name: vault
+    display_name: Vault
+    category: IaC
+    enabled: true
+    binary_names: [vault]
+    packages:
+      choco: "vault"
+      brew: "vault"
+
+  # --- Languages & Runtimes ---
+  - name: go
+    display_name: Go
+    category: Language
+    enabled: true
+    binary_names: [go]
+    packages:
+      winget: "GoLang.Go"
+      brew: "go"
+      apt: "golang-go"
+      snap: "go"
+
+  - name: node
+    display_name: Node.js
+    category: Language
+    enabled: true
+    binary_names: [node]
+    packages:
+      winget: "OpenJS.NodeJS"
+      brew: "node"
+      apt: "nodejs"
+
+  - name: python
+    display_name: Python
+    category: Language
+    enabled: true
+    binary_names: [python3, python]
+    packages:
+      winget: "Python.Python.3.12"
+      brew: "python@3"
+      apt: "python3"
+
+  - name: dotnet
+    display_name: .NET
+    category: Language
+    enabled: true
+    binary_names: [dotnet]
+    packages:
+      winget: "Microsoft.DotNet.SDK.8"
+      brew: "dotnet"
+      apt: "dotnet-sdk-8.0"
+      snap: "dotnet-sdk"
+
+  - name: rustc
+    display_name: Rust
+    category: Language
+    enabled: true
+    binary_names: [rustc]
+    packages:
+      brew: "rust"
+      apt: "rustc"
+
+  - name: cargo
+    display_name: Cargo
+    category: Language
+    enabled: true
+    binary_names: [cargo]
+    packages:
+      brew: "rust"
+      apt: "cargo"
+
+  - name: java
+    display_name: Java
+    category: Language
+    enabled: true
+    binary_names: [java]
+    packages:
+      winget: "Microsoft.OpenJDK.21"
+      brew: "openjdk"
+      apt: "default-jdk"
+
+  - name: ruby
+    display_name: Ruby
+    category: Language
+    enabled: true
+    binary_names: [ruby]
+    packages:
+      winget: "RubyInstallerTeam.Ruby"
+      brew: "ruby"
+      apt: "ruby"
+
+  # --- Package Managers ---
+  - name: npm
+    display_name: npm
+    category: PkgMgr
+    enabled: true
+    binary_names: [npm]
+    packages:
+      npm: "npm"
+
+  - name: uv
+    display_name: uv
+    category: PkgMgr
+    enabled: true
+    binary_names: [uv]
+    packages:
+      winget: "astral-sh.uv"
+      brew: "uv"
+
+  # --- Editors ---
+  - name: code
+    display_name: VS Code
+    category: Editor
+    enabled: true
+    binary_names: [code]
+    packages:
+      winget: "Microsoft.VisualStudioCode"
+      brew: "visual-studio-code"
+
+  # --- CLI Utilities ---
+  - name: jq
+    display_name: jq
+    category: CLI
+    enabled: true
+    binary_names: [jq]
+    packages:
+      winget: "jqlang.jq"
+      choco: "jq"
+      brew: "jq"
+      apt: "jq"
+
+  - name: fzf
+    display_name: fzf
+    category: CLI
+    enabled: true
+    binary_names: [fzf]
+    packages:
+      winget: "junegunn.fzf"
+      choco: "fzf"
+      brew: "fzf"
+      apt: "fzf"
+
+  - name: bat
+    display_name: bat
+    category: CLI
+    enabled: true
+    binary_names: [bat]
+    packages:
+      winget: "sharkdp.bat"
+      brew: "bat"
+      apt: "bat"
+
+  - name: fd
+    display_name: fd
+    category: CLI
+    enabled: true
+    binary_names: [fd]
+    packages:
+      winget: "sharkdp.fd"
+      brew: "fd"
+      apt: "fd-find"
+
+  # --- Shells ---
+  - name: pwsh
+    display_name: PowerShell
+    category: Shell
+    enabled: true
+    binary_names: [pwsh]
+    packages:
+      winget: "Microsoft.PowerShell"
+      brew: "powershell"
+      apt: "powershell"
+      snap: "powershell"
+
+  # --- AI ---
+  - name: claude
+    display_name: Claude Code
+    category: AI
+    enabled: true
+    binary_names: [claude]
+    packages:
+      npm: "@anthropic-ai/claude-code"
