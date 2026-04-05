@@ -137,6 +137,37 @@ func (p PackageIDs) UpgradeCmd(source InstallSource) string {
 	return ""
 }
 
+// RemoveCmd returns the shell command to remove/uninstall this tool.
+func (p PackageIDs) RemoveCmd(source InstallSource) string {
+	switch source {
+	case SourceWinget:
+		if p.Winget != "" {
+			return "winget uninstall --id " + p.Winget
+		}
+	case SourceChoco:
+		if p.Choco != "" {
+			return "choco uninstall " + p.Choco
+		}
+	case SourceBrew:
+		if p.Brew != "" {
+			return "brew uninstall " + p.Brew
+		}
+	case SourceApt:
+		if p.Apt != "" {
+			return "sudo apt remove " + p.Apt
+		}
+	case SourceSnap:
+		if p.Snap != "" {
+			return "sudo snap remove " + p.Snap
+		}
+	case SourceNPM:
+		if p.NPM != "" {
+			return "npm uninstall -g " + p.NPM
+		}
+	}
+	return ""
+}
+
 // BestInstallSource returns the recommended package manager for the current OS.
 // Priority: Windows: winget→choco→npm, macOS: brew→npm, Linux: apt→snap→brew→npm.
 func (p PackageIDs) BestInstallSource() InstallSource {

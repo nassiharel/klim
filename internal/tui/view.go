@@ -292,9 +292,13 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 			if cmd := tool.Packages.UpgradeCmd(primary.Source); cmd != "" {
 				b.WriteString("  " + detailLabelStyle.Render("Upgrade:") + "  " + detailCmdStyle.Render(cmd) + "\n")
 			}
+			if cmd := tool.Packages.RemoveCmd(primary.Source); cmd != "" {
+				b.WriteString("  " + detailLabelStyle.Render("Remove: ") + "  " + detailCmdStyle.Render(cmd) + "\n")
+			}
 		}
 	} else {
-		b.WriteString("  " + dimVersion.Render("Not installed") + "\n\n")
+		b.WriteString("  " + dimVersion.Render("Not installed") + "\n")
+		b.WriteString("  " + dimVersion.Render("Recommended developer tool") + "\n\n")
 	}
 
 	// Install commands for all available sources.
