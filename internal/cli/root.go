@@ -34,6 +34,7 @@ for non-interactive operation.`,
 func init() {
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(toolsCmd)
 }
 
 // Execute runs the root command.

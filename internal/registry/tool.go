@@ -29,6 +29,7 @@ type Tool struct {
 	Instances   []Instance
 	Latest      string
 	LatestFrom  string
+	Disabled    bool
 }
 
 // Instance represents a single installation of a tool found on PATH.

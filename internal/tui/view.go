@@ -68,6 +68,8 @@ func (m Model) renderView() string {
 			msg = "  All tools are up to date! ✓"
 		case tabDiscover:
 			msg = "  All curated tools are already installed!"
+		case tabDisabled:
+			msg = "  No disabled tools."
 		}
 		b.WriteString("\n" + dimVersion.Render(msg) + "\n")
 	}
@@ -95,13 +97,17 @@ func (m Model) renderTitleBar() string {
 		return title + "  " + loadingStyle.Render(m.spinner.View()+" checking versions...")
 	}
 
-	inst, upd, notInst := m.stats()
-	summary := fmt.Sprintf("%d/%d installed", inst, len(m.tools))
+	inst, upd, notInst, disabled := m.stats()
+	active := inst + notInst
+	summary := fmt.Sprintf("%d/%d installed", inst, active)
 	if upd > 0 {
 		summary += fmt.Sprintf(" · %s", upgradableStyle.Render(fmt.Sprintf("%d updates", upd)))
 	}
 	if notInst > 0 {
 		summary += fmt.Sprintf(" · %d to discover", notInst)
+	}
+	if disabled > 0 {
+		summary += fmt.Sprintf(" · %d disabled", disabled)
 	}
 	return title + "  " + summaryStyle.Render(summary)
 }
@@ -114,6 +120,7 @@ func (m Model) renderTabBar() string {
 		{"Installed", tabInstalled},
 		{"Updates", tabUpdates},
 		{"Discover", tabDiscover},
+		{"Disabled", tabDisabled},
 	}
 
 	var parts []string
@@ -147,6 +154,10 @@ func (m Model) renderHeader() string {
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", 12)) + "  " +
 			headerStyle.Render("INSTALL COMMAND")
+	case tabDisabled:
+		return "  " +
+			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
+			headerStyle.Render("CATEGORY")
 	}
 	return ""
 }
@@ -163,6 +174,8 @@ func (m Model) renderRow(tool registry.Tool, selected bool) string {
 		line = m.renderUpdateRow(tool, selected)
 	case tabDiscover:
 		line = m.renderDiscoverRow(tool, selected)
+	case tabDisabled:
+		line = m.renderDisabledRow(tool, selected)
 	}
 
 	if selected {
@@ -240,6 +253,19 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	return cursor + nameCell + "  " + catCell + "  " + detailCmdStyle.Render(cmd)
 }
 
+func (m Model) renderDisabledRow(tool registry.Tool, selected bool) string {
+	cursor := "  "
+	if selected {
+		cursor = "▸ "
+	}
+
+	nameText := toolLabel(tool)
+	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
+	catCell := categoryStyle.Render(tool.Category)
+
+	return cursor + nameCell + "  " + catCell
+}
+
 // --- Version info (plain text, no ANSI) ---
 
 func (m Model) versionInfoPlain(tool registry.Tool) string {
@@ -306,6 +332,11 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		}
 		b.WriteString("\n")
 
+		// Smart recommendations for multiple instances.
+		if len(tool.Instances) > 1 {
+			b.WriteString(m.renderInstanceRecommendations(tool))
+		}
+
 		if tool.Latest != "" {
 			if registry.VersionsMatch(tool.InstalledVersion(), tool.Latest) {
 				b.WriteString("  " + upToDateStyle.Render("✓ Up to date") + "  " + dimVersion.Render("("+tool.Latest+")") + "\n")
@@ -345,13 +376,102 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	return b.String()
 }
 
+// renderInstanceRecommendations analyzes multiple installations and gives
+// actionable advice: version conflicts, stale installs, PATH priority issues.
+func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
+	var tips []string
+	primary := tool.Instances[0]
+
+	// Find the newest version among all instances.
+	newestVer := primary.Version
+	newestIdx := 0
+	for i, inst := range tool.Instances {
+		if inst.Version != "" && inst.Version != "—" {
+			if newestVer == "" || !registry.VersionsMatch(inst.Version, newestVer) {
+				// Simple heuristic: longer version or later in lexicographic order = newer.
+				if inst.Version > newestVer {
+					newestVer = inst.Version
+					newestIdx = i
+				}
+			}
+		}
+	}
+
+	// Tip: primary is not the newest version.
+	if newestIdx != 0 && newestVer != "" && primary.Version != "" &&
+		!registry.VersionsMatch(primary.Version, newestVer) {
+		newer := tool.Instances[newestIdx]
+		tips = append(tips, upgradableStyle.Render("⚠")+fmt.Sprintf(
+			"  PATH priority: %s (%s) is active, but %s (%s) has a newer version %s",
+			sourceStyle.Render(string(primary.Source)),
+			primary.Version,
+			sourceStyle.Render(string(newer.Source)),
+			newer.Version,
+			newestVer,
+		))
+	}
+
+	// Tip: stale manual installs with no version.
+	for _, inst := range tool.Instances[1:] {
+		if inst.Source == registry.SourceManual && inst.Version == "" {
+			tips = append(tips, dimVersion.Render("⚠")+fmt.Sprintf(
+				"  Unknown version at %s — consider removing this stale install",
+				dimVersion.Render(registry.TruncatePath(inst.Path, 50)),
+			))
+		}
+	}
+
+	// Tip: multiple package managers managing the same tool.
+	sources := make(map[registry.InstallSource]bool)
+	for _, inst := range tool.Instances {
+		if inst.Source != registry.SourceManual {
+			sources[inst.Source] = true
+		}
+	}
+	if len(sources) > 1 {
+		var srcNames []string
+		for src := range sources {
+			srcNames = append(srcNames, string(src))
+		}
+		tips = append(tips, dimVersion.Render("💡")+fmt.Sprintf(
+			"  Multiple package managers (%s) — consider standardizing on one to avoid conflicts",
+			strings.Join(srcNames, ", "),
+		))
+	}
+
+	// Tip: suggest removing duplicates.
+	if len(tool.Instances) >= 3 {
+		tips = append(tips, dimVersion.Render("💡")+fmt.Sprintf(
+			"  %d installations found — consider removing unused ones to simplify your PATH",
+			len(tool.Instances),
+		))
+	}
+
+	if len(tips) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("  " + detailLabelStyle.Render("Recommendations:") + "\n")
+	for _, tip := range tips {
+		b.WriteString("    " + tip + "\n")
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
 // --- Help ---
 
 func (m Model) renderHelp() string {
+	xLabel := "disable"
+	if m.activeTab == tabDisabled {
+		xLabel = "enable"
+	}
 	parts := []string{
 		dimVersion.Render("↑↓") + " navigate",
 		dimVersion.Render("Tab") + " switch",
 		dimVersion.Render("Enter") + " detail",
+		dimVersion.Render("x") + " " + xLabel,
 		dimVersion.Render("/") + " filter",
 		dimVersion.Render("r") + " refresh",
 		dimVersion.Render("q") + " quit",

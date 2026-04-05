@@ -22,6 +22,9 @@ func FindAll(tools []registry.Tool) {
 	pathDirs := pathDirectories()
 
 	for i := range tools {
+		if tools[i].Disabled {
+			continue
+		}
 		tools[i].Instances = findInstances(&tools[i], pathDirs)
 	}
 }

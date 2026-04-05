@@ -1,158 +1,150 @@
 package registry
 
-// DefaultTools returns the curated list of developer tools that clim tracks.
-func DefaultTools() []Tool {
-	return []Tool{
-		// --- Version Control ---
-		{Name: "git", DisplayName: "Git", Category: "VCS",
-			BinaryNames: []string{"git"},
-			Packages:    PackageIDs{Winget: "Git.Git", Choco: "git", Brew: "git", Apt: "git"}},
-		{Name: "gh", DisplayName: "GitHub CLI", Category: "VCS",
-			BinaryNames: []string{"gh"},
-			Packages:    PackageIDs{Winget: "GitHub.cli", Choco: "gh", Brew: "gh", Apt: "gh"}},
+import (
+	_ "embed"
+	"fmt"
+	"os"
+	"path/filepath"
 
-		// --- Cloud CLIs ---
-		{Name: "az", DisplayName: "Azure CLI", Category: "Cloud",
-			BinaryNames: []string{"az"},
-			Packages:    PackageIDs{Winget: "Microsoft.AzureCLI", Choco: "azure-cli", Brew: "azure-cli", Apt: "azure-cli"}},
-		{Name: "azd", DisplayName: "Azure Dev CLI", Category: "Cloud",
-			BinaryNames: []string{"azd"},
-			Packages:    PackageIDs{Winget: "Microsoft.Azd", Brew: "azure/azd/azd"}},
-		{Name: "aws", DisplayName: "AWS CLI", Category: "Cloud",
-			BinaryNames: []string{"aws"},
-			Packages:    PackageIDs{Winget: "Amazon.AWSCLI", Choco: "awscli", Brew: "awscli"}},
-		{Name: "gcloud", DisplayName: "Google Cloud CLI", Category: "Cloud",
-			BinaryNames: []string{"gcloud"},
-			Packages:    PackageIDs{Brew: "google-cloud-sdk", Snap: "google-cloud-cli"}},
+	"gopkg.in/yaml.v3"
+)
 
-		// --- Containers & Orchestration ---
-		{Name: "docker", DisplayName: "Docker", Category: "Containers",
-			BinaryNames: []string{"docker"},
-			Packages:    PackageIDs{Winget: "Docker.DockerDesktop", Brew: "docker", Apt: "docker.io"}},
-		{Name: "docker-compose", DisplayName: "Docker Compose", Category: "Containers",
-			BinaryNames: []string{"docker-compose"},
-			Packages:    PackageIDs{Brew: "docker-compose"}},
-		{Name: "kubectl", DisplayName: "kubectl", Category: "Containers",
-			BinaryNames: []string{"kubectl"},
-			Packages:    PackageIDs{Winget: "Kubernetes.kubectl", Choco: "kubernetes-cli", Brew: "kubernetes-cli", Snap: "kubectl"}},
-		{Name: "helm", DisplayName: "Helm", Category: "Containers",
-			BinaryNames: []string{"helm"},
-			Packages:    PackageIDs{Winget: "Helm.Helm", Choco: "kubernetes-helm", Brew: "helm", Snap: "helm"}},
-		{Name: "k9s", DisplayName: "K9s", Category: "Containers",
-			BinaryNames: []string{"k9s"},
-			Packages:    PackageIDs{Choco: "k9s", Brew: "derailed/k9s/k9s"}},
-		{Name: "kubelogin", DisplayName: "Kubelogin", Category: "Containers",
-			BinaryNames: []string{"kubelogin"},
-			Packages:    PackageIDs{Brew: "Azure/kubelogin/kubelogin"}},
-		{Name: "kind", DisplayName: "kind", Category: "Containers",
-			BinaryNames: []string{"kind"},
-			Packages:    PackageIDs{Choco: "kind", Brew: "kind"}},
-		{Name: "minikube", DisplayName: "Minikube", Category: "Containers",
-			BinaryNames: []string{"minikube"},
-			Packages:    PackageIDs{Winget: "Kubernetes.minikube", Choco: "minikube", Brew: "minikube"}},
-		{Name: "skaffold", DisplayName: "Skaffold", Category: "Containers",
-			BinaryNames: []string{"skaffold"},
-			Packages:    PackageIDs{Choco: "skaffold", Brew: "skaffold"}},
-		{Name: "istioctl", DisplayName: "Istio CLI", Category: "Containers",
-			BinaryNames: []string{"istioctl"},
-			Packages:    PackageIDs{Brew: "istioctl"}},
-		{Name: "argocd", DisplayName: "Argo CD CLI", Category: "Containers",
-			BinaryNames: []string{"argocd"},
-			Packages:    PackageIDs{Brew: "argocd"}},
-		{Name: "flux", DisplayName: "Flux CLI", Category: "Containers",
-			BinaryNames: []string{"flux"},
-			Packages:    PackageIDs{Brew: "fluxcd/tap/flux"}},
+//go:embed tools.yaml
+var defaultToolsYAML []byte
 
-		// --- Infrastructure as Code ---
-		{Name: "terraform", DisplayName: "Terraform", Category: "IaC",
-			BinaryNames: []string{"terraform"},
-			Packages:    PackageIDs{Winget: "Hashicorp.Terraform", Choco: "terraform", Brew: "terraform", Snap: "terraform"}},
-		{Name: "pulumi", DisplayName: "Pulumi", Category: "IaC",
-			BinaryNames: []string{"pulumi"},
-			Packages:    PackageIDs{Winget: "Pulumi.Pulumi", Choco: "pulumi", Brew: "pulumi"}},
-		{Name: "terragrunt", DisplayName: "Terragrunt", Category: "IaC",
-			BinaryNames: []string{"terragrunt"},
-			Packages:    PackageIDs{Choco: "terragrunt", Brew: "terragrunt"}},
-		{Name: "kustomize", DisplayName: "Kustomize", Category: "IaC",
-			BinaryNames: []string{"kustomize"},
-			Packages:    PackageIDs{Choco: "kustomize", Brew: "kustomize"}},
-		{Name: "ansible", DisplayName: "Ansible", Category: "IaC",
-			BinaryNames: []string{"ansible"},
-			Packages:    PackageIDs{Brew: "ansible", Apt: "ansible"}},
-		{Name: "vagrant", DisplayName: "Vagrant", Category: "IaC",
-			BinaryNames: []string{"vagrant"},
-			Packages:    PackageIDs{Winget: "Hashicorp.Vagrant", Choco: "vagrant", Brew: "vagrant"}},
-		{Name: "packer", DisplayName: "Packer", Category: "IaC",
-			BinaryNames: []string{"packer"},
-			Packages:    PackageIDs{Winget: "Hashicorp.Packer", Choco: "packer", Brew: "packer"}},
-		{Name: "consul", DisplayName: "Consul", Category: "IaC",
-			BinaryNames: []string{"consul"},
-			Packages:    PackageIDs{Choco: "consul", Brew: "consul"}},
-		{Name: "vault", DisplayName: "Vault", Category: "IaC",
-			BinaryNames: []string{"vault"},
-			Packages:    PackageIDs{Choco: "vault", Brew: "vault"}},
+type toolsFile struct {
+	Tools []toolDef `yaml:"tools"`
+}
 
-		// --- Languages & Runtimes ---
-		{Name: "go", DisplayName: "Go", Category: "Language",
-			BinaryNames: []string{"go"},
-			Packages:    PackageIDs{Winget: "GoLang.Go", Brew: "go", Apt: "golang-go", Snap: "go"}},
-		{Name: "node", DisplayName: "Node.js", Category: "Language",
-			BinaryNames: []string{"node"},
-			Packages:    PackageIDs{Winget: "OpenJS.NodeJS", Brew: "node", Apt: "nodejs"}},
-		{Name: "python", DisplayName: "Python", Category: "Language",
-			BinaryNames: []string{"python3", "python"},
-			Packages:    PackageIDs{Winget: "Python.Python.3.12", Brew: "python@3", Apt: "python3"}},
-		{Name: "dotnet", DisplayName: ".NET", Category: "Language",
-			BinaryNames: []string{"dotnet"},
-			Packages:    PackageIDs{Winget: "Microsoft.DotNet.SDK.8", Brew: "dotnet", Apt: "dotnet-sdk-8.0", Snap: "dotnet-sdk"}},
-		{Name: "rustc", DisplayName: "Rust", Category: "Language",
-			BinaryNames: []string{"rustc"},
-			Packages:    PackageIDs{Brew: "rust", Apt: "rustc"}},
-		{Name: "cargo", DisplayName: "Cargo", Category: "Language",
-			BinaryNames: []string{"cargo"},
-			Packages:    PackageIDs{Brew: "rust", Apt: "cargo"}},
-		{Name: "java", DisplayName: "Java", Category: "Language",
-			BinaryNames: []string{"java"},
-			Packages:    PackageIDs{Winget: "Microsoft.OpenJDK.21", Brew: "openjdk", Apt: "default-jdk"}},
-		{Name: "ruby", DisplayName: "Ruby", Category: "Language",
-			BinaryNames: []string{"ruby"},
-			Packages:    PackageIDs{Winget: "RubyInstallerTeam.Ruby", Brew: "ruby", Apt: "ruby"}},
+type toolDef struct {
+	Name        string     `yaml:"name"`
+	DisplayName string     `yaml:"display_name"`
+	Category    string     `yaml:"category"`
+	Enabled     bool       `yaml:"enabled"`
+	BinaryNames []string   `yaml:"binary_names"`
+	Packages    packageDef `yaml:"packages"`
+}
 
-		// --- Package Managers ---
-		{Name: "npm", DisplayName: "npm", Category: "PkgMgr",
-			BinaryNames: []string{"npm"},
-			Packages:    PackageIDs{NPM: "npm"}},
-		{Name: "uv", DisplayName: "uv", Category: "PkgMgr",
-			BinaryNames: []string{"uv"},
-			Packages:    PackageIDs{Winget: "astral-sh.uv", Brew: "uv"}},
+type packageDef struct {
+	Winget string `yaml:"winget"`
+	Choco  string `yaml:"choco"`
+	Brew   string `yaml:"brew"`
+	Apt    string `yaml:"apt"`
+	Snap   string `yaml:"snap"`
+	NPM    string `yaml:"npm"`
+}
 
-		// --- Editors ---
-		{Name: "code", DisplayName: "VS Code", Category: "Editor",
-			BinaryNames: []string{"code"},
-			Packages:    PackageIDs{Winget: "Microsoft.VisualStudioCode", Brew: "visual-studio-code"}},
-
-		// --- CLI Utilities ---
-		{Name: "jq", DisplayName: "jq", Category: "CLI",
-			BinaryNames: []string{"jq"},
-			Packages:    PackageIDs{Winget: "jqlang.jq", Choco: "jq", Brew: "jq", Apt: "jq"}},
-		{Name: "fzf", DisplayName: "fzf", Category: "CLI",
-			BinaryNames: []string{"fzf"},
-			Packages:    PackageIDs{Winget: "junegunn.fzf", Choco: "fzf", Brew: "fzf", Apt: "fzf"}},
-		{Name: "bat", DisplayName: "bat", Category: "CLI",
-			BinaryNames: []string{"bat"},
-			Packages:    PackageIDs{Winget: "sharkdp.bat", Brew: "bat", Apt: "bat"}},
-		{Name: "fd", DisplayName: "fd", Category: "CLI",
-			BinaryNames: []string{"fd"},
-			Packages:    PackageIDs{Winget: "sharkdp.fd", Brew: "fd", Apt: "fd-find"}},
-
-		// --- Shells ---
-		{Name: "pwsh", DisplayName: "PowerShell", Category: "Shell",
-			BinaryNames: []string{"pwsh"},
-			Packages:    PackageIDs{Winget: "Microsoft.PowerShell", Brew: "powershell", Apt: "powershell", Snap: "powershell"}},
-
-		// --- Other ---
-		{Name: "claude", DisplayName: "Claude Code", Category: "AI",
-			BinaryNames: []string{"claude"},
-			Packages:    PackageIDs{NPM: "@anthropic-ai/claude-code"}},
+// ToolsPath returns the path to the tools.yaml file.
+// Creates the file from embedded defaults on first run.
+func ToolsPath() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
 	}
+	path := filepath.Join(dir, "clim", "tools.yaml")
+
+	// If the file doesn't exist, create it from embedded defaults.
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return "", fmt.Errorf("creating config dir: %w", err)
+		}
+		if err := os.WriteFile(path, defaultToolsYAML, 0o644); err != nil {
+			return "", fmt.Errorf("writing default tools.yaml: %w", err)
+		}
+	}
+
+	return path, nil
+}
+
+// DefaultTools loads tools from ~/.config/clim/tools.yaml.
+// On first run, the file is created from embedded defaults.
+func DefaultTools() []Tool {
+	path, err := ToolsPath()
+	if err != nil {
+		// Fallback: parse embedded defaults directly.
+		return defsToTools(parseToolDefs(defaultToolsYAML))
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return defsToTools(parseToolDefs(defaultToolsYAML))
+	}
+
+	return defsToTools(parseToolDefs(data))
+}
+
+// SetToolEnabled sets the enabled flag for a tool by name in the YAML file.
+func SetToolEnabled(name string, enabled bool) error {
+	path, err := ToolsPath()
+	if err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	defs := parseToolDefs(data)
+	found := false
+	for i := range defs {
+		if defs[i].Name == name {
+			defs[i].Enabled = enabled
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("tool %q not found", name)
+	}
+
+	return writeToolDefs(path, defs)
+}
+
+func writeToolDefs(path string, defs []toolDef) error {
+	f := toolsFile{Tools: defs}
+	data, err := yaml.Marshal(&f)
+	if err != nil {
+		return err
+	}
+
+	header := "# clim — Tool Definitions\n# Edit this file to add, remove, or configure tools.\n# Set enabled: false to hide a tool from clim.\n\n"
+	return os.WriteFile(path, []byte(header+string(data)), 0o644)
+}
+
+func parseToolDefs(data []byte) []toolDef {
+	var f toolsFile
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return nil
+	}
+	return f.Tools
+}
+
+func defsToTools(defs []toolDef) []Tool {
+	tools := make([]Tool, 0, len(defs))
+	for _, d := range defs {
+		t := Tool{
+			Name:        d.Name,
+			DisplayName: d.DisplayName,
+			Category:    d.Category,
+			BinaryNames: d.BinaryNames,
+			Disabled:    !d.Enabled,
+			Packages: PackageIDs{
+				Winget: d.Packages.Winget,
+				Choco:  d.Packages.Choco,
+				Brew:   d.Packages.Brew,
+				Apt:    d.Packages.Apt,
+				Snap:   d.Packages.Snap,
+				NPM:    d.Packages.NPM,
+			},
+		}
+		if t.DisplayName == "" {
+			t.DisplayName = t.Name
+		}
+		if len(t.BinaryNames) == 0 {
+			t.BinaryNames = []string{t.Name}
+		}
+		tools = append(tools, t)
+	}
+	return tools
 }

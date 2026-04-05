@@ -16,6 +16,7 @@ const (
 	tabInstalled = iota
 	tabUpdates
 	tabDiscover
+	tabDisabled
 )
 
 // Model is the Bubbletea model for the interactive TUI.
@@ -168,12 +169,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "tab":
-		m.activeTab = (m.activeTab + 1) % 3
+		m.activeTab = (m.activeTab + 1) % 4
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
 	case "shift+tab":
-		m.activeTab = (m.activeTab + 2) % 3
+		m.activeTab = (m.activeTab + 3) % 4
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
@@ -189,6 +190,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "3":
 		m.activeTab = tabDiscover
+		m.cursor = 0
+		m.applyFilter()
+		return m, nil
+	case "4":
+		m.activeTab = tabDisabled
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
@@ -211,6 +217,22 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor < len(m.filteredIndex) {
 			m.detailIdx = m.filteredIndex[m.cursor]
 			m.showDetail = true
+		}
+		return m, nil
+	case "x":
+		if m.cursor < len(m.filteredIndex) {
+			idx := m.filteredIndex[m.cursor]
+			tool := &m.tools[idx]
+			if m.activeTab == tabDisabled {
+				// Re-enable.
+				_ = registry.SetToolEnabled(tool.Name, true)
+				tool.Disabled = false
+			} else {
+				// Disable.
+				_ = registry.SetToolEnabled(tool.Name, false)
+				tool.Disabled = true
+			}
+			m.applyFilter()
 		}
 		return m, nil
 	case "r":
@@ -253,19 +275,25 @@ func (m *Model) applyFilter() {
 func (m *Model) matchesTab(tool registry.Tool) bool {
 	switch m.activeTab {
 	case tabInstalled:
-		return tool.IsInstalled()
+		return !tool.Disabled && tool.IsInstalled()
 	case tabUpdates:
-		return tool.HasUpdate()
+		return !tool.Disabled && tool.HasUpdate()
 	case tabDiscover:
-		return !tool.IsInstalled()
+		return !tool.Disabled && !tool.IsInstalled()
+	case tabDisabled:
+		return tool.Disabled
 	}
 	return false
 }
 
 // --- Stats ---
 
-func (m Model) stats() (installed, updates, notInstalled int) {
+func (m Model) stats() (installed, updates, notInstalled, disabled int) {
 	for _, tool := range m.tools {
+		if tool.Disabled {
+			disabled++
+			continue
+		}
 		if tool.IsInstalled() {
 			installed++
 			if tool.HasUpdate() {
