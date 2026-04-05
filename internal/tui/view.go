@@ -4,18 +4,16 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/nassiharel/clim/internal/registry"
 )
 
-const nameCol = 30 // wider to fit "az (Azure CLI)" style labels
-
-// toolLabel returns "name (DisplayName)" or just "name" if they're the same.
-func toolLabel(tool registry.Tool) string {
-	if tool.DisplayName == "" || strings.EqualFold(tool.Name, tool.DisplayName) {
-		return tool.Name
-	}
-	return tool.Name + " " + sourceStyle.Render("("+tool.DisplayName+")")
-}
+const (
+	colName    = 28 // width for name column
+	colVersion = 24 // width for version info column
+	colSource  = 8  // width for source column
+)
 
 func (m Model) renderView() string {
 	if m.quitting {
@@ -29,12 +27,16 @@ func (m Model) renderView() string {
 
 	var b strings.Builder
 
-	// Title + tabs + summary.
 	b.WriteString(m.renderTitleBar() + "\n")
 	b.WriteString(m.renderTabBar() + "\n\n")
 
+	// Header row.
+	if m.phase >= 1 && len(m.filteredIndex) > 0 {
+		b.WriteString(m.renderHeader() + "\n")
+	}
+
 	// Rows.
-	visibleRows := m.height - 6
+	visibleRows := m.height - 7
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
@@ -72,7 +74,6 @@ func (m Model) renderView() string {
 
 	b.WriteString("\n")
 
-	// Filter or help.
 	if m.filtering {
 		b.WriteString("  " + filterPromptStyle.Render("/") + " " + m.filterInput.View())
 	} else {
@@ -102,7 +103,6 @@ func (m Model) renderTitleBar() string {
 	if notInst > 0 {
 		summary += fmt.Sprintf(" · %d to discover", notInst)
 	}
-
 	return title + "  " + summaryStyle.Render(summary)
 }
 
@@ -128,6 +128,29 @@ func (m Model) renderTabBar() string {
 	return "  " + strings.Join(parts, " ")
 }
 
+// --- Header ---
+
+func (m Model) renderHeader() string {
+	switch m.activeTab {
+	case tabInstalled:
+		return "  " +
+			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
+			headerStyle.Render(fixedWidth("VERSION", colVersion)) + "  " +
+			headerStyle.Render(fixedWidth("SOURCE", colSource))
+	case tabUpdates:
+		return "  " +
+			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
+			headerStyle.Render(fixedWidth("UPDATE", colVersion)) + "  " +
+			headerStyle.Render("COMMAND")
+	case tabDiscover:
+		return "  " +
+			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
+			headerStyle.Render(fixedWidth("CATEGORY", 12)) + "  " +
+			headerStyle.Render("INSTALL COMMAND")
+	}
+	return ""
+}
+
 // --- Row rendering per tab ---
 
 func (m Model) renderRow(tool registry.Tool, selected bool) string {
@@ -143,9 +166,9 @@ func (m Model) renderRow(tool registry.Tool, selected bool) string {
 	}
 
 	if selected {
-		lineWidth := runeLen(line)
-		if lineWidth < m.width {
-			line += strings.Repeat(" ", m.width-lineWidth)
+		w := lipgloss.Width(line)
+		if w < m.width {
+			line += strings.Repeat(" ", m.width-w)
 		}
 		line = selectedRowStyle.Render(line)
 	}
@@ -159,20 +182,22 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 		cursor = "▸ "
 	}
 
-	name := nameStyle.Render(pad(toolLabel(tool), nameCol))
-	verInfo := m.renderVersionInfo(tool)
+	// Name column: plain text padded, then styled.
+	nameText := toolLabel(tool)
+	nameCell := nameStyle.Render(fixedWidth(nameText, colName))
 
+	// Version column: build plain version info, then pad.
+	verCell := fixedWidth(m.versionInfoPlain(tool), colVersion)
+
+	// Source column.
 	src := ""
-	if primary := tool.PrimaryInstance(); primary != nil && primary.Source != "" {
-		src = sourceStyle.Render(string(primary.Source))
+	if primary := tool.PrimaryInstance(); primary != nil {
+		src = string(primary.Source)
 	}
+	srcCell := sourceStyle.Render(fixedWidth(src, colSource))
 
-	line := cursor + name + "  " + verInfo
-	if src != "" {
-		line += "  " + src
-	}
+	line := cursor + nameCell + "  " + verCell + "  " + srcCell
 
-	// Show instance count if multiple.
 	if len(tool.Instances) > 1 {
 		line += "  " + dimVersion.Render(fmt.Sprintf("(%d instances)", len(tool.Instances)))
 	}
@@ -186,22 +211,19 @@ func (m Model) renderUpdateRow(tool registry.Tool, selected bool) string {
 		cursor = "▸ "
 	}
 
-	name := nameStyle.Render(pad(toolLabel(tool), nameCol))
-	ver := tool.InstalledVersion()
-	verStr := versionStyle.Render(ver) + arrowStyle.Render(" → ") + upgradableStyle.Render(tool.Latest)
+	nameText := toolLabel(tool)
+	nameCell := nameStyle.Render(fixedWidth(nameText, colName))
 
-	// Show upgrade command.
+	ver := tool.InstalledVersion()
+	updateText := ver + " → " + tool.Latest
+	verCell := fixedWidth(updateText, colVersion)
+
 	cmd := ""
 	if primary := tool.PrimaryInstance(); primary != nil {
 		cmd = tool.Packages.UpgradeCmd(primary.Source)
 	}
 
-	line := cursor + name + "  " + verStr
-	if cmd != "" {
-		line += "  " + detailCmdStyle.Render(cmd)
-	}
-
-	return line
+	return cursor + nameCell + "  " + verCell + "  " + detailCmdStyle.Render(cmd)
 }
 
 func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
@@ -210,23 +232,19 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 		cursor = "▸ "
 	}
 
-	name := pad(toolLabel(tool), nameCol)
-	cat := categoryStyle.Render(pad(tool.Category, 12))
+	nameText := toolLabel(tool)
+	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
+	catCell := categoryStyle.Render(fixedWidth(tool.Category, 12))
 	cmd := tool.Packages.BestInstallCmd()
 
-	line := cursor + dimVersion.Render(name) + "  " + cat
-	if cmd != "" {
-		line += "  " + detailCmdStyle.Render(cmd)
-	}
-
-	return line
+	return cursor + nameCell + "  " + catCell + "  " + detailCmdStyle.Render(cmd)
 }
 
-// --- Version info (Installed tab) ---
+// --- Version info (plain text, no ANSI) ---
 
-func (m Model) renderVersionInfo(tool registry.Tool) string {
+func (m Model) versionInfoPlain(tool registry.Tool) string {
 	if m.phase < 2 {
-		return loadingStyle.Render("…")
+		return "…"
 	}
 
 	primary := tool.PrimaryInstance()
@@ -237,18 +255,18 @@ func (m Model) renderVersionInfo(tool registry.Tool) string {
 	latest := tool.Latest
 
 	if ver == "" && latest == "" {
-		return dimVersion.Render("—")
+		return "—"
 	}
 	if ver != "" && latest == "" {
-		return versionStyle.Render(ver)
+		return ver
 	}
 	if ver == "" && latest != "" {
-		return dimVersion.Render("—") + arrowStyle.Render(" → ") + versionStyle.Render(latest) + " " + dimVersion.Render("?")
+		return "— → " + latest + " ?"
 	}
 	if registry.VersionsMatch(ver, latest) {
-		return versionStyle.Render(ver) + " " + upToDateStyle.Render("✓")
+		return ver + " ✓"
 	}
-	return versionStyle.Render(ver) + arrowStyle.Render(" → ") + upgradableStyle.Render(latest) + " " + upgradableStyle.Render("⬆")
+	return ver + " → " + latest + " ⬆"
 }
 
 // --- Detail view ---
@@ -263,11 +281,10 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	}
 	b.WriteString("  " + detailTitleStyle.Render(label))
 	b.WriteString("  " + categoryStyle.Render(tool.Category))
-	b.WriteString("  " + strings.Repeat("─", max(m.width-runeLen(label)-runeLen(tool.Category)-8, 10)))
+	b.WriteString("  " + strings.Repeat("─", max(m.width-len(label)-len(tool.Category)-8, 10)))
 	b.WriteString("\n\n")
 
 	if tool.IsInstalled() {
-		// Instances.
 		b.WriteString("  " + detailLabelStyle.Render("Instances:") + "\n")
 		for i, inst := range tool.Instances {
 			bullet := "○"
@@ -280,16 +297,15 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 			if ver == "" {
 				ver = "—"
 			}
-			b.WriteString(fmt.Sprintf("    %s  %s  %s  %s\n",
+			b.WriteString(fmt.Sprintf("    %s  %-14s  %-8s  %s\n",
 				style.Render(bullet),
-				pad(ver, 14),
-				sourceStyle.Render(pad(string(inst.Source), 8)),
+				ver,
+				sourceStyle.Render(string(inst.Source)),
 				dimVersion.Render(registry.TruncatePath(inst.Path, m.width-40)),
 			))
 		}
 		b.WriteString("\n")
 
-		// Version status.
 		if tool.Latest != "" {
 			if registry.VersionsMatch(tool.InstalledVersion(), tool.Latest) {
 				b.WriteString("  " + upToDateStyle.Render("✓ Up to date") + "  " + dimVersion.Render("("+tool.Latest+")") + "\n")
@@ -299,7 +315,6 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 			b.WriteString("\n")
 		}
 
-		// Commands.
 		if primary := tool.PrimaryInstance(); primary != nil {
 			if cmd := tool.Packages.UpgradeCmd(primary.Source); cmd != "" {
 				b.WriteString("  " + detailLabelStyle.Render("Upgrade:") + "  " + detailCmdStyle.Render(cmd) + "\n")
@@ -317,7 +332,10 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	b.WriteString("\n  " + detailLabelStyle.Render("Install:") + "\n")
 	for _, src := range registry.SourcesForOS() {
 		if cmd := tool.Packages.InstallCmd(src); cmd != "" {
-			b.WriteString("    " + sourceStyle.Render(pad(string(src), 8)) + detailCmdStyle.Render(cmd) + "\n")
+			b.WriteString(fmt.Sprintf("    %-8s  %s\n",
+				sourceStyle.Render(string(src)),
+				detailCmdStyle.Render(cmd),
+			))
 		}
 	}
 
@@ -343,14 +361,23 @@ func (m Model) renderHelp() string {
 
 // --- Helpers ---
 
-func pad(s string, width int) string {
-	r := []rune(s)
-	if len(r) >= width {
-		return string(r[:width])
+// toolLabel returns "name (DisplayName)" or just "name" if they match.
+func toolLabel(tool registry.Tool) string {
+	if tool.DisplayName == "" || strings.EqualFold(tool.Name, tool.DisplayName) {
+		return tool.Name
 	}
-	return s + strings.Repeat(" ", width-len(r))
+	return tool.Name + " (" + tool.DisplayName + ")"
 }
 
-func runeLen(s string) int {
-	return len([]rune(s))
+// fixedWidth pads or truncates a plain string to exactly `width` characters.
+// Must be called BEFORE applying lipgloss styles, not after.
+func fixedWidth(s string, width int) string {
+	r := []rune(s)
+	if len(r) > width {
+		return string(r[:width-1]) + "…"
+	}
+	if len(r) < width {
+		return s + strings.Repeat(" ", width-len(r))
+	}
+	return s
 }

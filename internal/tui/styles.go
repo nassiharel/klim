@@ -33,6 +33,9 @@ var (
 	// Tool name.
 	nameStyle = lipgloss.NewStyle().Bold(true).Foreground(highlightColor)
 
+	// Table header.
+	headerStyle = lipgloss.NewStyle().Foreground(subtleColor)
+
 	// Version text.
 	versionStyle = lipgloss.NewStyle()
 	dimVersion   = lipgloss.NewStyle().Foreground(dimColor)
