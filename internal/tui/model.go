@@ -3,25 +3,23 @@ package tui
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/version"
 )
 
 // ToolRow represents a single row in the TUI table.
 type ToolRow struct {
-	Tool         registry.Tool
-	InstalledVer string
-	LatestVer    string
-	Path         string
-	Status       version.Status
-	DetectDone   bool
-	LatestDone   bool
+	Name    string
+	Path    string
+	Version string // empty while loading, "(unknown)" if detection failed
 }
 
 // Model is the Bubbletea model for the interactive TUI.
@@ -34,35 +32,24 @@ type Model struct {
 	filterInput   textinput.Model
 	filtering     bool
 	filterText    string
-	filteredIndex []int // maps visible row → index in tools
+	filteredIndex []int // maps visible row -> index in tools
 
 	// Loading state.
-	loading int // count of pending operations
+	loading bool
 
 	// Layout.
 	width  int
 	height int
 
-	// Dependencies.
-	ctx     context.Context
-	checker version.Checker
-	cache   *version.Cache
+	// Config.
+	cfg config.Config
 
 	// Quitting.
 	quitting bool
 }
 
 // NewModel creates a new TUI model.
-func NewModel(ctx context.Context, checker version.Checker, cache *version.Cache) Model {
-	tools := registry.DefaultTools()
-	rows := make([]ToolRow, len(tools))
-	for i, t := range tools {
-		rows[i] = ToolRow{
-			Tool:   t,
-			Status: version.StatusLoading,
-		}
-	}
-
+func NewModel(cfg config.Config) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 
@@ -70,36 +57,22 @@ func NewModel(ctx context.Context, checker version.Checker, cache *version.Cache
 	ti.Placeholder = "filter..."
 	ti.CharLimit = 30
 
-	indices := make([]int, len(tools))
-	for i := range indices {
-		indices[i] = i
-	}
-
 	return Model{
-		tools:         rows,
-		spinner:       s,
-		filterInput:   ti,
-		filteredIndex: indices,
-		loading:       len(tools) * 2, // detect + latest for each
-		ctx:           ctx,
-		checker:       checker,
-		cache:         cache,
-		width:         80,
-		height:        24,
+		spinner:     s,
+		filterInput: ti,
+		loading:     true,
+		cfg:         cfg,
+		width:       80,
+		height:      24,
 	}
 }
 
-// Init fires off all detection and version check commands simultaneously.
+// Init fires off the PATH scan and version detection command.
 func (m Model) Init() tea.Cmd {
-	var cmds []tea.Cmd
-	cmds = append(cmds, m.spinner.Tick)
-
-	for i, row := range m.tools {
-		cmds = append(cmds, detectToolCmd(m.ctx, i, row.Tool))
-		cmds = append(cmds, checkLatestCmd(m.ctx, i, row.Tool, m.checker, m.cache))
-	}
-
-	return tea.Batch(cmds...)
+	return tea.Batch(
+		m.spinner.Tick,
+		scanAndDetectCmd(m.cfg),
+	)
 }
 
 // Update handles all messages.
@@ -109,25 +82,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
-	case DetectionCompleteMsg:
-		row := &m.tools[msg.Index]
-		row.DetectDone = true
-		if msg.Result.Found {
-			row.Path = msg.Result.Path
-			row.InstalledVer = msg.Result.Version
+	case scanResultMsg:
+		m.loading = false
+		if msg.err != nil {
+			// Show error in the title area — tools stay empty.
+			return m, nil
 		}
-		m.loading--
-		m.recalculateStatus(msg.Index)
-		return m, nil
-
-	case LatestVersionMsg:
-		row := &m.tools[msg.Index]
-		row.LatestDone = true
-		if msg.Result.Error == nil {
-			row.LatestVer = msg.Result.Version
+		m.tools = make([]ToolRow, len(msg.tools))
+		for i, t := range msg.tools {
+			ver := t.Version
+			if ver == "" {
+				ver = "(unknown)"
+			}
+			m.tools[i] = ToolRow{
+				Name:    t.Name,
+				Path:    t.Path,
+				Version: ver,
+			}
 		}
-		m.loading--
-		m.recalculateStatus(msg.Index)
+		m.applyFilter()
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -136,8 +109,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
-		// Delegate to spinner.
-		if m.loading > 0 {
+		// Delegate to spinner while loading.
+		if m.loading {
 			var cmd tea.Cmd
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
@@ -155,21 +128,14 @@ func (m Model) View() tea.View {
 }
 
 // Run starts the interactive TUI.
-func Run() error {
-	ctx := context.Background()
-	cache := version.LoadCache()
-	checker := version.NewHTTPChecker(version.TokenFromEnv())
-
-	model := NewModel(ctx, checker, cache)
+func Run(cfg config.Config) error {
+	model := NewModel(cfg)
 	p := tea.NewProgram(model)
 
 	_, err := p.Run()
 	if err != nil {
 		return fmt.Errorf("TUI error: %w", err)
 	}
-
-	// Save cache on exit.
-	cache.Save()
 	return nil
 }
 
@@ -223,51 +189,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.filterInput.Focus()
 
 	case "r":
-		// Refresh all tools.
-		m.loading = len(m.tools) * 2
-		for i := range m.tools {
-			m.tools[i].DetectDone = false
-			m.tools[i].LatestDone = false
-			m.tools[i].Status = version.StatusLoading
-		}
-		var cmds []tea.Cmd
-		cmds = append(cmds, m.spinner.Tick)
-		for i, row := range m.tools {
-			cmds = append(cmds, detectToolCmd(m.ctx, i, row.Tool))
-			cmds = append(cmds, checkLatestCmd(m.ctx, i, row.Tool, m.checker, m.cache))
-		}
-		return m, tea.Batch(cmds...)
+		// Refresh — re-scan PATH.
+		m.loading = true
+		m.tools = nil
+		m.filteredIndex = nil
+		m.cursor = 0
+		return m, tea.Batch(
+			m.spinner.Tick,
+			scanAndDetectCmd(m.cfg),
+		)
 	}
 
 	return m, nil
-}
-
-// recalculateStatus updates a row's status when both detect and latest are done.
-func (m *Model) recalculateStatus(idx int) {
-	row := &m.tools[idx]
-
-	if !row.DetectDone || !row.LatestDone {
-		row.Status = version.StatusLoading
-		return
-	}
-
-	if row.Path == "" {
-		row.Status = version.StatusNotInstalled
-		return
-	}
-
-	if row.InstalledVer == "" {
-		row.Status = version.StatusError
-		return
-	}
-
-	if row.LatestVer == "" {
-		row.Status = version.StatusError
-		return
-	}
-
-	s, _ := version.CompareVersions(row.InstalledVer, row.LatestVer)
-	row.Status = s
 }
 
 // applyFilter updates the filteredIndex based on the current filter text.
@@ -283,9 +216,7 @@ func (m *Model) applyFilter() {
 	filter := strings.ToLower(m.filterText)
 	m.filteredIndex = nil
 	for i, row := range m.tools {
-		name := strings.ToLower(row.Tool.DisplayName)
-		short := strings.ToLower(row.Tool.Name)
-		if strings.Contains(name, filter) || strings.Contains(short, filter) {
+		if strings.Contains(strings.ToLower(row.Name), filter) {
 			m.filteredIndex = append(m.filteredIndex, i)
 		}
 	}
@@ -294,4 +225,27 @@ func (m *Model) applyFilter() {
 	if m.cursor >= len(m.filteredIndex) {
 		m.cursor = max(0, len(m.filteredIndex)-1)
 	}
+}
+
+// scanAndDetectCmd returns a Bubbletea command that scans PATH and detects versions.
+func scanAndDetectCmd(cfg config.Config) tea.Cmd {
+	return func() tea.Msg {
+		tools, err := scanAndDetect(cfg)
+		return scanResultMsg{tools: tools, err: err}
+	}
+}
+
+// scanAndDetect performs the actual PATH scan and version detection.
+func scanAndDetect(cfg config.Config) ([]registry.Tool, error) {
+	// Import scanner here to avoid circular imports — use the scanner package.
+	// We inline the import at the package level.
+	tools, err := scanPATH(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	timeout := time.Duration(cfg.EffectiveTimeout()) * time.Second
+	detectAll(context.Background(), tools, timeout, runtime.NumCPU()*2)
+
+	return tools, nil
 }

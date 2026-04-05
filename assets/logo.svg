@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" fill="none">
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6C63FF"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <linearGradient id="text-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E2E8F0"/>
+      <stop offset="100%" stop-color="#94A3B8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="480" height="160" rx="16" fill="#0F172A"/>
+
+  <!-- Terminal window dots -->
+  <circle cx="28" cy="24" r="6" fill="#EF4444"/>
+  <circle cx="48" cy="24" r="6" fill="#F59E0B"/>
+  <circle cx="68" cy="24" r="6" fill="#22C55E"/>
+
+  <!-- Prompt symbol -->
+  <text x="28" y="95" font-family="'SF Mono','Fira Code','JetBrains Mono','Cascadia Code',Consolas,monospace" font-size="48" font-weight="700" fill="url(#accent)">$</text>
+
+  <!-- clim text -->
+  <text x="80" y="95" font-family="'SF Mono','Fira Code','JetBrains Mono','Cascadia Code',Consolas,monospace" font-size="56" font-weight="700" fill="url(#text-grad)" letter-spacing="-1">clim</text>
+
+  <!-- Tagline -->
+  <text x="28" y="132" font-family="'Inter','SF Pro','Segoe UI',system-ui,sans-serif" font-size="16" fill="#64748B" letter-spacing="0.5">detect</text>
+  <text x="95" y="132" font-family="'Inter','SF Pro','Segoe UI',system-ui,sans-serif" font-size="16" fill="#475569">.</text>
+  <text x="109" y="132" font-family="'Inter','SF Pro','Segoe UI',system-ui,sans-serif" font-size="16" fill="#64748B" letter-spacing="0.5">check</text>
+  <text x="168" y="132" font-family="'Inter','SF Pro','Segoe UI',system-ui,sans-serif" font-size="16" fill="#475569">.</text>
+  <text x="182" y="132" font-family="'Inter','SF Pro','Segoe UI',system-ui,sans-serif" font-size="16" fill="#64748B" letter-spacing="0.5">upgrade</text>
+
+  <!-- Decorative cursor blink -->
+  <rect x="290" y="68" width="4" height="32" rx="1" fill="url(#accent)" opacity="0.8">
+    <animate attributeName="opacity" values="0.8;0.2;0.8" dur="1.2s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- Up arrow icon (upgrade symbol) -->
+  <g transform="translate(400, 60)">
+    <rect x="0" y="0" width="52" height="52" rx="12" fill="url(#accent)" opacity="0.15"/>
+    <path d="M26 40 V18 M16 28 L26 16 L36 28" stroke="url(#accent)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

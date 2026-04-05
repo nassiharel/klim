@@ -5,8 +5,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-
-	"github.com/nassiharel/clim/internal/version"
 )
 
 // renderView renders the full TUI.
@@ -18,15 +16,16 @@ func (m Model) renderView() string {
 	var b strings.Builder
 
 	// Title.
-	title := titleStyle.Render("clim — CLI Manager")
-	if m.loading > 0 {
-		title += " " + loadingStyle.Render(m.spinner.View()+" scanning...")
+	title := titleStyle.Render("clim — PATH Explorer")
+	if m.loading {
+		title += " " + loadingStyle.Render(m.spinner.View()+" scanning PATH...")
+	} else {
+		title += " " + loadingStyle.Render(fmt.Sprintf("(%d binaries)", len(m.tools)))
 	}
 	b.WriteString(title + "\n\n")
 
 	// Calculate column widths based on terminal width.
-	showPath := m.width >= 100
-	tableWidth := m.width - 6 // account for border padding
+	showPath := m.width >= 80
 
 	// Header.
 	header := m.renderHeader(showPath)
@@ -52,13 +51,13 @@ func (m Model) renderView() string {
 		idx := m.filteredIndex[vi]
 		row := m.tools[idx]
 		selected := vi == m.cursor
-		b.WriteString(m.renderRow(row, selected, showPath, tableWidth) + "\n")
+		b.WriteString(m.renderRow(row, selected, showPath) + "\n")
 	}
 
 	// Pad remaining lines.
-	rendered := len(m.filteredIndex) - start
+	rendered := min(len(m.filteredIndex)-start, visibleRows)
 	if rendered < visibleRows {
-		for i := 0; i < visibleRows-rendered; i++ {
+		for range visibleRows - rendered {
 			b.WriteString("\n")
 		}
 	}
@@ -74,74 +73,49 @@ func (m Model) renderView() string {
 	help := m.renderHelp()
 	b.WriteString(help)
 
-	_ = tableWidth
-
 	return borderStyle.Render(b.String())
 }
 
 func (m Model) renderHeader(showPath bool) string {
-	name := headerStyle.Render(padRight("Tool", 20))
-	ver := headerStyle.Render(padRight("Version", 12))
-	latest := headerStyle.Render(padRight("Latest", 12))
-	status := headerStyle.Render(padRight("Status", 20))
+	name := headerStyle.Render(padRight("Name", 25))
+	ver := headerStyle.Render(padRight("Version", 30))
 
 	if showPath {
-		path := headerStyle.Render(padRight("Path", 35))
-		return fmt.Sprintf("  %s  %s  %s  %s  %s", name, ver, latest, path, status)
+		path := headerStyle.Render(padRight("Path", 40))
+		return fmt.Sprintf("  %s  %s  %s", name, ver, path)
 	}
-	return fmt.Sprintf("  %s  %s  %s  %s", name, ver, latest, status)
+	return fmt.Sprintf("  %s  %s", name, ver)
 }
 
 func (m Model) renderSeparator(showPath bool) string {
-	s := "  " + strings.Repeat("─", 20) + "  " +
-		strings.Repeat("─", 12) + "  " +
-		strings.Repeat("─", 12) + "  "
+	s := "  " + strings.Repeat("─", 25) + "  " +
+		strings.Repeat("─", 30)
 	if showPath {
-		s += strings.Repeat("─", 35) + "  "
+		s += "  " + strings.Repeat("─", 40)
 	}
-	s += strings.Repeat("─", 20)
 	return lipgloss.NewStyle().Foreground(dimColor).Render(s)
 }
 
-func (m Model) renderRow(row ToolRow, selected, showPath bool, maxWidth int) string {
+func (m Model) renderRow(row ToolRow, selected, showPath bool) string {
 	cursor := "  "
 	if selected {
 		cursor = "▸ "
 	}
 
-	name := padRight(row.Tool.DisplayName, 20)
-	installed := padRight(valueOr(row.InstalledVer, "—"), 12)
-	latest := padRight(valueOr(row.LatestVer, "…"), 12)
-
-	// Style based on status.
-	statusText := ""
-	var statusStyle lipgloss.Style
-	switch row.Status {
-	case version.StatusUpToDate:
-		statusText = "✓ up to date"
-		statusStyle = upToDateStyle
-	case version.StatusUpgradable:
-		statusText = "⬆ upgrade"
-		statusStyle = upgradableStyle
-	case version.StatusNotInstalled:
-		statusText = "✗ not found"
-		statusStyle = notFoundStyle
-	case version.StatusLoading:
-		statusText = "… loading"
-		statusStyle = loadingStyle
-	case version.StatusError:
-		statusText = "? error"
-		statusStyle = errorStatusStyle
+	name := padRight(row.Name, 25)
+	ver := row.Version
+	if ver == "" || ver == "(unknown)" {
+		ver = loadingStyle.Render(padRight("(unknown)", 30))
+	} else {
+		ver = padRight(ver, 30)
 	}
-
-	styledStatus := statusStyle.Render(padRight(statusText, 20))
 
 	var line string
 	if showPath {
-		path := padRight(truncatePath(row.Path, 35), 35)
-		line = fmt.Sprintf("%s%s  %s  %s  %s  %s", cursor, name, installed, latest, path, styledStatus)
+		path := padRight(truncatePath(row.Path, 40), 40)
+		line = fmt.Sprintf("%s%s  %s  %s", cursor, name, ver, path)
 	} else {
-		line = fmt.Sprintf("%s%s  %s  %s  %s", cursor, name, installed, latest, styledStatus)
+		line = fmt.Sprintf("%s%s  %s", cursor, name, ver)
 	}
 
 	if selected {
@@ -177,11 +151,4 @@ func truncatePath(path string, maxLen int) string {
 		return path
 	}
 	return "..." + path[len(path)-maxLen+3:]
-}
-
-func valueOr(val, fallback string) string {
-	if val == "" {
-		return fallback
-	}
-	return val
 }

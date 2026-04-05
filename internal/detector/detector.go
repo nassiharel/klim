@@ -4,113 +4,68 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
-	"regexp"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/nassiharel/clim/internal/registry"
 )
 
-// DetectionResult holds the outcome of detecting a single CLI tool.
-type DetectionResult struct {
-	Found   bool
-	Version string // Parsed version string, empty if not parseable.
-	Path    string // Absolute path to the binary.
-	Error   error  // Non-fatal error (e.g., version parse failure).
+// DetectVersion runs "binary --version" with a timeout and returns the first
+// non-empty line of combined stdout+stderr output. Returns an empty string
+// on any failure (timeout, non-zero exit, no output, etc.).
+func DetectVersion(ctx context.Context, tool registry.Tool, timeout time.Duration) string {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, tool.Path, "--version")
+	cmd.Stdin = nil // prevent interactive prompts from blocking
+
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	if err := cmd.Run(); err != nil {
+		// Some tools write version info even on non-zero exit —
+		// try to extract output anyway.
+		if buf.Len() == 0 {
+			return ""
+		}
+	}
+
+	return firstLine(buf.String())
 }
 
-// DetectAll runs detection for all tools concurrently.
-// Returns results in the same order as the input slice.
-func DetectAll(ctx context.Context, tools []registry.Tool) []DetectionResult {
-	results := make([]DetectionResult, len(tools))
+// DetectAll runs DetectVersion concurrently for all tools, mutating each
+// tool's Version field in place. Concurrency is bounded by a semaphore
+// to avoid overwhelming the system.
+func DetectAll(ctx context.Context, tools []registry.Tool, timeout time.Duration, concurrency int) {
+	if concurrency <= 0 {
+		concurrency = runtime.NumCPU() * 2
+	}
+
+	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 
-	for i, tool := range tools {
+	for i := range tools {
 		wg.Add(1)
-		go func(idx int, t registry.Tool) {
+		sem <- struct{}{} // acquire
+		go func(t *registry.Tool) {
 			defer wg.Done()
-			results[idx] = DetectOne(ctx, t)
-		}(i, tool)
+			defer func() { <-sem }() // release
+			t.Version = DetectVersion(ctx, *t, timeout)
+		}(&tools[i])
 	}
 
 	wg.Wait()
-	return results
 }
 
-// DetectOne detects a single tool: finds the binary, runs the version command,
-// and parses the version from the output.
-func DetectOne(ctx context.Context, tool registry.Tool) DetectionResult {
-	// Find the binary — try each name in order.
-	var binPath string
-	var binName string
-	for _, name := range tool.BinaryNames {
-		path, err := exec.LookPath(name)
-		if err == nil {
-			binPath = path
-			binName = name
-			break
-		}
+// firstLine extracts the first non-empty line from the given string.
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
+		s = s[:idx]
 	}
-
-	if binPath == "" {
-		return DetectionResult{Found: false}
-	}
-
-	// Run the version command with a timeout.
-	timeout := 10 * time.Second
-	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	args := tool.VersionArgs
-	cmd := exec.CommandContext(cmdCtx, binName, args...)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-
-	// Some tools write version info even on non-zero exit.
-	// Combine stdout and stderr for regex matching.
-	combined := stdout.String() + stderr.String()
-
-	if err != nil && combined == "" {
-		return DetectionResult{
-			Found: true,
-			Path:  binPath,
-			Error: err,
-		}
-	}
-
-	// Parse version from the output.
-	version, parseErr := ParseVersion(combined, tool.VersionRegex)
-	if parseErr != nil {
-		return DetectionResult{
-			Found: true,
-			Path:  binPath,
-			Error: parseErr,
-		}
-	}
-
-	return DetectionResult{
-		Found:   true,
-		Version: version,
-		Path:    binPath,
-	}
-}
-
-// ParseVersion extracts a version string from the given output using the regex.
-// The regex must contain exactly one capture group.
-func ParseVersion(output, pattern string) (string, error) {
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return "", err
-	}
-
-	matches := re.FindStringSubmatch(output)
-	if len(matches) < 2 {
-		return "", nil // No match — version not parseable but not an error.
-	}
-
-	return matches[1], nil
+	return strings.TrimSpace(s)
 }

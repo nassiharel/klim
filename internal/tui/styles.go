@@ -7,11 +7,9 @@ import (
 var (
 	// Colors.
 	primaryColor   = lipgloss.Color("39")  // Blue
-	successColor   = lipgloss.Color("42")  // Green
-	warningColor   = lipgloss.Color("214") // Orange/Yellow
-	errorColor     = lipgloss.Color("196") // Red
 	dimColor       = lipgloss.Color("241") // Gray
 	highlightColor = lipgloss.Color("15")  // White/bright
+	warningColor   = lipgloss.Color("214") // Orange/Yellow
 
 	// Title.
 	titleStyle = lipgloss.NewStyle().
@@ -36,12 +34,8 @@ var (
 			Bold(true).
 			Foreground(highlightColor)
 
-	// Status styles.
-	upToDateStyle    = lipgloss.NewStyle().Foreground(successColor)
-	upgradableStyle  = lipgloss.NewStyle().Foreground(warningColor)
-	notFoundStyle    = lipgloss.NewStyle().Foreground(dimColor)
-	errorStatusStyle = lipgloss.NewStyle().Foreground(errorColor)
-	loadingStyle     = lipgloss.NewStyle().Foreground(dimColor)
+	// Loading / dim text.
+	loadingStyle = lipgloss.NewStyle().Foreground(dimColor)
 
 	// Border.
 	borderStyle = lipgloss.NewStyle().
