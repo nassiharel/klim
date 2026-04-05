@@ -1,0 +1,293 @@
+package registry
+
+import (
+	"runtime"
+	"testing"
+)
+
+func TestInstallCmd(t *testing.T) {
+	pkgs := PackageIDs{
+		Winget: "Git.Git",
+		Choco:  "git",
+		Brew:   "git",
+		Apt:    "git",
+		Snap:   "git",
+		NPM:    "git",
+	}
+
+	tests := []struct {
+		source InstallSource
+		want   string
+	}{
+		{SourceWinget, "winget install --id Git.Git"},
+		{SourceChoco, "choco install git"},
+		{SourceBrew, "brew install git"},
+		{SourceApt, "sudo apt install git"},
+		{SourceSnap, "sudo snap install git"},
+		{SourceNPM, "npm install -g git"},
+		{SourceGo, ""},
+		{SourceCargo, ""},
+		{SourcePip, ""},
+		{SourceManual, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.source), func(t *testing.T) {
+			got := pkgs.InstallCmd(tt.source)
+			if got != tt.want {
+				t.Errorf("InstallCmd(%s) = %q, want %q", tt.source, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUpgradeCmd(t *testing.T) {
+	pkgs := PackageIDs{
+		Winget: "Git.Git",
+		Choco:  "git",
+		Brew:   "git",
+		Apt:    "git",
+		Snap:   "git",
+		NPM:    "git",
+	}
+
+	tests := []struct {
+		source InstallSource
+		want   string
+	}{
+		{SourceWinget, "winget upgrade --id Git.Git"},
+		{SourceChoco, "choco upgrade git"},
+		{SourceBrew, "brew upgrade git"},
+		{SourceApt, "sudo apt upgrade git"},
+		{SourceSnap, "sudo snap refresh git"},
+		{SourceNPM, "npm update -g git"},
+		{SourceGo, ""},
+		{SourceManual, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.source), func(t *testing.T) {
+			got := pkgs.UpgradeCmd(tt.source)
+			if got != tt.want {
+				t.Errorf("UpgradeCmd(%s) = %q, want %q", tt.source, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRemoveCmd(t *testing.T) {
+	pkgs := PackageIDs{
+		Winget: "Git.Git",
+		Choco:  "git",
+		Brew:   "git",
+		Apt:    "git",
+		Snap:   "git",
+		NPM:    "git",
+	}
+
+	tests := []struct {
+		source InstallSource
+		want   string
+	}{
+		{SourceWinget, "winget uninstall --id Git.Git"},
+		{SourceChoco, "choco uninstall git"},
+		{SourceBrew, "brew uninstall git"},
+		{SourceApt, "sudo apt remove git"},
+		{SourceSnap, "sudo snap remove git"},
+		{SourceNPM, "npm uninstall -g git"},
+		{SourceGo, ""},
+		{SourceManual, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.source), func(t *testing.T) {
+			got := pkgs.RemoveCmd(tt.source)
+			if got != tt.want {
+				t.Errorf("RemoveCmd(%s) = %q, want %q", tt.source, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCommandsWithEmptyPackageIDs(t *testing.T) {
+	empty := PackageIDs{}
+	sources := []InstallSource{
+		SourceWinget, SourceChoco, SourceBrew,
+		SourceApt, SourceSnap, SourceNPM,
+	}
+
+	for _, source := range sources {
+		if got := empty.InstallCmd(source); got != "" {
+			t.Errorf("empty.InstallCmd(%s) = %q, want empty", source, got)
+		}
+		if got := empty.UpgradeCmd(source); got != "" {
+			t.Errorf("empty.UpgradeCmd(%s) = %q, want empty", source, got)
+		}
+		if got := empty.RemoveCmd(source); got != "" {
+			t.Errorf("empty.RemoveCmd(%s) = %q, want empty", source, got)
+		}
+	}
+}
+
+func TestStatusString(t *testing.T) {
+	tests := []struct {
+		name      string
+		installed string
+		latest    string
+		want      string
+	}{
+		{"up to date", "1.2.3", "1.2.3", "✓ up to date"},
+		{"update available", "1.2.3", "1.2.4", "⬆ update"},
+		{"no installed", "", "1.2.3", "?"},
+		{"no latest", "1.2.3", "", ""},
+		{"both empty", "", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := StatusString(tt.installed, tt.latest)
+			if got != tt.want {
+				t.Errorf("StatusString(%q, %q) = %q, want %q",
+					tt.installed, tt.latest, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTruncatePath(t *testing.T) {
+	tests := []struct {
+		name   string
+		path   string
+		maxLen int
+		want   string
+	}{
+		{"empty path", "", 50, "—"},
+		{"short path", "/usr/bin/git", 50, "/usr/bin/git"},
+		{"exact length", "/usr/bin/git", 12, "/usr/bin/git"},
+		{"needs truncation", "/very/long/path/to/binary", 15, "...th/to/binary"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := TruncatePath(tt.path, tt.maxLen)
+			if got != tt.want {
+				t.Errorf("TruncatePath(%q, %d) = %q, want %q",
+					tt.path, tt.maxLen, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrimaryInstance(t *testing.T) {
+	t.Run("no instances", func(t *testing.T) {
+		tool := Tool{}
+		if got := tool.PrimaryInstance(); got != nil {
+			t.Errorf("PrimaryInstance() = %v, want nil", got)
+		}
+	})
+
+	t.Run("with instances", func(t *testing.T) {
+		tool := Tool{
+			Instances: []Instance{
+				{Path: "/usr/bin/git", Version: "2.43.0", Source: SourceApt},
+				{Path: "/usr/local/bin/git", Version: "2.44.0", Source: SourceBrew},
+			},
+		}
+		got := tool.PrimaryInstance()
+		if got == nil {
+			t.Fatal("PrimaryInstance() = nil, want non-nil")
+		}
+		if got.Path != "/usr/bin/git" {
+			t.Errorf("PrimaryInstance().Path = %q, want /usr/bin/git", got.Path)
+		}
+	})
+}
+
+func TestInstalledVersion(t *testing.T) {
+	t.Run("no instances", func(t *testing.T) {
+		tool := Tool{}
+		if got := tool.InstalledVersion(); got != "" {
+			t.Errorf("InstalledVersion() = %q, want empty", got)
+		}
+	})
+
+	t.Run("with version", func(t *testing.T) {
+		tool := Tool{
+			Instances: []Instance{{Version: "2.43.0"}},
+		}
+		if got := tool.InstalledVersion(); got != "2.43.0" {
+			t.Errorf("InstalledVersion() = %q, want 2.43.0", got)
+		}
+	})
+}
+
+func TestHasUpdate(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		latest  string
+		want    bool
+	}{
+		{"update available", "1.2.3", "1.2.4", true},
+		{"up to date", "1.2.3", "1.2.3", false},
+		{"no version", "", "1.2.3", false},
+		{"no latest", "1.2.3", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool := Tool{
+				Instances: []Instance{{Version: tt.version}},
+				Latest:    tt.latest,
+			}
+			if got := tool.HasUpdate(); got != tt.want {
+				t.Errorf("HasUpdate() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBestInstallSource(t *testing.T) {
+	pkgs := PackageIDs{
+		Winget: "Git.Git",
+		Choco:  "git",
+		Brew:   "git",
+		Apt:    "git",
+		Snap:   "git",
+		NPM:    "git",
+	}
+
+	got := pkgs.BestInstallSource()
+
+	// Platform-dependent expectation.
+	switch runtime.GOOS {
+	case "windows":
+		if got != SourceWinget {
+			t.Errorf("BestInstallSource() on Windows = %q, want winget", got)
+		}
+	case "darwin":
+		if got != SourceBrew {
+			t.Errorf("BestInstallSource() on macOS = %q, want brew", got)
+		}
+	default:
+		if got != SourceApt {
+			t.Errorf("BestInstallSource() on Linux = %q, want apt", got)
+		}
+	}
+}
+
+func TestBestInstallSource_NPMFallback(t *testing.T) {
+	pkgs := PackageIDs{NPM: "prettier"}
+	got := pkgs.BestInstallSource()
+	if got != SourceNPM {
+		t.Errorf("BestInstallSource() with only NPM = %q, want npm", got)
+	}
+}
+
+func TestBestInstallSource_Empty(t *testing.T) {
+	pkgs := PackageIDs{}
+	got := pkgs.BestInstallSource()
+	if got != "" {
+		t.Errorf("BestInstallSource() with no packages = %q, want empty", got)
+	}
+}

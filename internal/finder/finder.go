@@ -1,6 +1,7 @@
 package finder
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,8 +19,13 @@ var cachedPathExts struct {
 }
 
 // FindAll locates all installations of each curated tool across PATH.
-func FindAll(tools []registry.Tool) {
+// It populates the Instances field of each non-disabled tool in-place.
+// Returns an error if PATH is empty or not set.
+func FindAll(tools []registry.Tool) error {
 	pathDirs := pathDirectories()
+	if len(pathDirs) == 0 {
+		return fmt.Errorf("PATH is empty or not set")
+	}
 
 	for i := range tools {
 		if tools[i].Disabled {
@@ -27,10 +33,11 @@ func FindAll(tools []registry.Tool) {
 		}
 		tools[i].Instances = findInstances(&tools[i], pathDirs)
 	}
+	return nil
 }
 
 func findInstances(tool *registry.Tool, pathDirs []string) []registry.Instance {
-	seen := make(map[string]bool)
+	seen := make(map[string]struct{})
 	var instances []registry.Instance
 
 	for _, dir := range pathDirs {
@@ -44,10 +51,10 @@ func findInstances(tool *registry.Tool, pathDirs []string) []registry.Instance {
 				if err != nil || info.IsDir() {
 					continue
 				}
-				if seen[resolved] {
+				if _, exists := seen[resolved]; exists {
 					continue
 				}
-				seen[resolved] = true
+				seen[resolved] = struct{}{}
 
 				instances = append(instances, registry.Instance{
 					Path:   resolved,
@@ -64,8 +71,9 @@ func findInstances(tool *registry.Tool, pathDirs []string) []registry.Instance {
 			if err != nil {
 				continue
 			}
-			resolved, _ := filepath.EvalSymlinks(path)
-			if resolved == "" {
+			resolved, err := filepath.EvalSymlinks(path)
+			if err != nil || resolved == "" {
+				// Symlink resolution failed; use original path as fallback.
 				resolved = path
 			}
 			instances = append(instances, registry.Instance{
@@ -99,10 +107,14 @@ func pathDirectories() []string {
 		return nil
 	}
 	raw := strings.Split(pathEnv, string(os.PathListSeparator))
+	seen := make(map[string]struct{}, len(raw))
 	dirs := make([]string, 0, len(raw))
 	for _, d := range raw {
 		if d = strings.TrimSpace(d); d != "" {
-			dirs = append(dirs, d)
+			if _, exists := seen[d]; !exists {
+				seen[d] = struct{}{}
+				dirs = append(dirs, d)
+			}
 		}
 	}
 	return dirs
@@ -154,13 +166,17 @@ func detectSource(path string) registry.InstallSource {
 	case strings.Contains(lower, ".cargo/bin/"):
 		return registry.SourceCargo
 	case strings.Contains(lower, ".local/bin/"):
-		return registry.SourcePip
+		// ~/.local/bin is a general user-level directory (XDG standard) used by
+		// pip, pipx, cargo, go install, and manual copies. Attribute as manual
+		// since we can't reliably determine the actual installer.
+		return registry.SourceManual
 
 	// Windows: winget installs to many locations beyond Program Files.
 	case strings.Contains(lower, "program files"):
 		return registry.SourceWinget
 	case strings.Contains(lower, "8wekyb3d8bbwe"):
-		// WinGet source packages (e.g. fzf, bat, fd, helm via winget)
+		// 8wekyb3d8bbwe is the package family suffix for Microsoft Store (MSIX)
+		// sideloaded packages, used by WinGet-distributed tools like fzf, bat, fd.
 		return registry.SourceWinget
 	case strings.Contains(lower, "microsoft/windowsapps/"):
 		// Windows Store / App Execution Aliases (e.g. python)

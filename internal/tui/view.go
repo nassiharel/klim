@@ -389,8 +389,8 @@ func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 	for i, inst := range tool.Instances {
 		if inst.Version != "" && inst.Version != "—" {
 			if newestVer == "" || !registry.VersionsMatch(inst.Version, newestVer) {
-				// Simple heuristic: longer version or later in lexicographic order = newer.
-				if inst.Version > newestVer {
+				// Compare versions numerically to find the newest.
+				if registry.CompareVersions(inst.Version, newestVer) > 0 {
 					newestVer = inst.Version
 					newestIdx = i
 				}
@@ -477,7 +477,11 @@ func (m Model) renderHelp() string {
 		dimVersion.Render("r") + " refresh",
 		dimVersion.Render("q") + " quit",
 	}
-	return helpStyle.Render("  " + strings.Join(parts, "   "))
+	help := helpStyle.Render("  " + strings.Join(parts, "   "))
+	if m.statusMsg != "" {
+		help += "  " + upgradableStyle.Render(m.statusMsg)
+	}
+	return help
 }
 
 // --- Helpers ---

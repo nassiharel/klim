@@ -26,7 +26,9 @@ func runList(cmd *cobra.Command, args []string) error {
 	tools := registry.DefaultTools()
 
 	fmt.Fprintln(os.Stderr, "Finding tools...")
-	finder.FindAll(tools)
+	if err := finder.FindAll(tools); err != nil {
+		return err
+	}
 
 	fmt.Fprintln(os.Stderr, "Checking versions...")
 	pkgmgr.ResolveVersions(tools, runtime.NumCPU())

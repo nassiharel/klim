@@ -1,6 +1,9 @@
 package registry
 
-import "runtime"
+import (
+	"fmt"
+	"runtime"
+)
 
 // InstallSource identifies how a tool was installed.
 type InstallSource string
@@ -76,32 +79,48 @@ func (t *Tool) HasUpdate() bool {
 	return ver != "" && t.Latest != "" && !VersionsMatch(ver, t.Latest)
 }
 
-// InstallCmd returns the shell command to install this tool using the given source.
-func (p PackageIDs) InstallCmd(source InstallSource) string {
+// sourceCommands holds command templates for a package manager.
+// Each template uses %s as a placeholder for the package identifier.
+type sourceCommands struct {
+	install   string
+	upgrade   string
+	uninstall string
+}
+
+// commandTemplates maps each package manager to its command templates.
+var commandTemplates = map[InstallSource]sourceCommands{
+	SourceWinget: {"winget install --id %s", "winget upgrade --id %s", "winget uninstall --id %s"},
+	SourceChoco:  {"choco install %s", "choco upgrade %s", "choco uninstall %s"},
+	SourceBrew:   {"brew install %s", "brew upgrade %s", "brew uninstall %s"},
+	SourceApt:    {"sudo apt install %s", "sudo apt upgrade %s", "sudo apt remove %s"},
+	SourceSnap:   {"sudo snap install %s", "sudo snap refresh %s", "sudo snap remove %s"},
+	SourceNPM:    {"npm install -g %s", "npm update -g %s", "npm uninstall -g %s"},
+}
+
+// pkgID returns the package identifier for the given source, or "".
+func (p PackageIDs) pkgID(source InstallSource) string {
 	switch source {
 	case SourceWinget:
-		if p.Winget != "" {
-			return "winget install --id " + p.Winget
-		}
+		return p.Winget
 	case SourceChoco:
-		if p.Choco != "" {
-			return "choco install " + p.Choco
-		}
+		return p.Choco
 	case SourceBrew:
-		if p.Brew != "" {
-			return "brew install " + p.Brew
-		}
+		return p.Brew
 	case SourceApt:
-		if p.Apt != "" {
-			return "sudo apt install " + p.Apt
-		}
+		return p.Apt
 	case SourceSnap:
-		if p.Snap != "" {
-			return "sudo snap install " + p.Snap
-		}
+		return p.Snap
 	case SourceNPM:
-		if p.NPM != "" {
-			return "npm install -g " + p.NPM
+		return p.NPM
+	}
+	return ""
+}
+
+// InstallCmd returns the shell command to install this tool using the given source.
+func (p PackageIDs) InstallCmd(source InstallSource) string {
+	if id := p.pkgID(source); id != "" {
+		if tmpl, ok := commandTemplates[source]; ok {
+			return fmt.Sprintf(tmpl.install, id)
 		}
 	}
 	return ""
@@ -109,30 +128,9 @@ func (p PackageIDs) InstallCmd(source InstallSource) string {
 
 // UpgradeCmd returns the shell command to upgrade this tool using the given source.
 func (p PackageIDs) UpgradeCmd(source InstallSource) string {
-	switch source {
-	case SourceWinget:
-		if p.Winget != "" {
-			return "winget upgrade --id " + p.Winget
-		}
-	case SourceChoco:
-		if p.Choco != "" {
-			return "choco upgrade " + p.Choco
-		}
-	case SourceBrew:
-		if p.Brew != "" {
-			return "brew upgrade " + p.Brew
-		}
-	case SourceApt:
-		if p.Apt != "" {
-			return "sudo apt upgrade " + p.Apt
-		}
-	case SourceSnap:
-		if p.Snap != "" {
-			return "sudo snap refresh " + p.Snap
-		}
-	case SourceNPM:
-		if p.NPM != "" {
-			return "npm update -g " + p.NPM
+	if id := p.pkgID(source); id != "" {
+		if tmpl, ok := commandTemplates[source]; ok {
+			return fmt.Sprintf(tmpl.upgrade, id)
 		}
 	}
 	return ""
@@ -140,30 +138,9 @@ func (p PackageIDs) UpgradeCmd(source InstallSource) string {
 
 // RemoveCmd returns the shell command to remove/uninstall this tool.
 func (p PackageIDs) RemoveCmd(source InstallSource) string {
-	switch source {
-	case SourceWinget:
-		if p.Winget != "" {
-			return "winget uninstall --id " + p.Winget
-		}
-	case SourceChoco:
-		if p.Choco != "" {
-			return "choco uninstall " + p.Choco
-		}
-	case SourceBrew:
-		if p.Brew != "" {
-			return "brew uninstall " + p.Brew
-		}
-	case SourceApt:
-		if p.Apt != "" {
-			return "sudo apt remove " + p.Apt
-		}
-	case SourceSnap:
-		if p.Snap != "" {
-			return "sudo snap remove " + p.Snap
-		}
-	case SourceNPM:
-		if p.NPM != "" {
-			return "npm uninstall -g " + p.NPM
+	if id := p.pkgID(source); id != "" {
+		if tmpl, ok := commandTemplates[source]; ok {
+			return fmt.Sprintf(tmpl.uninstall, id)
 		}
 	}
 	return ""

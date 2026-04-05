@@ -22,7 +22,7 @@ type toolVersionMsg struct {
 func findToolsCmd() func() scanResultMsg {
 	return func() scanResultMsg {
 		tools := registry.DefaultTools()
-		finder.FindAll(tools)
+		_ = finder.FindAll(tools) // Best-effort; empty PATH returns no instances.
 		return scanResultMsg{tools: tools}
 	}
 }

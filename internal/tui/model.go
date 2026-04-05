@@ -49,6 +49,9 @@ type Model struct {
 
 	// Quitting.
 	quitting bool
+
+	// Status message (transient, e.g. error feedback).
+	statusMsg string
 }
 
 // NewModel creates a new TUI model.
@@ -249,11 +252,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			tool := &m.tools[idx]
 			if m.activeTab == tabDisabled {
 				// Re-enable.
-				_ = registry.SetToolEnabled(tool.Name, true)
+				if err := registry.SetToolEnabled(tool.Name, true); err != nil {
+					m.statusMsg = fmt.Sprintf("⚠ Could not save config: %v", err)
+				} else {
+					m.statusMsg = ""
+				}
 				tool.Disabled = false
 			} else {
 				// Disable.
-				_ = registry.SetToolEnabled(tool.Name, false)
+				if err := registry.SetToolEnabled(tool.Name, false); err != nil {
+					m.statusMsg = fmt.Sprintf("⚠ Could not save config: %v", err)
+				} else {
+					m.statusMsg = ""
+				}
 				tool.Disabled = true
 			}
 			m.applyFilter()
