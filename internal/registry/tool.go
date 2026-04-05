@@ -74,9 +74,18 @@ func (t *Tool) IsInstalled() bool {
 }
 
 // HasUpdate returns true if a newer version is available.
+// Returns false if the installed version is already newer than the latest
+// reported by the package manager (e.g. preview/RC vs stable channel).
 func (t *Tool) HasUpdate() bool {
 	ver := t.InstalledVersion()
-	return ver != "" && t.Latest != "" && !VersionsMatch(ver, t.Latest)
+	if ver == "" || t.Latest == "" {
+		return false
+	}
+	if VersionsMatch(ver, t.Latest) {
+		return false
+	}
+	// Only flag as update if latest is actually newer than installed.
+	return CompareVersions(t.Latest, ver) > 0
 }
 
 // sourceCommands holds command templates for a package manager.
@@ -209,7 +218,11 @@ func StatusString(installed, latest string) string {
 	if VersionsMatch(installed, latest) {
 		return "✓ up to date"
 	}
-	return "⬆ update"
+	// Only show update arrow if latest is actually newer.
+	if CompareVersions(latest, installed) > 0 {
+		return "⬆ update"
+	}
+	return "✓ up to date"
 }
 
 // TruncatePath shortens a path for display.

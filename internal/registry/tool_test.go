@@ -141,6 +141,7 @@ func TestStatusString(t *testing.T) {
 		{"no installed", "", "1.2.3", "?"},
 		{"no latest", "1.2.3", "", ""},
 		{"both empty", "", "", ""},
+		{"installed newer than latest", "10.0.426", "8.0.419", "✓ up to date"},
 	}
 
 	for _, tt := range tests {
@@ -232,6 +233,8 @@ func TestHasUpdate(t *testing.T) {
 		{"up to date", "1.2.3", "1.2.3", false},
 		{"no version", "", "1.2.3", false},
 		{"no latest", "1.2.3", "", false},
+		{"installed newer than latest", "10.0.426", "8.0.419", false},
+		{"installed newer preview", "2.0.0", "1.9.5", false},
 	}
 
 	for _, tt := range tests {
