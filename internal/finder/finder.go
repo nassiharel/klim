@@ -152,8 +152,22 @@ func detectSource(path string) registry.InstallSource {
 		return registry.SourceCargo
 	case strings.Contains(lower, ".local/bin/"):
 		return registry.SourcePip
+
+	// Windows: winget installs to many locations beyond Program Files.
 	case strings.Contains(lower, "program files"):
 		return registry.SourceWinget
+	case strings.Contains(lower, "8wekyb3d8bbwe"):
+		// WinGet source packages (e.g. fzf, bat, fd, helm via winget)
+		return registry.SourceWinget
+	case strings.Contains(lower, "microsoft/windowsapps/"):
+		// Windows Store / App Execution Aliases (e.g. python)
+		return registry.SourceWinget
+	case strings.Contains(lower, "appdata/local/programs/"):
+		// Per-user installs (VS Code, Azure Dev CLI, etc.)
+		return registry.SourceWinget
+	case strings.Contains(lower, "programdata/"):
+		return registry.SourceWinget
+
 	default:
 		return registry.SourceManual
 	}
