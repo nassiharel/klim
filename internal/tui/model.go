@@ -11,17 +11,30 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
+const (
+	tabInstalled = iota
+	tabUpdates
+	tabDiscover
+)
+
 // Model is the Bubbletea model for the interactive TUI.
 type Model struct {
 	tools   []registry.Tool
 	cursor  int
 	spinner spinner.Model
 
+	// Tabs.
+	activeTab int
+
 	// Filter.
 	filterInput   textinput.Model
 	filtering     bool
 	filterText    string
 	filteredIndex []int
+
+	// Detail view.
+	detailIdx int  // index into m.tools, -1 = no detail
+	showDetail bool
 
 	// Loading state.
 	phase   int // 0=scanning, 1=resolving, 2=done
@@ -49,12 +62,13 @@ func NewModel() Model {
 		filterInput: ti,
 		loading:     true,
 		phase:       0,
+		activeTab:   tabInstalled,
+		detailIdx:   -1,
 		width:       80,
 		height:      24,
 	}
 }
 
-// Init fires off the tool finding command (Phase 1).
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
@@ -62,25 +76,21 @@ func (m Model) Init() tea.Cmd {
 	)
 }
 
-// Update handles all messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
 	case scanResultMsg:
-		// Phase 1 complete: tools found, now resolve versions.
 		m.tools = msg.tools
 		m.phase = 1
 		m.applyFilter()
-		// Kick off Phase 2: version resolution.
 		return m, func() tea.Msg { return resolveVersionsCmd(m.tools)() }
 
 	case versionResultMsg:
-		// Phase 2 complete: all versions resolved.
 		m.phase = 2
 		m.loading = false
+		m.applyFilter()
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -95,11 +105,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
-
 	return m, nil
 }
 
-// View renders the full TUI.
 func (m Model) View() tea.View {
 	v := tea.NewView(m.renderView())
 	v.AltScreen = true
@@ -110,7 +118,6 @@ func (m Model) View() tea.View {
 func Run() error {
 	model := NewModel()
 	p := tea.NewProgram(model)
-
 	_, err := p.Run()
 	if err != nil {
 		return fmt.Errorf("TUI error: %w", err)
@@ -118,9 +125,20 @@ func Run() error {
 	return nil
 }
 
-// --- Private helpers ---
+// --- Key handling ---
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Detail view — Esc goes back.
+	if m.showDetail {
+		switch msg.String() {
+		case "esc", "q", "backspace":
+			m.showDetail = false
+			return m, nil
+		}
+		return m, nil
+	}
+
+	// Filter mode.
 	if m.filtering {
 		switch msg.String() {
 		case "esc":
@@ -145,6 +163,31 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
+	case "tab":
+		m.activeTab = (m.activeTab + 1) % 3
+		m.cursor = 0
+		m.applyFilter()
+		return m, nil
+	case "shift+tab":
+		m.activeTab = (m.activeTab + 2) % 3
+		m.cursor = 0
+		m.applyFilter()
+		return m, nil
+	case "1":
+		m.activeTab = tabInstalled
+		m.cursor = 0
+		m.applyFilter()
+		return m, nil
+	case "2":
+		m.activeTab = tabUpdates
+		m.cursor = 0
+		m.applyFilter()
+		return m, nil
+	case "3":
+		m.activeTab = tabDiscover
+		m.cursor = 0
+		m.applyFilter()
+		return m, nil
 	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
@@ -160,6 +203,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		m.filtering = true
 		return m, m.filterInput.Focus()
+	case "enter":
+		if m.cursor < len(m.filteredIndex) {
+			m.detailIdx = m.filteredIndex[m.cursor]
+			m.showDetail = true
+		}
+		return m, nil
 	case "r":
 		m.loading = true
 		m.phase = 0
@@ -171,25 +220,56 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			func() tea.Msg { return findToolsCmd()() },
 		)
 	}
-
 	return m, nil
 }
+
+// --- Filtering ---
 
 func (m *Model) applyFilter() {
 	m.filteredIndex = nil
 	filter := strings.ToLower(m.filterText)
 
 	for i, tool := range m.tools {
-		if !tool.IsInstalled() {
+		if !m.matchesTab(tool) {
 			continue
 		}
-		if filter == "" ||
-			strings.Contains(strings.ToLower(tool.DisplayName), filter) ||
-			strings.Contains(strings.ToLower(tool.Name), filter) {
-			m.filteredIndex = append(m.filteredIndex, i)
+		if filter != "" &&
+			!strings.Contains(strings.ToLower(tool.DisplayName), filter) &&
+			!strings.Contains(strings.ToLower(tool.Name), filter) &&
+			!strings.Contains(strings.ToLower(tool.Category), filter) {
+			continue
 		}
+		m.filteredIndex = append(m.filteredIndex, i)
 	}
 	if m.cursor >= len(m.filteredIndex) {
 		m.cursor = max(0, len(m.filteredIndex)-1)
 	}
+}
+
+func (m *Model) matchesTab(tool registry.Tool) bool {
+	switch m.activeTab {
+	case tabInstalled:
+		return tool.IsInstalled()
+	case tabUpdates:
+		return tool.HasUpdate()
+	case tabDiscover:
+		return !tool.IsInstalled()
+	}
+	return false
+}
+
+// --- Stats ---
+
+func (m Model) stats() (installed, updates, notInstalled int) {
+	for _, tool := range m.tools {
+		if tool.IsInstalled() {
+			installed++
+			if tool.HasUpdate() {
+				updates++
+			}
+		} else {
+			notInstalled++
+		}
+	}
+	return
 }

@@ -1,5 +1,7 @@
 package registry
 
+import "runtime"
+
 // InstallSource identifies how a tool was installed.
 type InstallSource string
 
@@ -21,6 +23,7 @@ const (
 type Tool struct {
 	Name        string
 	DisplayName string
+	Category    string
 	BinaryNames []string
 	Packages    PackageIDs
 	Instances   []Instance
@@ -66,6 +69,111 @@ func (t *Tool) IsInstalled() bool {
 	return len(t.Instances) > 0
 }
 
+// HasUpdate returns true if a newer version is available.
+func (t *Tool) HasUpdate() bool {
+	ver := t.InstalledVersion()
+	return ver != "" && t.Latest != "" && !VersionsMatch(ver, t.Latest)
+}
+
+// InstallCmd returns the shell command to install this tool using the given source.
+func (p PackageIDs) InstallCmd(source InstallSource) string {
+	switch source {
+	case SourceWinget:
+		if p.Winget != "" {
+			return "winget install --id " + p.Winget
+		}
+	case SourceChoco:
+		if p.Choco != "" {
+			return "choco install " + p.Choco
+		}
+	case SourceBrew:
+		if p.Brew != "" {
+			return "brew install " + p.Brew
+		}
+	case SourceApt:
+		if p.Apt != "" {
+			return "sudo apt install " + p.Apt
+		}
+	case SourceSnap:
+		if p.Snap != "" {
+			return "sudo snap install " + p.Snap
+		}
+	case SourceNPM:
+		if p.NPM != "" {
+			return "npm install -g " + p.NPM
+		}
+	}
+	return ""
+}
+
+// UpgradeCmd returns the shell command to upgrade this tool using the given source.
+func (p PackageIDs) UpgradeCmd(source InstallSource) string {
+	switch source {
+	case SourceWinget:
+		if p.Winget != "" {
+			return "winget upgrade --id " + p.Winget
+		}
+	case SourceChoco:
+		if p.Choco != "" {
+			return "choco upgrade " + p.Choco
+		}
+	case SourceBrew:
+		if p.Brew != "" {
+			return "brew upgrade " + p.Brew
+		}
+	case SourceApt:
+		if p.Apt != "" {
+			return "sudo apt upgrade " + p.Apt
+		}
+	case SourceSnap:
+		if p.Snap != "" {
+			return "sudo snap refresh " + p.Snap
+		}
+	case SourceNPM:
+		if p.NPM != "" {
+			return "npm update -g " + p.NPM
+		}
+	}
+	return ""
+}
+
+// BestInstallSource returns the recommended package manager for the current OS.
+// Priority: Windows: winget→choco→npm, macOS: brew→npm, Linux: apt→snap→brew→npm.
+func (p PackageIDs) BestInstallSource() InstallSource {
+	switch runtime.GOOS {
+	case "windows":
+		if p.Winget != "" {
+			return SourceWinget
+		}
+		if p.Choco != "" {
+			return SourceChoco
+		}
+	case "darwin":
+		if p.Brew != "" {
+			return SourceBrew
+		}
+	default: // linux
+		if p.Apt != "" {
+			return SourceApt
+		}
+		if p.Snap != "" {
+			return SourceSnap
+		}
+		if p.Brew != "" {
+			return SourceBrew
+		}
+	}
+	if p.NPM != "" {
+		return SourceNPM
+	}
+	return ""
+}
+
+// BestInstallCmd returns the install command using the best source for this OS.
+func (p PackageIDs) BestInstallCmd() string {
+	return p.InstallCmd(p.BestInstallSource())
+}
+
 // StatusString compares installed vs latest and returns a display string.
 func StatusString(installed, latest string) string {
 	if installed == "" {
@@ -83,7 +191,7 @@ func StatusString(installed, latest string) string {
 	return "⬆ update"
 }
 
-// TruncatePath shortens a path for display, keeping the tail.
+// TruncatePath shortens a path for display.
 func TruncatePath(path string, maxLen int) string {
 	if path == "" {
 		return "—"

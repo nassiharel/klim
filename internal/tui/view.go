@@ -4,36 +4,29 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/nassiharel/clim/internal/registry"
 )
+
+const nameCol = 20
 
 func (m Model) renderView() string {
 	if m.quitting {
 		return ""
 	}
 
+	// Detail view.
+	if m.showDetail && m.detailIdx >= 0 && m.detailIdx < len(m.tools) {
+		return m.renderDetailView(m.tools[m.detailIdx])
+	}
+
 	var b strings.Builder
 
-	title := titleStyle.Render("clim — CLI Manager")
-	switch m.phase {
-	case 0:
-		title += " " + loadingStyle.Render(m.spinner.View()+" finding tools...")
-	case 1:
-		title += " " + loadingStyle.Render(m.spinner.View()+" checking versions...")
-	default:
-		title += " " + loadingStyle.Render(fmt.Sprintf("(%d tools)", len(m.filteredIndex)))
-	}
-	b.WriteString(title + "\n\n")
+	// Title + tabs + summary.
+	b.WriteString(m.renderTitleBar() + "\n")
+	b.WriteString(m.renderTabBar() + "\n\n")
 
-	showPath := m.width >= 120
-	showSource := m.width >= 90
-
-	b.WriteString(m.renderHeader(showPath, showSource) + "\n")
-	b.WriteString(m.renderSeparator(showPath, showSource) + "\n")
-
-	visibleRows := m.height - 8
+	// Rows.
+	visibleRows := m.height - 6
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
@@ -45,127 +38,306 @@ func (m Model) renderView() string {
 
 	for vi := start; vi < len(m.filteredIndex) && vi < start+visibleRows; vi++ {
 		tool := m.tools[m.filteredIndex[vi]]
-		b.WriteString(m.renderToolRow(tool, vi == m.cursor, showPath, showSource) + "\n")
+		selected := vi == m.cursor
+		b.WriteString(m.renderRow(tool, selected) + "\n")
 	}
 
+	// Pad.
 	rendered := min(len(m.filteredIndex)-start, visibleRows)
-	for range visibleRows - max(rendered, 0) {
+	for range max(visibleRows-rendered, 0) {
 		b.WriteString("\n")
 	}
 
+	// Empty state.
+	if len(m.filteredIndex) == 0 && m.phase >= 2 {
+		msg := ""
+		switch m.activeTab {
+		case tabInstalled:
+			msg = "  No installed tools found."
+		case tabUpdates:
+			msg = "  All tools are up to date! ✓"
+		case tabDiscover:
+			msg = "  All curated tools are already installed!"
+		}
+		b.WriteString("\n" + dimVersion.Render(msg) + "\n")
+	}
+
 	b.WriteString("\n")
+
+	// Filter or help.
 	if m.filtering {
-		b.WriteString(filterPromptStyle.Render("/ ") + m.filterInput.View() + "\n")
+		b.WriteString("  " + filterPromptStyle.Render("/") + " " + m.filterInput.View())
+	} else {
+		b.WriteString(m.renderHelp())
 	}
-	b.WriteString(m.renderHelp())
 
-	return borderStyle.Render(b.String())
+	return b.String()
 }
 
-func (m Model) renderHeader(showPath, showSource bool) string {
-	parts := []string{
-		"  " + headerStyle.Render(padRight("Tool", 18)),
-		headerStyle.Render(padRight("Version", 14)),
-		headerStyle.Render(padRight("Latest", 14)),
+// --- Title & Tabs ---
+
+func (m Model) renderTitleBar() string {
+	title := titleStyle.Render("  clim")
+
+	if m.phase == 0 {
+		return title + "  " + loadingStyle.Render(m.spinner.View()+" finding tools...")
 	}
-	if showSource {
-		parts = append(parts, headerStyle.Render(padRight("Source", 10)))
+	if m.phase == 1 {
+		return title + "  " + loadingStyle.Render(m.spinner.View()+" checking versions...")
 	}
-	parts = append(parts, headerStyle.Render(padRight("Status", 14)))
-	if showPath {
-		parts = append(parts, headerStyle.Render(padRight("Path", 40)))
+
+	inst, upd, notInst := m.stats()
+	summary := fmt.Sprintf("%d/%d installed", inst, len(m.tools))
+	if upd > 0 {
+		summary += fmt.Sprintf(" · %s", upgradableStyle.Render(fmt.Sprintf("%d updates", upd)))
 	}
-	return strings.Join(parts, "  ")
+	if notInst > 0 {
+		summary += fmt.Sprintf(" · %d to discover", notInst)
+	}
+
+	return title + "  " + summaryStyle.Render(summary)
 }
 
-func (m Model) renderSeparator(showPath, showSource bool) string {
-	s := "  " + strings.Repeat("─", 18) + "  " + strings.Repeat("─", 14) + "  " + strings.Repeat("─", 14)
-	if showSource {
-		s += "  " + strings.Repeat("─", 10)
+func (m Model) renderTabBar() string {
+	tabs := []struct {
+		label string
+		idx   int
+	}{
+		{"Installed", tabInstalled},
+		{"Updates", tabUpdates},
+		{"Discover", tabDiscover},
 	}
-	s += "  " + strings.Repeat("─", 14)
-	if showPath {
-		s += "  " + strings.Repeat("─", 40)
+
+	var parts []string
+	for _, tab := range tabs {
+		style := inactiveTabStyle
+		if tab.idx == m.activeTab {
+			style = activeTabStyle
+		}
+		parts = append(parts, style.Render(tab.label))
 	}
-	return lipgloss.NewStyle().Foreground(dimColor).Render(s)
+
+	return "  " + strings.Join(parts, " ")
 }
 
-func (m Model) renderToolRow(tool registry.Tool, selected, showPath, showSource bool) string {
+// --- Row rendering per tab ---
+
+func (m Model) renderRow(tool registry.Tool, selected bool) string {
+	var line string
+
+	switch m.activeTab {
+	case tabInstalled:
+		line = m.renderInstalledRow(tool, selected)
+	case tabUpdates:
+		line = m.renderUpdateRow(tool, selected)
+	case tabDiscover:
+		line = m.renderDiscoverRow(tool, selected)
+	}
+
+	if selected {
+		lineWidth := runeLen(line)
+		if lineWidth < m.width {
+			line += strings.Repeat(" ", m.width-lineWidth)
+		}
+		line = selectedRowStyle.Render(line)
+	}
+
+	return line
+}
+
+func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 	cursor := "  "
 	if selected {
 		cursor = "▸ "
 	}
 
-	primary := tool.PrimaryInstance()
-	ver, lat := "—", ""
-	if m.phase < 2 {
-		ver, lat = "…", "…"
-	} else if primary != nil && primary.Version != "" {
-		ver = primary.Version
-	}
-	if m.phase >= 2 {
-		lat = tool.Latest
+	name := nameStyle.Render(pad(tool.DisplayName, nameCol))
+	verInfo := m.renderVersionInfo(tool)
+
+	src := ""
+	if primary := tool.PrimaryInstance(); primary != nil && primary.Source != "" {
+		src = sourceStyle.Render(string(primary.Source))
 	}
 
-	verStr := padRight(ver, 14)
-	latStr := padRight(lat, 14)
-	if ver == "—" || ver == "…" {
-		verStr = loadingStyle.Render(verStr)
-	}
-	if lat == "…" {
-		latStr = loadingStyle.Render(latStr)
+	line := cursor + name + "  " + verInfo
+	if src != "" {
+		line += "  " + src
 	}
 
-	parts := []string{cursor + padRight(tool.DisplayName, 18), verStr, latStr}
-
-	if showSource && primary != nil {
-		parts = append(parts, padRight(string(primary.Source), 10))
-	} else if showSource {
-		parts = append(parts, padRight("", 10))
+	// Show instance count if multiple.
+	if len(tool.Instances) > 1 {
+		line += "  " + dimVersion.Render(fmt.Sprintf("(%d instances)", len(tool.Instances)))
 	}
 
-	statusText, statusSty := renderStatus(ver, tool.Latest, m.phase)
-	parts = append(parts, statusSty.Render(padRight(statusText, 14)))
-
-	if showPath {
-		p := ""
-		if primary != nil {
-			p = registry.TruncatePath(primary.Path, 40)
-		}
-		parts = append(parts, padRight(p, 40))
-	}
-
-	line := strings.Join(parts, "  ")
-	if selected {
-		return selectedStyle.Render(line)
-	}
 	return line
 }
 
-func renderStatus(installed, latest string, phase int) (string, lipgloss.Style) {
-	if phase < 2 {
-		return "…", loadingStyle
+func (m Model) renderUpdateRow(tool registry.Tool, selected bool) string {
+	cursor := "  "
+	if selected {
+		cursor = "▸ "
 	}
-	status := registry.StatusString(installed, latest)
-	switch status {
-	case "✓ up to date":
-		return status, upToDateStyle
-	case "⬆ update":
-		return status, upgradableStyle
-	default:
-		return status, loadingStyle
+
+	name := nameStyle.Render(pad(tool.DisplayName, nameCol))
+	ver := tool.InstalledVersion()
+	verStr := versionStyle.Render(ver) + arrowStyle.Render(" → ") + upgradableStyle.Render(tool.Latest)
+
+	// Show upgrade command.
+	cmd := ""
+	if primary := tool.PrimaryInstance(); primary != nil {
+		cmd = tool.Packages.UpgradeCmd(primary.Source)
 	}
+
+	line := cursor + name + "  " + verStr
+	if cmd != "" {
+		line += "  " + detailCmdStyle.Render(cmd)
+	}
+
+	return line
 }
+
+func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
+	cursor := "  "
+	if selected {
+		cursor = "▸ "
+	}
+
+	name := pad(tool.DisplayName, nameCol)
+	cat := categoryStyle.Render(pad(tool.Category, 12))
+	cmd := tool.Packages.BestInstallCmd()
+
+	line := cursor + dimVersion.Render(name) + "  " + cat
+	if cmd != "" {
+		line += "  " + detailCmdStyle.Render(cmd)
+	}
+
+	return line
+}
+
+// --- Version info (Installed tab) ---
+
+func (m Model) renderVersionInfo(tool registry.Tool) string {
+	if m.phase < 2 {
+		return loadingStyle.Render("…")
+	}
+
+	primary := tool.PrimaryInstance()
+	ver := ""
+	if primary != nil {
+		ver = primary.Version
+	}
+	latest := tool.Latest
+
+	if ver == "" && latest == "" {
+		return dimVersion.Render("—")
+	}
+	if ver != "" && latest == "" {
+		return versionStyle.Render(ver)
+	}
+	if ver == "" && latest != "" {
+		return dimVersion.Render("—") + arrowStyle.Render(" → ") + versionStyle.Render(latest) + " " + dimVersion.Render("?")
+	}
+	if registry.VersionsMatch(ver, latest) {
+		return versionStyle.Render(ver) + " " + upToDateStyle.Render("✓")
+	}
+	return versionStyle.Render(ver) + arrowStyle.Render(" → ") + upgradableStyle.Render(latest) + " " + upgradableStyle.Render("⬆")
+}
+
+// --- Detail view ---
+
+func (m Model) renderDetailView(tool registry.Tool) string {
+	var b strings.Builder
+
+	// Header.
+	b.WriteString("  " + detailTitleStyle.Render(tool.DisplayName))
+	b.WriteString("  " + categoryStyle.Render(tool.Category))
+	b.WriteString("  " + strings.Repeat("─", max(m.width-runeLen(tool.DisplayName)-runeLen(tool.Category)-8, 10)))
+	b.WriteString("\n\n")
+
+	if tool.IsInstalled() {
+		// Instances.
+		b.WriteString("  " + detailLabelStyle.Render("Instances:") + "\n")
+		for i, inst := range tool.Instances {
+			bullet := "○"
+			style := detailSecondary
+			if i == 0 {
+				bullet = "●"
+				style = detailPrimary
+			}
+			ver := inst.Version
+			if ver == "" {
+				ver = "—"
+			}
+			b.WriteString(fmt.Sprintf("    %s  %s  %s  %s\n",
+				style.Render(bullet),
+				pad(ver, 14),
+				sourceStyle.Render(pad(string(inst.Source), 8)),
+				dimVersion.Render(registry.TruncatePath(inst.Path, m.width-40)),
+			))
+		}
+		b.WriteString("\n")
+
+		// Version status.
+		if tool.Latest != "" {
+			if registry.VersionsMatch(tool.InstalledVersion(), tool.Latest) {
+				b.WriteString("  " + upToDateStyle.Render("✓ Up to date") + "  " + dimVersion.Render("("+tool.Latest+")") + "\n")
+			} else {
+				b.WriteString("  " + upgradableStyle.Render("⬆ Update available: "+tool.Latest) + "\n")
+			}
+			b.WriteString("\n")
+		}
+
+		// Commands.
+		if primary := tool.PrimaryInstance(); primary != nil {
+			if cmd := tool.Packages.UpgradeCmd(primary.Source); cmd != "" {
+				b.WriteString("  " + detailLabelStyle.Render("Upgrade:") + "  " + detailCmdStyle.Render(cmd) + "\n")
+			}
+		}
+	} else {
+		b.WriteString("  " + dimVersion.Render("Not installed") + "\n\n")
+	}
+
+	// Install commands for all available sources.
+	b.WriteString("  " + detailLabelStyle.Render("Install:") + "\n")
+	for _, src := range []registry.InstallSource{
+		registry.SourceWinget, registry.SourceChoco, registry.SourceBrew,
+		registry.SourceApt, registry.SourceSnap, registry.SourceNPM,
+	} {
+		if cmd := tool.Packages.InstallCmd(src); cmd != "" {
+			b.WriteString("    " + sourceStyle.Render(pad(string(src), 8)) + detailCmdStyle.Render(cmd) + "\n")
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString("  " + helpStyle.Render("Esc back"))
+
+	return b.String()
+}
+
+// --- Help ---
 
 func (m Model) renderHelp() string {
-	return helpStyle.Render(strings.Join([]string{
-		"↑/↓ navigate", "/ filter", "r refresh", "q quit",
-	}, "  "))
+	parts := []string{
+		dimVersion.Render("↑↓") + " navigate",
+		dimVersion.Render("Tab") + " switch",
+		dimVersion.Render("Enter") + " detail",
+		dimVersion.Render("/") + " filter",
+		dimVersion.Render("r") + " refresh",
+		dimVersion.Render("q") + " quit",
+	}
+	return helpStyle.Render("  " + strings.Join(parts, "   "))
 }
 
-func padRight(s string, width int) string {
-	if len(s) >= width {
-		return s[:width]
+// --- Helpers ---
+
+func pad(s string, width int) string {
+	r := []rune(s)
+	if len(r) >= width {
+		return string(r[:width])
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	return s + strings.Repeat(" ", width-len(r))
+}
+
+func runeLen(s string) int {
+	return len([]rune(s))
 }
