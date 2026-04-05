@@ -1,25 +1,20 @@
 package tui
 
 import (
-	"context"
 	"fmt"
-	"runtime"
 	"strings"
-	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/registry"
 )
 
 // ToolRow represents a single row in the TUI table.
 type ToolRow struct {
-	Name    string
-	Path    string
-	Version string // empty while loading, "(unknown)" if detection failed
+	Name string
+	Path string
 }
 
 // Model is the Bubbletea model for the interactive TUI.
@@ -67,11 +62,11 @@ func NewModel(cfg config.Config) Model {
 	}
 }
 
-// Init fires off the PATH scan and version detection command.
+// Init fires off the PATH scan command.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
-		scanAndDetectCmd(m.cfg),
+		func() tea.Msg { return scanPATHCmd(m.cfg)() },
 	)
 }
 
@@ -85,19 +80,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case scanResultMsg:
 		m.loading = false
 		if msg.err != nil {
-			// Show error in the title area — tools stay empty.
 			return m, nil
 		}
 		m.tools = make([]ToolRow, len(msg.tools))
 		for i, t := range msg.tools {
-			ver := t.Version
-			if ver == "" {
-				ver = "(unknown)"
-			}
 			m.tools[i] = ToolRow{
-				Name:    t.Name,
-				Path:    t.Path,
-				Version: ver,
+				Name: t.Name,
+				Path: t.Path,
 			}
 		}
 		m.applyFilter()
@@ -196,7 +185,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		return m, tea.Batch(
 			m.spinner.Tick,
-			scanAndDetectCmd(m.cfg),
+			func() tea.Msg { return scanPATHCmd(m.cfg)() },
 		)
 	}
 
@@ -225,27 +214,4 @@ func (m *Model) applyFilter() {
 	if m.cursor >= len(m.filteredIndex) {
 		m.cursor = max(0, len(m.filteredIndex)-1)
 	}
-}
-
-// scanAndDetectCmd returns a Bubbletea command that scans PATH and detects versions.
-func scanAndDetectCmd(cfg config.Config) tea.Cmd {
-	return func() tea.Msg {
-		tools, err := scanAndDetect(cfg)
-		return scanResultMsg{tools: tools, err: err}
-	}
-}
-
-// scanAndDetect performs the actual PATH scan and version detection.
-func scanAndDetect(cfg config.Config) ([]registry.Tool, error) {
-	// Import scanner here to avoid circular imports — use the scanner package.
-	// We inline the import at the package level.
-	tools, err := scanPATH(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	timeout := time.Duration(cfg.EffectiveTimeout()) * time.Second
-	detectAll(context.Background(), tools, timeout, runtime.NumCPU()*2)
-
-	return tools, nil
 }

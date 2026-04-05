@@ -7,8 +7,4 @@ type Tool struct {
 
 	// Path is the absolute resolved path to the binary (e.g., "/usr/bin/git").
 	Path string
-
-	// Version is the detected version string, populated by the detector.
-	// Empty if version detection failed or was not attempted.
-	Version string
 }

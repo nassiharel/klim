@@ -11,7 +11,7 @@ func TestLoadMissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error for missing file, got: %v", err)
 	}
-	if len(cfg.Include) != 0 || len(cfg.Exclude) != 0 || cfg.VersionTimeout != 0 {
+	if len(cfg.Include) != 0 || len(cfg.Exclude) != 0 {
 		t.Fatalf("expected zero-value config, got: %+v", cfg)
 	}
 }
@@ -20,9 +20,8 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "subdir", "config.json")
 
 	original := Config{
-		Include:        []string{"git", "go"},
-		Exclude:        []string{"vim"},
-		VersionTimeout: 3,
+		Include: []string{"git", "go"},
+		Exclude: []string{"vim"},
 	}
 
 	if err := Save(path, original); err != nil {
@@ -39,9 +38,6 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 	}
 	if len(loaded.Exclude) != 1 || loaded.Exclude[0] != "vim" {
 		t.Errorf("Exclude mismatch: %v", loaded.Exclude)
-	}
-	if loaded.VersionTimeout != 3 {
-		t.Errorf("VersionTimeout mismatch: %d", loaded.VersionTimeout)
 	}
 }
 
@@ -106,16 +102,42 @@ func TestApplyFilter_IncludeTakesPrecedence(t *testing.T) {
 	}
 }
 
-func TestEffectiveTimeout_Default(t *testing.T) {
-	cfg := Config{}
-	if cfg.EffectiveTimeout() != 5 {
-		t.Errorf("expected default 5, got %d", cfg.EffectiveTimeout())
+func TestApplyFilter_DefaultExcludeExactMatch(t *testing.T) {
+	cfg := Config{} // no user include/exclude
+
+	// These are in the built-in exclude set.
+	for _, name := range []string{"createdump", "unins000", "RefreshEnv", "nodevars", "bcp", "sqlcmd"} {
+		if cfg.ApplyFilter(name) {
+			t.Errorf("%q should be default-excluded", name)
+		}
 	}
 }
 
-func TestEffectiveTimeout_Custom(t *testing.T) {
-	cfg := Config{VersionTimeout: 10}
-	if cfg.EffectiveTimeout() != 10 {
-		t.Errorf("expected 10, got %d", cfg.EffectiveTimeout())
+func TestApplyFilter_DefaultExcludePrefixMatch(t *testing.T) {
+	cfg := Config{}
+
+	for _, name := range []string{"docker-credential-desktop", "docker-credential-ecr-login", "lens-cli-windows-amd64", "code-tunnel-insiders"} {
+		if cfg.ApplyFilter(name) {
+			t.Errorf("%q should be default-excluded by prefix", name)
+		}
+	}
+}
+
+func TestApplyFilter_DefaultExcludeDoesNotBlockDevTools(t *testing.T) {
+	cfg := Config{}
+
+	for _, name := range []string{"git", "docker", "node", "go", "az", "kubectl", "gh"} {
+		if !cfg.ApplyFilter(name) {
+			t.Errorf("%q should NOT be excluded", name)
+		}
+	}
+}
+
+func TestApplyFilter_IncludeOverridesDefaultExclude(t *testing.T) {
+	// If user explicitly includes a default-excluded binary, it should show.
+	cfg := Config{Include: []string{"createdump"}}
+
+	if !cfg.ApplyFilter("createdump") {
+		t.Error("explicit include should override default exclude")
 	}
 }

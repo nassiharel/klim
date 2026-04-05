@@ -1,27 +1,21 @@
 package tui
 
 import (
-	"context"
-	"time"
-
 	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/detector"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/scanner"
 )
 
-// scanResultMsg is sent when PATH scanning and version detection complete.
+// scanResultMsg is sent when PATH scanning completes.
 type scanResultMsg struct {
 	tools []registry.Tool
 	err   error
 }
 
-// scanPATH wraps scanner.ScanPATH for use within the tui package.
-func scanPATH(cfg config.Config) ([]registry.Tool, error) {
-	return scanner.ScanPATH(cfg)
-}
-
-// detectAll wraps detector.DetectAll for use within the tui package.
-func detectAll(ctx context.Context, tools []registry.Tool, timeout time.Duration, concurrency int) {
-	detector.DetectAll(ctx, tools, timeout, concurrency)
+// scanPATHCmd returns a Bubbletea command that scans PATH for executables.
+func scanPATHCmd(cfg config.Config) func() scanResultMsg {
+	return func() scanResultMsg {
+		tools, err := scanner.ScanPATH(cfg)
+		return scanResultMsg{tools: tools, err: err}
+	}
 }

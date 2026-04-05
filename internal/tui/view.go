@@ -24,15 +24,12 @@ func (m Model) renderView() string {
 	}
 	b.WriteString(title + "\n\n")
 
-	// Calculate column widths based on terminal width.
-	showPath := m.width >= 80
-
 	// Header.
-	header := m.renderHeader(showPath)
+	header := m.renderHeader()
 	b.WriteString(header + "\n")
 
 	// Separator.
-	sep := m.renderSeparator(showPath)
+	sep := m.renderSeparator()
 	b.WriteString(sep + "\n")
 
 	// Rows.
@@ -51,7 +48,7 @@ func (m Model) renderView() string {
 		idx := m.filteredIndex[vi]
 		row := m.tools[idx]
 		selected := vi == m.cursor
-		b.WriteString(m.renderRow(row, selected, showPath) + "\n")
+		b.WriteString(m.renderRow(row, selected) + "\n")
 	}
 
 	// Pad remaining lines.
@@ -76,47 +73,26 @@ func (m Model) renderView() string {
 	return borderStyle.Render(b.String())
 }
 
-func (m Model) renderHeader(showPath bool) string {
+func (m Model) renderHeader() string {
 	name := headerStyle.Render(padRight("Name", 25))
-	ver := headerStyle.Render(padRight("Version", 30))
-
-	if showPath {
-		path := headerStyle.Render(padRight("Path", 40))
-		return fmt.Sprintf("  %s  %s  %s", name, ver, path)
-	}
-	return fmt.Sprintf("  %s  %s", name, ver)
+	path := headerStyle.Render(padRight("Path", 50))
+	return fmt.Sprintf("  %s  %s", name, path)
 }
 
-func (m Model) renderSeparator(showPath bool) string {
-	s := "  " + strings.Repeat("─", 25) + "  " +
-		strings.Repeat("─", 30)
-	if showPath {
-		s += "  " + strings.Repeat("─", 40)
-	}
+func (m Model) renderSeparator() string {
+	s := "  " + strings.Repeat("─", 25) + "  " + strings.Repeat("─", 50)
 	return lipgloss.NewStyle().Foreground(dimColor).Render(s)
 }
 
-func (m Model) renderRow(row ToolRow, selected, showPath bool) string {
+func (m Model) renderRow(row ToolRow, selected bool) string {
 	cursor := "  "
 	if selected {
 		cursor = "▸ "
 	}
 
 	name := padRight(row.Name, 25)
-	ver := row.Version
-	if ver == "" || ver == "(unknown)" {
-		ver = loadingStyle.Render(padRight("(unknown)", 30))
-	} else {
-		ver = padRight(ver, 30)
-	}
-
-	var line string
-	if showPath {
-		path := padRight(truncatePath(row.Path, 40), 40)
-		line = fmt.Sprintf("%s%s  %s  %s", cursor, name, ver, path)
-	} else {
-		line = fmt.Sprintf("%s%s  %s", cursor, name, ver)
-	}
+	path := padRight(truncatePath(row.Path, 50), 50)
+	line := fmt.Sprintf("%s%s  %s", cursor, name, path)
 
 	if selected {
 		return selectedStyle.Render(line)
