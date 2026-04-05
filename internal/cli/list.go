@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -29,6 +31,10 @@ func runList(cmd *cobra.Command, args []string) error {
 	fmt.Fprintln(os.Stderr, "Checking versions...")
 	pkgmgr.ResolveVersions(tools, runtime.NumCPU())
 	detector.EnrichFallback(tools)
+
+	sort.Slice(tools, func(i, j int) bool {
+		return strings.ToLower(tools[i].Name) < strings.ToLower(tools[j].Name)
+	})
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "TOOL\tVERSION\tLATEST\tSOURCE\tSTATUS\tPATH")

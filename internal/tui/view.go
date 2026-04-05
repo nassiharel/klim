@@ -7,7 +7,15 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
-const nameCol = 20
+const nameCol = 30 // wider to fit "az (Azure CLI)" style labels
+
+// toolLabel returns "name (DisplayName)" or just "name" if they're the same.
+func toolLabel(tool registry.Tool) string {
+	if tool.DisplayName == "" || strings.EqualFold(tool.Name, tool.DisplayName) {
+		return tool.Name
+	}
+	return tool.Name + " " + sourceStyle.Render("("+tool.DisplayName+")")
+}
 
 func (m Model) renderView() string {
 	if m.quitting {
@@ -151,7 +159,7 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 		cursor = "▸ "
 	}
 
-	name := nameStyle.Render(pad(tool.DisplayName, nameCol))
+	name := nameStyle.Render(pad(toolLabel(tool), nameCol))
 	verInfo := m.renderVersionInfo(tool)
 
 	src := ""
@@ -178,7 +186,7 @@ func (m Model) renderUpdateRow(tool registry.Tool, selected bool) string {
 		cursor = "▸ "
 	}
 
-	name := nameStyle.Render(pad(tool.DisplayName, nameCol))
+	name := nameStyle.Render(pad(toolLabel(tool), nameCol))
 	ver := tool.InstalledVersion()
 	verStr := versionStyle.Render(ver) + arrowStyle.Render(" → ") + upgradableStyle.Render(tool.Latest)
 
@@ -202,7 +210,7 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 		cursor = "▸ "
 	}
 
-	name := pad(tool.DisplayName, nameCol)
+	name := pad(toolLabel(tool), nameCol)
 	cat := categoryStyle.Render(pad(tool.Category, 12))
 	cmd := tool.Packages.BestInstallCmd()
 
@@ -249,9 +257,13 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	var b strings.Builder
 
 	// Header.
-	b.WriteString("  " + detailTitleStyle.Render(tool.DisplayName))
+	label := tool.Name
+	if tool.DisplayName != "" && !strings.EqualFold(tool.Name, tool.DisplayName) {
+		label += " (" + tool.DisplayName + ")"
+	}
+	b.WriteString("  " + detailTitleStyle.Render(label))
 	b.WriteString("  " + categoryStyle.Render(tool.Category))
-	b.WriteString("  " + strings.Repeat("─", max(m.width-runeLen(tool.DisplayName)-runeLen(tool.Category)-8, 10)))
+	b.WriteString("  " + strings.Repeat("─", max(m.width-runeLen(label)-runeLen(tool.Category)-8, 10)))
 	b.WriteString("\n\n")
 
 	if tool.IsInstalled() {

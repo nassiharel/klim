@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -83,6 +84,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case scanResultMsg:
 		m.tools = msg.tools
+		sort.Slice(m.tools, func(i, j int) bool {
+			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
+		})
 		m.phase = 1
 		m.applyFilter()
 		return m, func() tea.Msg { return resolveVersionsCmd(m.tools)() }
