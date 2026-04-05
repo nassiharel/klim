@@ -6,13 +6,18 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/nassiharel/clim/internal/registry"
 )
 
+// Cached PATHEXT extensions (Windows), computed once.
+var cachedPathExts struct {
+	once sync.Once
+	exts []string
+}
+
 // FindAll locates all installations of each curated tool across PATH.
-// For each tool, it finds every matching binary in PATH directories,
-// resolves symlinks, and identifies the primary (first in PATH).
 func FindAll(tools []registry.Tool) {
 	pathDirs := pathDirectories()
 
@@ -21,182 +26,135 @@ func FindAll(tools []registry.Tool) {
 	}
 }
 
-// findInstances searches all PATH directories for a tool's binary names.
-// Returns all found instances; the first is marked as primary.
 func findInstances(tool *registry.Tool, pathDirs []string) []registry.Instance {
-	seen := make(map[string]bool) // resolved path → already added
+	seen := make(map[string]bool)
 	var instances []registry.Instance
 
 	for _, dir := range pathDirs {
 		for _, binName := range tool.BinaryNames {
-			candidates := binaryCandidates(dir, binName)
-			for _, fullPath := range candidates {
+			for _, fullPath := range binaryCandidates(dir, binName) {
 				resolved, err := filepath.EvalSymlinks(fullPath)
 				if err != nil {
 					continue
 				}
-
 				info, err := os.Stat(resolved)
 				if err != nil || info.IsDir() {
 					continue
 				}
-
-				// Deduplicate by resolved path.
 				if seen[resolved] {
 					continue
 				}
 				seen[resolved] = true
 
-				inst := registry.Instance{
-					Path:      resolved,
-					IsPrimary: len(instances) == 0,
-					Source:    detectSource(resolved),
-				}
-				instances = append(instances, inst)
+				instances = append(instances, registry.Instance{
+					Path:   resolved,
+					Source: detectSource(resolved),
+				})
 			}
 		}
 	}
 
-	// If nothing found via manual PATH walk, try exec.LookPath as fallback
-	// (handles edge cases like Windows App Execution Aliases).
+	// Fallback: exec.LookPath for edge cases (e.g. Windows App Execution Aliases).
 	if len(instances) == 0 {
 		for _, binName := range tool.BinaryNames {
 			path, err := exec.LookPath(binName)
 			if err != nil {
 				continue
 			}
-			resolved, err := filepath.EvalSymlinks(path)
-			if err != nil {
+			resolved, _ := filepath.EvalSymlinks(path)
+			if resolved == "" {
 				resolved = path
 			}
 			instances = append(instances, registry.Instance{
-				Path:      resolved,
-				IsPrimary: true,
-				Source:    detectSource(resolved),
+				Path:   resolved,
+				Source: detectSource(resolved),
 			})
-			break // first match wins
+			break
 		}
 	}
 
 	return instances
 }
 
-// binaryCandidates returns possible full paths for a binary name in a directory.
-// On Windows, appends PATHEXT extensions; on Unix, returns the name as-is.
+// binaryCandidates returns candidate paths without stat-checking;
+// the caller handles stat + symlink resolution.
 func binaryCandidates(dir, name string) []string {
 	if runtime.GOOS == "windows" {
 		var candidates []string
-		// Try with each PATHEXT extension.
-		for _, ext := range pathExtensions() {
-			candidate := filepath.Join(dir, name+ext)
-			if _, err := os.Stat(candidate); err == nil {
-				candidates = append(candidates, candidate)
-			}
+		for _, ext := range getPathExtensions() {
+			candidates = append(candidates, filepath.Join(dir, name+ext))
 		}
-		// Also try the exact name (might already have extension).
-		exact := filepath.Join(dir, name)
-		if _, err := os.Stat(exact); err == nil {
-			candidates = append(candidates, exact)
-		}
+		candidates = append(candidates, filepath.Join(dir, name))
 		return candidates
 	}
-
-	// Unix: just the name.
-	candidate := filepath.Join(dir, name)
-	if _, err := os.Stat(candidate); err == nil {
-		return []string{candidate}
-	}
-	return nil
+	return []string{filepath.Join(dir, name)}
 }
 
-// pathDirectories returns all directories in PATH, in order.
 func pathDirectories() []string {
 	pathEnv := os.Getenv("PATH")
 	if pathEnv == "" {
 		return nil
 	}
-
 	raw := strings.Split(pathEnv, string(os.PathListSeparator))
-	var dirs []string
+	dirs := make([]string, 0, len(raw))
 	for _, d := range raw {
-		d = strings.TrimSpace(d)
-		if d != "" {
+		if d = strings.TrimSpace(d); d != "" {
 			dirs = append(dirs, d)
 		}
 	}
 	return dirs
 }
 
-// pathExtensions returns Windows PATHEXT extensions (lowercased).
-func pathExtensions() []string {
-	env := os.Getenv("PATHEXT")
-	if env == "" {
-		return []string{".exe", ".cmd", ".bat", ".com"}
-	}
-	parts := strings.Split(env, ";")
-	exts := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			exts = append(exts, strings.ToLower(p))
+func getPathExtensions() []string {
+	cachedPathExts.once.Do(func() {
+		env := os.Getenv("PATHEXT")
+		if env == "" {
+			cachedPathExts.exts = []string{".exe", ".cmd", ".bat", ".com"}
+			return
 		}
-	}
-	return exts
+		parts := strings.Split(env, ";")
+		exts := make([]string, 0, len(parts))
+		for _, p := range parts {
+			if p = strings.TrimSpace(p); p != "" {
+				exts = append(exts, strings.ToLower(p))
+			}
+		}
+		cachedPathExts.exts = exts
+	})
+	return cachedPathExts.exts
 }
 
-// detectSource infers the install source from the binary's file path.
-func detectSource(path string) string {
+// detectSource infers the install source from the binary's resolved path.
+// Uses forward slashes only (filepath.ToSlash) for consistent matching.
+func detectSource(path string) registry.InstallSource {
 	lower := strings.ToLower(filepath.ToSlash(path))
 
-	// Windows package managers.
-	if strings.Contains(lower, "chocolatey/") || strings.Contains(lower, "chocolatey\\") {
-		return "choco"
+	switch {
+	case strings.Contains(lower, "chocolatey/"):
+		return registry.SourceChoco
+	case strings.Contains(lower, "scoop/"):
+		return registry.SourceScoop
+	case strings.HasPrefix(lower, "/opt/homebrew/") ||
+		strings.Contains(lower, "/homebrew/cellar/") ||
+		strings.HasPrefix(lower, "/usr/local/cellar/"):
+		return registry.SourceBrew
+	case strings.HasPrefix(lower, "/snap/"):
+		return registry.SourceSnap
+	case strings.HasPrefix(lower, "/usr/bin/") || strings.HasPrefix(lower, "/usr/lib/"):
+		return registry.SourceApt
+	case strings.Contains(lower, "roaming/npm/") ||
+		strings.Contains(lower, "node_modules/") ||
+		strings.Contains(lower, "/lib/node_modules/"):
+		return registry.SourceNPM
+	case strings.Contains(lower, "/go/bin/"):
+		return registry.SourceGo
+	case strings.Contains(lower, ".cargo/bin/"):
+		return registry.SourceCargo
+	case strings.Contains(lower, ".local/bin/"):
+		return registry.SourcePip
+	case strings.Contains(lower, "program files"):
+		return registry.SourceWinget
+	default:
+		return registry.SourceManual
 	}
-	if strings.Contains(lower, "scoop/") || strings.Contains(lower, "scoop\\") {
-		return "scoop"
-	}
-
-	// macOS Homebrew.
-	if strings.HasPrefix(lower, "/opt/homebrew/") || strings.Contains(lower, "/homebrew/cellar/") ||
-		strings.HasPrefix(lower, "/usr/local/cellar/") {
-		return "brew"
-	}
-
-	// Linux package managers.
-	if strings.HasPrefix(lower, "/snap/") || strings.HasPrefix(lower, "/snap/bin/") {
-		return "snap"
-	}
-
-	// Debian/Ubuntu system packages.
-	if strings.HasPrefix(lower, "/usr/bin/") || strings.HasPrefix(lower, "/usr/lib/") {
-		return "apt"
-	}
-
-	// npm global installs.
-	if strings.Contains(lower, "roaming/npm/") || strings.Contains(lower, "node_modules/") ||
-		strings.Contains(lower, "/lib/node_modules/") {
-		return "npm"
-	}
-
-	// Go installs.
-	if strings.Contains(lower, "/go/bin/") || strings.Contains(lower, "\\go\\bin\\") {
-		return "go"
-	}
-
-	// Cargo/Rust installs.
-	if strings.Contains(lower, ".cargo/bin/") || strings.Contains(lower, ".cargo\\bin\\") {
-		return "cargo"
-	}
-
-	// pip / user-local installs.
-	if strings.Contains(lower, ".local/bin/") || strings.Contains(lower, ".local\\bin\\") {
-		return "pip"
-	}
-
-	// Windows Program Files — likely winget or MSI install.
-	if strings.Contains(lower, "program files") || strings.Contains(lower, "programdata") {
-		return "winget"
-	}
-
-	return "manual"
 }

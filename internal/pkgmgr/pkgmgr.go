@@ -5,10 +5,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -17,7 +15,6 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
-// cmdTimeout is the max time for any package manager command.
 const cmdTimeout = 10 * time.Second
 
 // ResolveVersions populates Version on each instance and Latest on each tool,
@@ -45,15 +42,12 @@ func ResolveVersions(tools []registry.Tool, concurrency int) {
 	wg.Wait()
 }
 
-// resolveOne populates versions for a single tool.
 func resolveOne(tool *registry.Tool) {
-	// Detect installed version for each instance.
 	for j := range tool.Instances {
 		inst := &tool.Instances[j]
-		inst.Version = installedVersion(inst.Source, inst.Path, tool.Packages)
+		inst.Version = installedVersion(inst.Source, tool.Packages)
 	}
 
-	// Get latest version from the primary instance's source.
 	if primary := tool.PrimaryInstance(); primary != nil {
 		latest, from := latestVersion(primary.Source, tool.Packages)
 		tool.Latest = latest
@@ -61,75 +55,70 @@ func resolveOne(tool *registry.Tool) {
 	}
 }
 
-// installedVersion queries the package manager for the installed version.
-func installedVersion(source, path string, pkgs registry.PackageIDs) string {
+func installedVersion(source registry.InstallSource, pkgs registry.PackageIDs) string {
 	switch source {
-	case "winget":
+	case registry.SourceWinget:
 		if pkgs.Winget != "" {
-			return wingetInstalledVersion(pkgs.Winget)
+			return wingetVersion(pkgs.Winget)
 		}
-	case "choco":
+	case registry.SourceChoco:
 		if pkgs.Choco != "" {
 			return chocoInstalledVersion(pkgs.Choco)
 		}
-	case "brew":
+	case registry.SourceBrew:
 		if pkgs.Brew != "" {
 			return brewInstalledVersion(pkgs.Brew)
 		}
-	case "apt":
+	case registry.SourceApt:
 		if pkgs.Apt != "" {
 			return dpkgInstalledVersion(pkgs.Apt)
 		}
-	case "snap":
+	case registry.SourceSnap:
 		if pkgs.Snap != "" {
 			return snapInstalledVersion(pkgs.Snap)
 		}
-	case "npm":
+	case registry.SourceNPM:
 		if pkgs.NPM != "" {
 			return npmInstalledVersion(pkgs.NPM)
 		}
-	case "go":
-		return goBuildInfoVersion(path)
 	}
-
-	// Fallback: try PE metadata (Windows) or Go buildinfo.
-	return fallbackVersion(path)
+	// Sources like "go", "cargo", "pip", "manual" — handled by detector fallback.
+	return ""
 }
 
-// latestVersion queries the package manager for the latest available version.
-func latestVersion(source string, pkgs registry.PackageIDs) (version, from string) {
+func latestVersion(source registry.InstallSource, pkgs registry.PackageIDs) (version string, from string) {
 	switch source {
-	case "winget":
+	case registry.SourceWinget:
 		if pkgs.Winget != "" {
-			if v := wingetLatestVersion(pkgs.Winget); v != "" {
+			if v := wingetVersion(pkgs.Winget); v != "" {
 				return v, "winget"
 			}
 		}
-	case "choco":
+	case registry.SourceChoco:
 		if pkgs.Choco != "" {
 			if v := chocoLatestVersion(pkgs.Choco); v != "" {
 				return v, "choco"
 			}
 		}
-	case "brew":
+	case registry.SourceBrew:
 		if pkgs.Brew != "" {
 			if v := brewLatestVersion(pkgs.Brew); v != "" {
 				return v, "brew"
 			}
 		}
-	case "apt":
+	case registry.SourceApt:
 		if pkgs.Apt != "" {
 			if v := aptLatestVersion(pkgs.Apt); v != "" {
 				return v, "apt"
 			}
 		}
-	case "snap":
+	case registry.SourceSnap:
 		if pkgs.Snap != "" {
 			if v := snapLatestVersion(pkgs.Snap); v != "" {
 				return v, "snap"
 			}
 		}
-	case "npm":
+	case registry.SourceNPM:
 		if pkgs.NPM != "" {
 			if v := npmLatestVersion(pkgs.NPM); v != "" {
 				return v, "npm"
@@ -140,16 +129,9 @@ func latestVersion(source string, pkgs registry.PackageIDs) (version, from strin
 }
 
 // --- winget ---
-
-var versionLineRe = regexp.MustCompile(`(?i)^Version:\s+(.+)$`)
-
-func wingetInstalledVersion(id string) string {
-	// winget show --id X shows the installed version if installed.
-	out := runCmd("winget", "show", "--id", id, "--accept-source-agreements")
-	return parseKeyValue(out, "Version")
-}
-
-func wingetLatestVersion(id string) string {
+// winget show returns the available version; used for both installed and latest
+// since winget show --id X reports the catalog version for the matched install.
+func wingetVersion(id string) string {
 	out := runCmd("winget", "show", "--id", id, "--accept-source-agreements")
 	return parseKeyValue(out, "Version")
 }
@@ -158,35 +140,21 @@ func wingetLatestVersion(id string) string {
 
 func chocoInstalledVersion(pkg string) string {
 	out := runCmd("choco", "list", "--limit-output", "--exact", pkg)
-	// Output format: "name|version"
-	for _, line := range strings.Split(out, "\n") {
-		parts := strings.SplitN(strings.TrimSpace(line), "|", 2)
-		if len(parts) == 2 && strings.EqualFold(parts[0], pkg) {
-			return parts[1]
-		}
-	}
-	return ""
+	return parsePipeSeparated(out, pkg)
 }
 
 func chocoLatestVersion(pkg string) string {
 	out := runCmd("choco", "search", "--exact", "--limit-output", pkg)
-	for _, line := range strings.Split(out, "\n") {
-		parts := strings.SplitN(strings.TrimSpace(line), "|", 2)
-		if len(parts) == 2 && strings.EqualFold(parts[0], pkg) {
-			return parts[1]
-		}
-	}
-	return ""
+	return parsePipeSeparated(out, pkg)
 }
 
 // --- brew ---
 
 func brewInstalledVersion(formula string) string {
 	out := runCmd("brew", "list", "--versions", formula)
-	// Output: "git 2.47.0" or "git 2.47.0 2.46.0" (multiple versions)
 	parts := strings.Fields(strings.TrimSpace(out))
 	if len(parts) >= 2 {
-		return parts[1] // most recent is first
+		return parts[1]
 	}
 	return ""
 }
@@ -212,8 +180,7 @@ func brewLatestVersion(formula string) string {
 // --- apt/dpkg ---
 
 func dpkgInstalledVersion(pkg string) string {
-	versions := getCachedDpkgVersions()
-	if v, ok := versions[pkg]; ok {
+	if v, ok := getCachedDpkgVersions()[pkg]; ok {
 		return v
 	}
 	return ""
@@ -221,7 +188,6 @@ func dpkgInstalledVersion(pkg string) string {
 
 func aptLatestVersion(pkg string) string {
 	out := runCmd("apt-cache", "policy", pkg)
-	// Parse "Candidate: 1:2.43.0-1ubuntu7.3"
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "Candidate:") {
@@ -238,7 +204,6 @@ func aptLatestVersion(pkg string) string {
 
 func snapInstalledVersion(pkg string) string {
 	out := runCmd("snap", "list", pkg)
-	// Header: Name  Version  Rev  Tracking  Publisher  Notes
 	lines := strings.Split(out, "\n")
 	if len(lines) >= 2 {
 		fields := strings.Fields(lines[1])
@@ -251,7 +216,6 @@ func snapInstalledVersion(pkg string) string {
 
 func snapLatestVersion(pkg string) string {
 	out := runCmd("snap", "info", pkg)
-	// Parse "latest/stable: 1.33.3 2024-01-15 (123) 50MB classic"
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "latest/stable:") {
@@ -264,27 +228,45 @@ func snapLatestVersion(pkg string) string {
 	return ""
 }
 
-// --- npm ---
+// --- npm (cached) ---
 
-func npmInstalledVersion(pkg string) string {
+var (
+	npmGlobalCache map[string]string
+	npmOnce        sync.Once
+)
+
+func loadNpmGlobals() map[string]string {
 	out := runCmd("npm", "list", "-g", "--depth=0", "--json")
 	if out == "" {
-		return ""
+		return nil
 	}
 	var result struct {
 		Dependencies map[string]struct {
 			Version string `json:"version"`
 		} `json:"dependencies"`
 	}
-	if err := json.Unmarshal([]byte(out), &result); err == nil {
-		if dep, ok := result.Dependencies[pkg]; ok {
-			return dep.Version
-		}
-		// Handle scoped packages: "@anthropic-ai/claude-code" → key in dependencies
-		for name, dep := range result.Dependencies {
-			if name == pkg || strings.HasSuffix(name, "/"+pkg) {
-				return dep.Version
-			}
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		return nil
+	}
+	m := make(map[string]string, len(result.Dependencies))
+	for name, dep := range result.Dependencies {
+		m[name] = dep.Version
+	}
+	return m
+}
+
+func npmInstalledVersion(pkg string) string {
+	npmOnce.Do(func() { npmGlobalCache = loadNpmGlobals() })
+	if npmGlobalCache == nil {
+		return ""
+	}
+	if v, ok := npmGlobalCache[pkg]; ok {
+		return v
+	}
+	// Handle scoped packages by suffix match.
+	for name, ver := range npmGlobalCache {
+		if strings.HasSuffix(name, "/"+pkg) {
+			return ver
 		}
 	}
 	return ""
@@ -295,31 +277,15 @@ func npmLatestVersion(pkg string) string {
 	return strings.TrimSpace(out)
 }
 
-// --- Go buildinfo ---
-
-func goBuildInfoVersion(path string) string {
-	// Reuse the existing detector's buildinfo logic.
-	// Imported at runtime to avoid circular deps.
-	return "" // Will be filled by detector fallback
-}
-
-// --- Fallback (PE / buildinfo) ---
-
-func fallbackVersion(path string) string {
-	return "" // Handled by detector package
-}
-
 // --- dpkg cache ---
 
 var (
-	dpkgCache  map[string]string
-	dpkgOnce   sync.Once
+	dpkgCache map[string]string
+	dpkgOnce  sync.Once
 )
 
 func getCachedDpkgVersions() map[string]string {
-	dpkgOnce.Do(func() {
-		dpkgCache = parseDpkgStatus()
-	})
+	dpkgOnce.Do(func() { dpkgCache = parseDpkgStatus() })
 	return dpkgCache
 }
 
@@ -380,7 +346,7 @@ func runCmd(name string, args ...string) string {
 
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = nil // discard stderr
+	cmd.Stderr = nil
 
 	if err := cmd.Run(); err != nil {
 		return ""
@@ -389,11 +355,22 @@ func runCmd(name string, args ...string) string {
 }
 
 func parseKeyValue(output, key string) string {
-	prefix := fmt.Sprintf("%s:", key)
+	prefix := key + ":"
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, prefix) {
 			return strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		}
+	}
+	return ""
+}
+
+// parsePipeSeparated parses "name|version" lines (choco --limit-output format).
+func parsePipeSeparated(output, pkg string) string {
+	for _, line := range strings.Split(output, "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), "|", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], pkg) {
+			return parts[1]
 		}
 	}
 	return ""

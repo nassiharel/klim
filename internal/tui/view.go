@@ -16,7 +16,6 @@ func (m Model) renderView() string {
 
 	var b strings.Builder
 
-	// Title.
 	title := titleStyle.Render("clim — CLI Manager")
 	switch m.phase {
 	case 0:
@@ -28,14 +27,12 @@ func (m Model) renderView() string {
 	}
 	b.WriteString(title + "\n\n")
 
-	// Layout.
 	showPath := m.width >= 120
 	showSource := m.width >= 90
 
 	b.WriteString(m.renderHeader(showPath, showSource) + "\n")
 	b.WriteString(m.renderSeparator(showPath, showSource) + "\n")
 
-	// Rows.
 	visibleRows := m.height - 8
 	if visibleRows < 3 {
 		visibleRows = 3
@@ -47,10 +44,8 @@ func (m Model) renderView() string {
 	}
 
 	for vi := start; vi < len(m.filteredIndex) && vi < start+visibleRows; vi++ {
-		idx := m.filteredIndex[vi]
-		tool := m.tools[idx]
-		selected := vi == m.cursor
-		b.WriteString(m.renderToolRow(tool, selected, showPath, showSource) + "\n")
+		tool := m.tools[m.filteredIndex[vi]]
+		b.WriteString(m.renderToolRow(tool, vi == m.cursor, showPath, showSource) + "\n")
 	}
 
 	rendered := min(len(m.filteredIndex)-start, visibleRows)
@@ -102,47 +97,40 @@ func (m Model) renderToolRow(tool registry.Tool, selected, showPath, showSource 
 	}
 
 	primary := tool.PrimaryInstance()
-	name := padRight(tool.DisplayName, 18)
-
-	ver := "—"
+	ver, lat := "—", ""
 	if m.phase < 2 {
-		ver = "…"
+		ver, lat = "…", "…"
 	} else if primary != nil && primary.Version != "" {
 		ver = primary.Version
 	}
+	if m.phase >= 2 {
+		lat = tool.Latest
+	}
+
 	verStr := padRight(ver, 14)
+	latStr := padRight(lat, 14)
 	if ver == "—" || ver == "…" {
 		verStr = loadingStyle.Render(verStr)
 	}
-
-	lat := ""
-	if m.phase < 2 {
-		lat = "…"
-	} else {
-		lat = tool.Latest
-	}
-	latStr := padRight(lat, 14)
 	if lat == "…" {
 		latStr = loadingStyle.Render(latStr)
 	}
 
-	parts := []string{cursor + name, verStr, latStr}
+	parts := []string{cursor + padRight(tool.DisplayName, 18), verStr, latStr}
 
-	if showSource {
-		src := ""
-		if primary != nil {
-			src = primary.Source
-		}
-		parts = append(parts, padRight(src, 10))
+	if showSource && primary != nil {
+		parts = append(parts, padRight(string(primary.Source), 10))
+	} else if showSource {
+		parts = append(parts, padRight("", 10))
 	}
 
-	statusText, statusSty := computeRowStatus(ver, tool.Latest, m.phase)
+	statusText, statusSty := renderStatus(ver, tool.Latest, m.phase)
 	parts = append(parts, statusSty.Render(padRight(statusText, 14)))
 
 	if showPath {
 		p := ""
 		if primary != nil {
-			p = truncatePath(primary.Path, 40)
+			p = registry.TruncatePath(primary.Path, 40)
 		}
 		parts = append(parts, padRight(p, 40))
 	}
@@ -154,23 +142,19 @@ func (m Model) renderToolRow(tool registry.Tool, selected, showPath, showSource 
 	return line
 }
 
-func computeRowStatus(installed, latest string, phase int) (string, lipgloss.Style) {
+func renderStatus(installed, latest string, phase int) (string, lipgloss.Style) {
 	if phase < 2 {
 		return "…", loadingStyle
 	}
-	if installed == "—" || installed == "" {
-		if latest != "" {
-			return "?", loadingStyle
-		}
-		return "", lipgloss.NewStyle()
+	status := registry.StatusString(installed, latest)
+	switch status {
+	case "✓ up to date":
+		return status, upToDateStyle
+	case "⬆ update":
+		return status, upgradableStyle
+	default:
+		return status, loadingStyle
 	}
-	if latest == "" {
-		return "", lipgloss.NewStyle()
-	}
-	if registry.VersionsMatch(installed, latest) {
-		return "✓ up to date", upToDateStyle
-	}
-	return "⬆ update", upgradableStyle
 }
 
 func (m Model) renderHelp() string {
@@ -184,14 +168,4 @@ func padRight(s string, width int) string {
 		return s[:width]
 	}
 	return s + strings.Repeat(" ", width-len(s))
-}
-
-func truncatePath(path string, maxLen int) string {
-	if path == "" {
-		return "—"
-	}
-	if len(path) <= maxLen {
-		return path
-	}
-	return "..." + path[len(path)-maxLen+3:]
 }

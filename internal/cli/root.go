@@ -34,8 +34,6 @@ for non-interactive operation.`,
 func init() {
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(versionCmd)
-
-	rootCmd.PersistentFlags().Bool("no-color", false, "disable color output")
 }
 
 // Execute runs the root command.
