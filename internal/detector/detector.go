@@ -2,23 +2,25 @@ package detector
 
 import (
 	"debug/buildinfo"
-	"runtime"
+	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/nassiharel/clim/internal/registry"
 )
 
-// Detect reads version information from a binary file without executing it.
-// It tries Go build info first (covers Go-compiled tools), then PE version
-// resources on Windows (covers C/C++ tools). Returns "" if no version found.
-func Detect(path string) string {
-	// Layer 1: Go build info (works cross-platform).
+// FallbackDetect reads version information from a binary file without executing it.
+// Used as a fallback when package manager queries don't return a version.
+// Tries Go build info first, then PE version resources on Windows.
+func FallbackDetect(path string) string {
+	// Resolve Chocolatey shims to the real binary.
+	if resolved := resolveChocoShim(path); resolved != "" {
+		path = resolved
+	}
+
 	if ver := detectGoBuildInfo(path); ver != "" {
 		return ver
 	}
 
-	// Layer 2: PE version info (Windows only).
 	if ver := detectPE(path); ver != "" {
 		return ver
 	}
@@ -26,32 +28,19 @@ func Detect(path string) string {
 	return ""
 }
 
-// DetectAll runs Detect concurrently for all tools, populating each tool's
-// Version field in place. Concurrency is bounded by a semaphore.
-func DetectAll(tools []registry.Tool, concurrency int) {
-	if concurrency <= 0 {
-		concurrency = runtime.NumCPU() * 2
-	}
-
-	sem := make(chan struct{}, concurrency)
-	var wg sync.WaitGroup
-
+// EnrichFallback fills in Version for any instance that still has an empty version
+// after package manager queries, using PE metadata and Go buildinfo.
+func EnrichFallback(tools []registry.Tool) {
 	for i := range tools {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(t *registry.Tool) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			t.Version = Detect(t.Path)
-		}(&tools[i])
+		for j := range tools[i].Instances {
+			inst := &tools[i].Instances[j]
+			if inst.Version == "" {
+				inst.Version = FallbackDetect(inst.Path)
+			}
+		}
 	}
-
-	wg.Wait()
 }
 
-// detectGoBuildInfo reads Go module version info embedded in a Go binary.
-// Returns the main module version (e.g. "0.21.1") or "" if not a Go binary
-// or version is "(devel)".
 func detectGoBuildInfo(path string) string {
 	info, err := buildinfo.ReadFile(path)
 	if err != nil {
@@ -63,7 +52,22 @@ func detectGoBuildInfo(path string) string {
 		return ""
 	}
 
-	// Strip leading "v" prefix (e.g. "v0.21.1" → "0.21.1").
 	ver = strings.TrimPrefix(ver, "v")
+
+	// Discard Go pseudo-versions.
+	if strings.HasPrefix(ver, "0.0.0-") {
+		return ""
+	}
+
 	return ver
+}
+
+// resolveChocoShim is defined in detector_choco.go (or inline below for simplicity).
+func resolveChocoShim(path string) string {
+	lower := strings.ToLower(filepath.Clean(path))
+	if !strings.Contains(lower, "chocolatey") {
+		return ""
+	}
+	// Delegate to the platform-specific resolver.
+	return resolveChocoShimPlatform(path)
 }

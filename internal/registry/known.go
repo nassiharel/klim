@@ -1,84 +1,238 @@
 package registry
 
-// SourceType identifies the upstream source for latest version checks.
-type SourceType string
+// DefaultTools returns the curated list of developer tools that clim tracks.
+// Each tool includes binary names, display name, and package manager identifiers.
+func DefaultTools() []Tool {
+	return []Tool{
+		// --- Version Control ---
+		{
+			Name: "git", DisplayName: "Git",
+			BinaryNames: []string{"git"},
+			Packages: PackageIDs{
+				Winget: "Git.Git", Choco: "git", Brew: "git", Apt: "git",
+			},
+		},
+		{
+			Name: "gh", DisplayName: "GitHub CLI",
+			BinaryNames: []string{"gh"},
+			Packages: PackageIDs{
+				Winget: "GitHub.cli", Choco: "gh", Brew: "gh", Apt: "gh",
+			},
+		},
 
-const (
-	SourceGitHub SourceType = "github"
-	SourcePyPI   SourceType = "pypi"
-	SourceNPM    SourceType = "npm"
-)
+		// --- Cloud CLIs ---
+		{
+			Name: "az", DisplayName: "Azure CLI",
+			BinaryNames: []string{"az"},
+			Packages: PackageIDs{
+				Winget: "Microsoft.AzureCLI", Brew: "azure-cli", Apt: "azure-cli",
+			},
+		},
+		{
+			Name: "azd", DisplayName: "Azure Dev CLI",
+			BinaryNames: []string{"azd"},
+			Packages: PackageIDs{
+				Winget: "Microsoft.Azd", Brew: "azure/azd/azd",
+			},
+		},
+		{
+			Name: "aws", DisplayName: "AWS CLI",
+			BinaryNames: []string{"aws"},
+			Packages: PackageIDs{
+				Winget: "Amazon.AWSCLI", Brew: "awscli",
+			},
+		},
+		{
+			Name: "gcloud", DisplayName: "Google Cloud CLI",
+			BinaryNames: []string{"gcloud"},
+			Packages: PackageIDs{
+				Brew: "google-cloud-sdk", Snap: "google-cloud-cli",
+			},
+		},
 
-// LatestSource describes where to check for the latest version of a tool.
-type LatestSource struct {
-	Type    SourceType
-	Repo    string // "owner/repo" for GitHub
-	Package string // package name for PyPI/NPM
-}
+		// --- Containers & Orchestration ---
+		{
+			Name: "docker", DisplayName: "Docker",
+			BinaryNames: []string{"docker"},
+			Packages: PackageIDs{
+				Winget: "Docker.DockerDesktop", Brew: "docker", Apt: "docker.io",
+			},
+		},
+		{
+			Name: "docker-compose", DisplayName: "Docker Compose",
+			BinaryNames: []string{"docker-compose"},
+			Packages: PackageIDs{
+				Brew: "docker-compose",
+			},
+		},
+		{
+			Name: "kubectl", DisplayName: "kubectl",
+			BinaryNames: []string{"kubectl"},
+			Packages: PackageIDs{
+				Winget: "Kubernetes.kubectl", Choco: "kubernetes-cli",
+				Brew: "kubernetes-cli", Snap: "kubectl",
+			},
+		},
+		{
+			Name: "helm", DisplayName: "Helm",
+			BinaryNames: []string{"helm"},
+			Packages: PackageIDs{
+				Winget: "Helm.Helm", Choco: "kubernetes-helm",
+				Brew: "helm", Snap: "helm",
+			},
+		},
+		{
+			Name: "k9s", DisplayName: "K9s",
+			BinaryNames: []string{"k9s"},
+			Packages: PackageIDs{
+				Choco: "k9s", Brew: "derailed/k9s/k9s",
+			},
+		},
+		{
+			Name: "terraform", DisplayName: "Terraform",
+			BinaryNames: []string{"terraform"},
+			Packages: PackageIDs{
+				Winget: "Hashicorp.Terraform", Choco: "terraform",
+				Brew: "terraform", Snap: "terraform",
+			},
+		},
+		{
+			Name: "kubelogin", DisplayName: "Kubelogin",
+			BinaryNames: []string{"kubelogin"},
+			Packages: PackageIDs{
+				Brew: "Azure/kubelogin/kubelogin",
+			},
+		},
 
-// KnownTool holds curated metadata for a recognized developer tool.
-type KnownTool struct {
-	DisplayName  string
-	LatestSource LatestSource
-}
+		// --- Languages & Runtimes ---
+		{
+			Name: "go", DisplayName: "Go",
+			BinaryNames: []string{"go"},
+			Packages: PackageIDs{
+				Winget: "GoLang.Go", Brew: "go", Apt: "golang-go", Snap: "go",
+			},
+		},
+		{
+			Name: "node", DisplayName: "Node.js",
+			BinaryNames: []string{"node"},
+			Packages: PackageIDs{
+				Winget: "OpenJS.NodeJS", Brew: "node", Apt: "nodejs",
+			},
+		},
+		{
+			Name: "python", DisplayName: "Python",
+			BinaryNames: []string{"python3", "python"},
+			Packages: PackageIDs{
+				Winget: "Python.Python.3.12", Brew: "python@3",
+				Apt: "python3",
+			},
+		},
+		{
+			Name: "dotnet", DisplayName: ".NET",
+			BinaryNames: []string{"dotnet"},
+			Packages: PackageIDs{
+				Winget: "Microsoft.DotNet.SDK.8", Brew: "dotnet",
+				Apt: "dotnet-sdk-8.0", Snap: "dotnet-sdk",
+			},
+		},
+		{
+			Name: "rustc", DisplayName: "Rust",
+			BinaryNames: []string{"rustc"},
+			Packages: PackageIDs{
+				Brew: "rust", Apt: "rustc",
+			},
+		},
+		{
+			Name: "cargo", DisplayName: "Cargo",
+			BinaryNames: []string{"cargo"},
+			Packages: PackageIDs{
+				Brew: "rust", Apt: "cargo",
+			},
+		},
+		{
+			Name: "java", DisplayName: "Java",
+			BinaryNames: []string{"java"},
+			Packages: PackageIDs{
+				Winget: "Microsoft.OpenJDK.21", Brew: "openjdk",
+				Apt: "default-jdk",
+			},
+		},
+		{
+			Name: "ruby", DisplayName: "Ruby",
+			BinaryNames: []string{"ruby"},
+			Packages: PackageIDs{
+				Winget: "RubyInstallerTeam.Ruby", Brew: "ruby", Apt: "ruby",
+			},
+		},
 
-// KnownTools maps binary names (lowercase) to their curated metadata.
-// Tools not in this map still get version detection (PE/Go buildinfo)
-// but won't have latest-version or display-name info.
-var KnownTools = map[string]KnownTool{
-	// Version control
-	"git":     {DisplayName: "Git", LatestSource: LatestSource{Type: SourceGitHub, Repo: "git-for-windows/git"}},
-	"git-lfs": {DisplayName: "Git LFS", LatestSource: LatestSource{Type: SourceGitHub, Repo: "git-lfs/git-lfs"}},
-	"gh":      {DisplayName: "GitHub CLI", LatestSource: LatestSource{Type: SourceGitHub, Repo: "cli/cli"}},
-	"tig":     {DisplayName: "Tig", LatestSource: LatestSource{Type: SourceGitHub, Repo: "jonas/tig"}},
+		// --- Package Managers ---
+		{
+			Name: "npm", DisplayName: "npm",
+			BinaryNames: []string{"npm"},
+			Packages: PackageIDs{NPM: "npm"},
+		},
+		{
+			Name: "uv", DisplayName: "uv",
+			BinaryNames: []string{"uv"},
+			Packages: PackageIDs{
+				Winget: "astral-sh.uv", Brew: "uv",
+			},
+		},
 
-	// Cloud & infrastructure
-	"az":        {DisplayName: "Azure CLI", LatestSource: LatestSource{Type: SourcePyPI, Package: "azure-cli"}},
-	"azd":       {DisplayName: "Azure Dev CLI", LatestSource: LatestSource{Type: SourceGitHub, Repo: "Azure/azure-dev"}},
-	"terraform": {DisplayName: "Terraform", LatestSource: LatestSource{Type: SourceGitHub, Repo: "hashicorp/terraform"}},
-	"kubectl":   {DisplayName: "kubectl", LatestSource: LatestSource{Type: SourceGitHub, Repo: "kubernetes/kubernetes"}},
-	"helm":      {DisplayName: "Helm", LatestSource: LatestSource{Type: SourceGitHub, Repo: "helm/helm"}},
-	"k9s":       {DisplayName: "K9s", LatestSource: LatestSource{Type: SourceGitHub, Repo: "derailed/k9s"}},
-	"kubelogin": {DisplayName: "Kubelogin", LatestSource: LatestSource{Type: SourceGitHub, Repo: "Azure/kubelogin"}},
+		// --- Editors ---
+		{
+			Name: "code", DisplayName: "VS Code",
+			BinaryNames: []string{"code"},
+			Packages: PackageIDs{
+				Winget: "Microsoft.VisualStudioCode", Brew: "visual-studio-code",
+			},
+		},
 
-	// Containers
-	"docker":         {DisplayName: "Docker", LatestSource: LatestSource{Type: SourceGitHub, Repo: "moby/moby"}},
-	"docker-compose": {DisplayName: "Docker Compose", LatestSource: LatestSource{Type: SourceGitHub, Repo: "docker/compose"}},
+		// --- CLI Utilities ---
+		{
+			Name: "jq", DisplayName: "jq",
+			BinaryNames: []string{"jq"},
+			Packages: PackageIDs{
+				Winget: "jqlang.jq", Choco: "jq", Brew: "jq", Apt: "jq",
+			},
+		},
+		{
+			Name: "fzf", DisplayName: "fzf",
+			BinaryNames: []string{"fzf"},
+			Packages: PackageIDs{
+				Winget: "junegunn.fzf", Choco: "fzf", Brew: "fzf", Apt: "fzf",
+			},
+		},
+		{
+			Name: "bat", DisplayName: "bat",
+			BinaryNames: []string{"bat"},
+			Packages: PackageIDs{
+				Winget: "sharkdp.bat", Brew: "bat", Apt: "bat",
+			},
+		},
+		{
+			Name: "fd", DisplayName: "fd",
+			BinaryNames: []string{"fd"},
+			Packages: PackageIDs{
+				Winget: "sharkdp.fd", Brew: "fd", Apt: "fd-find",
+			},
+		},
 
-	// Languages & runtimes
-	"go":      {DisplayName: "Go", LatestSource: LatestSource{Type: SourceGitHub, Repo: "golang/go"}},
-	"node":    {DisplayName: "Node.js", LatestSource: LatestSource{Type: SourceGitHub, Repo: "nodejs/node"}},
-	"python":  {DisplayName: "Python", LatestSource: LatestSource{Type: SourceGitHub, Repo: "python/cpython"}},
-	"python3": {DisplayName: "Python", LatestSource: LatestSource{Type: SourceGitHub, Repo: "python/cpython"}},
-	"dotnet":  {DisplayName: ".NET", LatestSource: LatestSource{Type: SourceGitHub, Repo: "dotnet/runtime"}},
-	"rustc":   {DisplayName: "Rust", LatestSource: LatestSource{Type: SourceGitHub, Repo: "rust-lang/rust"}},
+		// --- Shells ---
+		{
+			Name: "pwsh", DisplayName: "PowerShell",
+			BinaryNames: []string{"pwsh"},
+			Packages: PackageIDs{
+				Winget: "Microsoft.PowerShell", Brew: "powershell",
+				Apt: "powershell", Snap: "powershell",
+			},
+		},
 
-	// Package managers
-	"npm":   {DisplayName: "npm", LatestSource: LatestSource{Type: SourceNPM, Package: "npm"}},
-	"npx":   {DisplayName: "npx"},
-	"uv":    {DisplayName: "uv", LatestSource: LatestSource{Type: SourceGitHub, Repo: "astral-sh/uv"}},
-	"uvx":   {DisplayName: "uvx"},
-	"choco": {DisplayName: "Chocolatey"},
-	"cargo": {DisplayName: "Cargo"},
-
-	// Editors & tools
-	"code":          {DisplayName: "VS Code", LatestSource: LatestSource{Type: SourceGitHub, Repo: "microsoft/vscode"}},
-	"code-insiders": {DisplayName: "VS Code Insiders"},
-	"claude":        {DisplayName: "Claude Code"},
-
-	// CLI utilities
-	"jq":   {DisplayName: "jq", LatestSource: LatestSource{Type: SourceGitHub, Repo: "jqlang/jq"}},
-	"fzf":  {DisplayName: "fzf", LatestSource: LatestSource{Type: SourceGitHub, Repo: "junegunn/fzf"}},
-	"bat":  {DisplayName: "bat", LatestSource: LatestSource{Type: SourceGitHub, Repo: "sharkdp/bat"}},
-	"fd":   {DisplayName: "fd", LatestSource: LatestSource{Type: SourceGitHub, Repo: "sharkdp/fd"}},
-	"ffmpeg": {DisplayName: "FFmpeg"},
-
-	// Shells
-	"pwsh": {DisplayName: "PowerShell", LatestSource: LatestSource{Type: SourceGitHub, Repo: "PowerShell/PowerShell"}},
-}
-
-// LookupKnown returns the KnownTool metadata for a binary name, if it exists.
-func LookupKnown(name string) (KnownTool, bool) {
-	kt, ok := KnownTools[name]
-	return kt, ok
+		// --- Other ---
+		{
+			Name: "claude", DisplayName: "Claude Code",
+			BinaryNames: []string{"claude"},
+			Packages: PackageIDs{NPM: "@anthropic-ai/claude-code"},
+		},
+	}
 }

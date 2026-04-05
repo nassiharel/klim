@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/nassiharel/clim/internal/registry"
 )
 
 func (m Model) renderView() string {
@@ -16,22 +18,22 @@ func (m Model) renderView() string {
 
 	// Title.
 	title := titleStyle.Render("clim — CLI Manager")
-	if m.scanning {
-		title += " " + loadingStyle.Render(m.spinner.View()+" scanning PATH...")
-	} else if m.pending > 0 {
-		title += " " + loadingStyle.Render(fmt.Sprintf("%s checking %d...", m.spinner.View(), m.pending))
-	} else {
-		title += " " + loadingStyle.Render(fmt.Sprintf("(%d tools)", len(m.tools)))
+	switch m.phase {
+	case 0:
+		title += " " + loadingStyle.Render(m.spinner.View()+" finding tools...")
+	case 1:
+		title += " " + loadingStyle.Render(m.spinner.View()+" checking versions...")
+	default:
+		title += " " + loadingStyle.Render(fmt.Sprintf("(%d tools)", len(m.filteredIndex)))
 	}
 	b.WriteString(title + "\n\n")
 
-	// Layout: adapt columns to terminal width.
-	showPath := m.width >= 110
-	showLatest := m.width >= 80
+	// Layout.
+	showPath := m.width >= 120
+	showSource := m.width >= 90
 
-	// Header.
-	b.WriteString(m.renderHeader(showPath, showLatest) + "\n")
-	b.WriteString(m.renderSeparator(showPath, showLatest) + "\n")
+	b.WriteString(m.renderHeader(showPath, showSource) + "\n")
+	b.WriteString(m.renderSeparator(showPath, showSource) + "\n")
 
 	// Rows.
 	visibleRows := m.height - 8
@@ -46,159 +48,136 @@ func (m Model) renderView() string {
 
 	for vi := start; vi < len(m.filteredIndex) && vi < start+visibleRows; vi++ {
 		idx := m.filteredIndex[vi]
-		row := m.tools[idx]
+		tool := m.tools[idx]
 		selected := vi == m.cursor
-		b.WriteString(m.renderRow(row, selected, showPath, showLatest) + "\n")
+		b.WriteString(m.renderToolRow(tool, selected, showPath, showSource) + "\n")
 	}
 
 	rendered := min(len(m.filteredIndex)-start, visibleRows)
-	if rendered < visibleRows {
-		for range visibleRows - rendered {
-			b.WriteString("\n")
-		}
+	for range visibleRows - max(rendered, 0) {
+		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
-
 	if m.filtering {
 		b.WriteString(filterPromptStyle.Render("/ ") + m.filterInput.View() + "\n")
 	}
-
 	b.WriteString(m.renderHelp())
 
 	return borderStyle.Render(b.String())
 }
 
-func (m Model) renderHeader(showPath, showLatest bool) string {
-	name := headerStyle.Render(padRight("Tool", 20))
-	ver := headerStyle.Render(padRight("Version", 14))
-	var parts []string
-	parts = append(parts, "  "+name, ver)
-	if showLatest {
-		parts = append(parts, headerStyle.Render(padRight("Latest", 14)))
-		parts = append(parts, headerStyle.Render(padRight("Status", 14)))
+func (m Model) renderHeader(showPath, showSource bool) string {
+	parts := []string{
+		"  " + headerStyle.Render(padRight("Tool", 18)),
+		headerStyle.Render(padRight("Version", 14)),
+		headerStyle.Render(padRight("Latest", 14)),
 	}
+	if showSource {
+		parts = append(parts, headerStyle.Render(padRight("Source", 10)))
+	}
+	parts = append(parts, headerStyle.Render(padRight("Status", 14)))
 	if showPath {
 		parts = append(parts, headerStyle.Render(padRight("Path", 40)))
 	}
 	return strings.Join(parts, "  ")
 }
 
-func (m Model) renderSeparator(showPath, showLatest bool) string {
-	s := "  " + strings.Repeat("─", 20) + "  " + strings.Repeat("─", 14)
-	if showLatest {
-		s += "  " + strings.Repeat("─", 14) + "  " + strings.Repeat("─", 14)
+func (m Model) renderSeparator(showPath, showSource bool) string {
+	s := "  " + strings.Repeat("─", 18) + "  " + strings.Repeat("─", 14) + "  " + strings.Repeat("─", 14)
+	if showSource {
+		s += "  " + strings.Repeat("─", 10)
 	}
+	s += "  " + strings.Repeat("─", 14)
 	if showPath {
 		s += "  " + strings.Repeat("─", 40)
 	}
 	return lipgloss.NewStyle().Foreground(dimColor).Render(s)
 }
 
-func (m Model) renderRow(row ToolRow, selected, showPath, showLatest bool) string {
+func (m Model) renderToolRow(tool registry.Tool, selected, showPath, showSource bool) string {
 	cursor := "  "
 	if selected {
 		cursor = "▸ "
 	}
 
-	name := padRight(row.DisplayName, 20)
+	primary := tool.PrimaryInstance()
+	name := padRight(tool.DisplayName, 18)
 
-	// Version column.
-	var verStr string
-	if !row.VersionDone {
-		verStr = loadingStyle.Render(padRight("…", 14))
-	} else if row.Version == "—" {
-		verStr = loadingStyle.Render(padRight("—", 14))
+	ver := "—"
+	if m.phase < 2 {
+		ver = "…"
+	} else if primary != nil && primary.Version != "" {
+		ver = primary.Version
+	}
+	verStr := padRight(ver, 14)
+	if ver == "—" || ver == "…" {
+		verStr = loadingStyle.Render(verStr)
+	}
+
+	lat := ""
+	if m.phase < 2 {
+		lat = "…"
 	} else {
-		verStr = padRight(row.Version, 14)
+		lat = tool.Latest
+	}
+	latStr := padRight(lat, 14)
+	if lat == "…" {
+		latStr = loadingStyle.Render(latStr)
 	}
 
-	var parts []string
-	parts = append(parts, cursor+name, verStr)
+	parts := []string{cursor + name, verStr, latStr}
 
-	if showLatest {
-		// Latest column.
-		var latStr string
-		if !row.LatestDone {
-			latStr = loadingStyle.Render(padRight("…", 14))
-		} else if row.LatestVersion == "" {
-			latStr = padRight("", 14)
-		} else {
-			latStr = padRight(row.LatestVersion, 14)
+	if showSource {
+		src := ""
+		if primary != nil {
+			src = primary.Source
 		}
-		parts = append(parts, latStr)
-
-		// Status column.
-		statusText, statusStyle := computeRowStatus(row)
-		parts = append(parts, statusStyle.Render(padRight(statusText, 14)))
+		parts = append(parts, padRight(src, 10))
 	}
+
+	statusText, statusSty := computeRowStatus(ver, tool.Latest, m.phase)
+	parts = append(parts, statusSty.Render(padRight(statusText, 14)))
 
 	if showPath {
-		parts = append(parts, padRight(truncatePath(row.Path, 40), 40))
+		p := ""
+		if primary != nil {
+			p = truncatePath(primary.Path, 40)
+		}
+		parts = append(parts, padRight(p, 40))
 	}
 
 	line := strings.Join(parts, "  ")
-
 	if selected {
 		return selectedStyle.Render(line)
 	}
 	return line
 }
 
-func computeRowStatus(row ToolRow) (string, lipgloss.Style) {
-	if !row.VersionDone || !row.LatestDone {
+func computeRowStatus(installed, latest string, phase int) (string, lipgloss.Style) {
+	if phase < 2 {
 		return "…", loadingStyle
 	}
-
-	if row.Version == "—" {
-		return "?", loadingStyle
+	if installed == "—" || installed == "" {
+		if latest != "" {
+			return "?", loadingStyle
+		}
+		return "", lipgloss.NewStyle()
 	}
-
-	if row.LatestVersion == "" {
-		return "", lipgloss.NewStyle() // no latest source
+	if latest == "" {
+		return "", lipgloss.NewStyle()
 	}
-
-	if versionEqual(row.Version, row.LatestVersion) {
+	if registry.VersionsMatch(installed, latest) {
 		return "✓ up to date", upToDateStyle
 	}
 	return "⬆ update", upgradableStyle
 }
 
-// versionEqual checks if two version strings refer to the same version.
-func versionEqual(a, b string) bool {
-	na := normalizeVer(a)
-	nb := normalizeVer(b)
-	if na == nb {
-		return true
-	}
-	if len(na) > len(nb) {
-		return strings.HasPrefix(na, nb+".")
-	}
-	return strings.HasPrefix(nb, na+".")
-}
-
-func normalizeVer(v string) string {
-	for {
-		if len(v) >= 2 && v[len(v)-2:] == ".0" {
-			v = v[:len(v)-2]
-		} else {
-			break
-		}
-	}
-	return v
-}
-
 func (m Model) renderHelp() string {
-	parts := []string{
-		"↑/↓ navigate",
-		"/ filter",
-		"r refresh",
-		"q quit",
-	}
-	return helpStyle.Render(strings.Join(parts, "  "))
+	return helpStyle.Render(strings.Join([]string{
+		"↑/↓ navigate", "/ filter", "r refresh", "q quit",
+	}, "  "))
 }
-
-// --- Helpers ---
 
 func padRight(s string, width int) string {
 	if len(s) >= width {
