@@ -93,8 +93,8 @@ func (m Model) renderTitleBar() string {
 	if m.phase == 0 {
 		return title + "  " + loadingStyle.Render(m.spinner.View()+" finding tools...")
 	}
-	if m.phase == 1 {
-		return title + "  " + loadingStyle.Render(m.spinner.View()+" checking versions...")
+	if m.phase == 1 && m.pending > 0 {
+		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s checking versions (%d remaining)...", m.spinner.View(), m.pending))
 	}
 
 	inst, upd, notInst, disabled := m.stats()
@@ -269,7 +269,8 @@ func (m Model) renderDisabledRow(tool registry.Tool, selected bool) string {
 // --- Version info (plain text, no ANSI) ---
 
 func (m Model) versionInfoPlain(tool registry.Tool) string {
-	if m.phase < 2 {
+	// Tool still resolving — show spinner placeholder.
+	if m.phase < 2 && !toolResolved(tool) {
 		return "…"
 	}
 
@@ -480,6 +481,18 @@ func (m Model) renderHelp() string {
 }
 
 // --- Helpers ---
+
+func toolResolved(tool registry.Tool) bool {
+	if tool.Latest != "" || tool.LatestFrom != "" {
+		return true
+	}
+	for _, inst := range tool.Instances {
+		if inst.Version != "" {
+			return true
+		}
+	}
+	return false
+}
 
 // toolLabel returns "name (DisplayName)" or just "name" if they match.
 func toolLabel(tool registry.Tool) string {

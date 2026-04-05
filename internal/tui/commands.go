@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"runtime"
-
 	"github.com/nassiharel/clim/internal/detector"
 	"github.com/nassiharel/clim/internal/finder"
 	"github.com/nassiharel/clim/internal/pkgmgr"
@@ -14,8 +12,11 @@ type scanResultMsg struct {
 	tools []registry.Tool
 }
 
-// versionResultMsg is sent when version resolution completes (Phase 2).
-type versionResultMsg struct{}
+// toolVersionMsg is sent when a single tool's version is resolved.
+type toolVersionMsg struct {
+	index int
+	tool  registry.Tool
+}
 
 // findToolsCmd finds all curated tools on PATH.
 func findToolsCmd() func() scanResultMsg {
@@ -26,11 +27,13 @@ func findToolsCmd() func() scanResultMsg {
 	}
 }
 
-// resolveVersionsCmd resolves versions from package managers + fallback.
-func resolveVersionsCmd(tools []registry.Tool) func() versionResultMsg {
-	return func() versionResultMsg {
-		pkgmgr.ResolveVersions(tools, runtime.NumCPU())
-		detector.EnrichFallback(tools)
-		return versionResultMsg{}
+// resolveToolVersionCmd resolves version for a single tool (package manager + fallback).
+func resolveToolVersionCmd(index int, tool registry.Tool) func() toolVersionMsg {
+	return func() toolVersionMsg {
+		if tool.IsInstalled() && !tool.Disabled {
+			pkgmgr.ResolveOne(&tool)
+			detector.EnrichOne(&tool)
+		}
+		return toolVersionMsg{index: index, tool: tool}
 	}
 }

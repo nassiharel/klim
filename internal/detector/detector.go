@@ -32,11 +32,16 @@ func FallbackDetect(path string) string {
 // after package manager queries, using PE metadata and Go buildinfo.
 func EnrichFallback(tools []registry.Tool) {
 	for i := range tools {
-		for j := range tools[i].Instances {
-			inst := &tools[i].Instances[j]
-			if inst.Version == "" {
-				inst.Version = FallbackDetect(inst.Path)
-			}
+		EnrichOne(&tools[i])
+	}
+}
+
+// EnrichOne fills in Version for a single tool's instances using fallback detection.
+func EnrichOne(tool *registry.Tool) {
+	for j := range tool.Instances {
+		inst := &tool.Instances[j]
+		if inst.Version == "" {
+			inst.Version = FallbackDetect(inst.Path)
 		}
 	}
 }

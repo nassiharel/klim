@@ -42,6 +42,11 @@ func ResolveVersions(tools []registry.Tool, concurrency int) {
 	wg.Wait()
 }
 
+// ResolveOne populates versions for a single tool.
+func ResolveOne(tool *registry.Tool) {
+	resolveOne(tool)
+}
+
 func resolveOne(tool *registry.Tool) {
 	for j := range tool.Instances {
 		inst := &tool.Instances[j]

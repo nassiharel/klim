@@ -39,8 +39,9 @@ type Model struct {
 	showDetail bool
 
 	// Loading state.
-	phase   int // 0=scanning, 1=resolving, 2=done
-	loading bool
+	phase    int // 0=scanning, 1=resolving, 2=done
+	loading  bool
+	pending  int // count of tools still resolving versions
 
 	// Layout.
 	width  int
@@ -90,12 +91,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 		m.phase = 1
 		m.applyFilter()
-		return m, func() tea.Msg { return resolveVersionsCmd(m.tools)() }
 
-	case versionResultMsg:
-		m.phase = 2
-		m.loading = false
-		m.applyFilter()
+		// Fire per-tool version resolution commands.
+		var cmds []tea.Cmd
+		for i, tool := range m.tools {
+			if tool.IsInstalled() && !tool.Disabled {
+				m.pending++
+				idx := i
+				t := tool // capture
+				cmds = append(cmds, func() tea.Msg { return resolveToolVersionCmd(idx, t)() })
+			}
+		}
+		if len(cmds) == 0 {
+			m.phase = 2
+			m.loading = false
+		}
+		return m, tea.Batch(cmds...)
+
+	case toolVersionMsg:
+		// Update the tool in place with resolved version data.
+		if msg.index < len(m.tools) {
+			m.tools[msg.index].Instances = msg.tool.Instances
+			m.tools[msg.index].Latest = msg.tool.Latest
+			m.tools[msg.index].LatestFrom = msg.tool.LatestFrom
+		}
+		m.pending--
+		if m.pending <= 0 {
+			m.phase = 2
+			m.loading = false
+		}
 		return m, nil
 
 	case tea.WindowSizeMsg:
