@@ -1,2 +1,6 @@
 [files]
 extend-exclude = ["go.sum", "*.svg", "vendor/"]
+
+[default.extend-words]
+# Win32 VS_FIXEDFILEINFO struct field name — not a typo
+Struc = "Struc"
