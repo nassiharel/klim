@@ -61,7 +61,9 @@ func runImport(cmd *cobra.Command, args []string) error {
 	// Load registry and scan PATH to know what's already installed.
 	regTools := registry.DefaultTools()
 	fmt.Fprintln(os.Stderr, "Scanning installed tools...")
-	_ = finder.FindAll(regTools)
+	if err := finder.FindAll(regTools); err != nil {
+		return fmt.Errorf("scanning PATH: %w", err)
+	}
 
 	// Build a lookup by name.
 	regMap := make(map[string]*registry.Tool, len(regTools))

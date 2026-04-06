@@ -411,14 +411,28 @@ func FetchToolInfo(tool *registry.Tool) {
 	}
 }
 
+// supportedInfoSources lists the sources that FetchToolInfo can actually query
+// for rich metadata. Sources like Choco, Scoop, Go, Cargo, and Pip don't have
+// info-fetching implementations, so bestInfoSource skips them.
+var supportedInfoSources = map[registry.InstallSource]bool{
+	registry.SourceWinget: true,
+	registry.SourceBrew:   true,
+	registry.SourceApt:    true,
+	registry.SourceSnap:   true,
+	registry.SourceNPM:    true,
+}
+
 // bestInfoSource picks the best source+pkgID for fetching tool info.
 // Prefers the primary instance's source, falls back through all available sources
 // in priority order (winget is richest, then brew, apt, snap, npm).
+// Only returns sources that FetchToolInfo knows how to query.
 func bestInfoSource(tool *registry.Tool) (registry.InstallSource, string) {
 	// Try the primary instance's source first.
 	if primary := tool.PrimaryInstance(); primary != nil {
-		if id := pkgIDForSource(tool, primary.Source); id != "" {
-			return primary.Source, id
+		if supportedInfoSources[primary.Source] {
+			if id := pkgIDForSource(tool, primary.Source); id != "" {
+				return primary.Source, id
+			}
 		}
 	}
 

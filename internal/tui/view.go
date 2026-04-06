@@ -160,21 +160,21 @@ func (m Model) renderHeader() string {
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("VERSION", colVersion)) + "  " +
 			headerStyle.Render(fixedWidth("SOURCE", colSource)) + "  " +
-			headerStyle.Render("CATEGORY")
+			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
 	case tabUpdates:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("UPDATE", colVersion)) + "  " +
 			headerStyle.Render(fixedWidth("SOURCE", colSource)) + "  " +
-			headerStyle.Render("CATEGORY")
+			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
 	case tabDiscover:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
-			headerStyle.Render("CATEGORY")
+			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
 	case tabDisabled:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
-			headerStyle.Render("CATEGORY")
+			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
 	case tabTransfer:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
@@ -230,7 +230,7 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 		src = string(primary.Source)
 	}
 	srcCell := sourceStyle.Render(fixedWidth(src, colSource))
-	catCell := categoryStyle.Render(tool.Category)
+	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
 	line := cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 
@@ -259,7 +259,7 @@ func (m Model) renderUpdateRow(tool registry.Tool, selected bool) string {
 		src = string(primary.Source)
 	}
 	srcCell := sourceStyle.Render(fixedWidth(src, colSource))
-	catCell := categoryStyle.Render(tool.Category)
+	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
 	return cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 }
@@ -272,7 +272,7 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 
 	nameText := toolLabel(tool)
 	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
-	catCell := categoryStyle.Render(tool.Category)
+	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
 	return cursor + nameCell + "  " + catCell
 }
@@ -285,7 +285,7 @@ func (m Model) renderDisabledRow(tool registry.Tool, selected bool) string {
 
 	nameText := toolLabel(tool)
 	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
-	catCell := categoryStyle.Render(tool.Category)
+	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
 	return cursor + nameCell + "  " + catCell
 }
@@ -681,11 +681,16 @@ func (m Model) renderHelp() string {
 		return strings.Join(parts, "")
 	}
 
+	toggleLabel := "disable"
+	if m.activeTab == tabDisabled {
+		toggleLabel = "enable"
+	}
+
 	parts := []string{
 		dimVersion.Render("↑↓") + " navigate",
 		dimVersion.Render("Tab") + " switch",
 		dimVersion.Render("Enter") + " detail",
-		dimVersion.Render("x") + " disable",
+		dimVersion.Render("x") + " " + toggleLabel,
 		dimVersion.Render("/") + " filter",
 		dimVersion.Render("r") + " refresh",
 		dimVersion.Render("q") + " quit",

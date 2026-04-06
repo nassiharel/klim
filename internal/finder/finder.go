@@ -41,13 +41,15 @@ func FindAll(tools []registry.Tool) error {
 	}
 
 	// Phase 1: Build a map of all binary names we're looking for.
-	wantedBins := make(map[string][]toolRef) // lowercase binary name → tool refs
+	// On Windows, file names are case-insensitive, so we normalise keys to
+	// lowercase. On Unix/macOS they are case-sensitive and kept as-is.
+	wantedBins := make(map[string][]toolRef) // normalised binary name → tool refs
 	for i := range tools {
 		if tools[i].Disabled {
 			continue
 		}
 		for _, bin := range tools[i].BinaryNames {
-			key := strings.ToLower(bin)
+			key := normaliseName(bin)
 			wantedBins[key] = append(wantedBins[key], toolRef{toolIdx: i, binName: bin})
 		}
 	}
@@ -160,12 +162,13 @@ func scanDir(dir string, wantedBins map[string][]toolRef, emit func(match)) {
 	}
 
 	// Build a set of entry names for O(1) lookup.
-	entryNames := make(map[string]string, len(entries)) // lowercase → original name
+	// On Windows names are case-insensitive; on Unix they are case-sensitive.
+	entryNames := make(map[string]string, len(entries)) // normalised → original name
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
-		entryNames[strings.ToLower(e.Name())] = e.Name()
+		entryNames[normaliseName(e.Name())] = e.Name()
 	}
 
 	// Check each wanted binary against this directory's entries.
@@ -198,7 +201,17 @@ func scanDir(dir string, wantedBins map[string][]toolRef, emit func(match)) {
 	}
 }
 
-// binaryCandidateNames returns the lowercase file names to look for in a directory.
+// normaliseName returns a file name suitable for map-key comparison.
+// On Windows file systems are case-insensitive, so we lowercase the name.
+// On Unix/macOS names are case-sensitive and returned as-is.
+func normaliseName(name string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(name)
+	}
+	return name
+}
+
+// binaryCandidateNames returns the normalised file names to look for in a directory.
 func binaryCandidateNames(name string) []string {
 	if runtime.GOOS == "windows" {
 		var candidates []string

@@ -82,7 +82,9 @@ func isPaddedMatch(a, b int) bool {
 
 // CompareVersions compares two version strings numerically, segment by segment.
 // Returns -1 if a < b, 0 if a == b, 1 if a > b.
-// Non-numeric segments are compared lexicographically as a fallback.
+// Parsing stops at the first non-numeric segment (e.g. "2.53.0.windows.1"
+// is compared as [2, 53, 0]), so versions differing only in non-numeric
+// suffixes are treated as equal.
 func CompareVersions(a, b string) int {
 	aParts := parseSegments(a)
 	bParts := parseSegments(b)

@@ -120,6 +120,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
 		})
 		m.phase = 1
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
+		}
 		m.applyFilter()
 
 		// Fire per-tool version resolution commands.

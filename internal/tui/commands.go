@@ -22,6 +22,7 @@ import (
 
 type scanResultMsg struct {
 	tools []registry.Tool
+	err   error // non-nil if PATH scanning failed
 }
 
 type toolVersionMsg struct {
@@ -110,8 +111,8 @@ type transferItemDoneMsg struct {
 func findToolsCmd() func() scanResultMsg {
 	return func() scanResultMsg {
 		tools := registry.DefaultTools()
-		_ = finder.FindAll(tools)
-		return scanResultMsg{tools: tools}
+		err := finder.FindAll(tools)
+		return scanResultMsg{tools: tools, err: err}
 	}
 }
 
@@ -141,7 +142,7 @@ func execToolActionCmd(pa pendingAction) tea.Cmd {
 func refreshSingleToolCmd(idx int, tool registry.Tool) tea.Cmd {
 	return func() tea.Msg {
 		singleTool := []registry.Tool{tool}
-		_ = finder.FindAll(singleTool)
+		_ = finder.FindAll(singleTool) // best-effort: user already warned on initial scan
 		tool = singleTool[0]
 		if tool.IsInstalled() {
 			pkgmgr.ResolveOne(&tool)
@@ -272,7 +273,12 @@ func buildImportPlanCmd(path string) tea.Cmd {
 
 		// Load registry and scan PATH.
 		regTools := registry.DefaultTools()
-		_ = finder.FindAll(regTools)
+		if err := finder.FindAll(regTools); err != nil {
+			return transferPlanMsg{items: []transferItem{{
+				name: "error", display: "Error", status: transferFailed,
+				errMsg: fmt.Sprintf("scanning PATH: %v", err),
+			}}}
+		}
 
 		regMap := make(map[string]*registry.Tool, len(regTools))
 		for i := range regTools {
