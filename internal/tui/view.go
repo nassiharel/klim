@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	colName    = 28 // width for name column
-	colVersion = 24 // width for version info column
-	colSource  = 8  // width for source column
+	colName     = 28 // width for name column
+	colVersion  = 24 // width for version info column
+	colSource   = 8  // width for source column
+	colCategory = 12 // width for category column
 )
 
 func (m Model) renderView() string {
@@ -156,17 +157,18 @@ func (m Model) renderHeader() string {
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("VERSION", colVersion)) + "  " +
-			headerStyle.Render(fixedWidth("SOURCE", colSource))
+			headerStyle.Render(fixedWidth("SOURCE", colSource)) + "  " +
+			headerStyle.Render("CATEGORY")
 	case tabUpdates:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("UPDATE", colVersion)) + "  " +
-			headerStyle.Render("COMMAND")
+			headerStyle.Render(fixedWidth("SOURCE", colSource)) + "  " +
+			headerStyle.Render("CATEGORY")
 	case tabDiscover:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
-			headerStyle.Render(fixedWidth("CATEGORY", 12)) + "  " +
-			headerStyle.Render("INSTALL COMMAND")
+			headerStyle.Render("CATEGORY")
 	case tabDisabled:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
@@ -226,8 +228,9 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 		src = string(primary.Source)
 	}
 	srcCell := sourceStyle.Render(fixedWidth(src, colSource))
+	catCell := categoryStyle.Render(tool.Category)
 
-	line := cursor + nameCell + "  " + verCell + "  " + srcCell
+	line := cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 
 	if len(tool.Instances) > 1 {
 		line += "  " + dimVersion.Render(fmt.Sprintf("(%d instances)", len(tool.Instances)))
@@ -249,12 +252,14 @@ func (m Model) renderUpdateRow(tool registry.Tool, selected bool) string {
 	updateText := ver + " → " + tool.Latest
 	verCell := fixedWidth(updateText, colVersion)
 
-	cmd := ""
+	src := ""
 	if primary := tool.PrimaryInstance(); primary != nil {
-		cmd = tool.Packages.UpgradeCmd(primary.Source)
+		src = string(primary.Source)
 	}
+	srcCell := sourceStyle.Render(fixedWidth(src, colSource))
+	catCell := categoryStyle.Render(tool.Category)
 
-	return cursor + nameCell + "  " + verCell + "  " + detailCmdStyle.Render(cmd)
+	return cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 }
 
 func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
@@ -265,10 +270,9 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 
 	nameText := toolLabel(tool)
 	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
-	catCell := categoryStyle.Render(fixedWidth(tool.Category, 12))
-	cmd := tool.Packages.BestInstallCmd()
+	catCell := categoryStyle.Render(tool.Category)
 
-	return cursor + nameCell + "  " + catCell + "  " + detailCmdStyle.Render(cmd)
+	return cursor + nameCell + "  " + catCell
 }
 
 func (m Model) renderDisabledRow(tool registry.Tool, selected bool) string {

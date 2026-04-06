@@ -2,7 +2,9 @@ package registry
 
 import (
 	"fmt"
+	"os/exec"
 	"runtime"
+	"sync"
 )
 
 // InstallSource identifies how a tool was installed.
@@ -165,36 +167,55 @@ func (p PackageIDs) RemoveCmd(source InstallSource) string {
 	return ""
 }
 
+// pmAvailable checks if a package manager binary is on PATH (cached).
+var pmAvailability struct {
+	once sync.Once
+	avail map[InstallSource]bool
+}
+
+func pmAvailable(source InstallSource) bool {
+	pmAvailability.once.Do(func() {
+		pmAvailability.avail = make(map[InstallSource]bool)
+		checks := map[InstallSource]string{
+			SourceWinget: "winget",
+			SourceChoco:  "choco",
+			SourceScoop:  "scoop",
+			SourceBrew:   "brew",
+			SourceApt:    "apt",
+			SourceSnap:   "snap",
+			SourceNPM:    "npm",
+		}
+		for src, bin := range checks {
+			_, err := exec.LookPath(bin)
+			pmAvailability.avail[src] = err == nil
+		}
+	})
+	return pmAvailability.avail[source]
+}
+
 // BestInstallSource returns the recommended package manager for the current OS.
+// Only suggests package managers that are actually installed on the system.
 // Priority: Windows: winget→choco→npm, macOS: brew→npm, Linux: apt→snap→brew→npm.
 func (p PackageIDs) BestInstallSource() InstallSource {
-	switch runtime.GOOS {
-	case "windows":
-		if p.Winget != "" {
-			return SourceWinget
+	candidates := sourcePriority()
+	for _, src := range candidates {
+		if p.pkgID(src) != "" && pmAvailable(src) {
+			return src
 		}
-		if p.Choco != "" {
-			return SourceChoco
-		}
-	case "darwin":
-		if p.Brew != "" {
-			return SourceBrew
-		}
-	default: // linux
-		if p.Apt != "" {
-			return SourceApt
-		}
-		if p.Snap != "" {
-			return SourceSnap
-		}
-		if p.Brew != "" {
-			return SourceBrew
-		}
-	}
-	if p.NPM != "" {
-		return SourceNPM
 	}
 	return ""
+}
+
+// sourcePriority returns the preferred package manager order for the current OS.
+func sourcePriority() []InstallSource {
+	switch runtime.GOOS {
+	case "windows":
+		return []InstallSource{SourceWinget, SourceChoco, SourceNPM}
+	case "darwin":
+		return []InstallSource{SourceBrew, SourceNPM}
+	default: // linux
+		return []InstallSource{SourceApt, SourceSnap, SourceBrew, SourceNPM}
+	}
 }
 
 // BestInstallCmd returns the install command using the best source for this OS.
@@ -202,16 +223,25 @@ func (p PackageIDs) BestInstallCmd() string {
 	return p.InstallCmd(p.BestInstallSource())
 }
 
-// SourcesForOS returns the package manager sources relevant to the current OS.
+// SourcesForOS returns the package manager sources available on the current OS.
+// Only includes package managers that are actually installed.
 func SourcesForOS() []InstallSource {
+	var all []InstallSource
 	switch runtime.GOOS {
 	case "windows":
-		return []InstallSource{SourceWinget, SourceChoco, SourceScoop, SourceNPM}
+		all = []InstallSource{SourceWinget, SourceChoco, SourceScoop, SourceNPM}
 	case "darwin":
-		return []InstallSource{SourceBrew, SourceNPM}
+		all = []InstallSource{SourceBrew, SourceNPM}
 	default: // linux
-		return []InstallSource{SourceApt, SourceSnap, SourceBrew, SourceNPM}
+		all = []InstallSource{SourceApt, SourceSnap, SourceBrew, SourceNPM}
 	}
+	var available []InstallSource
+	for _, src := range all {
+		if pmAvailable(src) {
+			available = append(available, src)
+		}
+	}
+	return available
 }
 
 // StatusString compares installed vs latest and returns a display string.

@@ -424,20 +424,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.filterInput.Focus()
 	case "enter":
 		if m.cursor < len(m.filteredIndex) {
-			// On Discover/Updates tabs, Enter triggers the primary action.
-			if m.activeTab == tabDiscover {
-				if picker := m.resolveInstallAction(); picker != nil {
-					m.startAction(picker)
-					return m, nil
-				}
-			}
+			// On Updates tab, Enter triggers upgrade directly.
 			if m.activeTab == tabUpdates {
 				if picker := m.resolveUpgradeAction(); picker != nil {
 					m.startAction(picker)
 					return m, nil
 				}
 			}
-			// Otherwise open detail view.
+			// Otherwise open detail view (including Discover tab).
 			m.detailIdx = m.filteredIndex[m.cursor]
 			m.showDetail = true
 			// Fetch tool info lazily if not already available.

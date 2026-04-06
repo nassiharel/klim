@@ -189,27 +189,25 @@ func TestPathDirectories(t *testing.T) {
 	})
 }
 
-func TestBinaryCandidates(t *testing.T) {
-	// binaryCandidates is platform-dependent. We test that it returns at least
-	// the base path on any platform.
-	candidates := binaryCandidates("/usr/bin", "git")
+func TestBinaryCandidateNames(t *testing.T) {
+	// binaryCandidateNames is platform-dependent. We test that it returns at least
+	// the base name on any platform.
+	candidates := binaryCandidateNames("git")
 	if len(candidates) == 0 {
-		t.Fatal("binaryCandidates returned 0 candidates")
+		t.Fatal("binaryCandidateNames returned 0 candidates")
 	}
 
-	// On all platforms, the list should contain the full path.
+	// On all platforms, the list should contain "git" (the bare name).
 	found := false
 	for _, c := range candidates {
-		// Normalize for comparison.
-		if c == "/usr/bin/git" || c == `\usr\bin\git` {
+		if c == "git" {
 			found = true
 			break
 		}
 	}
-	// On Windows, candidates will have .exe etc. instead of bare name at first,
-	// but the bare name is appended last. On Unix, only the bare name is returned.
-	if !found && len(candidates) == 1 {
-		// Unix: single candidate should be the exact path.
-		t.Errorf("binaryCandidates(/usr/bin, git) = %v, expected /usr/bin/git", candidates)
+	// On Windows, candidates will have .exe etc. plus the bare name.
+	// On Unix, only the bare name is returned.
+	if !found {
+		t.Errorf("binaryCandidateNames(git) = %v, expected to contain 'git'", candidates)
 	}
 }

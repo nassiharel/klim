@@ -385,48 +385,13 @@ func parsePipeSeparated(output, pkg string) string {
 
 // FetchToolInfo retrieves rich metadata from the package manager for display.
 // Uses the primary instance's source to determine which PM to query.
+// Falls back to any available source if the primary has no package ID.
 func FetchToolInfo(tool *registry.Tool) {
 	if tool.Info != nil {
 		return // already fetched
 	}
 
-	// Determine which source and package ID to query.
-	var source registry.InstallSource
-	var pkgID string
-
-	if primary := tool.PrimaryInstance(); primary != nil {
-		source = primary.Source
-	}
-
-	switch source {
-	case registry.SourceWinget:
-		pkgID = tool.Packages.Winget
-	case registry.SourceChoco:
-		pkgID = tool.Packages.Choco
-	case registry.SourceBrew:
-		pkgID = tool.Packages.Brew
-	case registry.SourceApt:
-		pkgID = tool.Packages.Apt
-	case registry.SourceSnap:
-		pkgID = tool.Packages.Snap
-	case registry.SourceNPM:
-		pkgID = tool.Packages.NPM
-	default:
-		// Try winget first (most info-rich), then brew, then others.
-		if tool.Packages.Winget != "" {
-			source = registry.SourceWinget
-			pkgID = tool.Packages.Winget
-		} else if tool.Packages.Brew != "" {
-			source = registry.SourceBrew
-			pkgID = tool.Packages.Brew
-		} else if tool.Packages.Apt != "" {
-			source = registry.SourceApt
-			pkgID = tool.Packages.Apt
-		} else {
-			return
-		}
-	}
-
+	source, pkgID := bestInfoSource(tool)
 	if pkgID == "" {
 		return
 	}
@@ -443,6 +408,54 @@ func FetchToolInfo(tool *registry.Tool) {
 	case registry.SourceNPM:
 		tool.Info = fetchNpmInfo(pkgID)
 	}
+}
+
+// bestInfoSource picks the best source+pkgID for fetching tool info.
+// Prefers the primary instance's source, falls back through all available sources
+// in priority order (winget is richest, then brew, apt, snap, npm).
+func bestInfoSource(tool *registry.Tool) (registry.InstallSource, string) {
+	// Try the primary instance's source first.
+	if primary := tool.PrimaryInstance(); primary != nil {
+		if id := pkgIDForSource(tool, primary.Source); id != "" {
+			return primary.Source, id
+		}
+	}
+
+	// Fallback: try sources in priority order (richest info first).
+	fallback := []struct {
+		src registry.InstallSource
+		id  string
+	}{
+		{registry.SourceWinget, tool.Packages.Winget},
+		{registry.SourceBrew, tool.Packages.Brew},
+		{registry.SourceApt, tool.Packages.Apt},
+		{registry.SourceSnap, tool.Packages.Snap},
+		{registry.SourceNPM, tool.Packages.NPM},
+	}
+	for _, f := range fallback {
+		if f.id != "" {
+			return f.src, f.id
+		}
+	}
+	return "", ""
+}
+
+func pkgIDForSource(tool *registry.Tool, source registry.InstallSource) string {
+	switch source {
+	case registry.SourceWinget:
+		return tool.Packages.Winget
+	case registry.SourceChoco:
+		return tool.Packages.Choco
+	case registry.SourceBrew:
+		return tool.Packages.Brew
+	case registry.SourceApt:
+		return tool.Packages.Apt
+	case registry.SourceSnap:
+		return tool.Packages.Snap
+	case registry.SourceNPM:
+		return tool.Packages.NPM
+	}
+	return ""
 }
 
 func fetchWingetInfo(id string) *registry.ToolInfo {
