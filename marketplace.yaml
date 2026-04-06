@@ -314,7 +314,7 @@ tools:
     enabled: true
     binary_names: [node]
     packages:
-      winget: "OpenJS.NodeJS"
+      winget: "OpenJS.NodeJS.LTS"
       brew: "node"
       apt: "nodejs"
 

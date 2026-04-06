@@ -128,8 +128,11 @@ func TestMergeToolDefs_EmbeddedMetadataWins(t *testing.T) {
 		{Name: "git", DisplayName: "Git (Old)", Category: "Old Category", BinaryNames: []string{"old-git"}, Enabled: true},
 	}
 
-	merged, _ := mergeToolDefs(embedded, user)
+	merged, changed := mergeToolDefs(embedded, user)
 
+	if !changed {
+		t.Fatal("expected changed=true when embedded metadata differs from user")
+	}
 	if merged[0].DisplayName != "Git (Updated)" {
 		t.Errorf("expected embedded display_name, got %q", merged[0].DisplayName)
 	}

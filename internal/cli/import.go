@@ -60,7 +60,6 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 	// Load registry and scan PATH to know what's already installed.
 	regTools := registry.DefaultTools()
-	fmt.Fprintln(os.Stderr, "Scanning installed tools...")
 	if err := finder.FindAll(regTools); err != nil {
 		return fmt.Errorf("scanning PATH: %w", err)
 	}
@@ -82,6 +81,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	var toInstall []installPlan
 	var alreadyInstalled []string
 	var noPackage []string
+	var noPkgMgr []string
 
 	for _, mt := range manifest.Tools {
 		rt, exists := regMap[mt.Name]
@@ -98,7 +98,11 @@ func runImport(cmd *cobra.Command, args []string) error {
 			src := pkgs.BestInstallSource()
 			installCmd := pkgs.InstallCmd(src)
 			if installCmd == "" {
-				noPackage = append(noPackage, mt.Name)
+				if pkgs.HasAnyPackageForOS() {
+					noPkgMgr = append(noPkgMgr, mt.Name)
+				} else {
+					noPackage = append(noPackage, mt.Name)
+				}
 				continue
 			}
 			toInstall = append(toInstall, installPlan{
@@ -118,7 +122,11 @@ func runImport(cmd *cobra.Command, args []string) error {
 		src := rt.Packages.BestInstallSource()
 		installCmd := rt.Packages.InstallCmd(src)
 		if installCmd == "" {
-			noPackage = append(noPackage, mt.Name)
+			if rt.Packages.HasAnyPackageForOS() {
+				noPkgMgr = append(noPkgMgr, mt.Name)
+			} else {
+				noPackage = append(noPackage, mt.Name)
+			}
 			continue
 		}
 
@@ -130,22 +138,39 @@ func runImport(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Print summary.
-	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "\n──── Import Summary ────\n\n")
+	fmt.Fprintf(os.Stderr, "  Manifest:  %d tools (from %s/%s)\n\n", len(manifest.Tools), manifest.OS, manifest.Arch)
+
 	if len(alreadyInstalled) > 0 {
-		fmt.Fprintf(os.Stderr, "  ✓ Already installed (%d): %s\n", len(alreadyInstalled), strings.Join(alreadyInstalled, ", "))
+		fmt.Fprintf(os.Stderr, "  ✓ Already installed (%d):\n", len(alreadyInstalled))
+		for _, name := range alreadyInstalled {
+			fmt.Fprintf(os.Stderr, "    · %s\n", name)
+		}
+		fmt.Fprintln(os.Stderr)
 	}
 	if len(noPackage) > 0 {
-		fmt.Fprintf(os.Stderr, "  ⚠ No package available for %s (%d): %s\n", runtime.GOOS, len(noPackage), strings.Join(noPackage, ", "))
+		fmt.Fprintf(os.Stderr, "  ⚠ No package for %s (%d):\n", runtime.GOOS, len(noPackage))
+		for _, name := range noPackage {
+			fmt.Fprintf(os.Stderr, "    · %s\n", name)
+		}
+		fmt.Fprintln(os.Stderr)
+	}
+	if len(noPkgMgr) > 0 {
+		fmt.Fprintf(os.Stderr, "  ⚠ No supported package manager (%d):\n", len(noPkgMgr))
+		for _, name := range noPkgMgr {
+			fmt.Fprintf(os.Stderr, "    · %s\n", name)
+		}
+		fmt.Fprintln(os.Stderr)
 	}
 	if len(toInstall) == 0 {
-		fmt.Fprintln(os.Stderr, "\n  Nothing to install — all tools are present!")
+		fmt.Fprintln(os.Stderr, "  Nothing to install — all tools are present!")
+		fmt.Fprintln(os.Stderr, "\n────────────────────────")
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "\n  To install (%d):\n", len(toInstall))
+	fmt.Fprintf(os.Stderr, "  To install (%d):\n", len(toInstall))
 	for _, p := range toInstall {
-		fmt.Fprintf(os.Stderr, "    %s  →  %s\n", p.display, p.cmd)
+		fmt.Fprintf(os.Stderr, "    · %-20s  via %s\n", p.display, p.source)
 	}
 	fmt.Fprintln(os.Stderr)
 

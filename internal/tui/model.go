@@ -18,7 +18,8 @@ const (
 	tabUpdates
 	tabDiscover
 	tabDisabled
-	tabTransfer
+	tabBackup
+	tabConfig
 	tabCount // total number of tabs, used for modular cycling
 )
 
@@ -66,11 +67,11 @@ type Model struct {
 	importInput   textinput.Model
 	importingPath bool // true = import path input is active
 
-	// Transfer tab state.
-	transferItems []transferItem // items being exported/imported
-	transferMode  string         // "" (idle), "export", "import"
-	transferDone  int            // count of completed items
-	transferBar   progress.Model // overall progress bar
+	// Backup tab state.
+	backupItems []backupItem   // items being exported/imported
+	backupMode  string         // "" (idle), "export", "import"
+	backupDone  int            // count of completed items
+	backupBar   progress.Model // overall progress bar
 }
 
 // NewModel creates a new TUI model.
@@ -90,7 +91,7 @@ func NewModel() Model {
 		spinner:     s,
 		filterInput: ti,
 		importInput: ii,
-		transferBar: progress.New(progress.WithWidth(40)),
+		backupBar:   progress.New(progress.WithWidth(40)),
 		loading:     true,
 		phase:       0,
 		activeTab:   tabInstalled,
@@ -183,44 +184,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("✗ Export failed: %s", msg.err)
 			// Mark all items as failed.
-			for i := range m.transferItems {
-				m.transferItems[i].status = transferFailed
+			for i := range m.backupItems {
+				m.backupItems[i].status = backupFailed
 			}
 		} else {
 			m.statusMsg = fmt.Sprintf("✓ Exported %d tools to %s", msg.count, msg.path)
 			// Mark all items as done.
-			for i := range m.transferItems {
-				m.transferItems[i].status = transferDone
+			for i := range m.backupItems {
+				m.backupItems[i].status = backupDone
 			}
-			m.transferDone = len(m.transferItems)
+			m.backupDone = len(m.backupItems)
 		}
 		return m, nil
 
-	case transferPlanMsg:
-		m.transferItems = msg.items
-		m.transferDone = 0
+	case backupPlanMsg:
+		m.backupItems = msg.items
+		m.backupDone = 0
 		// Count already-skipped items as "done" for progress.
-		for _, item := range m.transferItems {
-			if item.status == transferSkipped || item.status == transferFailed {
-				m.transferDone++
+		for _, item := range m.backupItems {
+			if item.status == backupSkipped || item.status == backupFailed {
+				m.backupDone++
 			}
 		}
 		// Start installing the first pending item.
-		cmd := m.nextTransferInstall()
+		cmd := m.nextBackupInstall()
 		return m, cmd
 
-	case transferItemDoneMsg:
-		if msg.idx < len(m.transferItems) {
+	case backupItemDoneMsg:
+		if msg.idx < len(m.backupItems) {
 			if msg.err != nil {
-				m.transferItems[msg.idx].status = transferFailed
-				m.transferItems[msg.idx].errMsg = msg.err.Error()
+				m.backupItems[msg.idx].status = backupFailed
+				m.backupItems[msg.idx].errMsg = msg.err.Error()
 			} else {
-				m.transferItems[msg.idx].status = transferDone
+				m.backupItems[msg.idx].status = backupDone
 			}
-			m.transferDone++
+			m.backupDone++
 		}
 		// Fire the next install, or finish.
-		if cmd := m.nextTransferInstall(); cmd != nil {
+		if cmd := m.nextBackupInstall(); cmd != nil {
 			return m, cmd
 		}
 		// All done — refresh tools to pick up newly installed ones.
@@ -322,10 +323,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if path == "" {
 				return m, nil
 			}
-			m.transferItems = nil
-			m.transferDone = 0
-			m.transferMode = "import"
-			m.activeTab = tabTransfer
+			m.backupItems = nil
+			m.backupDone = 0
+			m.backupMode = "import"
+			m.activeTab = tabBackup
 			m.cursor = 0
 			m.statusMsg = "Building import plan..."
 			return m, buildImportPlanCmd(path)
@@ -411,7 +412,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.applyFilter()
 		return m, nil
 	case "5":
-		m.activeTab = tabTransfer
+		m.activeTab = tabBackup
+		m.cursor = 0
+		return m, nil
+	case "6":
+		m.activeTab = tabConfig
 		m.cursor = 0
 		return m, nil
 	case "up", "k":
@@ -493,21 +498,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		)
 	case "e":
 		if m.phase >= 2 && len(m.tools) > 0 {
-			// Build transfer items from installed tools.
-			m.transferItems = nil
-			m.transferDone = 0
+			// Build backup items from installed tools.
+			m.backupItems = nil
+			m.backupDone = 0
 			for _, tool := range m.tools {
 				if tool.IsInstalled() && !tool.Disabled {
-					m.transferItems = append(m.transferItems, transferItem{
+					m.backupItems = append(m.backupItems, backupItem{
 						name:    tool.Name,
 						display: tool.DisplayName,
 						source:  "—",
-						status:  transferPending,
+						status:  backupPending,
 					})
 				}
 			}
-			m.transferMode = "export"
-			m.activeTab = tabTransfer
+			m.backupMode = "export"
+			m.activeTab = tabBackup
 			m.cursor = 0
 			m.statusMsg = "Exporting..."
 			return m, exportToolsCmd(m.tools)
@@ -553,8 +558,10 @@ func (m *Model) matchesTab(tool registry.Tool) bool {
 		return !tool.Disabled && !tool.IsInstalled()
 	case tabDisabled:
 		return tool.Disabled
-	case tabTransfer:
-		return false // Transfer tab renders from transferItems, not tools
+	case tabBackup:
+		return false // Backup tab renders from backupItems, not tools
+	case tabConfig:
+		return false // Config tab renders static content, not tools
 	}
 	return false
 }
@@ -688,24 +695,28 @@ func (m Model) resolveRemoveAction() *sourcePicker {
 	}
 }
 
-// --- Transfer ---
+// --- Backup ---
 
 // rowCount returns the number of navigable rows for the current tab.
 func (m Model) rowCount() int {
-	if m.activeTab == tabTransfer {
-		return len(m.transferItems)
+	switch m.activeTab {
+	case tabBackup:
+		return len(m.backupItems)
+	case tabConfig:
+		return 0
+	default:
+		return len(m.filteredIndex)
 	}
-	return len(m.filteredIndex)
 }
 
-// nextTransferInstall finds the next pending transfer item and fires its install command.
+// nextBackupInstall finds the next pending transfer item and fires its install command.
 // Returns nil if no pending items remain (all done/failed/skipped).
-func (m *Model) nextTransferInstall() tea.Cmd {
-	for i := range m.transferItems {
-		if m.transferItems[i].status == transferPending {
-			m.transferItems[i].status = transferRunning
-			m.statusMsg = fmt.Sprintf("Installing %s...", m.transferItems[i].display)
-			return execTransferInstallCmd(i, m.transferItems[i].cmd)
+func (m *Model) nextBackupInstall() tea.Cmd {
+	for i := range m.backupItems {
+		if m.backupItems[i].status == backupPending {
+			m.backupItems[i].status = backupRunning
+			m.statusMsg = fmt.Sprintf("Installing %s...", m.backupItems[i].display)
+			return execBackupInstallCmd(i, m.backupItems[i].cmd)
 		}
 	}
 	return nil

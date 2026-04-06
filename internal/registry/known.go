@@ -188,6 +188,9 @@ func mergeToolDefs(embedded, user []toolDef) ([]toolDef, bool) {
 		if m.Packages != u.Packages {
 			changed = true // embedded filled in a package ID gap
 		}
+		if m.DisplayName != u.DisplayName || m.Category != u.Category || !slicesEqual(m.BinaryNames, u.BinaryNames) {
+			changed = true // embedded metadata updated
+		}
 
 		merged = append(merged, m)
 	}
@@ -220,4 +223,17 @@ func pickNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// slicesEqual reports whether two string slices have identical contents.
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

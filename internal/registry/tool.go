@@ -207,6 +207,18 @@ func (p PackageIDs) BestInstallSource() InstallSource {
 	return ""
 }
 
+// HasAnyPackageForOS reports whether any package ID is defined for a package
+// manager that is relevant to the current OS — regardless of whether that
+// package manager is actually installed.
+func (p PackageIDs) HasAnyPackageForOS() bool {
+	for _, src := range sourcePriority() {
+		if p.pkgID(src) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // sourcePriority returns the preferred package manager order for the current OS.
 func sourcePriority() []InstallSource {
 	switch runtime.GOOS {
@@ -243,6 +255,31 @@ func SourcesForOS() []InstallSource {
 		}
 	}
 	return available
+}
+
+// PMStatus represents the availability of a package manager on this system.
+type PMStatus struct {
+	Source    InstallSource
+	Available bool
+}
+
+// AllPMStatusForOS returns all package manager candidates for the current OS
+// along with whether each is installed on the system.
+func AllPMStatusForOS() []PMStatus {
+	var all []InstallSource
+	switch runtime.GOOS {
+	case "windows":
+		all = []InstallSource{SourceWinget, SourceChoco, SourceScoop, SourceNPM}
+	case "darwin":
+		all = []InstallSource{SourceBrew, SourceNPM}
+	default: // linux
+		all = []InstallSource{SourceApt, SourceSnap, SourceBrew, SourceNPM}
+	}
+	result := make([]PMStatus, len(all))
+	for i, src := range all {
+		result[i] = PMStatus{Source: src, Available: pmAvailable(src)}
+	}
+	return result
 }
 
 // StatusString compares installed vs latest and returns a display string.

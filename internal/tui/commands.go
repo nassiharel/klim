@@ -68,28 +68,28 @@ type sourcePicker struct {
 	choices []sourceChoice
 }
 
-// --- Transfer types ---
+// --- Backup types ---
 
-type transferStatus int
+type backupStatus int
 
 const (
-	transferPending transferStatus = iota
-	transferRunning
-	transferDone
-	transferFailed
-	transferSkipped
+	backupPending backupStatus = iota
+	backupRunning
+	backupDone
+	backupFailed
+	backupSkipped
 )
 
-type transferItem struct {
+type backupItem struct {
 	name    string
 	display string
 	cmd     string // install command (import) or "" (export)
 	source  string
-	status  transferStatus
+	status  backupStatus
 	errMsg  string
 }
 
-// --- Transfer messages ---
+// --- Backup messages ---
 
 type exportFinishedMsg struct {
 	path  string
@@ -97,11 +97,11 @@ type exportFinishedMsg struct {
 	err   error
 }
 
-type transferPlanMsg struct {
-	items []transferItem
+type backupPlanMsg struct {
+	items []backupItem
 }
 
-type transferItemDoneMsg struct {
+type backupItemDoneMsg struct {
 	idx int
 	err error
 }
@@ -252,21 +252,21 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 
 // --- Import commands ---
 
-// buildImportPlanCmd reads a manifest, scans PATH, and builds a transfer plan.
+// buildImportPlanCmd reads a manifest, scans PATH, and builds a backup plan.
 func buildImportPlanCmd(path string) tea.Cmd {
 	return func() tea.Msg {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return transferPlanMsg{items: []transferItem{{
-				name: "error", display: "Error", status: transferFailed,
+			return backupPlanMsg{items: []backupItem{{
+				name: "error", display: "Error", status: backupFailed,
 				errMsg: fmt.Sprintf("reading manifest: %v", err),
 			}}}
 		}
 
 		var manifest exportManifest
 		if err := yaml.Unmarshal(data, &manifest); err != nil {
-			return transferPlanMsg{items: []transferItem{{
-				name: "error", display: "Error", status: transferFailed,
+			return backupPlanMsg{items: []backupItem{{
+				name: "error", display: "Error", status: backupFailed,
 				errMsg: fmt.Sprintf("parsing manifest: %v", err),
 			}}}
 		}
@@ -274,8 +274,8 @@ func buildImportPlanCmd(path string) tea.Cmd {
 		// Load registry and scan PATH.
 		regTools := registry.DefaultTools()
 		if err := finder.FindAll(regTools); err != nil {
-			return transferPlanMsg{items: []transferItem{{
-				name: "error", display: "Error", status: transferFailed,
+			return backupPlanMsg{items: []backupItem{{
+				name: "error", display: "Error", status: backupFailed,
 				errMsg: fmt.Sprintf("scanning PATH: %v", err),
 			}}}
 		}
@@ -285,16 +285,16 @@ func buildImportPlanCmd(path string) tea.Cmd {
 			regMap[regTools[i].Name] = &regTools[i]
 		}
 
-		var items []transferItem
+		var items []backupItem
 		for _, mt := range manifest.Tools {
 			rt, exists := regMap[mt.Name]
 
 			if exists && rt.IsInstalled() {
-				items = append(items, transferItem{
+				items = append(items, backupItem{
 					name:    mt.Name,
 					display: mt.DisplayName,
 					source:  "—",
-					status:  transferSkipped,
+					status:  backupSkipped,
 					errMsg:  "already installed",
 				})
 				continue
@@ -318,32 +318,36 @@ func buildImportPlanCmd(path string) tea.Cmd {
 			src := pkgs.BestInstallSource()
 			installCmd := pkgs.InstallCmd(src)
 			if installCmd == "" {
-				items = append(items, transferItem{
+				reason := "no package for " + runtime.GOOS
+				if src == "" && pkgs.HasAnyPackageForOS() {
+					reason = "no supported package manager installed"
+				}
+				items = append(items, backupItem{
 					name:    mt.Name,
 					display: mt.DisplayName,
-					status:  transferSkipped,
-					errMsg:  "no package for " + runtime.GOOS,
+					status:  backupSkipped,
+					errMsg:  reason,
 				})
 				continue
 			}
 
-			items = append(items, transferItem{
+			items = append(items, backupItem{
 				name:    mt.Name,
 				display: mt.DisplayName,
 				cmd:     installCmd,
 				source:  string(src),
-				status:  transferPending,
+				status:  backupPending,
 			})
 		}
 
-		return transferPlanMsg{items: items}
+		return backupPlanMsg{items: items}
 	}
 }
 
-// execTransferInstallCmd suspends the TUI and runs one install command.
-func execTransferInstallCmd(idx int, cmdStr string) tea.Cmd {
+// execBackupInstallCmd suspends the TUI and runs one install command.
+func execBackupInstallCmd(idx int, cmdStr string) tea.Cmd {
 	cmd := buildShellCmd(cmdStr)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
-		return transferItemDoneMsg{idx: idx, err: err}
+		return backupItemDoneMsg{idx: idx, err: err}
 	})
 }

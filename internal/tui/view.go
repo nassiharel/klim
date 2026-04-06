@@ -2,11 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/nassiharel/clim/internal/build"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -32,9 +35,17 @@ func (m Model) renderView() string {
 	b.WriteString(m.renderTitleBar() + "\n")
 	b.WriteString(m.renderTabBar() + "\n\n")
 
-	// Transfer tab has its own rendering path.
-	if m.activeTab == tabTransfer {
-		b.WriteString(m.renderTransferView())
+	// Backup tab has its own rendering path.
+	if m.activeTab == tabBackup {
+		b.WriteString(m.renderBackupView())
+		b.WriteString("\n")
+		b.WriteString(m.renderHelp())
+		return b.String()
+	}
+
+	// Config tab has its own rendering path.
+	if m.activeTab == tabConfig {
+		b.WriteString(m.renderConfigView())
 		b.WriteString("\n")
 		b.WriteString(m.renderHelp())
 		return b.String()
@@ -80,8 +91,10 @@ func (m Model) renderView() string {
 			msg = "  All curated tools are already installed!"
 		case tabDisabled:
 			msg = "  No disabled tools."
-		case tabTransfer:
-			msg = "" // handled by renderTransferView
+		case tabBackup:
+			msg = "" // handled by renderBackupView
+		case tabConfig:
+			msg = "" // handled by renderConfigView
 		}
 		b.WriteString("\n" + dimVersion.Render(msg) + "\n")
 	}
@@ -136,7 +149,8 @@ func (m Model) renderTabBar() string {
 		{"Updates", tabUpdates},
 		{"Discover", tabDiscover},
 		{"Disabled", tabDisabled},
-		{"Transfer", tabTransfer},
+		{"Backup", tabBackup},
+		{"Config", tabConfig},
 	}
 
 	var parts []string
@@ -175,7 +189,7 @@ func (m Model) renderHeader() string {
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
-	case tabTransfer:
+	case tabBackup:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("STATUS", 12)) + "  " +
@@ -544,15 +558,15 @@ func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 	return b.String()
 }
 
-// --- Transfer tab ---
+// --- Backup tab ---
 
-func (m Model) renderTransferView() string {
+func (m Model) renderBackupView() string {
 	var b strings.Builder
 
-	if m.transferMode == "" {
+	if m.backupMode == "" {
 		// Idle state — show instructions.
 		b.WriteString("\n")
-		b.WriteString(dimVersion.Render("  No transfer in progress.") + "\n\n")
+		b.WriteString(dimVersion.Render("  No backup in progress.") + "\n\n")
 		b.WriteString(dimVersion.Render("  Press ") + dimVersion.Render("e") + dimVersion.Render(" to export installed tools to a file.") + "\n")
 		b.WriteString(dimVersion.Render("  Press ") + dimVersion.Render("I") + dimVersion.Render(" to import tools from a manifest.") + "\n")
 
@@ -565,25 +579,25 @@ func (m Model) renderTransferView() string {
 	}
 
 	// Progress bar.
-	total := len(m.transferItems)
+	total := len(m.backupItems)
 	if total > 0 {
-		frac := float64(m.transferDone) / float64(total)
+		frac := float64(m.backupDone) / float64(total)
 		barWidth := m.width - 30
 		if barWidth < 20 {
 			barWidth = 20
 		}
-		m.transferBar.SetWidth(barWidth)
+		m.backupBar.SetWidth(barWidth)
 		fmt.Fprintf(&b, "  %s  %s  %d/%d\n\n",
 			detailLabelStyle.Render("Progress:"),
-			m.transferBar.ViewAs(frac),
-			m.transferDone, total,
+			m.backupBar.ViewAs(frac),
+			m.backupDone, total,
 		)
 	}
 
 	// Header.
 	b.WriteString(m.renderHeader() + "\n")
 
-	// Transfer rows.
+	// Backup rows.
 	visibleRows := m.height - 11
 	if visibleRows < 3 {
 		visibleRows = 3
@@ -594,14 +608,14 @@ func (m Model) renderTransferView() string {
 		start = m.cursor - visibleRows + 1
 	}
 
-	for vi := start; vi < len(m.transferItems) && vi < start+visibleRows; vi++ {
-		item := m.transferItems[vi]
+	for vi := start; vi < len(m.backupItems) && vi < start+visibleRows; vi++ {
+		item := m.backupItems[vi]
 		selected := vi == m.cursor
-		b.WriteString(m.renderTransferRow(item, selected) + "\n")
+		b.WriteString(m.renderBackupRow(item, selected) + "\n")
 	}
 
 	// Pad.
-	rendered := min(len(m.transferItems)-start, visibleRows)
+	rendered := min(len(m.backupItems)-start, visibleRows)
 	for range max(visibleRows-rendered, 0) {
 		b.WriteString("\n")
 	}
@@ -609,7 +623,7 @@ func (m Model) renderTransferView() string {
 	return b.String()
 }
 
-func (m Model) renderTransferRow(item transferItem, selected bool) string {
+func (m Model) renderBackupRow(item backupItem, selected bool) string {
 	cursor := "  "
 	if selected {
 		cursor = "▸ "
@@ -618,19 +632,19 @@ func (m Model) renderTransferRow(item transferItem, selected bool) string {
 	// Status icon + label.
 	var icon, statusText string
 	switch item.status {
-	case transferPending:
+	case backupPending:
 		icon = dimVersion.Render("○")
 		statusText = dimVersion.Render("pending")
-	case transferRunning:
+	case backupRunning:
 		icon = upgradableStyle.Render("◉")
 		statusText = upgradableStyle.Render("installing")
-	case transferDone:
+	case backupDone:
 		icon = upToDateStyle.Render("✓")
 		statusText = upToDateStyle.Render("done")
-	case transferFailed:
+	case backupFailed:
 		icon = upgradableStyle.Render("✗")
 		statusText = upgradableStyle.Render("failed")
-	case transferSkipped:
+	case backupSkipped:
 		icon = dimVersion.Render("–")
 		if item.errMsg != "" {
 			statusText = dimVersion.Render(item.errMsg)
@@ -655,6 +669,68 @@ func (m Model) renderTransferRow(item transferItem, selected bool) string {
 	}
 
 	return line
+}
+
+// --- Config tab ---
+
+func (m Model) renderConfigView() string {
+	var b strings.Builder
+	label := detailLabelStyle.Render
+	dim := dimVersion.Render
+
+	// Version info.
+	b.WriteString("\n")
+	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Version", 18)), build.Info())
+	fmt.Fprintf(&b, "  %s  %s / %s\n", label(fixedWidth("OS / Arch", 18)), runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Go", 18)), runtime.Version())
+
+	// Config file path.
+	b.WriteString("\n")
+	configPath := dim("(unknown)")
+	if p, err := registry.ToolsPath(); err == nil {
+		configPath = p
+	}
+	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Config File", 18)), configPath)
+
+	// Editor.
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = os.Getenv("VISUAL")
+	}
+	if editor == "" {
+		editor = dim("(not set)")
+	} else {
+		editor += "  " + dim("($EDITOR)")
+	}
+	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Editor", 18)), editor)
+
+	// Package managers.
+	b.WriteString("\n")
+	b.WriteString("  " + label("Package Managers") + "\n")
+	for _, pm := range registry.AllPMStatusForOS() {
+		icon := upgradableStyle.Render("✗")
+		status := dim("not found")
+		if pm.Available {
+			icon = upToDateStyle.Render("✓")
+			status = upToDateStyle.Render("installed")
+		}
+		fmt.Fprintf(&b, "    %s  %-10s %s\n", icon, string(pm.Source), status)
+	}
+
+	// Tool stats.
+	b.WriteString("\n")
+	inst, upd, notInst, disabled := m.stats()
+	total := inst + notInst + disabled
+	fmt.Fprintf(&b, "  %s  %d total · %d installed · %d updates · %d disabled\n",
+		label(fixedWidth("Tools", 18)), total, inst, upd, disabled)
+
+	// Pad remaining height.
+	used := 10 + len(registry.AllPMStatusForOS())
+	if remaining := m.height - used - 6; remaining > 0 {
+		b.WriteString(strings.Repeat("\n", remaining))
+	}
+
+	return b.String()
 }
 
 // --- Help ---
@@ -686,14 +762,34 @@ func (m Model) renderHelp() string {
 		toggleLabel = "enable"
 	}
 
-	parts := []string{
-		dimVersion.Render("↑↓") + " navigate",
-		dimVersion.Render("Tab") + " switch",
-		dimVersion.Render("Enter") + " detail",
-		dimVersion.Render("x") + " " + toggleLabel,
-		dimVersion.Render("/") + " filter",
-		dimVersion.Render("r") + " refresh",
-		dimVersion.Render("q") + " quit",
+	var parts []string
+
+	switch m.activeTab {
+	case tabBackup:
+		parts = []string{
+			dimVersion.Render("Tab") + " switch",
+			dimVersion.Render("e") + " export",
+			dimVersion.Render("I") + " import",
+			dimVersion.Render("q") + " quit",
+		}
+	case tabConfig:
+		parts = []string{
+			dimVersion.Render("Tab") + " switch",
+			dimVersion.Render("r") + " refresh",
+			dimVersion.Render("q") + " quit",
+		}
+	default:
+		parts = []string{
+			dimVersion.Render("↑↓") + " navigate",
+			dimVersion.Render("Tab") + " switch",
+			dimVersion.Render("Enter") + " detail",
+			dimVersion.Render("x") + " " + toggleLabel,
+			dimVersion.Render("/") + " filter",
+			dimVersion.Render("e") + " export",
+			dimVersion.Render("I") + " import",
+			dimVersion.Render("r") + " refresh",
+			dimVersion.Render("q") + " quit",
+		}
 	}
 
 	help := helpStyle.Render("  " + strings.Join(parts, "   "))
