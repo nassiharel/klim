@@ -67,4 +67,7 @@ var (
 
 	// Category badge.
 	categoryStyle = lipgloss.NewStyle().Foreground(subtleColor)
+
+	// Confirmation prompt.
+	confirmStyle = lipgloss.NewStyle().Foreground(warningColor).Bold(true)
 )

@@ -17,7 +17,7 @@ var toolsCmd = &cobra.Command{
 
 var toolsPathCmd = &cobra.Command{
 	Use:   "path",
-	Short: "Print the path to tools.yaml",
+	Short: "Print the path to marketplace.yaml",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := registry.ToolsPath()
 		if err != nil {
@@ -30,7 +30,7 @@ var toolsPathCmd = &cobra.Command{
 
 var toolsEditCmd = &cobra.Command{
 	Use:   "edit",
-	Short: "Open tools.yaml in your editor",
+	Short: "Open marketplace.yaml in your editor",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := registry.ToolsPath()
 		if err != nil {

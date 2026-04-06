@@ -380,3 +380,184 @@ func parsePipeSeparated(output, pkg string) string {
 	}
 	return ""
 }
+
+// --- Tool info ---
+
+// FetchToolInfo retrieves rich metadata from the package manager for display.
+// Uses the primary instance's source to determine which PM to query.
+func FetchToolInfo(tool *registry.Tool) {
+	if tool.Info != nil {
+		return // already fetched
+	}
+
+	// Determine which source and package ID to query.
+	var source registry.InstallSource
+	var pkgID string
+
+	if primary := tool.PrimaryInstance(); primary != nil {
+		source = primary.Source
+	}
+
+	switch source {
+	case registry.SourceWinget:
+		pkgID = tool.Packages.Winget
+	case registry.SourceChoco:
+		pkgID = tool.Packages.Choco
+	case registry.SourceBrew:
+		pkgID = tool.Packages.Brew
+	case registry.SourceApt:
+		pkgID = tool.Packages.Apt
+	case registry.SourceSnap:
+		pkgID = tool.Packages.Snap
+	case registry.SourceNPM:
+		pkgID = tool.Packages.NPM
+	default:
+		// Try winget first (most info-rich), then brew, then others.
+		if tool.Packages.Winget != "" {
+			source = registry.SourceWinget
+			pkgID = tool.Packages.Winget
+		} else if tool.Packages.Brew != "" {
+			source = registry.SourceBrew
+			pkgID = tool.Packages.Brew
+		} else if tool.Packages.Apt != "" {
+			source = registry.SourceApt
+			pkgID = tool.Packages.Apt
+		} else {
+			return
+		}
+	}
+
+	if pkgID == "" {
+		return
+	}
+
+	switch source {
+	case registry.SourceWinget:
+		tool.Info = fetchWingetInfo(pkgID)
+	case registry.SourceBrew:
+		tool.Info = fetchBrewInfo(pkgID)
+	case registry.SourceApt:
+		tool.Info = fetchAptInfo(pkgID)
+	case registry.SourceSnap:
+		tool.Info = fetchSnapInfo(pkgID)
+	case registry.SourceNPM:
+		tool.Info = fetchNpmInfo(pkgID)
+	}
+}
+
+func fetchWingetInfo(id string) *registry.ToolInfo {
+	out := runCmd("winget", "show", "--id", id, "--accept-source-agreements")
+	if out == "" {
+		return nil
+	}
+	info := &registry.ToolInfo{
+		Publisher:   parseKeyValue(out, "Publisher"),
+		Homepage:    parseKeyValue(out, "Homepage"),
+		License:     parseKeyValue(out, "License"),
+		ReleaseDate: parseKeyValue(out, "Release Date"),
+	}
+	info.Description = parseWingetDescription(out)
+	if info.Description == "" && info.Publisher == "" && info.Homepage == "" {
+		return nil
+	}
+	return info
+}
+
+// parseWingetDescription extracts the Description field which may span multiple
+// indented lines in winget show output.
+func parseWingetDescription(output string) string {
+	lines := strings.Split(output, "\n")
+	var desc []string
+	inDesc := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "Description:") {
+			rest := strings.TrimSpace(strings.TrimPrefix(trimmed, "Description:"))
+			if rest != "" {
+				desc = append(desc, rest)
+			}
+			inDesc = true
+			continue
+		}
+		if inDesc {
+			if strings.HasPrefix(line, "  ") && trimmed != "" {
+				desc = append(desc, trimmed)
+			} else {
+				break
+			}
+		}
+	}
+	return strings.Join(desc, " ")
+}
+
+func fetchBrewInfo(formula string) *registry.ToolInfo {
+	out := runCmd("brew", "info", "--json=v2", formula)
+	if out == "" {
+		return nil
+	}
+	var result struct {
+		Formulae []struct {
+			Desc     string `json:"desc"`
+			Homepage string `json:"homepage"`
+			License  string `json:"license"`
+		} `json:"formulae"`
+	}
+	if err := json.Unmarshal([]byte(out), &result); err != nil || len(result.Formulae) == 0 {
+		return nil
+	}
+	f := result.Formulae[0]
+	if f.Desc == "" && f.Homepage == "" {
+		return nil
+	}
+	return &registry.ToolInfo{
+		Description: f.Desc,
+		Homepage:    f.Homepage,
+		License:     f.License,
+	}
+}
+
+func fetchAptInfo(pkg string) *registry.ToolInfo {
+	out := runCmd("apt-cache", "show", pkg)
+	if out == "" {
+		return nil
+	}
+	desc := parseKeyValue(out, "Description")
+	homepage := parseKeyValue(out, "Homepage")
+	if desc == "" && homepage == "" {
+		return nil
+	}
+	return &registry.ToolInfo{
+		Description: desc,
+		Homepage:    homepage,
+	}
+}
+
+func fetchSnapInfo(pkg string) *registry.ToolInfo {
+	out := runCmd("snap", "info", pkg)
+	if out == "" {
+		return nil
+	}
+	desc := parseKeyValue(out, "summary")
+	publisher := parseKeyValue(out, "publisher")
+	if desc == "" {
+		return nil
+	}
+	return &registry.ToolInfo{
+		Description: desc,
+		Publisher:   publisher,
+	}
+}
+
+func fetchNpmInfo(pkg string) *registry.ToolInfo {
+	desc := strings.TrimSpace(runCmd("npm", "view", pkg, "description"))
+	homepage := strings.TrimSpace(runCmd("npm", "view", pkg, "homepage"))
+	license := strings.TrimSpace(runCmd("npm", "view", pkg, "license"))
+	if desc == "" && homepage == "" {
+		return nil
+	}
+	return &registry.ToolInfo{
+		Description: desc,
+		Homepage:    homepage,
+		License:     license,
+	}
+}

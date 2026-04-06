@@ -30,6 +30,14 @@ func (m Model) renderView() string {
 	b.WriteString(m.renderTitleBar() + "\n")
 	b.WriteString(m.renderTabBar() + "\n\n")
 
+	// Transfer tab has its own rendering path.
+	if m.activeTab == tabTransfer {
+		b.WriteString(m.renderTransferView())
+		b.WriteString("\n")
+		b.WriteString(m.renderHelp())
+		return b.String()
+	}
+
 	// Header row.
 	if m.phase >= 1 && len(m.filteredIndex) > 0 {
 		b.WriteString(m.renderHeader() + "\n")
@@ -70,6 +78,8 @@ func (m Model) renderView() string {
 			msg = "  All curated tools are already installed!"
 		case tabDisabled:
 			msg = "  No disabled tools."
+		case tabTransfer:
+			msg = "" // handled by renderTransferView
 		}
 		b.WriteString("\n" + dimVersion.Render(msg) + "\n")
 	}
@@ -78,6 +88,8 @@ func (m Model) renderView() string {
 
 	if m.filtering {
 		b.WriteString("  " + filterPromptStyle.Render("/") + " " + m.filterInput.View())
+	} else if m.importingPath {
+		b.WriteString("  " + confirmStyle.Render("Import:") + " " + m.importInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
 	} else {
 		b.WriteString(m.renderHelp())
 	}
@@ -121,6 +133,7 @@ func (m Model) renderTabBar() string {
 		{"Updates", tabUpdates},
 		{"Discover", tabDiscover},
 		{"Disabled", tabDisabled},
+		{"Transfer", tabTransfer},
 	}
 
 	var parts []string
@@ -158,6 +171,11 @@ func (m Model) renderHeader() string {
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render("CATEGORY")
+	case tabTransfer:
+		return "  " +
+			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
+			headerStyle.Render(fixedWidth("STATUS", 12)) + "  " +
+			headerStyle.Render("SOURCE")
 	}
 	return ""
 }
@@ -311,6 +329,38 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	b.WriteString("  " + strings.Repeat("─", max(m.width-len(label)-len(tool.Category)-8, 10)))
 	b.WriteString("\n\n")
 
+	// Tool info — fetched lazily from package manager.
+	if tool.Info != nil {
+		if tool.Info.Description != "" {
+			// Word-wrap description to fit width.
+			desc := tool.Info.Description
+			maxLen := m.width - 6
+			if len(desc) > maxLen {
+				desc = desc[:maxLen-3] + "..."
+			}
+			b.WriteString("  " + dimVersion.Render(desc) + "\n")
+		}
+		var meta []string
+		if tool.Info.Publisher != "" {
+			meta = append(meta, detailLabelStyle.Render("Publisher: ")+tool.Info.Publisher)
+		}
+		if tool.Info.Homepage != "" {
+			meta = append(meta, detailLabelStyle.Render("Homepage:  ")+dimVersion.Render(tool.Info.Homepage))
+		}
+		if tool.Info.License != "" {
+			meta = append(meta, detailLabelStyle.Render("License:   ")+tool.Info.License)
+		}
+		if tool.Info.ReleaseDate != "" {
+			meta = append(meta, detailLabelStyle.Render("Released:  ")+tool.Info.ReleaseDate)
+		}
+		for _, line := range meta {
+			b.WriteString("  " + line + "\n")
+		}
+		b.WriteString("\n")
+	} else {
+		b.WriteString("  " + loadingStyle.Render("Loading info...") + "\n\n")
+	}
+
 	if tool.IsInstalled() {
 		b.WriteString("  " + detailLabelStyle.Render("Instances:") + "\n")
 		for i, inst := range tool.Instances {
@@ -372,7 +422,33 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString("  " + helpStyle.Render("Esc back"))
+
+	// Detail view help with action hints.
+	if m.pendingAction != nil {
+		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", m.pendingAction.cmdStr))
+		keys := dimVersion.Render("y") + " confirm   " + dimVersion.Render("Esc") + " cancel"
+		b.WriteString(prompt + "  " + keys)
+	} else if m.sourcePicker != nil {
+		var parts []string
+		parts = append(parts, confirmStyle.Render(fmt.Sprintf("  %s via:", m.sourcePicker.action)))
+		for i, c := range m.sourcePicker.choices {
+			parts = append(parts, fmt.Sprintf("  %s %s",
+				dimVersion.Render(fmt.Sprintf("%d", i+1)),
+				string(c.source),
+			))
+		}
+		parts = append(parts, "  "+dimVersion.Render("Esc")+" cancel")
+		b.WriteString(strings.Join(parts, ""))
+	} else {
+		var hints []string
+		if tool.IsInstalled() {
+			hints = append(hints, dimVersion.Render("u")+" upgrade", dimVersion.Render("d")+" remove")
+		} else {
+			hints = append(hints, dimVersion.Render("i")+" install")
+		}
+		hints = append(hints, dimVersion.Render("Esc")+" back")
+		b.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
+	}
 
 	return b.String()
 }
@@ -461,22 +537,157 @@ func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 	return b.String()
 }
 
+// --- Transfer tab ---
+
+func (m Model) renderTransferView() string {
+	var b strings.Builder
+
+	if m.transferMode == "" {
+		// Idle state — show instructions.
+		b.WriteString("\n")
+		b.WriteString(dimVersion.Render("  No transfer in progress.") + "\n\n")
+		b.WriteString(dimVersion.Render("  Press ") + dimVersion.Render("e") + dimVersion.Render(" to export installed tools to a file.") + "\n")
+		b.WriteString(dimVersion.Render("  Press ") + dimVersion.Render("I") + dimVersion.Render(" to import tools from a manifest.") + "\n")
+
+		// Pad remaining space.
+		visibleRows := m.height - 12
+		for range max(visibleRows, 0) {
+			b.WriteString("\n")
+		}
+		return b.String()
+	}
+
+	// Progress bar.
+	total := len(m.transferItems)
+	if total > 0 {
+		frac := float64(m.transferDone) / float64(total)
+		barWidth := m.width - 30
+		if barWidth < 20 {
+			barWidth = 20
+		}
+		m.transferBar.SetWidth(barWidth)
+		b.WriteString(fmt.Sprintf("  %s  %s  %d/%d\n\n",
+			detailLabelStyle.Render("Progress:"),
+			m.transferBar.ViewAs(frac),
+			m.transferDone, total,
+		))
+	}
+
+	// Header.
+	b.WriteString(m.renderHeader() + "\n")
+
+	// Transfer rows.
+	visibleRows := m.height - 11
+	if visibleRows < 3 {
+		visibleRows = 3
+	}
+
+	start := 0
+	if m.cursor >= visibleRows {
+		start = m.cursor - visibleRows + 1
+	}
+
+	for vi := start; vi < len(m.transferItems) && vi < start+visibleRows; vi++ {
+		item := m.transferItems[vi]
+		selected := vi == m.cursor
+		b.WriteString(m.renderTransferRow(item, selected) + "\n")
+	}
+
+	// Pad.
+	rendered := min(len(m.transferItems)-start, visibleRows)
+	for range max(visibleRows-rendered, 0) {
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+func (m Model) renderTransferRow(item transferItem, selected bool) string {
+	cursor := "  "
+	if selected {
+		cursor = "▸ "
+	}
+
+	// Status icon + label.
+	var icon, statusText string
+	switch item.status {
+	case transferPending:
+		icon = dimVersion.Render("○")
+		statusText = dimVersion.Render("pending")
+	case transferRunning:
+		icon = upgradableStyle.Render("◉")
+		statusText = upgradableStyle.Render("installing")
+	case transferDone:
+		icon = upToDateStyle.Render("✓")
+		statusText = upToDateStyle.Render("done")
+	case transferFailed:
+		icon = upgradableStyle.Render("✗")
+		if item.errMsg != "" {
+			statusText = upgradableStyle.Render("failed")
+		} else {
+			statusText = upgradableStyle.Render("failed")
+		}
+	case transferSkipped:
+		icon = dimVersion.Render("–")
+		if item.errMsg != "" {
+			statusText = dimVersion.Render(item.errMsg)
+		} else {
+			statusText = dimVersion.Render("skipped")
+		}
+	}
+
+	nameCell := nameStyle.Render(fixedWidth(item.display, colName))
+	statusCell := fixedWidth(statusText, 16)
+	sourceCell := sourceStyle.Render(item.source)
+
+	line := cursor + icon + " " + nameCell + "  " + statusCell + "  " + sourceCell
+
+	if selected {
+		// Pad to full width for selection highlight.
+		lineRunes := []rune(line)
+		if len(lineRunes) < m.width {
+			line += strings.Repeat(" ", m.width-len(lineRunes))
+		}
+		line = selectedRowStyle.Render(line)
+	}
+
+	return line
+}
+
 // --- Help ---
 
 func (m Model) renderHelp() string {
-	xLabel := "disable"
-	if m.activeTab == tabDisabled {
-		xLabel = "enable"
+	// Confirmation mode — show prompt instead of normal help.
+	if m.pendingAction != nil {
+		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", m.pendingAction.cmdStr))
+		keys := dimVersion.Render("y") + " confirm   " + dimVersion.Render("Esc") + " cancel"
+		return prompt + "  " + keys
 	}
+
+	// Source picker mode — show numbered choices.
+	if m.sourcePicker != nil {
+		var parts []string
+		parts = append(parts, confirmStyle.Render(fmt.Sprintf("  %s via:", m.sourcePicker.action)))
+		for i, c := range m.sourcePicker.choices {
+			parts = append(parts, fmt.Sprintf("  %s %s",
+				dimVersion.Render(fmt.Sprintf("%d", i+1)),
+				string(c.source),
+			))
+		}
+		parts = append(parts, "  "+dimVersion.Render("Esc")+" cancel")
+		return strings.Join(parts, "")
+	}
+
 	parts := []string{
 		dimVersion.Render("↑↓") + " navigate",
 		dimVersion.Render("Tab") + " switch",
 		dimVersion.Render("Enter") + " detail",
-		dimVersion.Render("x") + " " + xLabel,
+		dimVersion.Render("x") + " disable",
 		dimVersion.Render("/") + " filter",
 		dimVersion.Render("r") + " refresh",
 		dimVersion.Render("q") + " quit",
 	}
+
 	help := helpStyle.Render("  " + strings.Join(parts, "   "))
 	if m.statusMsg != "" {
 		help += "  " + upgradableStyle.Render(m.statusMsg)

@@ -33,6 +33,16 @@ type Tool struct {
 	Latest      string
 	LatestFrom  string
 	Disabled    bool
+	Info        *ToolInfo // rich metadata, fetched lazily
+}
+
+// ToolInfo holds rich metadata about a tool, fetched from package managers.
+type ToolInfo struct {
+	Description string
+	Publisher   string
+	Homepage    string
+	License     string
+	ReleaseDate string
 }
 
 // Instance represents a single installation of a tool found on PATH.
