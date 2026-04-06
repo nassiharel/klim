@@ -353,13 +353,14 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	switch {
 	case tool.Info != nil:
 		if tool.Info.Description != "" {
-			// Word-wrap description to fit width.
-			desc := tool.Info.Description
+			// Word-wrap description to fit width, using rune count to
+			// handle multibyte characters correctly.
+			descRunes := []rune(tool.Info.Description)
 			maxLen := m.width - 6
-			if len(desc) > maxLen {
-				desc = desc[:maxLen-3] + "..."
+			if maxLen > 3 && len(descRunes) > maxLen {
+				descRunes = append(descRunes[:maxLen-3], '.', '.', '.')
 			}
-			b.WriteString("  " + dimVersion.Render(desc) + "\n")
+			b.WriteString("  " + dimVersion.Render(string(descRunes)) + "\n")
 		}
 		var meta []string
 		if tool.Info.Publisher != "" {
@@ -632,32 +633,39 @@ func (m Model) renderBackupRow(item backupItem, selected bool) string {
 		cursor = "▸ "
 	}
 
-	// Status icon + label.
-	var icon, statusText string
+	// Status icon + label. Compute plain text first, style after fixedWidth.
+	var icon string
+	var statusLabel string
+	var statusStyle lipgloss.Style
 	switch item.status {
 	case backupPending:
 		icon = dimVersion.Render("○")
-		statusText = dimVersion.Render("pending")
+		statusLabel = "pending"
+		statusStyle = dimVersion
 	case backupRunning:
 		icon = upgradableStyle.Render("◉")
-		statusText = upgradableStyle.Render("installing")
+		statusLabel = "installing"
+		statusStyle = upgradableStyle
 	case backupDone:
 		icon = upToDateStyle.Render("✓")
-		statusText = upToDateStyle.Render("done")
+		statusLabel = "done"
+		statusStyle = upToDateStyle
 	case backupFailed:
 		icon = upgradableStyle.Render("✗")
-		statusText = upgradableStyle.Render("failed")
+		statusLabel = "failed"
+		statusStyle = upgradableStyle
 	case backupSkipped:
 		icon = dimVersion.Render("–")
 		if item.errMsg != "" {
-			statusText = dimVersion.Render(item.errMsg)
+			statusLabel = item.errMsg
 		} else {
-			statusText = dimVersion.Render("skipped")
+			statusLabel = "skipped"
 		}
+		statusStyle = dimVersion
 	}
 
 	nameCell := nameStyle.Render(fixedWidth(item.display, colName))
-	statusCell := fixedWidth(statusText, 16)
+	statusCell := statusStyle.Render(fixedWidth(statusLabel, 16))
 	sourceCell := sourceStyle.Render(item.source)
 
 	line := cursor + icon + " " + nameCell + "  " + statusCell + "  " + sourceCell
@@ -825,8 +833,14 @@ func toolLabel(tool registry.Tool) string {
 // fixedWidth pads or truncates a plain string to exactly `width` characters.
 // Must be called BEFORE applying lipgloss styles, not after.
 func fixedWidth(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
 	r := []rune(s)
 	if len(r) > width {
+		if width <= 1 {
+			return "…"
+		}
 		return string(r[:width-1]) + "…"
 	}
 	if len(r) < width {

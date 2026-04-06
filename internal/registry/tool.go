@@ -359,7 +359,7 @@ func TruncatePath(path string, maxLen int) string {
 	if path == "" {
 		return "—"
 	}
-	if len(path) <= maxLen {
+	if maxLen <= 3 || len(path) <= maxLen {
 		return path
 	}
 	return "..." + path[len(path)-maxLen+3:]

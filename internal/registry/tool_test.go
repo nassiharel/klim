@@ -170,6 +170,35 @@ func TestInstallArgs_ShellMetacharsStaySingleArg(t *testing.T) {
 	}
 }
 
+func TestTruncatePath(t *testing.T) {
+	tests := []struct {
+		name   string
+		path   string
+		maxLen int
+		want   string
+	}{
+		{"empty", "", 40, "—"},
+		{"short path", "/usr/bin/git", 40, "/usr/bin/git"},
+		{"exact fit", "/usr/bin/git", 12, "/usr/bin/git"},
+		{"truncated", "/home/user/.local/bin/tool", 15, "...cal/bin/tool"},
+		{"maxLen zero", "/usr/bin/git", 0, "/usr/bin/git"},
+		{"maxLen negative", "/usr/bin/git", -5, "/usr/bin/git"},
+		{"maxLen 1", "/usr/bin/git", 1, "/usr/bin/git"},
+		{"maxLen 3", "/usr/bin/git", 3, "/usr/bin/git"},
+		{"maxLen 4", "/usr/bin/git", 4, "...t"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := TruncatePath(tt.path, tt.maxLen)
+			if got != tt.want {
+				t.Errorf("TruncatePath(%q, %d) = %q, want %q",
+					tt.path, tt.maxLen, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestStatusString(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -191,30 +220,6 @@ func TestStatusString(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("StatusString(%q, %q) = %q, want %q",
 					tt.installed, tt.latest, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestTruncatePath(t *testing.T) {
-	tests := []struct {
-		name   string
-		path   string
-		maxLen int
-		want   string
-	}{
-		{"empty path", "", 50, "—"},
-		{"short path", "/usr/bin/git", 50, "/usr/bin/git"},
-		{"exact length", "/usr/bin/git", 12, "/usr/bin/git"},
-		{"needs truncation", "/very/long/path/to/binary", 15, "...th/to/binary"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := TruncatePath(tt.path, tt.maxLen)
-			if got != tt.want {
-				t.Errorf("TruncatePath(%q, %d) = %q, want %q",
-					tt.path, tt.maxLen, got, tt.want)
 			}
 		})
 	}
