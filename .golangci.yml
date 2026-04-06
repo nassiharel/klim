@@ -1,10 +1,77 @@
-linters:
-  default: standard
-  enable:
-    - misspell
-    - gofmt
+version: "2"
 
-issues:
-  exclude-dirs:
-    - dist
-    - bin
+linters:
+  default: none
+  enable:
+    # Correctness
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - errorlint
+
+    # Security
+    - gosec
+
+    # Style
+    - misspell
+    - revive
+    - gocritic
+    - perfsprint
+
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: exported
+          arguments: [checkPrivateReceivers]
+        - name: increment-decrement
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: var-naming
+
+    gosec:
+      excludes:
+        - G103 # unsafe — needed for Windows PE version extraction via syscall
+        - G104 # errcheck handles unhandled errors
+        - G204 # subprocess with variable — expected in CLI tool (install/upgrade commands)
+        - G301 # directory permissions 0755 — standard for config dirs
+        - G304 # file path from variable — expected in CLI tool
+        - G306 # file permissions 0644 — standard for config files
+
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
+
+  exclusions:
+    paths:
+      - dist
+      - bin
+    rules:
+      - linters: [revive]
+        path: _test\.go
+        text: "dot-imports"
+      - linters: [errcheck]
+        path: _test\.go
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

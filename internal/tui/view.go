@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -87,11 +88,12 @@ func (m Model) renderView() string {
 
 	b.WriteString("\n")
 
-	if m.filtering {
+	switch {
+	case m.filtering:
 		b.WriteString("  " + filterPromptStyle.Render("/") + " " + m.filterInput.View())
-	} else if m.importingPath {
+	case m.importingPath:
 		b.WriteString("  " + confirmStyle.Render("Import:") + " " + m.importInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
-	} else {
+	default:
 		b.WriteString(m.renderHelp())
 	}
 
@@ -114,7 +116,7 @@ func (m Model) renderTitleBar() string {
 	active := inst + notInst
 	summary := fmt.Sprintf("%d/%d installed", inst, active)
 	if upd > 0 {
-		summary += fmt.Sprintf(" · %s", upgradableStyle.Render(fmt.Sprintf("%d updates", upd)))
+		summary += " · " + upgradableStyle.Render(strconv.Itoa(upd)+" updates")
 	}
 	if notInst > 0 {
 		summary += fmt.Sprintf(" · %d to discover", notInst)
@@ -378,12 +380,12 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 			if ver == "" {
 				ver = "—"
 			}
-			b.WriteString(fmt.Sprintf("    %s  %-14s  %-8s  %s\n",
+			fmt.Fprintf(&b, "    %s  %-14s  %-8s  %s\n",
 				style.Render(bullet),
 				ver,
 				sourceStyle.Render(string(inst.Source)),
 				dimVersion.Render(registry.TruncatePath(inst.Path, m.width-40)),
-			))
+			)
 		}
 		b.WriteString("\n")
 
@@ -418,32 +420,33 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	b.WriteString("\n  " + detailLabelStyle.Render("Install:") + "\n")
 	for _, src := range registry.SourcesForOS() {
 		if cmd := tool.Packages.InstallCmd(src); cmd != "" {
-			b.WriteString(fmt.Sprintf("    %-8s  %s\n",
+			fmt.Fprintf(&b, "    %-8s  %s\n",
 				sourceStyle.Render(string(src)),
 				detailCmdStyle.Render(cmd),
-			))
+			)
 		}
 	}
 
 	b.WriteString("\n")
 
 	// Detail view help with action hints.
-	if m.pendingAction != nil {
+	switch {
+	case m.pendingAction != nil:
 		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", m.pendingAction.cmdStr))
 		keys := dimVersion.Render("y") + " confirm   " + dimVersion.Render("Esc") + " cancel"
 		b.WriteString(prompt + "  " + keys)
-	} else if m.sourcePicker != nil {
+	case m.sourcePicker != nil:
 		var parts []string
 		parts = append(parts, confirmStyle.Render(fmt.Sprintf("  %s via:", m.sourcePicker.action)))
 		for i, c := range m.sourcePicker.choices {
 			parts = append(parts, fmt.Sprintf("  %s %s",
-				dimVersion.Render(fmt.Sprintf("%d", i+1)),
+				dimVersion.Render(strconv.Itoa(i+1)),
 				string(c.source),
 			))
 		}
 		parts = append(parts, "  "+dimVersion.Render("Esc")+" cancel")
 		b.WriteString(strings.Join(parts, ""))
-	} else {
+	default:
 		var hints []string
 		if tool.IsInstalled() {
 			hints = append(hints, dimVersion.Render("u")+" upgrade", dimVersion.Render("d")+" remove")
@@ -570,11 +573,11 @@ func (m Model) renderTransferView() string {
 			barWidth = 20
 		}
 		m.transferBar.SetWidth(barWidth)
-		b.WriteString(fmt.Sprintf("  %s  %s  %d/%d\n\n",
+		fmt.Fprintf(&b, "  %s  %s  %d/%d\n\n",
 			detailLabelStyle.Render("Progress:"),
 			m.transferBar.ViewAs(frac),
 			m.transferDone, total,
-		))
+		)
 	}
 
 	// Header.
@@ -626,11 +629,7 @@ func (m Model) renderTransferRow(item transferItem, selected bool) string {
 		statusText = upToDateStyle.Render("done")
 	case transferFailed:
 		icon = upgradableStyle.Render("✗")
-		if item.errMsg != "" {
-			statusText = upgradableStyle.Render("failed")
-		} else {
-			statusText = upgradableStyle.Render("failed")
-		}
+		statusText = upgradableStyle.Render("failed")
 	case transferSkipped:
 		icon = dimVersion.Render("–")
 		if item.errMsg != "" {
@@ -674,7 +673,7 @@ func (m Model) renderHelp() string {
 		parts = append(parts, confirmStyle.Render(fmt.Sprintf("  %s via:", m.sourcePicker.action)))
 		for i, c := range m.sourcePicker.choices {
 			parts = append(parts, fmt.Sprintf("  %s %s",
-				dimVersion.Render(fmt.Sprintf("%d", i+1)),
+				dimVersion.Render(strconv.Itoa(i+1)),
 				string(c.source),
 			))
 		}

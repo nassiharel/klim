@@ -3,5 +3,7 @@ package clim
 
 import _ "embed"
 
+// MarketplaceYAML contains the embedded marketplace catalog YAML data.
+//
 //go:embed marketplace.yaml
 var MarketplaceYAML []byte

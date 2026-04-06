@@ -39,8 +39,8 @@ func runList(cmd *cobra.Command, args []string) error {
 	})
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "TOOL\tVERSION\tLATEST\tSOURCE\tSTATUS\tPATH")
-	fmt.Fprintln(w, "────\t───────\t──────\t──────\t──────\t────")
+	_, _ = fmt.Fprintln(w, "TOOL\tVERSION\tLATEST\tSOURCE\tSTATUS\tPATH")
+	_, _ = fmt.Fprintln(w, "────\t───────\t──────\t──────\t──────\t────")
 
 	installed := 0
 	for _, tool := range tools {
@@ -53,7 +53,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		ver := or(primary.Version, "—")
 		status := registry.StatusString(primary.Version, tool.Latest)
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 			tool.DisplayName,
 			ver,
 			tool.Latest,
@@ -63,7 +63,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		)
 
 		for _, inst := range tool.Instances[1:] {
-			fmt.Fprintf(w, "  └─ also:\t%s\t\t%s\t\t%s\n",
+			_, _ = fmt.Fprintf(w, "  └─ also:\t%s\t\t%s\t\t%s\n",
 				or(inst.Version, "—"),
 				inst.Source,
 				registry.TruncatePath(inst.Path, 45),
@@ -71,7 +71,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	w.Flush()
+	_ = w.Flush()
 	fmt.Fprintf(os.Stderr, "\n%d/%d tools installed.\n", installed, len(tools))
 	return nil
 }

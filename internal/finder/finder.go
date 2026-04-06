@@ -1,7 +1,7 @@
 package finder
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,7 +37,7 @@ type match struct {
 func FindAll(tools []registry.Tool) error {
 	pathDirs := pathDirectories()
 	if len(pathDirs) == 0 {
-		return fmt.Errorf("PATH is empty or not set")
+		return errors.New("PATH is empty or not set")
 	}
 
 	// Phase 1: Build a map of all binary names we're looking for.

@@ -10,6 +10,7 @@ import (
 // InstallSource identifies how a tool was installed.
 type InstallSource string
 
+// Supported install sources for tools.
 const (
 	SourceWinget InstallSource = "winget"
 	SourceChoco  InstallSource = "choco"
@@ -169,7 +170,7 @@ func (p PackageIDs) RemoveCmd(source InstallSource) string {
 
 // pmAvailable checks if a package manager binary is on PATH (cached).
 var pmAvailability struct {
-	once sync.Once
+	once  sync.Once
 	avail map[InstallSource]bool
 }
 

@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
-	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nassiharel/clim/internal/registry"
@@ -38,13 +38,13 @@ type Model struct {
 	filteredIndex []int
 
 	// Detail view.
-	detailIdx int  // index into m.tools, -1 = no detail
+	detailIdx  int // index into m.tools, -1 = no detail
 	showDetail bool
 
 	// Loading state.
-	phase    int // 0=scanning, 1=resolving, 2=done
-	loading  bool
-	pending  int // count of tools still resolving versions
+	phase   int // 0=scanning, 1=resolving, 2=done
+	loading bool
+	pending int // count of tools still resolving versions
 
 	// Layout.
 	width  int
@@ -100,6 +100,7 @@ func NewModel() Model {
 	}
 }
 
+// Init starts the initial tool discovery process.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
@@ -107,6 +108,7 @@ func (m Model) Init() tea.Cmd {
 	)
 }
 
+// Update handles all incoming messages and returns updated model and commands.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -201,7 +203,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Start installing the first pending item.
-		return m, m.nextTransferInstall()
+		cmd := m.nextTransferInstall()
+		return m, cmd
 
 	case transferItemDoneMsg:
 		if msg.idx < len(m.transferItems) {
@@ -243,6 +246,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// View renders the current UI state.
 func (m Model) View() tea.View {
 	v := tea.NewView(m.renderView())
 	v.AltScreen = true

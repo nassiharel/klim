@@ -299,7 +299,7 @@ func parseDpkgStatus() map[string]string {
 	if err != nil {
 		return make(map[string]string)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // best-effort close on read-only file
 
 	versions := make(map[string]string)
 	var pkg, version string
@@ -316,11 +316,12 @@ func parseDpkgStatus() map[string]string {
 			installed = false
 			continue
 		}
-		if strings.HasPrefix(line, "Package: ") {
+		switch {
+		case strings.HasPrefix(line, "Package: "):
 			pkg = strings.TrimPrefix(line, "Package: ")
-		} else if strings.HasPrefix(line, "Version: ") {
+		case strings.HasPrefix(line, "Version: "):
 			version = strings.TrimPrefix(line, "Version: ")
-		} else if strings.HasPrefix(line, "Status: ") {
+		case strings.HasPrefix(line, "Status: "):
 			installed = strings.Contains(line, "installed")
 		}
 	}
