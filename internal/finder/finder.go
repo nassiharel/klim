@@ -250,9 +250,13 @@ func getPathExtensions() []string {
 }
 
 // detectSource infers the install source from the binary's resolved path.
-// Uses forward slashes only (filepath.ToSlash) for consistent matching.
+// Normalises backslashes to forward slashes for cross-platform matching.
 func detectSource(path string) registry.InstallSource {
-	lower := strings.ToLower(filepath.ToSlash(path))
+	// Use ReplaceAll instead of filepath.ToSlash so Windows-style paths
+	// are normalised to forward slashes on every platform (ToSlash only
+	// replaces os.PathSeparator, which is '/' on Unix — leaving
+	// backslashes untouched).
+	lower := strings.ToLower(strings.ReplaceAll(path, `\`, "/"))
 
 	switch {
 	case strings.Contains(lower, "chocolatey/"):
