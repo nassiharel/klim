@@ -14,6 +14,7 @@ import (
 
 	"github.com/nassiharel/clim/internal/detector"
 	"github.com/nassiharel/clim/internal/finder"
+	"github.com/nassiharel/clim/internal/manifest"
 	"github.com/nassiharel/clim/internal/pkgmgr"
 	"github.com/nassiharel/clim/internal/registry"
 )
@@ -54,12 +55,12 @@ type toolInfoMsg struct {
 type pendingAction struct {
 	toolIdx int
 	action  string
-	cmdStr  string
+	cmdArgs []string // exec args: [0]=binary, [1:]=arguments (no shell)
 }
 
 type sourceChoice struct {
-	source registry.InstallSource
-	cmd    string
+	source  registry.InstallSource
+	cmdArgs []string // exec args (no shell)
 }
 
 type sourcePicker struct {
@@ -83,7 +84,7 @@ const (
 type backupItem struct {
 	name    string
 	display string
-	cmd     string // install command (import) or "" (export)
+	cmdArgs []string // install command args (import) or nil (export)
 	source  string
 	status  backupStatus
 	errMsg  string
@@ -129,7 +130,7 @@ func resolveToolVersionCmd(index int, tool registry.Tool) func() toolVersionMsg 
 // --- Single-tool action commands ---
 
 func execToolActionCmd(pa pendingAction) tea.Cmd {
-	cmd := buildShellCmd(pa.cmdStr)
+	cmd := exec.Command(pa.cmdArgs[0], pa.cmdArgs[1:]...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return execFinishedMsg{
 			toolIdx: pa.toolIdx,
@@ -160,40 +161,6 @@ func fetchToolInfoCmd(idx int, tool registry.Tool) tea.Cmd {
 	}
 }
 
-func buildShellCmd(cmdStr string) *exec.Cmd {
-	if runtime.GOOS == "windows" {
-		return exec.Command("cmd", "/C", cmdStr)
-	}
-	return exec.Command("sh", "-c", cmdStr)
-}
-
-// --- Export manifest types ---
-
-type exportManifest struct {
-	GeneratedBy string           `yaml:"generated_by"`
-	OS          string           `yaml:"os"`
-	Arch        string           `yaml:"arch"`
-	Tools       []exportToolItem `yaml:"tools"`
-}
-
-type exportToolItem struct {
-	Name        string             `yaml:"name"`
-	DisplayName string             `yaml:"display_name"`
-	Version     string             `yaml:"version,omitempty"`
-	Source      string             `yaml:"source,omitempty"`
-	Category    string             `yaml:"category"`
-	Packages    exportToolPackages `yaml:"packages,omitempty"`
-}
-
-type exportToolPackages struct {
-	Winget string `yaml:"winget,omitempty"`
-	Choco  string `yaml:"choco,omitempty"`
-	Brew   string `yaml:"brew,omitempty"`
-	Apt    string `yaml:"apt,omitempty"`
-	Snap   string `yaml:"snap,omitempty"`
-	NPM    string `yaml:"npm,omitempty"`
-}
-
 // --- Export command ---
 
 func exportToolsCmd(tools []registry.Tool) tea.Cmd {
@@ -204,19 +171,19 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 			return strings.ToLower(sorted[i].Name) < strings.ToLower(sorted[j].Name)
 		})
 
-		var exported []exportToolItem
+		var exported []manifest.Tool
 		for _, tool := range sorted {
 			if !tool.IsInstalled() || tool.Disabled {
 				continue
 			}
 			primary := tool.PrimaryInstance()
-			exported = append(exported, exportToolItem{
+			exported = append(exported, manifest.Tool{
 				Name:        tool.Name,
 				DisplayName: tool.DisplayName,
 				Version:     primary.Version,
 				Source:      string(primary.Source),
 				Category:    tool.Category,
-				Packages: exportToolPackages{
+				Packages: manifest.Packages{
 					Winget: tool.Packages.Winget,
 					Choco:  tool.Packages.Choco,
 					Brew:   tool.Packages.Brew,
@@ -227,14 +194,14 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 			})
 		}
 
-		manifest := exportManifest{
+		m := manifest.Manifest{
 			GeneratedBy: "clim export",
 			OS:          runtime.GOOS,
 			Arch:        runtime.GOARCH,
 			Tools:       exported,
 		}
 
-		data, err := yaml.Marshal(&manifest)
+		data, err := yaml.Marshal(&m)
 		if err != nil {
 			return exportFinishedMsg{err: err}
 		}
@@ -263,8 +230,8 @@ func buildImportPlanCmd(path string) tea.Cmd {
 			}}}
 		}
 
-		var manifest exportManifest
-		if err := yaml.Unmarshal(data, &manifest); err != nil {
+		var m manifest.Manifest
+		if err := yaml.Unmarshal(data, &m); err != nil {
 			return backupPlanMsg{items: []backupItem{{
 				name: "error", display: "Error", status: backupFailed,
 				errMsg: fmt.Sprintf("parsing manifest: %v", err),
@@ -286,7 +253,7 @@ func buildImportPlanCmd(path string) tea.Cmd {
 		}
 
 		var items []backupItem
-		for _, mt := range manifest.Tools {
+		for _, mt := range m.Tools {
 			rt, exists := regMap[mt.Name]
 
 			if exists && rt.IsInstalled() {
@@ -316,8 +283,8 @@ func buildImportPlanCmd(path string) tea.Cmd {
 			}
 
 			src := pkgs.BestInstallSource()
-			installCmd := pkgs.InstallCmd(src)
-			if installCmd == "" {
+			installArgs := pkgs.InstallArgs(src)
+			if installArgs == nil {
 				reason := "no package for " + runtime.GOOS
 				if src == "" && pkgs.HasAnyPackageForOS() {
 					reason = "no supported package manager installed"
@@ -334,7 +301,7 @@ func buildImportPlanCmd(path string) tea.Cmd {
 			items = append(items, backupItem{
 				name:    mt.Name,
 				display: mt.DisplayName,
-				cmd:     installCmd,
+				cmdArgs: installArgs,
 				source:  string(src),
 				status:  backupPending,
 			})
@@ -345,8 +312,8 @@ func buildImportPlanCmd(path string) tea.Cmd {
 }
 
 // execBackupInstallCmd suspends the TUI and runs one install command.
-func execBackupInstallCmd(idx int, cmdStr string) tea.Cmd {
-	cmd := buildShellCmd(cmdStr)
+func execBackupInstallCmd(idx int, args []string) tea.Cmd {
+	cmd := exec.Command(args[0], args[1:]...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return backupItemDoneMsg{idx: idx, err: err}
 	})

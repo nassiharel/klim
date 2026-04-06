@@ -12,6 +12,7 @@ import (
 
 	"github.com/nassiharel/clim/internal/detector"
 	"github.com/nassiharel/clim/internal/finder"
+	"github.com/nassiharel/clim/internal/manifest"
 	"github.com/nassiharel/clim/internal/pkgmgr"
 	"github.com/nassiharel/clim/internal/registry"
 )
@@ -50,20 +51,20 @@ func runExport(cmd *cobra.Command, args []string) error {
 		return strings.ToLower(tools[i].Name) < strings.ToLower(tools[j].Name)
 	})
 
-	var exported []exportTool
+	var exported []manifest.Tool
 	for _, tool := range tools {
 		if !tool.IsInstalled() || tool.Disabled {
 			continue
 		}
 		primary := tool.PrimaryInstance()
 
-		exported = append(exported, exportTool{
+		exported = append(exported, manifest.Tool{
 			Name:        tool.Name,
 			DisplayName: tool.DisplayName,
 			Version:     primary.Version,
 			Source:      string(primary.Source),
 			Category:    tool.Category,
-			Packages: exportPackages{
+			Packages: manifest.Packages{
 				Winget: tool.Packages.Winget,
 				Choco:  tool.Packages.Choco,
 				Brew:   tool.Packages.Brew,
@@ -74,14 +75,14 @@ func runExport(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	manifest := exportManifest{
+	m := manifest.Manifest{
 		GeneratedBy: "clim export",
 		OS:          runtime.GOOS,
 		Arch:        runtime.GOARCH,
 		Tools:       exported,
 	}
 
-	data, err := yaml.Marshal(&manifest)
+	data, err := yaml.Marshal(&m)
 	if err != nil {
 		return fmt.Errorf("marshalling export: %w", err)
 	}

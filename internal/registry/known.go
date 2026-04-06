@@ -43,6 +43,23 @@ func ToolsPath() (string, error) {
 	return path, nil
 }
 
+// EnsureToolsFile creates the marketplace.yaml from embedded defaults if it
+// doesn't exist yet. Returns the file path. Safe to call multiple times.
+func EnsureToolsFile() (string, error) {
+	path, err := ToolsPath()
+	if err != nil {
+		return "", err
+	}
+	if _, statErr := os.Stat(path); statErr == nil {
+		return path, nil // already exists
+	}
+	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
+		return path, mkErr
+	}
+	embeddedDefs := parseToolDefs(defaultToolsYAML)
+	return path, writeToolDefs(path, embeddedDefs)
+}
+
 // DefaultTools loads tools by merging the embedded catalog with the user's config.
 // New embedded tools are added, user customizations (enabled/disabled, package overrides)
 // are preserved, and user-added custom tools are kept. If anything changed, the
@@ -66,6 +83,8 @@ func DefaultTools() []Tool {
 
 	userDefs := parseToolDefs(data)
 	if userDefs == nil {
+		// Invalid YAML — rewrite from embedded defaults so the file is usable again.
+		_ = writeToolDefs(path, embeddedDefs)
 		return defsToTools(embeddedDefs)
 	}
 

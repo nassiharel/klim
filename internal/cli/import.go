@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/finder"
+	"github.com/nassiharel/clim/internal/manifest"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -46,17 +47,17 @@ func runImport(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("reading manifest: %w", err)
 	}
 
-	var manifest exportManifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
+	var m manifest.Manifest
+	if err := yaml.Unmarshal(data, &m); err != nil {
 		return fmt.Errorf("parsing manifest: %w", err)
 	}
 
-	if len(manifest.Tools) == 0 {
+	if len(m.Tools) == 0 {
 		fmt.Println("No tools in manifest.")
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "Manifest: %d tools (from %s/%s)\n", len(manifest.Tools), manifest.OS, manifest.Arch)
+	fmt.Fprintf(os.Stderr, "Manifest: %d tools (from %s/%s)\n", len(m.Tools), m.OS, m.Arch)
 
 	// Load registry and scan PATH to know what's already installed.
 	regTools := registry.DefaultTools()
@@ -74,7 +75,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	type installPlan struct {
 		name    string
 		display string
-		cmd     string
+		cmdArgs []string
 		source  string
 	}
 
@@ -83,7 +84,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	var noPackage []string
 	var noPkgMgr []string
 
-	for _, mt := range manifest.Tools {
+	for _, mt := range m.Tools {
 		rt, exists := regMap[mt.Name]
 		if !exists {
 			// Tool not in registry — try to use manifest's package IDs directly.
@@ -96,8 +97,8 @@ func runImport(cmd *cobra.Command, args []string) error {
 				NPM:    mt.Packages.NPM,
 			}
 			src := pkgs.BestInstallSource()
-			installCmd := pkgs.InstallCmd(src)
-			if installCmd == "" {
+			installArgs := pkgs.InstallArgs(src)
+			if installArgs == nil {
 				if pkgs.HasAnyPackageForOS() {
 					noPkgMgr = append(noPkgMgr, mt.Name)
 				} else {
@@ -108,7 +109,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 			toInstall = append(toInstall, installPlan{
 				name:    mt.Name,
 				display: mt.DisplayName,
-				cmd:     installCmd,
+				cmdArgs: installArgs,
 				source:  string(src),
 			})
 			continue
@@ -120,8 +121,8 @@ func runImport(cmd *cobra.Command, args []string) error {
 		}
 
 		src := rt.Packages.BestInstallSource()
-		installCmd := rt.Packages.InstallCmd(src)
-		if installCmd == "" {
+		installArgs := rt.Packages.InstallArgs(src)
+		if installArgs == nil {
 			if rt.Packages.HasAnyPackageForOS() {
 				noPkgMgr = append(noPkgMgr, mt.Name)
 			} else {
@@ -133,13 +134,13 @@ func runImport(cmd *cobra.Command, args []string) error {
 		toInstall = append(toInstall, installPlan{
 			name:    mt.Name,
 			display: mt.DisplayName,
-			cmd:     installCmd,
+			cmdArgs: installArgs,
 			source:  string(src),
 		})
 	}
 
 	fmt.Fprintf(os.Stderr, "\n──── Import Summary ────\n\n")
-	fmt.Fprintf(os.Stderr, "  Manifest:  %d tools (from %s/%s)\n\n", len(manifest.Tools), manifest.OS, manifest.Arch)
+	fmt.Fprintf(os.Stderr, "  Manifest:  %d tools (from %s/%s)\n\n", len(m.Tools), m.OS, m.Arch)
 
 	if len(alreadyInstalled) > 0 {
 		fmt.Fprintf(os.Stderr, "  ✓ Already installed (%d):\n", len(alreadyInstalled))
@@ -192,7 +193,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	for _, p := range toInstall {
 		fmt.Fprintf(os.Stderr, "\n──── Installing %s via %s ────\n", p.display, p.source)
 
-		c := buildImportShellCmd(p.cmd)
+		c := exec.Command(p.cmdArgs[0], p.cmdArgs[1:]...)
 		c.Stdin = os.Stdin
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
@@ -209,11 +210,4 @@ func runImport(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "\n──── Done: %d installed, %d failed, %d already present ────\n",
 		succeeded, failed, len(alreadyInstalled))
 	return nil
-}
-
-func buildImportShellCmd(cmdStr string) *exec.Cmd {
-	if runtime.GOOS == "windows" {
-		return exec.Command("cmd", "/C", cmdStr)
-	}
-	return exec.Command("sh", "-c", cmdStr)
 }

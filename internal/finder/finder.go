@@ -28,7 +28,8 @@ type toolRef struct {
 // match represents a found binary that matches a tool.
 type match struct {
 	toolIdx  int
-	instance registry.Instance
+	pathDir  string            // the original PATH directory (before symlink resolution)
+	instance registry.Instance // Path is the resolved (EvalSymlinks) path
 }
 
 // FindAll locates all installations of each curated tool across PATH.
@@ -113,11 +114,20 @@ func FindAll(tools []registry.Tool) error {
 			continue
 		}
 		tms := toolMatches[i]
-		// Sort by PATH order (dir position).
-		sort.Slice(tms, func(a, b int) bool {
-			da := filepath.Dir(tms[a].instance.Path)
-			db := filepath.Dir(tms[b].instance.Path)
-			return dirOrder[da] < dirOrder[db]
+		// Sort by PATH order using the original scanning directory.
+		// Falls back to max index for entries not in dirOrder (e.g. LookPath fallback)
+		// to keep them after all PATH-scanned entries.
+		fallback := len(pathDirs)
+		sort.SliceStable(tms, func(a, b int) bool {
+			oa, ok := dirOrder[tms[a].pathDir]
+			if !ok {
+				oa = fallback
+			}
+			ob, ok := dirOrder[tms[b].pathDir]
+			if !ok {
+				ob = fallback
+			}
+			return oa < ob
 		})
 		for _, m := range tms {
 			key := seenKey{toolIdx: i, path: m.instance.Path}
@@ -190,6 +200,7 @@ func scanDir(dir string, wantedBins map[string][]toolRef, emit func(match)) {
 			for _, ref := range refs {
 				emit(match{
 					toolIdx: ref.toolIdx,
+					pathDir: dir,
 					instance: registry.Instance{
 						Path:   resolved,
 						Source: detectSource(resolved),

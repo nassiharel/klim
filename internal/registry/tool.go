@@ -1,9 +1,9 @@
 package registry
 
 import (
-	"fmt"
 	"os/exec"
 	"runtime"
+	"strings"
 	"sync"
 )
 
@@ -37,6 +37,7 @@ type Tool struct {
 	LatestFrom  string
 	Disabled    bool
 	Info        *ToolInfo // rich metadata, fetched lazily
+	InfoFetched bool      // true once info fetch completed (Info may still be nil)
 }
 
 // ToolInfo holds rich metadata about a tool, fetched from package managers.
@@ -101,22 +102,47 @@ func (t *Tool) HasUpdate() bool {
 	return CompareVersions(t.Latest, ver) > 0
 }
 
-// sourceCommands holds command templates for a package manager.
-// Each template uses %s as a placeholder for the package identifier.
+// sourceCommands holds command arg templates for a package manager.
+// The package ID is appended as the final argument (no shell interpolation).
 type sourceCommands struct {
-	install   string
-	upgrade   string
-	uninstall string
+	install   []string // e.g. ["winget", "install", "--id"]
+	upgrade   []string
+	uninstall []string
 }
 
-// commandTemplates maps each package manager to its command templates.
+// commandTemplates maps each package manager to its command arg templates.
+// The package identifier is appended as the last argument at call time.
 var commandTemplates = map[InstallSource]sourceCommands{
-	SourceWinget: {"winget install --id %s", "winget upgrade --id %s", "winget uninstall --id %s"},
-	SourceChoco:  {"choco install %s", "choco upgrade %s", "choco uninstall %s"},
-	SourceBrew:   {"brew install %s", "brew upgrade %s", "brew uninstall %s"},
-	SourceApt:    {"sudo apt install %s", "sudo apt upgrade %s", "sudo apt remove %s"},
-	SourceSnap:   {"sudo snap install %s", "sudo snap refresh %s", "sudo snap remove %s"},
-	SourceNPM:    {"npm install -g %s", "npm update -g %s", "npm uninstall -g %s"},
+	SourceWinget: {
+		install:   []string{"winget", "install", "--id"},
+		upgrade:   []string{"winget", "upgrade", "--id"},
+		uninstall: []string{"winget", "uninstall", "--id"},
+	},
+	SourceChoco: {
+		install:   []string{"choco", "install"},
+		upgrade:   []string{"choco", "upgrade"},
+		uninstall: []string{"choco", "uninstall"},
+	},
+	SourceBrew: {
+		install:   []string{"brew", "install"},
+		upgrade:   []string{"brew", "upgrade"},
+		uninstall: []string{"brew", "uninstall"},
+	},
+	SourceApt: {
+		install:   []string{"sudo", "apt", "install"},
+		upgrade:   []string{"sudo", "apt", "upgrade"},
+		uninstall: []string{"sudo", "apt", "remove"},
+	},
+	SourceSnap: {
+		install:   []string{"sudo", "snap", "install"},
+		upgrade:   []string{"sudo", "snap", "refresh"},
+		uninstall: []string{"sudo", "snap", "remove"},
+	},
+	SourceNPM: {
+		install:   []string{"npm", "install", "-g"},
+		upgrade:   []string{"npm", "update", "-g"},
+		uninstall: []string{"npm", "uninstall", "-g"},
+	},
 }
 
 // pkgID returns the package identifier for the given source, or "".
@@ -138,43 +164,68 @@ func (p PackageIDs) pkgID(source InstallSource) string {
 	return ""
 }
 
-// InstallCmd returns the shell command to install this tool using the given source.
+// InstallArgs returns the command and arguments to install this tool.
+// Returns nil if no package ID is available for the given source.
+// The result is safe to pass directly to exec.Command(args[0], args[1:]...).
+func (p PackageIDs) InstallArgs(source InstallSource) []string {
+	if id := p.pkgID(source); id != "" {
+		if tmpl, ok := commandTemplates[source]; ok {
+			return append(append([]string{}, tmpl.install...), id)
+		}
+	}
+	return nil
+}
+
+// InstallCmd returns the human-readable install command string for display.
 func (p PackageIDs) InstallCmd(source InstallSource) string {
-	if id := p.pkgID(source); id != "" {
-		if tmpl, ok := commandTemplates[source]; ok {
-			return fmt.Sprintf(tmpl.install, id)
-		}
-	}
-	return ""
+	return strings.Join(p.InstallArgs(source), " ")
 }
 
-// UpgradeCmd returns the shell command to upgrade this tool using the given source.
+// UpgradeArgs returns the command and arguments to upgrade this tool.
+func (p PackageIDs) UpgradeArgs(source InstallSource) []string {
+	if id := p.pkgID(source); id != "" {
+		if tmpl, ok := commandTemplates[source]; ok {
+			return append(append([]string{}, tmpl.upgrade...), id)
+		}
+	}
+	return nil
+}
+
+// UpgradeCmd returns the human-readable upgrade command string for display.
 func (p PackageIDs) UpgradeCmd(source InstallSource) string {
-	if id := p.pkgID(source); id != "" {
-		if tmpl, ok := commandTemplates[source]; ok {
-			return fmt.Sprintf(tmpl.upgrade, id)
-		}
-	}
-	return ""
+	return strings.Join(p.UpgradeArgs(source), " ")
 }
 
-// RemoveCmd returns the shell command to remove/uninstall this tool.
-func (p PackageIDs) RemoveCmd(source InstallSource) string {
+// RemoveArgs returns the command and arguments to remove/uninstall this tool.
+func (p PackageIDs) RemoveArgs(source InstallSource) []string {
 	if id := p.pkgID(source); id != "" {
 		if tmpl, ok := commandTemplates[source]; ok {
-			return fmt.Sprintf(tmpl.uninstall, id)
+			return append(append([]string{}, tmpl.uninstall...), id)
 		}
 	}
-	return ""
+	return nil
+}
+
+// RemoveCmd returns the human-readable remove command string for display.
+func (p PackageIDs) RemoveCmd(source InstallSource) string {
+	return strings.Join(p.RemoveArgs(source), " ")
 }
 
 // pmAvailable checks if a package manager binary is on PATH (cached).
+// Override pmAvailableFunc in tests to control availability without real binaries.
 var pmAvailability struct {
 	once  sync.Once
 	avail map[InstallSource]bool
 }
 
+// pmAvailableFunc can be overridden in tests to stub package manager availability.
+// When nil (the default), the real exec.LookPath check is used.
+var pmAvailableFunc func(InstallSource) bool
+
 func pmAvailable(source InstallSource) bool {
+	if fn := pmAvailableFunc; fn != nil {
+		return fn(source)
+	}
 	pmAvailability.once.Do(func() {
 		pmAvailability.avail = make(map[InstallSource]bool)
 		checks := map[InstallSource]string{

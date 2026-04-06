@@ -350,7 +350,8 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	b.WriteString("\n\n")
 
 	// Tool info — fetched lazily from package manager.
-	if tool.Info != nil {
+	switch {
+	case tool.Info != nil:
 		if tool.Info.Description != "" {
 			// Word-wrap description to fit width.
 			desc := tool.Info.Description
@@ -377,7 +378,9 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 			b.WriteString("  " + line + "\n")
 		}
 		b.WriteString("\n")
-	} else {
+	case tool.InfoFetched:
+		b.WriteString("  " + dimVersion.Render("No metadata available.") + "\n\n")
+	default:
 		b.WriteString("  " + loadingStyle.Render("Loading info...") + "\n\n")
 	}
 
@@ -446,7 +449,7 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	// Detail view help with action hints.
 	switch {
 	case m.pendingAction != nil:
-		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", m.pendingAction.cmdStr))
+		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
 		keys := dimVersion.Render("y") + " confirm   " + dimVersion.Render("Esc") + " cancel"
 		b.WriteString(prompt + "  " + keys)
 	case m.sourcePicker != nil:
@@ -738,7 +741,7 @@ func (m Model) renderConfigView() string {
 func (m Model) renderHelp() string {
 	// Confirmation mode — show prompt instead of normal help.
 	if m.pendingAction != nil {
-		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", m.pendingAction.cmdStr))
+		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
 		keys := dimVersion.Render("y") + " confirm   " + dimVersion.Render("Esc") + " cancel"
 		return prompt + "  " + keys
 	}
@@ -767,26 +770,24 @@ func (m Model) renderHelp() string {
 	switch m.activeTab {
 	case tabBackup:
 		parts = []string{
-			dimVersion.Render("Tab") + " switch",
+			dimVersion.Render("←→") + " tab",
 			dimVersion.Render("e") + " export",
 			dimVersion.Render("I") + " import",
 			dimVersion.Render("q") + " quit",
 		}
 	case tabConfig:
 		parts = []string{
-			dimVersion.Render("Tab") + " switch",
+			dimVersion.Render("←→") + " tab",
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
 		}
 	default:
 		parts = []string{
 			dimVersion.Render("↑↓") + " navigate",
-			dimVersion.Render("Tab") + " switch",
+			dimVersion.Render("←→") + " tab",
 			dimVersion.Render("Enter") + " detail",
 			dimVersion.Render("x") + " " + toggleLabel,
 			dimVersion.Render("/") + " filter",
-			dimVersion.Render("e") + " export",
-			dimVersion.Render("I") + " import",
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
 		}

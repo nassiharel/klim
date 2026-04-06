@@ -177,6 +177,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case toolInfoMsg:
 		if msg.toolIdx < len(m.tools) {
 			m.tools[msg.toolIdx].Info = msg.info
+			m.tools[msg.toolIdx].InfoFetched = true
 		}
 		return m, nil
 
@@ -297,7 +298,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.pendingAction = &pendingAction{
 					toolIdx: m.sourcePicker.toolIdx,
 					action:  m.sourcePicker.action,
-					cmdStr:  choice.cmd,
+					cmdArgs: choice.cmdArgs,
 				}
 				m.sourcePicker = nil
 			}
@@ -381,12 +382,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
-	case "tab":
+	case "right", "tab":
 		m.activeTab = (m.activeTab + 1) % tabCount
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
-	case "shift+tab":
+	case "left", "shift+tab":
 		m.activeTab = (m.activeTab + tabCount - 1) % tabCount
 		m.cursor = 0
 		m.applyFilter()
@@ -446,9 +447,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Otherwise open detail view (including Discover tab).
 			m.detailIdx = m.filteredIndex[m.cursor]
 			m.showDetail = true
-			// Fetch tool info lazily if not already available.
+			// Fetch tool info lazily if not already fetched.
 			tool := m.tools[m.detailIdx]
-			if tool.Info == nil {
+			if !tool.InfoFetched {
 				return m, fetchToolInfoCmd(m.detailIdx, tool)
 			}
 		}
@@ -599,7 +600,7 @@ func (m *Model) startAction(picker *sourcePicker) {
 		m.pendingAction = &pendingAction{
 			toolIdx: picker.toolIdx,
 			action:  picker.action,
-			cmdStr:  picker.choices[0].cmd,
+			cmdArgs: picker.choices[0].cmdArgs,
 		}
 		return
 	}
@@ -637,8 +638,8 @@ func (m Model) resolveInstallAction() *sourcePicker {
 	}
 	var choices []sourceChoice
 	for _, src := range registry.SourcesForOS() {
-		if cmd := tool.Packages.InstallCmd(src); cmd != "" {
-			choices = append(choices, sourceChoice{source: src, cmd: cmd})
+		if args := tool.Packages.InstallArgs(src); args != nil {
+			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
 		}
 	}
 	if len(choices) == 0 {
@@ -659,8 +660,8 @@ func (m Model) resolveUpgradeAction() *sourcePicker {
 	}
 	var choices []sourceChoice
 	for _, src := range registry.SourcesForOS() {
-		if cmd := tool.Packages.UpgradeCmd(src); cmd != "" {
-			choices = append(choices, sourceChoice{source: src, cmd: cmd})
+		if args := tool.Packages.UpgradeArgs(src); args != nil {
+			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
 		}
 	}
 	if len(choices) == 0 {
@@ -681,8 +682,8 @@ func (m Model) resolveRemoveAction() *sourcePicker {
 	}
 	var choices []sourceChoice
 	for _, src := range registry.SourcesForOS() {
-		if cmd := tool.Packages.RemoveCmd(src); cmd != "" {
-			choices = append(choices, sourceChoice{source: src, cmd: cmd})
+		if args := tool.Packages.RemoveArgs(src); args != nil {
+			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
 		}
 	}
 	if len(choices) == 0 {
@@ -716,7 +717,7 @@ func (m *Model) nextBackupInstall() tea.Cmd {
 		if m.backupItems[i].status == backupPending {
 			m.backupItems[i].status = backupRunning
 			m.statusMsg = fmt.Sprintf("Installing %s...", m.backupItems[i].display)
-			return execBackupInstallCmd(i, m.backupItems[i].cmd)
+			return execBackupInstallCmd(i, m.backupItems[i].cmdArgs)
 		}
 	}
 	return nil

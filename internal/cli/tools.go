@@ -32,7 +32,7 @@ var toolsEditCmd = &cobra.Command{
 	Use:   "edit",
 	Short: "Open marketplace.yaml in your editor",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := registry.ToolsPath()
+		path, err := registry.EnsureToolsFile()
 		if err != nil {
 			return err
 		}

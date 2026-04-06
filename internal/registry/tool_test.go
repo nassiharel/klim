@@ -129,6 +129,47 @@ func TestCommandsWithEmptyPackageIDs(t *testing.T) {
 	}
 }
 
+func TestInstallArgs_StructuredArgs(t *testing.T) {
+	pkgs := PackageIDs{Winget: "Git.Git", Brew: "git"}
+
+	// Winget: binary + flags + package ID as separate args.
+	args := pkgs.InstallArgs(SourceWinget)
+	if len(args) != 4 || args[0] != "winget" || args[3] != "Git.Git" {
+		t.Errorf("InstallArgs(winget) = %v, want [winget install --id Git.Git]", args)
+	}
+
+	// Brew: binary + subcommand + package ID.
+	args = pkgs.InstallArgs(SourceBrew)
+	if len(args) != 3 || args[0] != "brew" || args[2] != "git" {
+		t.Errorf("InstallArgs(brew) = %v, want [brew install git]", args)
+	}
+
+	// Unsupported source returns nil.
+	if args := pkgs.InstallArgs(SourceCargo); args != nil {
+		t.Errorf("InstallArgs(cargo) = %v, want nil", args)
+	}
+
+	// Empty ID returns nil.
+	empty := PackageIDs{}
+	if args := empty.InstallArgs(SourceWinget); args != nil {
+		t.Errorf("empty.InstallArgs(winget) = %v, want nil", args)
+	}
+}
+
+func TestInstallArgs_ShellMetacharsStaySingleArg(t *testing.T) {
+	// A malicious package ID with shell metacharacters must remain as one
+	// argument — exec.Command passes it directly to the process, not a shell.
+	pkgs := PackageIDs{Brew: "legit; rm -rf /"}
+	args := pkgs.InstallArgs(SourceBrew)
+	if len(args) != 3 {
+		t.Fatalf("expected 3 args, got %d: %v", len(args), args)
+	}
+	// The malicious string is a single element, not split by the shell.
+	if args[2] != "legit; rm -rf /" {
+		t.Errorf("package ID was modified: got %q", args[2])
+	}
+}
+
 func TestStatusString(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -251,6 +292,11 @@ func TestHasUpdate(t *testing.T) {
 }
 
 func TestBestInstallSource(t *testing.T) {
+	// Stub all package managers as available so the test is deterministic
+	// regardless of what's installed on the host.
+	pmAvailableFunc = func(_ InstallSource) bool { return true }
+	t.Cleanup(func() { pmAvailableFunc = nil })
+
 	pkgs := PackageIDs{
 		Winget: "Git.Git",
 		Choco:  "git",
@@ -262,7 +308,7 @@ func TestBestInstallSource(t *testing.T) {
 
 	got := pkgs.BestInstallSource()
 
-	// Platform-dependent expectation.
+	// Platform-dependent expectation (priority order, all available).
 	switch runtime.GOOS {
 	case "windows":
 		if got != SourceWinget {
@@ -280,6 +326,9 @@ func TestBestInstallSource(t *testing.T) {
 }
 
 func TestBestInstallSource_NPMFallback(t *testing.T) {
+	pmAvailableFunc = func(_ InstallSource) bool { return true }
+	t.Cleanup(func() { pmAvailableFunc = nil })
+
 	pkgs := PackageIDs{NPM: "prettier"}
 	got := pkgs.BestInstallSource()
 	if got != SourceNPM {
@@ -288,9 +337,24 @@ func TestBestInstallSource_NPMFallback(t *testing.T) {
 }
 
 func TestBestInstallSource_Empty(t *testing.T) {
+	pmAvailableFunc = func(_ InstallSource) bool { return true }
+	t.Cleanup(func() { pmAvailableFunc = nil })
+
 	pkgs := PackageIDs{}
 	got := pkgs.BestInstallSource()
 	if got != "" {
 		t.Errorf("BestInstallSource() with no packages = %q, want empty", got)
+	}
+}
+
+func TestBestInstallSource_NoPMInstalled(t *testing.T) {
+	// When no package manager is installed, BestInstallSource returns "".
+	pmAvailableFunc = func(_ InstallSource) bool { return false }
+	t.Cleanup(func() { pmAvailableFunc = nil })
+
+	pkgs := PackageIDs{Winget: "Git.Git", Brew: "git", Apt: "git"}
+	got := pkgs.BestInstallSource()
+	if got != "" {
+		t.Errorf("BestInstallSource() with no PMs = %q, want empty", got)
 	}
 }
