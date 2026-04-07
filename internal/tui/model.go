@@ -187,6 +187,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.statusMsg = fmt.Sprintf("✓ %s refreshed", msg.tool.DisplayName)
 		m.applyFilter()
+		// Rebuild the tool menu if the detail view is still showing.
+		if m.showDetail {
+			m.buildToolMenu()
+		}
 		return m, nil
 
 	case toolInfoMsg:

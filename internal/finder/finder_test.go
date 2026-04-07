@@ -1,6 +1,7 @@
 package finder
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/nassiharel/clim/internal/registry"
@@ -183,7 +184,9 @@ func TestPathDirectories(t *testing.T) {
 		// Save and restore PATH.
 		t.Setenv("PATH", "")
 		dirs := pathDirectories()
-		if dirs != nil {
+		// On Windows, registry PATH may still return directories even when
+		// the process PATH is empty.
+		if runtime.GOOS != "windows" && dirs != nil {
 			t.Errorf("pathDirectories() with empty PATH = %v, want nil", dirs)
 		}
 	})

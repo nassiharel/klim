@@ -35,6 +35,7 @@ tools:
       winget: "JesseDuffield.lazygit"
       choco: "lazygit"
       brew: "lazygit"
+      snap: "lazygit"
 
   # --- Cloud CLIs ---
   - name: az
@@ -55,6 +56,7 @@ tools:
     binary_names: [azd]
     packages:
       winget: "Microsoft.Azd"
+      choco: "azd"
       brew: "azure/azd/azd"
 
   - name: aws
@@ -66,6 +68,8 @@ tools:
       winget: "Amazon.AWSCLI"
       choco: "awscli"
       brew: "awscli"
+      apt: "awscli"
+      snap: "aws-cli"
 
   - name: gcloud
     display_name: Google Cloud CLI
@@ -73,6 +77,8 @@ tools:
     enabled: true
     binary_names: [gcloud]
     packages:
+      winget: "Google.CloudSDK"
+      choco: "gcloudsdk"
       brew: "google-cloud-sdk"
       snap: "google-cloud-cli"
 
@@ -106,6 +112,7 @@ tools:
       winget: "JesseDuffield.Lazydocker"
       choco: "lazydocker"
       brew: "lazydocker"
+      snap: "lazydocker"
 
   - name: kubectl
     display_name: kubectl
@@ -304,6 +311,7 @@ tools:
     binary_names: [go]
     packages:
       winget: "GoLang.Go"
+      choco: "golang"
       brew: "go"
       apt: "golang-go"
       snap: "go"
@@ -315,8 +323,10 @@ tools:
     binary_names: [node]
     packages:
       winget: "OpenJS.NodeJS.LTS"
+      choco: "nodejs"
       brew: "node"
       apt: "nodejs"
+      snap: "node"
 
   - name: deno
     display_name: Deno
@@ -345,6 +355,7 @@ tools:
     binary_names: [python3, python]
     packages:
       winget: "Python.Python.3.12"
+      choco: "python3"
       brew: "python@3"
       apt: "python3"
 
@@ -355,6 +366,7 @@ tools:
     binary_names: [dotnet]
     packages:
       winget: "Microsoft.DotNet.SDK.8"
+      choco: "dotnet-sdk"
       brew: "dotnet"
       apt: "dotnet-sdk-8.0"
       snap: "dotnet-sdk"
@@ -384,8 +396,10 @@ tools:
     binary_names: [java]
     packages:
       winget: "Microsoft.OpenJDK.21"
+      choco: "openjdk"
       brew: "openjdk"
       apt: "default-jdk"
+      snap: "openjdk"
 
   - name: ruby
     display_name: Ruby
@@ -394,6 +408,7 @@ tools:
     binary_names: [ruby]
     packages:
       winget: "RubyInstallerTeam.Ruby"
+      choco: "ruby"
       brew: "ruby"
       apt: "ruby"
 
@@ -403,6 +418,8 @@ tools:
     enabled: true
     binary_names: [zig]
     packages:
+      winget: "zig.zig"
+      choco: "zig"
       brew: "zig"
       snap: "zig"
 
@@ -435,6 +452,8 @@ tools:
       winget: "Microsoft.VisualStudioCode"
       choco: "vscode"
       brew: "visual-studio-code"
+      apt: "code"
+      snap: "code"
 
   - name: nvim
     display_name: Neovim
@@ -446,6 +465,7 @@ tools:
       choco: "neovim"
       brew: "neovim"
       apt: "neovim"
+      snap: "nvim"
 
   # --- CLI Utilities ---
   - name: jq
@@ -468,6 +488,7 @@ tools:
       winget: "MikeFarah.yq"
       choco: "yq"
       brew: "yq"
+      snap: "yq"
 
   - name: fzf
     display_name: fzf
@@ -544,7 +565,6 @@ tools:
       winget: "dandavison.delta"
       choco: "delta"
       brew: "git-delta"
-      apt: "git-delta"
 
   - name: dust
     display_name: dust
@@ -564,6 +584,7 @@ tools:
     binary_names: [procs]
     packages:
       winget: "dalance.procs"
+      choco: "procs"
       brew: "procs"
 
   - name: tldr
@@ -572,7 +593,9 @@ tools:
     enabled: true
     binary_names: [tldr]
     packages:
+      choco: "tldr"
       brew: "tldr"
+      apt: "tldr"
       npm: "tldr"
 
   - name: httpie
@@ -694,6 +717,7 @@ tools:
     binary_names: [pwsh]
     packages:
       winget: "Microsoft.PowerShell"
+      choco: "powershell-core"
       brew: "powershell"
       apt: "powershell"
       snap: "powershell"

@@ -239,7 +239,13 @@ func binaryCandidateNames(name string) []string {
 }
 
 func pathDirectories() []string {
+	// Start with the process PATH, then merge any directories from the
+	// Windows registry that the current process hasn't picked up yet
+	// (e.g. winget portable installs that modify PATH after launch).
 	pathEnv := os.Getenv("PATH")
+	if extra := registryPATH(); extra != "" {
+		pathEnv = pathEnv + string(os.PathListSeparator) + extra
+	}
 	if pathEnv == "" {
 		return nil
 	}
@@ -248,8 +254,10 @@ func pathDirectories() []string {
 	dirs := make([]string, 0, len(raw))
 	for _, d := range raw {
 		if d = strings.TrimSpace(d); d != "" {
-			if _, exists := seen[d]; !exists {
-				seen[d] = struct{}{}
+			// Normalize for dedup on Windows (case-insensitive, trailing slash).
+			key := strings.ToLower(strings.TrimRight(d, `\/`))
+			if _, exists := seen[key]; !exists {
+				seen[key] = struct{}{}
 				dirs = append(dirs, d)
 			}
 		}

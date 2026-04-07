@@ -64,7 +64,7 @@ func installedVersion(source registry.InstallSource, pkgs registry.PackageIDs) s
 	switch source {
 	case registry.SourceWinget:
 		if pkgs.Winget != "" {
-			return wingetVersion(pkgs.Winget)
+			return wingetInstalledVersion(pkgs.Winget)
 		}
 	case registry.SourceChoco:
 		if pkgs.Choco != "" {
@@ -134,11 +134,35 @@ func latestVersion(source registry.InstallSource, pkgs registry.PackageIDs) (ver
 }
 
 // --- winget ---
-// winget show returns the available version; used for both installed and latest
-// since winget show --id X reports the catalog version for the matched install.
+// wingetVersion returns the latest available version from the winget catalog.
 func wingetVersion(id string) string {
 	out := runCmd("winget", "show", "--id", id, "--accept-source-agreements")
 	return parseKeyValue(out, "Version")
+}
+
+// wingetInstalledVersion returns the locally installed version via winget list.
+func wingetInstalledVersion(id string) string {
+	out := runCmd("winget", "list", "--id", id, "--exact", "--accept-source-agreements")
+	// Output format (fixed-width columns):
+	//   Name Id           Version Available Source
+	//   ------------------------------------------
+	//   fzf  junegunn.fzf 0.70.0  0.71.0    winget
+	// Find the line containing the exact package ID and extract the version field after it.
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
+		fields := strings.Fields(line)
+		for i, f := range fields {
+			if strings.EqualFold(f, id) && i+1 < len(fields) {
+				ver := fields[i+1]
+				// Skip if it looks like a header separator.
+				if strings.HasPrefix(ver, "-") {
+					continue
+				}
+				return ver
+			}
+		}
+	}
+	return ""
 }
 
 // --- choco ---
