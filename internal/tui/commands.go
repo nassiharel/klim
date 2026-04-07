@@ -28,6 +28,7 @@ type scanResultMsg struct {
 
 type toolVersionMsg struct {
 	index int
+	gen   int // scan generation — messages from old scans are discarded
 	tool  registry.Tool
 }
 
@@ -117,13 +118,13 @@ func findToolsCmd() func() scanResultMsg {
 	}
 }
 
-func resolveToolVersionCmd(index int, tool registry.Tool) func() toolVersionMsg {
+func resolveToolVersionCmd(index int, gen int, tool registry.Tool) func() toolVersionMsg {
 	return func() toolVersionMsg {
 		if tool.IsInstalled() && !tool.Disabled {
 			pkgmgr.ResolveOne(&tool)
 			detector.EnrichOne(&tool)
 		}
-		return toolVersionMsg{index: index, tool: tool}
+		return toolVersionMsg{index: index, gen: gen, tool: tool}
 	}
 }
 

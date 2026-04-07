@@ -18,6 +18,7 @@ const (
 	colVersion  = 24 // width for version info column
 	colSource   = 8  // width for source column
 	colCategory = 12 // width for category column
+	colStatus   = 18 // width for backup status column
 )
 
 func (m Model) renderView() string {
@@ -192,8 +193,8 @@ func (m Model) renderHeader() string {
 	case tabBackup:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
-			headerStyle.Render(fixedWidth("STATUS", 12)) + "  " +
-			headerStyle.Render("SOURCE")
+			headerStyle.Render(fixedWidth("STATUS", colStatus)) + "  " +
+			headerStyle.Render(fixedWidth("SOURCE", colSource))
 	}
 	return ""
 }
@@ -665,8 +666,8 @@ func (m Model) renderBackupRow(item backupItem, selected bool) string {
 	}
 
 	nameCell := nameStyle.Render(fixedWidth(item.display, colName))
-	statusCell := statusStyle.Render(fixedWidth(statusLabel, 16))
-	sourceCell := sourceStyle.Render(item.source)
+	statusCell := statusStyle.Render(fixedWidth(statusLabel, colStatus))
+	sourceCell := sourceStyle.Render(fixedWidth(item.source, colSource))
 
 	line := cursor + icon + " " + nameCell + "  " + statusCell + "  " + sourceCell
 
