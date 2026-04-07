@@ -77,6 +77,11 @@ type Model struct {
 	backupBar     progress.Model // overall progress bar
 	backupResult  string         // deferred status message shown after progress animation
 	backupConfirm bool           // true = import plan shown, waiting for user confirmation
+
+	// Batch update state (Updates tab).
+	updateSelected map[int]bool      // tool index → selected for batch upgrade
+	batchUpdating  bool              // true while batch upgrade is in progress
+	batchQueue     batchUpgradeQueue // remaining tool indices to upgrade
 }
 
 // NewModel creates a new TUI model.
@@ -93,17 +98,18 @@ func NewModel() Model {
 	ii.CharLimit = 200
 
 	return Model{
-		spinner:     s,
-		filterInput: ti,
-		importInput: ii,
-		backupBar:   progress.New(progress.WithWidth(40)),
-		loading:     true,
-		phase:       0,
-		activeTab:   tabInstalled,
-		detailIdx:   -1,
-		toolMenu:    -1,
-		width:       80,
-		height:      24,
+		spinner:        s,
+		filterInput:    ti,
+		importInput:    ii,
+		backupBar:      progress.New(progress.WithWidth(40)),
+		updateSelected: make(map[int]bool),
+		loading:        true,
+		phase:          0,
+		activeTab:      tabInstalled,
+		detailIdx:      -1,
+		toolMenu:       -1,
+		width:          80,
+		height:         24,
 	}
 }
 
@@ -162,6 +168,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tools[msg.index].Instances = msg.tool.Instances
 			m.tools[msg.index].Latest = msg.tool.Latest
 			m.tools[msg.index].LatestFrom = msg.tool.LatestFrom
+			// Auto-select for batch upgrade if an update is available.
+			if m.tools[msg.index].HasUpdate() {
+				m.updateSelected[msg.index] = true
+			}
 		}
 		m.pending--
 		if m.pending <= 0 {
@@ -275,6 +285,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			func() tea.Msg { return findToolsCmd()() },
 		)
 
+	case batchUpgradeItemMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ %s upgrade failed: %s", m.tools[msg.toolIdx].DisplayName, msg.err)
+		} else {
+			m.statusMsg = fmt.Sprintf("✓ %s upgraded", m.tools[msg.toolIdx].DisplayName)
+		}
+		// Deselect the completed tool.
+		delete(m.updateSelected, msg.toolIdx)
+		// Fire the next upgrade, or finish with a full refresh.
+		return m.fireNextBatchUpgrade()
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -366,10 +387,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "enter", "y", "Y":
 			m.backupConfirm = false
+			// Mark deselected pending items as skipped.
+			for i := range m.backupItems {
+				if m.backupItems[i].status == backupPending && !m.backupItems[i].selected {
+					m.backupItems[i].status = backupSkipped
+					m.backupItems[i].errMsg = "deselected"
+					m.backupDone++
+				}
+			}
 			cmd := m.nextBackupInstall()
 			if cmd == nil {
-				// Nothing to install — all items were skipped/failed.
-				m.statusMsg = "✓ Nothing to install — all tools already present."
+				// Nothing to install — all items were skipped/failed/deselected.
+				m.statusMsg = "Nothing to install — all tools skipped."
 				return m, nil
 			}
 			m.statusMsg = "Installing..."
@@ -380,6 +409,31 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.backupItems = nil
 			m.backupDone = 0
 			m.statusMsg = ""
+			return m, nil
+		case "space":
+			// Toggle selection of the current item (only pending items).
+			if m.cursor < len(m.backupItems) && m.backupItems[m.cursor].status == backupPending {
+				m.backupItems[m.cursor].selected = !m.backupItems[m.cursor].selected
+				// Advance cursor to next item.
+				if m.cursor < len(m.backupItems)-1 {
+					m.cursor++
+				}
+			}
+			return m, nil
+		case "a":
+			// Smart toggle all: if any pending item is selected, deselect all; otherwise select all.
+			anySelected := false
+			for _, item := range m.backupItems {
+				if item.status == backupPending && item.selected {
+					anySelected = true
+					break
+				}
+			}
+			for i := range m.backupItems {
+				if m.backupItems[i].status == backupPending {
+					m.backupItems[i].selected = !anySelected
+				}
+			}
 			return m, nil
 		case "up", "k":
 			if m.cursor > 0 {
@@ -508,6 +562,38 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		m.filtering = true
 		return m, m.filterInput.Focus()
+	case "space":
+		// Toggle selection for batch upgrade (Updates tab only).
+		if m.activeTab == tabUpdates && m.cursor < len(m.filteredIndex) {
+			idx := m.filteredIndex[m.cursor]
+			m.updateSelected[idx] = !m.updateSelected[idx]
+			// Advance cursor.
+			if m.cursor < m.rowCount()-1 {
+				m.cursor++
+			}
+		}
+		return m, nil
+	case "a":
+		// Select/deselect all on Updates tab.
+		if m.activeTab == tabUpdates {
+			anySelected := false
+			for _, idx := range m.filteredIndex {
+				if m.updateSelected[idx] {
+					anySelected = true
+					break
+				}
+			}
+			for _, idx := range m.filteredIndex {
+				m.updateSelected[idx] = !anySelected
+			}
+		}
+		return m, nil
+	case "u":
+		// Batch upgrade selected tools (Updates tab only).
+		if m.activeTab == tabUpdates && !m.batchUpdating {
+			return m.startBatchUpgrade()
+		}
+		return m, nil
 	case "enter":
 		// On Backup tab (idle), execute the selected menu item.
 		if m.activeTab == tabBackup && m.backupMode == "" {
@@ -590,6 +676,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tools = nil
 		m.filteredIndex = nil
 		m.cursor = 0
+		m.updateSelected = make(map[int]bool)
+		m.batchUpdating = false
 		return m, tea.Batch(
 			m.spinner.Tick,
 			func() tea.Msg { return findToolsCmd()() },
@@ -850,4 +938,69 @@ func (m *Model) nextBackupInstall() tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// --- Batch upgrade (Updates tab) ---
+
+// batchUpgradeQueue holds the ordered list of tool indices to upgrade.
+// Items are shifted off the front as each upgrade completes.
+type batchUpgradeQueue []int
+
+// startBatchUpgrade kicks off sequential upgrades for all selected tools.
+func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
+	// Build the queue of selected tool indices that have upgrade args.
+	var queue batchUpgradeQueue
+	for _, idx := range m.filteredIndex {
+		if !m.updateSelected[idx] {
+			continue
+		}
+		tool := &m.tools[idx]
+		if !tool.HasUpdate() {
+			continue
+		}
+		// Find upgrade args (best available source).
+		for _, src := range registry.SourcesForOS() {
+			if args := tool.Packages.UpgradeArgs(src); args != nil {
+				queue = append(queue, idx)
+				break
+			}
+		}
+	}
+	if len(queue) == 0 {
+		m.statusMsg = "No upgradable tools selected."
+		return m, nil
+	}
+	m.batchUpdating = true
+	m.batchQueue = queue
+	return m.fireNextBatchUpgrade()
+}
+
+// fireNextBatchUpgrade pops the next tool off the queue and fires its upgrade.
+// Returns (model, nil) when the queue is empty.
+func (m Model) fireNextBatchUpgrade() (tea.Model, tea.Cmd) {
+	if len(m.batchQueue) == 0 {
+		m.batchUpdating = false
+		m.statusMsg = "✓ Batch upgrade complete — refreshing..."
+		m.loading = true
+		m.phase = 0
+		m.tools = nil
+		m.filteredIndex = nil
+		m.updateSelected = make(map[int]bool)
+		return m, tea.Batch(
+			m.spinner.Tick,
+			func() tea.Msg { return findToolsCmd()() },
+		)
+	}
+	idx := m.batchQueue[0]
+	m.batchQueue = m.batchQueue[1:]
+	tool := &m.tools[idx]
+	// Find best upgrade args.
+	for _, src := range registry.SourcesForOS() {
+		if args := tool.Packages.UpgradeArgs(src); args != nil {
+			m.statusMsg = fmt.Sprintf("Upgrading %s...", tool.DisplayName)
+			return m, execBatchUpgradeCmd(idx, args)
+		}
+	}
+	// No upgrade args — skip and try next.
+	return m.fireNextBatchUpgrade()
 }

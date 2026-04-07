@@ -74,9 +74,10 @@ func (m Model) renderView() string {
 	}
 
 	for vi := start; vi < len(m.filteredIndex) && vi < start+visibleRows; vi++ {
-		tool := m.tools[m.filteredIndex[vi]]
+		toolIdx := m.filteredIndex[vi]
+		tool := m.tools[toolIdx]
 		selected := vi == m.cursor
-		b.WriteString(m.renderRow(tool, selected) + "\n")
+		b.WriteString(m.renderRow(tool, toolIdx, selected) + "\n")
 	}
 
 	// Pad.
@@ -206,14 +207,14 @@ func (m Model) renderHeader() string {
 
 // --- Row rendering per tab ---
 
-func (m Model) renderRow(tool registry.Tool, selected bool) string {
+func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string {
 	var line string
 
 	switch m.activeTab {
 	case tabInstalled:
 		line = m.renderInstalledRow(tool, selected)
 	case tabUpdates:
-		line = m.renderUpdateRow(tool, selected)
+		line = m.renderUpdateRow(tool, toolIdx, selected)
 	case tabDiscover:
 		line = m.renderDiscoverRow(tool, selected)
 	case tabDisabled:
@@ -261,10 +262,18 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 	return line
 }
 
-func (m Model) renderUpdateRow(tool registry.Tool, selected bool) string {
+func (m Model) renderUpdateRow(tool registry.Tool, toolIdx int, selected bool) string {
 	cursor := "  "
 	if selected {
 		cursor = "▸ "
+	}
+
+	// Selection checkbox.
+	check := ""
+	if m.updateSelected[toolIdx] {
+		check = upToDateStyle.Render("[✓]") + " "
+	} else {
+		check = dimVersion.Render("[ ]") + " "
 	}
 
 	nameText := toolLabel(tool)
@@ -281,7 +290,7 @@ func (m Model) renderUpdateRow(tool registry.Tool, selected bool) string {
 	srcCell := sourceStyle.Render(fixedWidth(src, colSource))
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
-	return cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
+	return cursor + check + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 }
 
 func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
@@ -619,18 +628,22 @@ func (m Model) renderBackupView() string {
 	// Confirm mode — show review header instead of progress bar.
 	if m.backupConfirm {
 		pending := 0
+		selected := 0
 		skipped := 0
 		for _, item := range m.backupItems {
 			switch item.status {
 			case backupPending:
 				pending++
+				if item.selected {
+					selected++
+				}
 			case backupSkipped, backupFailed:
 				skipped++
 			}
 		}
 		b.WriteString("\n")
 		b.WriteString(confirmStyle.Render("  Review import plan") + "  " +
-			dimVersion.Render(fmt.Sprintf("%d to install, %d skipped", pending, skipped)) + "\n\n")
+			dimVersion.Render(fmt.Sprintf("%d selected of %d to install, %d skipped", selected, pending, skipped)) + "\n\n")
 	} else {
 		// Progress bar.
 		total := len(m.backupItems)
@@ -666,7 +679,7 @@ func (m Model) renderBackupView() string {
 	for vi := start; vi < len(m.backupItems) && vi < start+visibleRows; vi++ {
 		item := m.backupItems[vi]
 		selected := vi == m.cursor
-		b.WriteString(m.renderBackupRow(item, selected) + "\n")
+		b.WriteString(m.renderBackupRow(item, selected, m.backupConfirm) + "\n")
 	}
 
 	// Pad.
@@ -678,7 +691,7 @@ func (m Model) renderBackupView() string {
 	return b.String()
 }
 
-func (m Model) renderBackupRow(item backupItem, selected bool) string {
+func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool) string {
 	cursor := "  "
 	if selected {
 		cursor = "▸ "
@@ -690,19 +703,28 @@ func (m Model) renderBackupRow(item backupItem, selected bool) string {
 	var statusStyle lipgloss.Style
 	switch item.status {
 	case backupPending:
-		icon = dimVersion.Render("○")
+		if confirmMode {
+			// Show selection checkbox during confirm mode.
+			if item.selected {
+				icon = upToDateStyle.Render("[✓]")
+			} else {
+				icon = dimVersion.Render("[ ]")
+			}
+		} else {
+			icon = dimVersion.Render(" ○ ")
+		}
 		statusLabel = "pending"
 		statusStyle = dimVersion
 	case backupRunning:
-		icon = upgradableStyle.Render("◉")
+		icon = upgradableStyle.Render(" ◉ ")
 		statusLabel = "installing"
 		statusStyle = upgradableStyle
 	case backupDone:
-		icon = upToDateStyle.Render("✓")
+		icon = upToDateStyle.Render(" ✓ ")
 		statusLabel = "done"
 		statusStyle = upToDateStyle
 	case backupFailed:
-		icon = upgradableStyle.Render("✗")
+		icon = upgradableStyle.Render(" ✗ ")
 		if item.errMsg != "" {
 			statusLabel = item.errMsg
 		} else {
@@ -710,7 +732,7 @@ func (m Model) renderBackupRow(item backupItem, selected bool) string {
 		}
 		statusStyle = upgradableStyle
 	case backupSkipped:
-		icon = dimVersion.Render("–")
+		icon = dimVersion.Render(" – ")
 		if item.errMsg != "" {
 			statusLabel = item.errMsg
 		} else {
@@ -727,9 +749,9 @@ func (m Model) renderBackupRow(item backupItem, selected bool) string {
 
 	if selected {
 		// Pad to full width for selection highlight.
-		lineRunes := []rune(line)
-		if len(lineRunes) < m.width {
-			line += strings.Repeat(" ", m.width-len(lineRunes))
+		w := lipgloss.Width(line)
+		if w < m.width {
+			line += strings.Repeat(" ", m.width-w)
 		}
 		line = selectedRowStyle.Render(line)
 	}
@@ -828,6 +850,8 @@ func (m Model) renderHelp() string {
 		} else if m.backupConfirm {
 			parts = []string{
 				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Space") + " toggle",
+				dimVersion.Render("a") + " select all",
 				dimVersion.Render("Enter") + " confirm",
 				dimVersion.Render("Esc") + " cancel",
 			}
@@ -853,6 +877,17 @@ func (m Model) renderHelp() string {
 			dimVersion.Render("/") + " filter",
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
+		}
+		if m.activeTab == tabUpdates {
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Space") + " toggle",
+				dimVersion.Render("a") + " select all",
+				dimVersion.Render("u") + " upgrade",
+				dimVersion.Render("Enter") + " detail",
+				dimVersion.Render("/") + " filter",
+				dimVersion.Render("q") + " quit",
+			}
 		}
 	}
 

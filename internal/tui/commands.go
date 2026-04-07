@@ -90,12 +90,13 @@ const (
 )
 
 type backupItem struct {
-	name    string
-	display string
-	cmdArgs []string // install command args (import) or nil (export)
-	source  string
-	status  backupStatus
-	errMsg  string
+	name     string
+	display  string
+	cmdArgs  []string // install command args (import) or nil (export)
+	source   string
+	status   backupStatus
+	errMsg   string
+	selected bool // true = will be installed on confirm (import only)
 }
 
 // --- Backup messages ---
@@ -113,6 +114,12 @@ type backupPlanMsg struct {
 type backupItemDoneMsg struct {
 	idx int
 	err error
+}
+
+// batchUpgradeItemMsg is sent when one batch-upgrade tool finishes.
+type batchUpgradeItemMsg struct {
+	toolIdx int
+	err     error
 }
 
 // backupTickMsg advances the animated progress by marking the next pending item as done.
@@ -321,11 +328,12 @@ func buildImportPlanCmd(path string) tea.Cmd {
 			}
 
 			items = append(items, backupItem{
-				name:    mt.Name,
-				display: mt.DisplayName,
-				cmdArgs: installArgs,
-				source:  string(src),
-				status:  backupPending,
+				name:     mt.Name,
+				display:  mt.DisplayName,
+				cmdArgs:  installArgs,
+				source:   string(src),
+				status:   backupPending,
+				selected: true,
 			})
 		}
 
@@ -338,5 +346,13 @@ func execBackupInstallCmd(idx int, args []string) tea.Cmd {
 	cmd := exec.Command(args[0], args[1:]...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return backupItemDoneMsg{idx: idx, err: err}
+	})
+}
+
+// execBatchUpgradeCmd suspends the TUI and runs one upgrade command.
+func execBatchUpgradeCmd(toolIdx int, args []string) tea.Cmd {
+	cmd := exec.Command(args[0], args[1:]...)
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return batchUpgradeItemMsg{toolIdx: toolIdx, err: err}
 	})
 }
