@@ -40,7 +40,12 @@ func (m Model) renderView() string {
 	if m.activeTab == tabBackup {
 		b.WriteString(m.renderBackupView())
 		b.WriteString("\n")
-		b.WriteString(m.renderHelp())
+		switch {
+		case m.importingPath:
+			b.WriteString("  " + confirmStyle.Render("Import:") + " " + m.importInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
+		default:
+			b.WriteString(m.renderHelp())
+		}
 		return b.String()
 	}
 
@@ -448,30 +453,37 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 
 	b.WriteString("\n")
 
+	// Action menu items.
+	if len(m.toolMenuItems) > 0 {
+		b.WriteString("  " + detailLabelStyle.Render("Actions:") + "\n")
+		for i, item := range m.toolMenuItems {
+			cursor := "  "
+			if i == m.toolMenu {
+				cursor = "▸ "
+			}
+			line := "  " + cursor + nameStyle.Render(item.label)
+			if i == m.toolMenu {
+				w := lipgloss.Width(line)
+				if w < m.width {
+					line += strings.Repeat(" ", m.width-w)
+				}
+				line = selectedRowStyle.Render(line)
+			}
+			b.WriteString(line + "\n")
+		}
+		b.WriteString("\n")
+	}
+
 	// Detail view help with action hints.
 	switch {
 	case m.pendingAction != nil:
 		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
 		keys := dimVersion.Render("y") + " confirm   " + dimVersion.Render("Esc") + " cancel"
 		b.WriteString(prompt + "  " + keys)
-	case m.sourcePicker != nil:
-		var parts []string
-		parts = append(parts, confirmStyle.Render(fmt.Sprintf("  %s via:", m.sourcePicker.action)))
-		for i, c := range m.sourcePicker.choices {
-			parts = append(parts, fmt.Sprintf("  %s %s",
-				dimVersion.Render(strconv.Itoa(i+1)),
-				string(c.source),
-			))
-		}
-		parts = append(parts, "  "+dimVersion.Render("Esc")+" cancel")
-		b.WriteString(strings.Join(parts, ""))
 	default:
 		var hints []string
-		if tool.IsInstalled() {
-			hints = append(hints, dimVersion.Render("u")+" upgrade", dimVersion.Render("d")+" remove")
-		} else {
-			hints = append(hints, dimVersion.Render("i")+" install")
-		}
+		hints = append(hints, dimVersion.Render("↑↓")+" navigate")
+		hints = append(hints, dimVersion.Render("Enter")+" select")
 		hints = append(hints, dimVersion.Render("Esc")+" back")
 		b.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
 	}
@@ -569,11 +581,32 @@ func (m Model) renderBackupView() string {
 	var b strings.Builder
 
 	if m.backupMode == "" {
-		// Idle state — show instructions.
 		b.WriteString("\n")
-		b.WriteString(dimVersion.Render("  No backup in progress.") + "\n\n")
-		b.WriteString(dimVersion.Render("  Press ") + dimVersion.Render("e") + dimVersion.Render(" to export installed tools to a file.") + "\n")
-		b.WriteString(dimVersion.Render("  Press ") + dimVersion.Render("I") + dimVersion.Render(" to import tools from a manifest.") + "\n")
+
+		type menuItem struct {
+			label string
+			desc  string
+		}
+		items := []menuItem{
+			{"Export", "Save installed tools to a manifest file"},
+			{"Import", "Reinstall tools from a manifest file"},
+		}
+
+		for i, item := range items {
+			cursor := "  "
+			if i == m.cursor {
+				cursor = "▸ "
+			}
+			line := cursor + nameStyle.Render(fixedWidth(item.label, 12)) + "  " + dimVersion.Render(item.desc)
+			if i == m.cursor {
+				w := lipgloss.Width(line)
+				if w < m.width {
+					line += strings.Repeat(" ", m.width-w)
+				}
+				line = selectedRowStyle.Render(line)
+			}
+			b.WriteString(line + "\n")
+		}
 
 		// Pad remaining space.
 		visibleRows := m.height - 12
@@ -583,20 +616,37 @@ func (m Model) renderBackupView() string {
 		return b.String()
 	}
 
-	// Progress bar.
-	total := len(m.backupItems)
-	if total > 0 {
-		frac := float64(m.backupDone) / float64(total)
-		barWidth := m.width - 30
-		if barWidth < 20 {
-			barWidth = 20
+	// Confirm mode — show review header instead of progress bar.
+	if m.backupConfirm {
+		pending := 0
+		skipped := 0
+		for _, item := range m.backupItems {
+			switch item.status {
+			case backupPending:
+				pending++
+			case backupSkipped, backupFailed:
+				skipped++
+			}
 		}
-		m.backupBar.SetWidth(barWidth)
-		fmt.Fprintf(&b, "  %s  %s  %d/%d\n\n",
-			detailLabelStyle.Render("Progress:"),
-			m.backupBar.ViewAs(frac),
-			m.backupDone, total,
-		)
+		b.WriteString("\n")
+		b.WriteString(confirmStyle.Render("  Review import plan") + "  " +
+			dimVersion.Render(fmt.Sprintf("%d to install, %d skipped", pending, skipped)) + "\n\n")
+	} else {
+		// Progress bar.
+		total := len(m.backupItems)
+		if total > 0 {
+			frac := float64(m.backupDone) / float64(total)
+			barWidth := m.width - 30
+			if barWidth < 20 {
+				barWidth = 20
+			}
+			m.backupBar.SetWidth(barWidth)
+			fmt.Fprintf(&b, "  %s  %s  %d/%d\n\n",
+				detailLabelStyle.Render("Progress:"),
+				m.backupBar.ViewAs(frac),
+				m.backupDone, total,
+			)
+		}
 	}
 
 	// Header.
@@ -653,7 +703,11 @@ func (m Model) renderBackupRow(item backupItem, selected bool) string {
 		statusStyle = upToDateStyle
 	case backupFailed:
 		icon = upgradableStyle.Render("✗")
-		statusLabel = "failed"
+		if item.errMsg != "" {
+			statusLabel = item.errMsg
+		} else {
+			statusLabel = "failed"
+		}
 		statusStyle = upgradableStyle
 	case backupSkipped:
 		icon = dimVersion.Render("–")
@@ -755,20 +809,6 @@ func (m Model) renderHelp() string {
 		return prompt + "  " + keys
 	}
 
-	// Source picker mode — show numbered choices.
-	if m.sourcePicker != nil {
-		var parts []string
-		parts = append(parts, confirmStyle.Render(fmt.Sprintf("  %s via:", m.sourcePicker.action)))
-		for i, c := range m.sourcePicker.choices {
-			parts = append(parts, fmt.Sprintf("  %s %s",
-				dimVersion.Render(strconv.Itoa(i+1)),
-				string(c.source),
-			))
-		}
-		parts = append(parts, "  "+dimVersion.Render("Esc")+" cancel")
-		return strings.Join(parts, "")
-	}
-
 	toggleLabel := "disable"
 	if m.activeTab == tabDisabled {
 		toggleLabel = "enable"
@@ -778,11 +818,25 @@ func (m Model) renderHelp() string {
 
 	switch m.activeTab {
 	case tabBackup:
-		parts = []string{
-			dimVersion.Render("←→") + " tab",
-			dimVersion.Render("e") + " export",
-			dimVersion.Render("I") + " import",
-			dimVersion.Render("q") + " quit",
+		if m.backupMode == "" {
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("Enter") + " select",
+				dimVersion.Render("q") + " quit",
+			}
+		} else if m.backupConfirm {
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Enter") + " confirm",
+				dimVersion.Render("Esc") + " cancel",
+			}
+		} else {
+			parts = []string{
+				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("Esc") + " back",
+				dimVersion.Render("q") + " quit",
+			}
 		}
 	case tabConfig:
 		parts = []string{

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
@@ -61,18 +62,21 @@ type Model struct {
 	// Action confirmation state.
 	pendingAction *pendingAction // nil = no pending confirmation
 
-	// Source picker state (choose which package manager to use).
-	sourcePicker *sourcePicker // nil = no picker active
+	// Tool action menu (Upgrade/Remove/Install).
+	toolMenu      int              // -1 = hidden; 0+ = selected action index
+	toolMenuItems []toolMenuAction // resolved actions for the current tool
 
 	// Import file path input.
 	importInput   textinput.Model
 	importingPath bool // true = import path input is active
 
 	// Backup tab state.
-	backupItems []backupItem   // items being exported/imported
-	backupMode  string         // "" (idle), "export", "import"
-	backupDone  int            // count of completed items
-	backupBar   progress.Model // overall progress bar
+	backupItems   []backupItem   // items being exported/imported
+	backupMode    string         // "" (idle), "export", "import"
+	backupDone    int            // count of completed items
+	backupBar     progress.Model // overall progress bar
+	backupResult  string         // deferred status message shown after progress animation
+	backupConfirm bool           // true = import plan shown, waiting for user confirmation
 }
 
 // NewModel creates a new TUI model.
@@ -97,6 +101,7 @@ func NewModel() Model {
 		phase:       0,
 		activeTab:   tabInstalled,
 		detailIdx:   -1,
+		toolMenu:    -1,
 		width:       80,
 		height:      24,
 	}
@@ -143,6 +148,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(cmds) == 0 {
 			m.phase = 2
 			m.loading = false
+			m.statusMsg = ""
 		}
 		return m, tea.Batch(cmds...)
 
@@ -161,6 +167,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.pending <= 0 {
 			m.phase = 2
 			m.loading = false
+			m.statusMsg = ""
 		}
 		return m, nil
 
@@ -192,18 +199,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case exportFinishedMsg:
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("✗ Export failed: %s", msg.err)
-			// Mark all items as failed.
 			for i := range m.backupItems {
 				m.backupItems[i].status = backupFailed
-			}
-		} else {
-			m.statusMsg = fmt.Sprintf("✓ Exported %d tools to %s", msg.count, msg.path)
-			// Mark all items as done.
-			for i := range m.backupItems {
-				m.backupItems[i].status = backupDone
+				m.backupItems[i].errMsg = msg.err.Error()
 			}
 			m.backupDone = len(m.backupItems)
+			return m, nil
 		}
+		// Store final message; animate progress item by item.
+		m.backupResult = fmt.Sprintf("✓ Exported %d tools to %s", msg.count, msg.path)
+		m.statusMsg = "Exporting..."
+		return m, tea.Tick(40*time.Millisecond, func(time.Time) tea.Msg { return backupTickMsg{} })
+
+	case backupTickMsg:
+		// Mark the next pending item as done.
+		for i := range m.backupItems {
+			if m.backupItems[i].status == backupPending {
+				m.backupItems[i].status = backupDone
+				m.backupDone++
+				// More items? schedule next tick.
+				if m.backupDone < len(m.backupItems) {
+					return m, tea.Tick(40*time.Millisecond, func(time.Time) tea.Msg { return backupTickMsg{} })
+				}
+				// All done — show final message.
+				m.statusMsg = m.backupResult
+				m.backupResult = ""
+				return m, nil
+			}
+		}
+		// No pending items left.
+		m.statusMsg = m.backupResult
+		m.backupResult = ""
 		return m, nil
 
 	case backupPlanMsg:
@@ -215,9 +241,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.backupDone++
 			}
 		}
-		// Start installing the first pending item.
-		cmd := m.nextBackupInstall()
-		return m, cmd
+		// Pause for user confirmation before installing.
+		m.backupConfirm = true
+		m.statusMsg = ""
+		return m, nil
 
 	case backupItemDoneMsg:
 		if msg.idx < len(m.backupItems) {
@@ -250,6 +277,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
+		// Forward non-key messages to the import text input (for paste support).
+		if m.importingPath {
+			var cmd tea.Cmd
+			m.importInput, cmd = m.importInput.Update(msg)
+			return m, cmd
+		}
 		if m.loading {
 			var cmd tea.Cmd
 			m.spinner, cmd = m.spinner.Update(msg)
@@ -296,28 +329,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil // swallow all other keys
 	}
 
-	// Source picker mode — user chooses which package manager to use.
-	if m.sourcePicker != nil {
-		switch msg.String() {
-		case "1", "2", "3", "4", "5", "6":
-			idx := int(msg.String()[0]-'0') - 1
-			if idx < len(m.sourcePicker.choices) {
-				choice := m.sourcePicker.choices[idx]
-				m.pendingAction = &pendingAction{
-					toolIdx: m.sourcePicker.toolIdx,
-					action:  m.sourcePicker.action,
-					cmdArgs: choice.cmdArgs,
-				}
-				m.sourcePicker = nil
-			}
-			return m, nil
-		case "esc", "n", "N":
-			m.sourcePicker = nil
-			return m, nil
-		}
-		return m, nil // swallow all other keys
-	}
-
 	// Import path input mode.
 	if m.importingPath {
 		switch msg.String() {
@@ -346,21 +357,61 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Detail view — Esc goes back, action keys available.
+	// Import confirm mode — user reviews plan before installing.
+	if m.backupConfirm {
+		switch msg.String() {
+		case "enter", "y", "Y":
+			m.backupConfirm = false
+			cmd := m.nextBackupInstall()
+			if cmd == nil {
+				// Nothing to install — all items were skipped/failed.
+				m.statusMsg = "✓ Nothing to install — all tools already present."
+				return m, nil
+			}
+			m.statusMsg = "Installing..."
+			return m, cmd
+		case "esc", "n", "N":
+			m.backupConfirm = false
+			m.backupMode = ""
+			m.backupItems = nil
+			m.backupDone = 0
+			m.statusMsg = ""
+			return m, nil
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.backupItems)-1 {
+				m.cursor++
+			}
+		}
+		return m, nil
+	}
+
+	// Detail view — navigate action menu, Esc goes back.
 	if m.showDetail {
 		switch msg.String() {
 		case "esc", "q", "backspace":
 			m.showDetail = false
+			m.toolMenu = -1
+			m.toolMenuItems = nil
 			return m, nil
-		case "i":
-			m.startAction(m.resolveInstallAction())
-			return m, nil
-		case "u":
-			m.startAction(m.resolveUpgradeAction())
-			return m, nil
-		case "d":
-			m.startAction(m.resolveRemoveAction())
-			return m, nil
+		case "up", "k":
+			if m.toolMenu > 0 {
+				m.toolMenu--
+			}
+		case "down", "j":
+			if m.toolMenu < len(m.toolMenuItems)-1 {
+				m.toolMenu++
+			}
+		case "enter":
+			if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
+				action := m.toolMenuItems[m.toolMenu]
+				m.toolMenu = -1
+				m.toolMenuItems = nil
+				m.startAction(action.picker)
+			}
 		}
 		return m, nil
 	}
@@ -390,6 +441,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
+	case "esc":
+		// Reset completed backup back to idle.
+		if m.activeTab == tabBackup && m.backupMode != "" {
+			m.backupMode = ""
+			m.backupItems = nil
+			m.backupDone = 0
+			m.backupConfirm = false
+			m.statusMsg = ""
+			return m, nil
+		}
 	case "right", "tab":
 		m.activeTab = (m.activeTab + 1) % tabCount
 		m.cursor = 0
@@ -444,32 +505,56 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filtering = true
 		return m, m.filterInput.Focus()
 	case "enter":
-		if m.cursor < len(m.filteredIndex) {
-			// On Updates tab, Enter triggers upgrade directly.
-			if m.activeTab == tabUpdates {
-				if picker := m.resolveUpgradeAction(); picker != nil {
-					m.startAction(picker)
+		// On Backup tab (idle), execute the selected menu item.
+		if m.activeTab == tabBackup && m.backupMode == "" {
+			if m.cursor == 0 {
+				// Export installed tools.
+				if m.phase < 2 {
+					m.statusMsg = "Still scanning — please wait..."
 					return m, nil
 				}
+				if len(m.tools) == 0 {
+					m.statusMsg = "No tools found to export."
+					return m, nil
+				}
+				m.backupItems = nil
+				m.backupDone = 0
+				for _, tool := range m.tools {
+					if tool.IsInstalled() && !tool.Disabled {
+						m.backupItems = append(m.backupItems, backupItem{
+							name:    tool.Name,
+							display: tool.DisplayName,
+							source:  "—",
+							status:  backupPending,
+						})
+					}
+				}
+				m.backupMode = "export"
+				m.cursor = 0
+				m.statusMsg = "Exporting..."
+				return m, exportToolsCmd(m.tools)
+			} else if m.cursor == 1 {
+				// Import from manifest — enter path input mode.
+				if m.phase < 2 {
+					m.statusMsg = "Still scanning — please wait..."
+					return m, nil
+				}
+				m.importingPath = true
+				return m, m.importInput.Focus()
 			}
-			// Otherwise open detail view (including Discover tab).
+			return m, nil
+		}
+		if m.cursor < len(m.filteredIndex) {
+			// Open detail view.
 			m.detailIdx = m.filteredIndex[m.cursor]
 			m.showDetail = true
+			m.buildToolMenu()
 			// Fetch tool info lazily if not already fetched.
 			tool := m.tools[m.detailIdx]
 			if !tool.InfoFetched {
 				return m, fetchToolInfoCmd(m.detailIdx, tool)
 			}
 		}
-		return m, nil
-	case "i":
-		m.startAction(m.resolveInstallAction())
-		return m, nil
-	case "u":
-		m.startAction(m.resolveUpgradeAction())
-		return m, nil
-	case "d":
-		m.startAction(m.resolveRemoveAction())
 		return m, nil
 	case "x":
 		if m.cursor < len(m.filteredIndex) {
@@ -505,31 +590,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.spinner.Tick,
 			func() tea.Msg { return findToolsCmd()() },
 		)
-	case "e":
-		if m.phase >= 2 && len(m.tools) > 0 {
-			// Build backup items from installed tools.
-			m.backupItems = nil
-			m.backupDone = 0
-			for _, tool := range m.tools {
-				if tool.IsInstalled() && !tool.Disabled {
-					m.backupItems = append(m.backupItems, backupItem{
-						name:    tool.Name,
-						display: tool.DisplayName,
-						source:  "—",
-						status:  backupPending,
-					})
-				}
-			}
-			m.backupMode = "export"
-			m.activeTab = tabBackup
-			m.cursor = 0
-			m.statusMsg = "Exporting..."
-			return m, exportToolsCmd(m.tools)
-		}
-		return m, nil
-	case "I":
-		m.importingPath = true
-		return m, m.importInput.Focus()
 	}
 	return m, nil
 }
@@ -612,7 +672,61 @@ func (m *Model) startAction(picker *sourcePicker) {
 		}
 		return
 	}
-	m.sourcePicker = picker
+	// Multiple sources — show as menu items in the detail view.
+	m.toolMenuItems = nil
+	for _, c := range picker.choices {
+		m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{
+			label: string(c.source),
+			picker: &sourcePicker{
+				toolIdx: picker.toolIdx,
+				action:  picker.action,
+				choices: []sourceChoice{c},
+			},
+		})
+	}
+	m.toolMenu = 0
+}
+
+// buildToolMenu resolves available actions for the current tool and populates the tool menu.
+// Returns true if the menu has any actions, false otherwise.
+func (m *Model) buildToolMenu() bool {
+	tool := m.currentTool()
+	if tool == nil {
+		return false
+	}
+	m.toolMenuItems = nil
+	idx := m.currentToolIdx()
+	if tool.IsInstalled() {
+		if p := m.resolveUpgradeAction(); p != nil {
+			m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: "Upgrade", picker: p})
+		}
+		if p := m.resolveRemoveAction(); p != nil {
+			m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: "Remove", picker: p})
+		}
+	} else {
+		// Install — show each source as a separate menu item.
+		if p := m.resolveInstallAction(); p != nil {
+			if len(p.choices) == 1 {
+				m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: "Install", picker: p})
+			} else {
+				for _, c := range p.choices {
+					m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{
+						label: "Install via " + string(c.source),
+						picker: &sourcePicker{
+							toolIdx: idx,
+							action:  "install",
+							choices: []sourceChoice{c},
+						},
+					})
+				}
+			}
+		}
+	}
+	if len(m.toolMenuItems) == 0 {
+		return false
+	}
+	m.toolMenu = 0
+	return true
 }
 
 // currentTool returns the tool at the current cursor position, or nil.
@@ -710,6 +824,9 @@ func (m Model) resolveRemoveAction() *sourcePicker {
 func (m Model) rowCount() int {
 	switch m.activeTab {
 	case tabBackup:
+		if m.backupMode == "" {
+			return 2 // Export, Import menu items
+		}
 		return len(m.backupItems)
 	case tabConfig:
 		return 0

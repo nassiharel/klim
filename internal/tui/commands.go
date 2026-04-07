@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -70,6 +71,12 @@ type sourcePicker struct {
 	choices []sourceChoice
 }
 
+// toolMenuAction represents one selectable action in the tool action menu.
+type toolMenuAction struct {
+	label  string        // "Upgrade", "Remove", "Install"
+	picker *sourcePicker // resolved sources for this action
+}
+
 // --- Backup types ---
 
 type backupStatus int
@@ -107,6 +114,9 @@ type backupItemDoneMsg struct {
 	idx int
 	err error
 }
+
+// backupTickMsg advances the animated progress by marking the next pending item as done.
+type backupTickMsg struct{}
 
 // --- Scan & version commands ---
 
@@ -212,6 +222,10 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 
 		if err := os.WriteFile(filename, []byte(header+string(data)), 0o644); err != nil {
 			return exportFinishedMsg{err: err}
+		}
+
+		if abs, err := filepath.Abs(filename); err == nil {
+			filename = abs
 		}
 
 		return exportFinishedMsg{path: filename, count: len(exported)}
