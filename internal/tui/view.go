@@ -353,55 +353,83 @@ func (m Model) versionInfoPlain(tool registry.Tool) string {
 
 func (m Model) renderDetailView(tool registry.Tool) string {
 	var b strings.Builder
+	label := detailLabelStyle.Render
+	dim := dimVersion.Render
 
-	// Header.
-	label := tool.Name
+	// ── Header ──────────────────────────────────────────────────
+	nameLabel := tool.Name
 	if tool.DisplayName != "" && !strings.EqualFold(tool.Name, tool.DisplayName) {
-		label += " (" + tool.DisplayName + ")"
+		nameLabel += " (" + tool.DisplayName + ")"
 	}
-	b.WriteString("  " + detailTitleStyle.Render(label))
+	b.WriteString("  " + detailTitleStyle.Render(nameLabel))
 	b.WriteString("  " + categoryStyle.Render(tool.Category))
-	b.WriteString("  " + strings.Repeat("─", max(m.width-len(label)-len(tool.Category)-8, 10)))
+	divLen := max(m.width-len(nameLabel)-len(tool.Category)-8, 10)
+	b.WriteString("  " + strings.Repeat("─", divLen))
 	b.WriteString("\n\n")
 
-	// Tool info — fetched lazily from package manager.
+	// ── Description (word-wrapped) ──────────────────────────────
 	switch {
 	case tool.Info != nil:
 		if tool.Info.Description != "" {
-			// Word-wrap description to fit width, using rune count to
-			// handle multibyte characters correctly.
-			descRunes := []rune(tool.Info.Description)
-			maxLen := m.width - 6
-			if maxLen > 3 && len(descRunes) > maxLen {
-				descRunes = append(descRunes[:maxLen-3], '.', '.', '.')
+			maxW := m.width - 6
+			if maxW < 20 {
+				maxW = 20
 			}
-			b.WriteString("  " + dimVersion.Render(string(descRunes)) + "\n")
+			for _, line := range wordWrap(tool.Info.Description, maxW) {
+				b.WriteString("  " + dim(line) + "\n")
+			}
+			b.WriteString("\n")
 		}
-		var meta []string
+		// Metadata table.
 		if tool.Info.Publisher != "" {
-			meta = append(meta, detailLabelStyle.Render("Publisher: ")+tool.Info.Publisher)
+			b.WriteString("  " + label("Publisher:  ") + tool.Info.Publisher + "\n")
 		}
 		if tool.Info.Homepage != "" {
-			meta = append(meta, detailLabelStyle.Render("Homepage:  ")+dimVersion.Render(tool.Info.Homepage))
+			b.WriteString("  " + label("Homepage:   ") + dim(tool.Info.Homepage) + "\n")
 		}
 		if tool.Info.License != "" {
-			meta = append(meta, detailLabelStyle.Render("License:   ")+tool.Info.License)
+			b.WriteString("  " + label("License:    ") + tool.Info.License + "\n")
 		}
 		if tool.Info.ReleaseDate != "" {
-			meta = append(meta, detailLabelStyle.Render("Released:  ")+tool.Info.ReleaseDate)
-		}
-		for _, line := range meta {
-			b.WriteString("  " + line + "\n")
+			b.WriteString("  " + label("Released:   ") + tool.Info.ReleaseDate + "\n")
 		}
 		b.WriteString("\n")
 	case tool.InfoFetched:
-		b.WriteString("  " + dimVersion.Render("No metadata available.") + "\n\n")
+		b.WriteString("  " + dim("No metadata available.") + "\n\n")
 	default:
 		b.WriteString("  " + loadingStyle.Render("Loading info...") + "\n\n")
 	}
 
+	// ── Version & Status ────────────────────────────────────────
 	if tool.IsInstalled() {
-		b.WriteString("  " + detailLabelStyle.Render("Instances:") + "\n")
+		ver := tool.InstalledVersion()
+		if ver == "" {
+			ver = "—"
+		}
+		b.WriteString("  " + label("Version:    ") + nameStyle.Render(ver))
+		if tool.Latest != "" {
+			if registry.VersionsMatch(ver, tool.Latest) {
+				b.WriteString("  " + upToDateStyle.Render("✓ up to date"))
+			} else if tool.HasUpdate() {
+				b.WriteString("  " + upgradableStyle.Render("⬆ "+tool.Latest+" available"))
+			}
+			if tool.LatestFrom != "" {
+				b.WriteString("  " + dim("(via "+tool.LatestFrom+")"))
+			}
+		}
+		b.WriteString("\n")
+	} else {
+		b.WriteString("  " + label("Status:     ") + dim("Not installed") + "\n")
+	}
+
+	// ── Instances ───────────────────────────────────────────────
+	if tool.IsInstalled() {
+		b.WriteString("  " + label("Instances:  "))
+		if len(tool.Instances) == 1 {
+			b.WriteString(dim("1 installation") + "\n")
+		} else {
+			b.WriteString(upgradableStyle.Render(fmt.Sprintf("%d installations", len(tool.Instances))) + "\n")
+		}
 		for i, inst := range tool.Instances {
 			bullet := "○"
 			style := detailSecondary
@@ -409,15 +437,15 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 				bullet = "●"
 				style = detailPrimary
 			}
-			ver := inst.Version
-			if ver == "" {
-				ver = "—"
+			instVer := inst.Version
+			if instVer == "" {
+				instVer = "—"
 			}
 			fmt.Fprintf(&b, "    %s  %-14s  %-8s  %s\n",
 				style.Render(bullet),
-				ver,
+				instVer,
 				sourceStyle.Render(string(inst.Source)),
-				dimVersion.Render(registry.TruncatePath(inst.Path, m.width-40)),
+				dim(registry.TruncatePath(inst.Path, m.width-40)),
 			)
 		}
 		b.WriteString("\n")
@@ -426,45 +454,49 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		if len(tool.Instances) > 1 {
 			b.WriteString(m.renderInstanceRecommendations(tool))
 		}
-
-		if tool.Latest != "" {
-			if registry.VersionsMatch(tool.InstalledVersion(), tool.Latest) {
-				b.WriteString("  " + upToDateStyle.Render("✓ Up to date") + "  " + dimVersion.Render("("+tool.Latest+")") + "\n")
-			} else {
-				b.WriteString("  " + upgradableStyle.Render("⬆ Update available: "+tool.Latest) + "\n")
-			}
-			b.WriteString("\n")
-		}
-
-		if primary := tool.PrimaryInstance(); primary != nil {
-			if cmd := tool.Packages.UpgradeCmd(primary.Source); cmd != "" {
-				b.WriteString("  " + detailLabelStyle.Render("Upgrade:") + "  " + detailCmdStyle.Render(cmd) + "\n")
-			}
-			if cmd := tool.Packages.RemoveCmd(primary.Source); cmd != "" {
-				b.WriteString("  " + detailLabelStyle.Render("Remove: ") + "  " + detailCmdStyle.Render(cmd) + "\n")
-			}
-		}
-	} else {
-		b.WriteString("  " + dimVersion.Render("Not installed") + "\n")
-		b.WriteString("  " + dimVersion.Render("Recommended developer tool") + "\n\n")
 	}
 
-	// Install commands — only for the current OS.
-	b.WriteString("\n  " + detailLabelStyle.Render("Install:") + "\n")
-	for _, src := range registry.SourcesForOS() {
-		if cmd := tool.Packages.InstallCmd(src); cmd != "" {
-			fmt.Fprintf(&b, "    %-8s  %s\n",
-				sourceStyle.Render(string(src)),
-				detailCmdStyle.Render(cmd),
-			)
-		}
+	// ── Supported Platforms ─────────────────────────────────────
+	platforms := derivePlatforms(tool.Packages)
+	if len(platforms) > 0 {
+		b.WriteString("  " + label("Platforms:  ") + dim(strings.Join(platforms, ", ")) + "\n")
 	}
 
+	// ── Binary names ────────────────────────────────────────────
+	if len(tool.BinaryNames) > 0 {
+		b.WriteString("  " + label("Binaries:   ") + dim(strings.Join(tool.BinaryNames, ", ")) + "\n")
+	}
 	b.WriteString("\n")
 
-	// Action menu items.
+	// ── Install / Upgrade / Remove commands ─────────────────────
+	if tool.IsInstalled() {
+		if primary := tool.PrimaryInstance(); primary != nil {
+			if cmd := tool.Packages.UpgradeCmd(primary.Source); cmd != "" {
+				b.WriteString("  " + label("Upgrade:    ") + detailCmdStyle.Render(cmd) + "\n")
+			}
+			if cmd := tool.Packages.RemoveCmd(primary.Source); cmd != "" {
+				b.WriteString("  " + label("Remove:     ") + detailCmdStyle.Render(cmd) + "\n")
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	// Install commands for all available sources on this OS.
+	installCmds := m.collectInstallCmds(tool)
+	if len(installCmds) > 0 {
+		b.WriteString("  " + label("Install:") + "\n")
+		for _, ic := range installCmds {
+			fmt.Fprintf(&b, "    %-8s  %s\n",
+				sourceStyle.Render(ic.source),
+				detailCmdStyle.Render(ic.cmd),
+			)
+		}
+		b.WriteString("\n")
+	}
+
+	// ── Action menu ─────────────────────────────────────────────
 	if len(m.toolMenuItems) > 0 {
-		b.WriteString("  " + detailLabelStyle.Render("Actions:") + "\n")
+		b.WriteString("  " + label("Actions:") + "\n")
 		for i, item := range m.toolMenuItems {
 			cursor := "  "
 			if i == m.toolMenu {
@@ -483,21 +515,96 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		b.WriteString("\n")
 	}
 
-	// Detail view help with action hints.
+	// ── Help bar ────────────────────────────────────────────────
 	switch {
 	case m.pendingAction != nil:
 		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
-		keys := dimVersion.Render("y") + " confirm   " + dimVersion.Render("Esc") + " cancel"
+		keys := dim("y") + " confirm   " + dim("Esc") + " cancel"
 		b.WriteString(prompt + "  " + keys)
 	default:
 		var hints []string
-		hints = append(hints, dimVersion.Render("↑↓")+" navigate")
-		hints = append(hints, dimVersion.Render("Enter")+" select")
-		hints = append(hints, dimVersion.Render("Esc")+" back")
+		hints = append(hints, dim("↑↓")+" navigate")
+		hints = append(hints, dim("Enter")+" select")
+		hints = append(hints, dim("Esc")+" back")
 		b.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
 	}
 
 	return b.String()
+}
+
+// installCmdEntry pairs a source label with the formatted command string.
+type installCmdEntry struct {
+	source string
+	cmd    string
+}
+
+// collectInstallCmds returns install commands for all available sources on this OS.
+func (m Model) collectInstallCmds(tool registry.Tool) []installCmdEntry {
+	var entries []installCmdEntry
+	for _, src := range registry.SourcesForOS() {
+		if cmd := tool.Packages.InstallCmd(src); cmd != "" {
+			entries = append(entries, installCmdEntry{
+				source: string(src),
+				cmd:    cmd,
+			})
+		}
+	}
+	return entries
+}
+
+// derivePlatforms infers supported operating systems from which package manager
+// IDs are defined. Returns human-readable labels like "Windows", "macOS", "Linux".
+func derivePlatforms(pkgs registry.PackageIDs) []string {
+	var platforms []string
+	seen := make(map[string]bool)
+
+	add := func(label string) {
+		if !seen[label] {
+			seen[label] = true
+			platforms = append(platforms, label)
+		}
+	}
+
+	if pkgs.Winget != "" || pkgs.Choco != "" {
+		add("Windows")
+	}
+	if pkgs.Brew != "" {
+		add("macOS")
+		add("Linux")
+	}
+	if pkgs.Apt != "" || pkgs.Snap != "" {
+		add("Linux")
+	}
+	if pkgs.NPM != "" {
+		add("Windows")
+		add("macOS")
+		add("Linux")
+	}
+	return platforms
+}
+
+// wordWrap breaks text into lines that fit within maxWidth characters.
+func wordWrap(text string, maxWidth int) []string {
+	if maxWidth <= 0 {
+		return []string{text}
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return nil
+	}
+
+	var lines []string
+	current := words[0]
+	for _, word := range words[1:] {
+		if len(current)+1+len(word) > maxWidth {
+			lines = append(lines, current)
+			current = word
+		} else {
+			current += " " + word
+		}
+	}
+	lines = append(lines, current)
+	return lines
 }
 
 // renderInstanceRecommendations analyzes multiple installations and gives
