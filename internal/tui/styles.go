@@ -37,9 +37,7 @@ var (
 	headerStyle = lipgloss.NewStyle().Foreground(subtleColor)
 
 	// Version text.
-	versionStyle = lipgloss.NewStyle()
-	dimVersion   = lipgloss.NewStyle().Foreground(dimColor)
-	arrowStyle   = lipgloss.NewStyle().Foreground(dimColor)
+	dimVersion = lipgloss.NewStyle().Foreground(dimColor)
 
 	// Status icons.
 	upToDateStyle   = lipgloss.NewStyle().Foreground(successColor)
@@ -69,4 +67,7 @@ var (
 
 	// Category badge.
 	categoryStyle = lipgloss.NewStyle().Foreground(subtleColor)
+
+	// Confirmation prompt.
+	confirmStyle = lipgloss.NewStyle().Foreground(warningColor).Bold(true)
 )

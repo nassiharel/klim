@@ -32,3 +32,14 @@ vendor/
 
 # Cache
 cache.json
+
+# Coverage
+coverage.out
+coverage.html
+
+# Fuzz
+testdata/fuzz/
+
+# Environment
+.env
+.env.*

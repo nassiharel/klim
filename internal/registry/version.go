@@ -34,8 +34,17 @@ func VersionsMatch(installed, latest string) bool {
 		}
 	}
 
-	// If one version has extra trailing segments, check they're zeros
-	// (or build metadata that doesn't affect the release version).
+	// If one version has extra trailing segments, they must be zeros
+	// (build numbers / metadata that don't affect the release version).
+	longer := iParts
+	if len(lParts) > len(iParts) {
+		longer = lParts
+	}
+	for i := minLen; i < len(longer); i++ {
+		if longer[i] != 0 {
+			return false
+		}
+	}
 	return true
 }
 
@@ -69,4 +78,36 @@ func isPaddedMatch(a, b int) bool {
 		return factor == 10 || factor == 100 || factor == 1000
 	}
 	return false
+}
+
+// CompareVersions compares two version strings numerically, segment by segment.
+// Returns -1 if a < b, 0 if a == b, 1 if a > b.
+// Parsing stops at the first non-numeric segment (e.g. "2.53.0.windows.1"
+// is compared as [2, 53, 0]), so versions differing only in non-numeric
+// suffixes are treated as equal.
+func CompareVersions(a, b string) int {
+	aParts := parseSegments(a)
+	bParts := parseSegments(b)
+
+	maxLen := len(aParts)
+	if len(bParts) > maxLen {
+		maxLen = len(bParts)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		var av, bv int
+		if i < len(aParts) {
+			av = aParts[i]
+		}
+		if i < len(bParts) {
+			bv = bParts[i]
+		}
+		if av < bv {
+			return -1
+		}
+		if av > bv {
+			return 1
+		}
+	}
+	return 0
 }

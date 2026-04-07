@@ -12,6 +12,7 @@ builds:
     binary: clim
     env:
       - CGO_ENABLED=0
+      - SOURCE_DATE_EPOCH={{ .CommitTimestamp }}
     flags:
       - -trimpath
     ldflags:
@@ -36,10 +37,42 @@ archives:
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        formats: ['zip']
+        formats: ["zip"]
     files:
       - README.md
       - LICENSE
+
+nfpms:
+  - id: packages
+    package_name: clim
+    vendor: nassiharel
+    homepage: https://github.com/nassiharel/clim
+    maintainer: nassiharel
+    description: >-
+      One command to discover, inspect, and upgrade every CLI on your system.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+
+brews:
+  - repository:
+      owner: nassiharel
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/nassiharel/clim
+    description: >-
+      One command to discover, inspect, and upgrade every CLI on your system.
+    license: MIT
+    install: |
+      bin.install "clim"
+    test: |
+      system bin/"clim", "version"
+
+sboms:
+  - artifacts: archive
 
 checksum:
   name_template: "checksums.txt"
@@ -49,6 +82,19 @@ snapshot:
 
 changelog:
   sort: asc
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))?\!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\(.+\))?\!?:.+$'
+      order: 1
+    - title: Dependencies
+      regexp: '^.*?(deps|build\(deps\))(\(.+\))?\!?:.+$'
+      order: 2
+    - title: Other
+      order: 999
   filters:
     exclude:
       - "^docs:"
@@ -62,3 +108,11 @@ release:
     name: clim
   prerelease: auto
   name_template: "v{{ .Version }}"
+  footer: |
+    ## Install
+
+    **Homebrew**: `brew install nassiharel/tap/clim`
+    **Go**: `go install github.com/nassiharel/clim/cmd/clim@v{{ .Version }}`
+    **Debian/Ubuntu**: `sudo dpkg -i clim_{{ .Version }}_linux_amd64.deb`
+    **RPM**: `sudo rpm -i clim_{{ .Version }}_linux_amd64.rpm`
+    **Binary**: Download from the assets below

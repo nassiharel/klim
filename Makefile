@@ -8,7 +8,10 @@ LDFLAGS := -s -w \
   -X $(MODULE)/internal/build.Commit=$(COMMIT) \
   -X $(MODULE)/internal/build.Date=$(DATE)
 
-.PHONY: build run test lint clean
+.DEFAULT_GOAL := all
+.PHONY: all build run test lint tidy vulncheck cover clean
+
+all: lint test build
 
 build:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/clim ./cmd/clim
@@ -22,5 +25,16 @@ test:
 lint:
 	golangci-lint run
 
+tidy:
+	go mod tidy -diff
+
+vulncheck:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+cover:
+	go test -race -count=1 -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report: coverage.html"
+
 clean:
-	rm -rf bin/ dist/
+	rm -rf bin/ dist/ coverage.out coverage.html

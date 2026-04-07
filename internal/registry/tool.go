@@ -1,10 +1,16 @@
 package registry
 
-import "runtime"
+import (
+	"os/exec"
+	"runtime"
+	"strings"
+	"sync"
+)
 
 // InstallSource identifies how a tool was installed.
 type InstallSource string
 
+// Supported install sources for tools.
 const (
 	SourceWinget InstallSource = "winget"
 	SourceChoco  InstallSource = "choco"
@@ -30,6 +36,17 @@ type Tool struct {
 	Latest      string
 	LatestFrom  string
 	Disabled    bool
+	Info        *ToolInfo // rich metadata, fetched lazily
+	InfoFetched bool      // true once info fetch completed (Info may still be nil)
+}
+
+// ToolInfo holds rich metadata about a tool, fetched from package managers.
+type ToolInfo struct {
+	Description string
+	Publisher   string
+	Homepage    string
+	License     string
+	ReleaseDate string
 }
 
 // Instance represents a single installation of a tool found on PATH.
@@ -71,134 +88,198 @@ func (t *Tool) IsInstalled() bool {
 }
 
 // HasUpdate returns true if a newer version is available.
+// Returns false if the installed version is already newer than the latest
+// reported by the package manager (e.g. preview/RC vs stable channel).
 func (t *Tool) HasUpdate() bool {
 	ver := t.InstalledVersion()
-	return ver != "" && t.Latest != "" && !VersionsMatch(ver, t.Latest)
+	if ver == "" || t.Latest == "" {
+		return false
+	}
+	if VersionsMatch(ver, t.Latest) {
+		return false
+	}
+	// Only flag as update if latest is actually newer than installed.
+	return CompareVersions(t.Latest, ver) > 0
 }
 
-// InstallCmd returns the shell command to install this tool using the given source.
+// sourceCommands holds command arg templates for a package manager.
+// The package ID is appended as the final argument (no shell interpolation).
+type sourceCommands struct {
+	install   []string // e.g. ["winget", "install", "--id"]
+	upgrade   []string
+	uninstall []string
+}
+
+// commandTemplates maps each package manager to its command arg templates.
+// The package identifier is appended as the last argument at call time.
+var commandTemplates = map[InstallSource]sourceCommands{
+	SourceWinget: {
+		install:   []string{"winget", "install", "--id"},
+		upgrade:   []string{"winget", "upgrade", "--id"},
+		uninstall: []string{"winget", "uninstall", "--id"},
+	},
+	SourceChoco: {
+		install:   []string{"choco", "install"},
+		upgrade:   []string{"choco", "upgrade"},
+		uninstall: []string{"choco", "uninstall"},
+	},
+	SourceBrew: {
+		install:   []string{"brew", "install"},
+		upgrade:   []string{"brew", "upgrade"},
+		uninstall: []string{"brew", "uninstall"},
+	},
+	SourceApt: {
+		install:   []string{"sudo", "apt", "install"},
+		upgrade:   []string{"sudo", "apt", "upgrade"},
+		uninstall: []string{"sudo", "apt", "remove"},
+	},
+	SourceSnap: {
+		install:   []string{"sudo", "snap", "install"},
+		upgrade:   []string{"sudo", "snap", "refresh"},
+		uninstall: []string{"sudo", "snap", "remove"},
+	},
+	SourceNPM: {
+		install:   []string{"npm", "install", "-g"},
+		upgrade:   []string{"npm", "update", "-g"},
+		uninstall: []string{"npm", "uninstall", "-g"},
+	},
+}
+
+// pkgID returns the package identifier for the given source, or "".
+func (p PackageIDs) pkgID(source InstallSource) string {
+	switch source {
+	case SourceWinget:
+		return p.Winget
+	case SourceChoco:
+		return p.Choco
+	case SourceBrew:
+		return p.Brew
+	case SourceApt:
+		return p.Apt
+	case SourceSnap:
+		return p.Snap
+	case SourceNPM:
+		return p.NPM
+	}
+	return ""
+}
+
+// InstallArgs returns the command and arguments to install this tool.
+// Returns nil if no package ID is available for the given source.
+// The result is safe to pass directly to exec.Command(args[0], args[1:]...).
+func (p PackageIDs) InstallArgs(source InstallSource) []string {
+	if id := p.pkgID(source); id != "" {
+		if tmpl, ok := commandTemplates[source]; ok {
+			return append(append([]string{}, tmpl.install...), id)
+		}
+	}
+	return nil
+}
+
+// InstallCmd returns the human-readable install command string for display.
 func (p PackageIDs) InstallCmd(source InstallSource) string {
-	switch source {
-	case SourceWinget:
-		if p.Winget != "" {
-			return "winget install --id " + p.Winget
-		}
-	case SourceChoco:
-		if p.Choco != "" {
-			return "choco install " + p.Choco
-		}
-	case SourceBrew:
-		if p.Brew != "" {
-			return "brew install " + p.Brew
-		}
-	case SourceApt:
-		if p.Apt != "" {
-			return "sudo apt install " + p.Apt
-		}
-	case SourceSnap:
-		if p.Snap != "" {
-			return "sudo snap install " + p.Snap
-		}
-	case SourceNPM:
-		if p.NPM != "" {
-			return "npm install -g " + p.NPM
-		}
-	}
-	return ""
+	return strings.Join(p.InstallArgs(source), " ")
 }
 
-// UpgradeCmd returns the shell command to upgrade this tool using the given source.
+// UpgradeArgs returns the command and arguments to upgrade this tool.
+func (p PackageIDs) UpgradeArgs(source InstallSource) []string {
+	if id := p.pkgID(source); id != "" {
+		if tmpl, ok := commandTemplates[source]; ok {
+			return append(append([]string{}, tmpl.upgrade...), id)
+		}
+	}
+	return nil
+}
+
+// UpgradeCmd returns the human-readable upgrade command string for display.
 func (p PackageIDs) UpgradeCmd(source InstallSource) string {
-	switch source {
-	case SourceWinget:
-		if p.Winget != "" {
-			return "winget upgrade --id " + p.Winget
-		}
-	case SourceChoco:
-		if p.Choco != "" {
-			return "choco upgrade " + p.Choco
-		}
-	case SourceBrew:
-		if p.Brew != "" {
-			return "brew upgrade " + p.Brew
-		}
-	case SourceApt:
-		if p.Apt != "" {
-			return "sudo apt upgrade " + p.Apt
-		}
-	case SourceSnap:
-		if p.Snap != "" {
-			return "sudo snap refresh " + p.Snap
-		}
-	case SourceNPM:
-		if p.NPM != "" {
-			return "npm update -g " + p.NPM
-		}
-	}
-	return ""
+	return strings.Join(p.UpgradeArgs(source), " ")
 }
 
-// RemoveCmd returns the shell command to remove/uninstall this tool.
-func (p PackageIDs) RemoveCmd(source InstallSource) string {
-	switch source {
-	case SourceWinget:
-		if p.Winget != "" {
-			return "winget uninstall --id " + p.Winget
-		}
-	case SourceChoco:
-		if p.Choco != "" {
-			return "choco uninstall " + p.Choco
-		}
-	case SourceBrew:
-		if p.Brew != "" {
-			return "brew uninstall " + p.Brew
-		}
-	case SourceApt:
-		if p.Apt != "" {
-			return "sudo apt remove " + p.Apt
-		}
-	case SourceSnap:
-		if p.Snap != "" {
-			return "sudo snap remove " + p.Snap
-		}
-	case SourceNPM:
-		if p.NPM != "" {
-			return "npm uninstall -g " + p.NPM
+// RemoveArgs returns the command and arguments to remove/uninstall this tool.
+func (p PackageIDs) RemoveArgs(source InstallSource) []string {
+	if id := p.pkgID(source); id != "" {
+		if tmpl, ok := commandTemplates[source]; ok {
+			return append(append([]string{}, tmpl.uninstall...), id)
 		}
 	}
-	return ""
+	return nil
+}
+
+// RemoveCmd returns the human-readable remove command string for display.
+func (p PackageIDs) RemoveCmd(source InstallSource) string {
+	return strings.Join(p.RemoveArgs(source), " ")
+}
+
+// pmAvailable checks if a package manager binary is on PATH (cached).
+// Override pmAvailableFunc in tests to control availability without real binaries.
+var pmAvailability struct {
+	once  sync.Once
+	avail map[InstallSource]bool
+}
+
+// pmAvailableFunc can be overridden in tests to stub package manager availability.
+// When nil (the default), the real exec.LookPath check is used.
+var pmAvailableFunc func(InstallSource) bool
+
+func pmAvailable(source InstallSource) bool {
+	if fn := pmAvailableFunc; fn != nil {
+		return fn(source)
+	}
+	pmAvailability.once.Do(func() {
+		pmAvailability.avail = make(map[InstallSource]bool)
+		checks := map[InstallSource]string{
+			SourceWinget: "winget",
+			SourceChoco:  "choco",
+			SourceScoop:  "scoop",
+			SourceBrew:   "brew",
+			SourceApt:    "apt",
+			SourceSnap:   "snap",
+			SourceNPM:    "npm",
+		}
+		for src, bin := range checks {
+			_, err := exec.LookPath(bin)
+			pmAvailability.avail[src] = err == nil
+		}
+	})
+	return pmAvailability.avail[source]
 }
 
 // BestInstallSource returns the recommended package manager for the current OS.
+// Only suggests package managers that are actually installed on the system.
 // Priority: Windows: winget→choco→npm, macOS: brew→npm, Linux: apt→snap→brew→npm.
 func (p PackageIDs) BestInstallSource() InstallSource {
-	switch runtime.GOOS {
-	case "windows":
-		if p.Winget != "" {
-			return SourceWinget
+	candidates := sourcePriority()
+	for _, src := range candidates {
+		if p.pkgID(src) != "" && pmAvailable(src) {
+			return src
 		}
-		if p.Choco != "" {
-			return SourceChoco
-		}
-	case "darwin":
-		if p.Brew != "" {
-			return SourceBrew
-		}
-	default: // linux
-		if p.Apt != "" {
-			return SourceApt
-		}
-		if p.Snap != "" {
-			return SourceSnap
-		}
-		if p.Brew != "" {
-			return SourceBrew
-		}
-	}
-	if p.NPM != "" {
-		return SourceNPM
 	}
 	return ""
+}
+
+// HasAnyPackageForOS reports whether any package ID is defined for a package
+// manager that is relevant to the current OS — regardless of whether that
+// package manager is actually installed.
+func (p PackageIDs) HasAnyPackageForOS() bool {
+	for _, src := range sourcePriority() {
+		if p.pkgID(src) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// sourcePriority returns the preferred package manager order for the current OS.
+func sourcePriority() []InstallSource {
+	switch runtime.GOOS {
+	case "windows":
+		return []InstallSource{SourceWinget, SourceChoco, SourceNPM}
+	case "darwin":
+		return []InstallSource{SourceBrew, SourceNPM}
+	default: // linux
+		return []InstallSource{SourceApt, SourceSnap, SourceBrew, SourceNPM}
+	}
 }
 
 // BestInstallCmd returns the install command using the best source for this OS.
@@ -206,16 +287,50 @@ func (p PackageIDs) BestInstallCmd() string {
 	return p.InstallCmd(p.BestInstallSource())
 }
 
-// SourcesForOS returns the package manager sources relevant to the current OS.
+// SourcesForOS returns the package manager sources available on the current OS.
+// Only includes package managers that are actually installed.
 func SourcesForOS() []InstallSource {
+	var all []InstallSource
 	switch runtime.GOOS {
 	case "windows":
-		return []InstallSource{SourceWinget, SourceChoco, SourceScoop, SourceNPM}
+		all = []InstallSource{SourceWinget, SourceChoco, SourceScoop, SourceNPM}
 	case "darwin":
-		return []InstallSource{SourceBrew, SourceNPM}
+		all = []InstallSource{SourceBrew, SourceNPM}
 	default: // linux
-		return []InstallSource{SourceApt, SourceSnap, SourceBrew, SourceNPM}
+		all = []InstallSource{SourceApt, SourceSnap, SourceBrew, SourceNPM}
 	}
+	var available []InstallSource
+	for _, src := range all {
+		if pmAvailable(src) {
+			available = append(available, src)
+		}
+	}
+	return available
+}
+
+// PMStatus represents the availability of a package manager on this system.
+type PMStatus struct {
+	Source    InstallSource
+	Available bool
+}
+
+// AllPMStatusForOS returns all package manager candidates for the current OS
+// along with whether each is installed on the system.
+func AllPMStatusForOS() []PMStatus {
+	var all []InstallSource
+	switch runtime.GOOS {
+	case "windows":
+		all = []InstallSource{SourceWinget, SourceChoco, SourceScoop, SourceNPM}
+	case "darwin":
+		all = []InstallSource{SourceBrew, SourceNPM}
+	default: // linux
+		all = []InstallSource{SourceApt, SourceSnap, SourceBrew, SourceNPM}
+	}
+	result := make([]PMStatus, len(all))
+	for i, src := range all {
+		result[i] = PMStatus{Source: src, Available: pmAvailable(src)}
+	}
+	return result
 }
 
 // StatusString compares installed vs latest and returns a display string.
@@ -232,7 +347,11 @@ func StatusString(installed, latest string) string {
 	if VersionsMatch(installed, latest) {
 		return "✓ up to date"
 	}
-	return "⬆ update"
+	// Only show update arrow if latest is actually newer.
+	if CompareVersions(latest, installed) > 0 {
+		return "⬆ update"
+	}
+	return "✓ up to date"
 }
 
 // TruncatePath shortens a path for display.
@@ -240,7 +359,7 @@ func TruncatePath(path string, maxLen int) string {
 	if path == "" {
 		return "—"
 	}
-	if len(path) <= maxLen {
+	if maxLen <= 3 || len(path) <= maxLen {
 		return path
 	}
 	return "..." + path[len(path)-maxLen+3:]
