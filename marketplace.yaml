@@ -192,6 +192,7 @@ tools:
     enabled: true
     binary_names: [istioctl]
     packages:
+      choco: "istioctl"
       brew: "istioctl"
 
   - name: argocd
@@ -200,6 +201,7 @@ tools:
     enabled: true
     binary_names: [argocd]
     packages:
+      winget: "argoproj.argocd"
       choco: "argocd-cli"
       brew: "argocd"
 
@@ -407,7 +409,7 @@ tools:
     enabled: true
     binary_names: [ruby]
     packages:
-      winget: "RubyInstallerTeam.Ruby"
+      winget: "RubyInstallerTeam.Ruby.3.4"
       choco: "ruby"
       brew: "ruby"
       apt: "ruby"
