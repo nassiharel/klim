@@ -46,11 +46,13 @@ make lint           # run golangci-lint
 cmd/clim/          → Entry point (main.go)
 internal/
   build/           → Version info (ldflags injection)
-  cli/             → Cobra commands (root, list, version, tools, export, import)
-  detector/        → Binary version detection (PE resources on Windows)
+  cli/             → Cobra commands (root, list, version, tools, export, import, update)
+  detector/        → Binary version detection (Go buildinfo, PE resources on Windows)
   finder/          → PATH scanning and tool discovery
-  pkgmgr/          → Package manager integration (brew, winget, apt, etc.)
+  manifest/        → YAML schema for export/import manifests
+  pkgmgr/          → Package manager integration (brew, winget, apt, choco, snap, npm)
   registry/        → Tool definitions, version comparison, marketplace YAML
+  selfupdate/      → Self-update from GitHub Releases (download, extract, replace binary)
   tui/             → Bubbletea interactive UI (model, view, commands, styles)
 ```
 
