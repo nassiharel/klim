@@ -97,6 +97,13 @@ func runImport(cmd *cobra.Command, args []string) error {
 				NPM:    mt.Packages.NPM,
 			}
 			src := pkgs.BestInstallSource()
+			// Prefer the source recorded in the manifest if it's available.
+			if mt.Source != "" {
+				preferred := registry.InstallSource(mt.Source)
+				if args := pkgs.InstallArgs(preferred); args != nil {
+					src = preferred
+				}
+			}
 			installArgs := pkgs.InstallArgs(src)
 			if installArgs == nil {
 				if pkgs.HasAnyPackageForOS() {
@@ -121,6 +128,13 @@ func runImport(cmd *cobra.Command, args []string) error {
 		}
 
 		src := rt.Packages.BestInstallSource()
+		// Prefer the source recorded in the manifest if it's available.
+		if mt.Source != "" {
+			preferred := registry.InstallSource(mt.Source)
+			if args := rt.Packages.InstallArgs(preferred); args != nil {
+				src = preferred
+			}
+		}
 		installArgs := rt.Packages.InstallArgs(src)
 		if installArgs == nil {
 			if rt.Packages.HasAnyPackageForOS() {

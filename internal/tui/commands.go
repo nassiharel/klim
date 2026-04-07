@@ -298,6 +298,13 @@ func buildImportPlanCmd(path string) tea.Cmd {
 			}
 
 			src := pkgs.BestInstallSource()
+			// Prefer the source recorded in the manifest if it's available.
+			if mt.Source != "" {
+				preferred := registry.InstallSource(mt.Source)
+				if args := pkgs.InstallArgs(preferred); args != nil {
+					src = preferred
+				}
+			}
 			installArgs := pkgs.InstallArgs(src)
 			if installArgs == nil {
 				reason := "no package for " + runtime.GOOS
