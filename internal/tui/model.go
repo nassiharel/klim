@@ -46,6 +46,7 @@ type Model struct {
 	phase   int // 0=scanning, 1=resolving, 2=done
 	loading bool
 	pending int // count of tools still resolving versions
+	scanGen int // incremented on each scan; used to discard stale toolVersionMsg
 
 	// Layout.
 	width  int
@@ -121,19 +122,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
 		})
 		m.phase = 1
+		m.pending = 0
+		m.scanGen++
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
 		}
 		m.applyFilter()
 
 		// Fire per-tool version resolution commands.
+		gen := m.scanGen
 		var cmds []tea.Cmd
 		for i, tool := range m.tools {
 			if tool.IsInstalled() && !tool.Disabled {
 				m.pending++
 				idx := i
 				t := tool // capture
-				cmds = append(cmds, func() tea.Msg { return resolveToolVersionCmd(idx, t)() })
+				cmds = append(cmds, func() tea.Msg { return resolveToolVersionCmd(idx, gen, t)() })
 			}
 		}
 		if len(cmds) == 0 {
@@ -143,6 +147,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case toolVersionMsg:
+		// Discard stale messages from a previous scan generation.
+		if msg.gen != m.scanGen {
+			return m, nil
+		}
 		// Update the tool in place with resolved version data.
 		if msg.index < len(m.tools) {
 			m.tools[msg.index].Instances = msg.tool.Instances

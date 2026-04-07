@@ -113,6 +113,9 @@ func FindAll(tools []registry.Tool) error {
 		if tools[i].Disabled {
 			continue
 		}
+		// Clear previous instances so rescans don't accumulate duplicates.
+		tools[i].Instances = nil
+
 		tms := toolMatches[i]
 		// Sort by PATH order using the original scanning directory.
 		// Falls back to max index for entries not in dirOrder (e.g. LookPath fallback)
