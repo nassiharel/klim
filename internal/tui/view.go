@@ -43,6 +43,8 @@ func (m Model) renderView() string {
 		switch {
 		case m.importingPath:
 			b.WriteString("  " + confirmStyle.Render("Import:") + " " + m.importInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
+		case m.enteringToken:
+			b.WriteString("  " + confirmStyle.Render("Token:") + " " + m.tokenInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
 		default:
 			b.WriteString(m.renderHelp())
 		}
@@ -113,6 +115,8 @@ func (m Model) renderView() string {
 		b.WriteString("  " + filterPromptStyle.Render("/") + " " + m.filterInput.View())
 	case m.importingPath:
 		b.WriteString("  " + confirmStyle.Render("Import:") + " " + m.importInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
+	case m.enteringToken:
+		b.WriteString("  " + confirmStyle.Render("Token:") + " " + m.tokenInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
 	default:
 		b.WriteString(m.renderHelp())
 	}
@@ -706,6 +710,8 @@ func (m Model) renderBackupView() string {
 		items := []menuItem{
 			{"Export", "Save installed tools to a manifest file"},
 			{"Import", "Reinstall tools from a manifest file"},
+			{"Share", "Generate a share token for chat/messaging"},
+			{"Open Token", "Install tools from a share token"},
 		}
 
 		for i, item := range items {
@@ -726,6 +732,41 @@ func (m Model) renderBackupView() string {
 
 		// Pad remaining space.
 		visibleRows := m.height - 12
+		for range max(visibleRows, 0) {
+			b.WriteString("\n")
+		}
+		return b.String()
+	}
+
+	// Share token display mode.
+	if m.backupMode == "share" {
+		b.WriteString("\n")
+		b.WriteString("  " + detailTitleStyle.Render("Share Token") + "\n\n")
+		b.WriteString("  " + dimVersion.Render("Send this token via Slack, Teams, or any chat:") + "\n\n")
+
+		// Word-wrap the token to fit the terminal width.
+		maxW := m.width - 6
+		if maxW < 40 {
+			maxW = 40
+		}
+		for _, line := range wordWrap(m.sharedToken, maxW) {
+			b.WriteString("  " + dimVersion.Render(line) + "\n")
+		}
+
+		b.WriteString("\n")
+
+		// Copy button.
+		if m.tokenCopied {
+			b.WriteString("  " + buttonDoneStyle.Render("✓ Copied to clipboard") + "\n")
+		} else {
+			b.WriteString("  " + buttonStyle.Render("⎘ Copy to clipboard (c)") + "\n")
+		}
+
+		b.WriteString("\n")
+		b.WriteString("  " + dimVersion.Render("Recipients can install with:") + "  " + detailCmdStyle.Render("clim open <token>") + "\n")
+
+		// Pad remaining space.
+		visibleRows := m.height - 16
 		for range max(visibleRows, 0) {
 			b.WriteString("\n")
 		}
@@ -961,6 +1002,12 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("a") + " select all",
 				dimVersion.Render("Enter") + " confirm",
 				dimVersion.Render("Esc") + " cancel",
+			}
+		} else if m.backupMode == "share" {
+			parts = []string{
+				dimVersion.Render("c") + " copy to clipboard",
+				dimVersion.Render("Esc") + " back",
+				dimVersion.Render("q") + " quit",
 			}
 		} else {
 			parts = []string{

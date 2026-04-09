@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 	"github.com/nassiharel/clim/internal/manifest"
 	"github.com/nassiharel/clim/internal/pkgmgr"
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/share"
 )
 
 // --- Scan & version resolution messages ---
@@ -124,6 +126,13 @@ type batchUpgradeItemMsg struct {
 
 // backupTickMsg advances the animated progress by marking the next pending item as done.
 type backupTickMsg struct{}
+
+// shareFinishedMsg is sent when share token generation completes.
+type shareFinishedMsg struct {
+	token string
+	count int
+	err   error
+}
 
 // --- Scan & version commands ---
 
@@ -347,6 +356,109 @@ func execBackupInstallCmd(idx int, args []string) tea.Cmd {
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return backupItemDoneMsg{idx: idx, err: err}
 	})
+}
+
+// --- Share token commands ---
+
+// shareToolsCmd generates a compact share token from installed tools.
+func shareToolsCmd(tools []registry.Tool) tea.Cmd {
+	return func() tea.Msg {
+		var names []string
+		for _, tool := range tools {
+			if tool.IsInstalled() && !tool.Disabled {
+				names = append(names, tool.Name)
+			}
+		}
+		if len(names) == 0 {
+			return shareFinishedMsg{err: errors.New("no installed tools to share")}
+		}
+
+		token, err := share.Encode(names)
+		if err != nil {
+			return shareFinishedMsg{err: err}
+		}
+		return shareFinishedMsg{token: token, count: len(names)}
+	}
+}
+
+// buildTokenImportPlanCmd decodes a share token and builds an import plan.
+func buildTokenImportPlanCmd(token string) tea.Cmd {
+	return func() tea.Msg {
+		names, err := share.Decode(token)
+		if err != nil {
+			return backupPlanMsg{items: []backupItem{{
+				name: "error", display: "Error", status: backupFailed,
+				errMsg: fmt.Sprintf("invalid token: %v", err),
+			}}}
+		}
+
+		// Load registry and scan PATH.
+		regTools := registry.DefaultTools()
+		if err := finder.FindAll(regTools); err != nil {
+			return backupPlanMsg{items: []backupItem{{
+				name: "error", display: "Error", status: backupFailed,
+				errMsg: fmt.Sprintf("scanning PATH: %v", err),
+			}}}
+		}
+
+		regMap := make(map[string]*registry.Tool, len(regTools))
+		for i := range regTools {
+			regMap[regTools[i].Name] = &regTools[i]
+		}
+
+		var items []backupItem
+		for _, name := range names {
+			rt, exists := regMap[name]
+
+			if !exists {
+				items = append(items, backupItem{
+					name:    name,
+					display: name,
+					status:  backupSkipped,
+					errMsg:  "not in catalog",
+				})
+				continue
+			}
+
+			if rt.IsInstalled() {
+				items = append(items, backupItem{
+					name:    rt.Name,
+					display: rt.DisplayName,
+					source:  "—",
+					status:  backupSkipped,
+					errMsg:  "already installed",
+				})
+				continue
+			}
+
+			src := rt.Packages.BestInstallSource()
+			installArgs := rt.Packages.InstallArgs(src)
+			if installArgs == nil {
+				reason := "no package for " + runtime.GOOS
+				if src == "" && rt.Packages.HasAnyPackageForOS() {
+					reason = "no supported package manager installed"
+				}
+				items = append(items, backupItem{
+					name:    rt.Name,
+					display: rt.DisplayName,
+					status:  backupSkipped,
+					errMsg:  reason,
+				})
+				continue
+			}
+
+			items = append(items, backupItem{
+				name:     rt.Name,
+				display:  rt.DisplayName,
+				cmdArgs:  installArgs,
+				source:   string(src),
+				status:   backupPending,
+				selected: true,
+			})
+		}
+
+		return backupPlanMsg{items: items}
+	}
 }
 
 // execBatchUpgradeCmd suspends the TUI and runs one upgrade command.

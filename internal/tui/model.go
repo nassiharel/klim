@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/atotto/clipboard"
 
 	"github.com/nassiharel/clim/internal/registry"
 )
@@ -70,6 +71,12 @@ type Model struct {
 	importInput   textinput.Model
 	importingPath bool // true = import path input is active
 
+	// Share token input.
+	tokenInput    textinput.Model
+	enteringToken bool   // true = token input is active
+	sharedToken   string // last generated share token (for display)
+	tokenCopied   bool   // true after token copied to clipboard
+
 	// Backup tab state.
 	backupItems   []backupItem   // items being exported/imported
 	backupMode    string         // "" (idle), "export", "import"
@@ -97,10 +104,15 @@ func NewModel() Model {
 	ii.Placeholder = "path/to/manifest.yaml"
 	ii.CharLimit = 200
 
+	ti2 := textinput.New()
+	ti2.Placeholder = "paste share token here..."
+	ti2.CharLimit = 1000
+
 	return Model{
 		spinner:        s,
 		filterInput:    ti,
 		importInput:    ii,
+		tokenInput:     ti2,
 		backupBar:      progress.New(progress.WithWidth(40)),
 		updateSelected: make(map[int]bool),
 		loading:        true,
@@ -296,16 +308,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Fire the next upgrade, or finish with a full refresh.
 		return m.fireNextBatchUpgrade()
 
+	case shareFinishedMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ Share failed: %s", msg.err)
+			return m, nil
+		}
+		m.sharedToken = msg.token
+		m.backupMode = "share"
+		m.tokenCopied = false
+		// Auto-copy to clipboard.
+		if err := clipboard.WriteAll(msg.token); err != nil {
+			m.statusMsg = fmt.Sprintf("✓ Token generated (%d tools)", msg.count)
+		} else {
+			m.tokenCopied = true
+			m.statusMsg = fmt.Sprintf("✓ Copied to clipboard! (%d tools)", msg.count)
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
 
 	default:
-		// Forward non-key messages to the import text input (for paste support).
+		// Forward non-key messages to text inputs (for paste support).
 		if m.importingPath {
 			var cmd tea.Cmd
 			m.importInput, cmd = m.importInput.Update(msg)
+			return m, cmd
+		}
+		if m.enteringToken {
+			var cmd tea.Cmd
+			m.tokenInput, cmd = m.tokenInput.Update(msg)
 			return m, cmd
 		}
 		if m.loading {
@@ -378,6 +412,34 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		default:
 			var cmd tea.Cmd
 			m.importInput, cmd = m.importInput.Update(msg)
+			return m, cmd
+		}
+	}
+
+	// Token input mode (Open Token).
+	if m.enteringToken {
+		switch msg.String() {
+		case "esc":
+			m.enteringToken = false
+			m.tokenInput.SetValue("")
+			return m, nil
+		case "enter":
+			token := strings.TrimSpace(m.tokenInput.Value())
+			m.enteringToken = false
+			m.tokenInput.SetValue("")
+			if token == "" {
+				return m, nil
+			}
+			m.backupItems = nil
+			m.backupDone = 0
+			m.backupMode = "import"
+			m.activeTab = tabBackup
+			m.cursor = 0
+			m.statusMsg = "Decoding share token..."
+			return m, buildTokenImportPlanCmd(token)
+		default:
+			var cmd tea.Cmd
+			m.tokenInput, cmd = m.tokenInput.Update(msg)
 			return m, cmd
 		}
 	}
@@ -499,6 +561,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
+	case "c":
+		// Copy share token to clipboard.
+		if m.activeTab == tabBackup && m.backupMode == "share" && m.sharedToken != "" {
+			if err := clipboard.WriteAll(m.sharedToken); err != nil {
+				m.statusMsg = "⚠ Clipboard unavailable"
+			} else {
+				m.tokenCopied = true
+				m.statusMsg = "✓ Copied to clipboard!"
+			}
+			return m, nil
+		}
 	case "esc":
 		// Reset completed backup back to idle.
 		if m.activeTab == tabBackup && m.backupMode != "" {
@@ -631,6 +704,22 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				m.importingPath = true
 				return m, m.importInput.Focus()
+			} else if m.cursor == 2 {
+				// Share — generate a share token.
+				if m.phase < 2 {
+					m.statusMsg = "Still scanning — please wait..."
+					return m, nil
+				}
+				m.statusMsg = "Generating share token..."
+				return m, shareToolsCmd(m.tools)
+			} else if m.cursor == 3 {
+				// Open Token — enter token input mode.
+				if m.phase < 2 {
+					m.statusMsg = "Still scanning — please wait..."
+					return m, nil
+				}
+				m.enteringToken = true
+				return m, m.tokenInput.Focus()
 			}
 			return m, nil
 		}
@@ -917,7 +1006,7 @@ func (m Model) rowCount() int {
 	switch m.activeTab {
 	case tabBackup:
 		if m.backupMode == "" {
-			return 2 // Export, Import menu items
+			return 4 // Export, Import, Share, Open Token menu items
 		}
 		return len(m.backupItems)
 	case tabConfig:

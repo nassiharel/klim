@@ -70,4 +70,17 @@ var (
 
 	// Confirmation prompt.
 	confirmStyle = lipgloss.NewStyle().Foreground(warningColor).Bold(true)
+
+	// Button.
+	buttonStyle = lipgloss.NewStyle().
+			Foreground(highlightColor).
+			Background(tabActiveBg).
+			Padding(0, 2).
+			Bold(true)
+
+	buttonDoneStyle = lipgloss.NewStyle().
+			Foreground(highlightColor).
+			Background(successColor).
+			Padding(0, 2).
+			Bold(true)
 )
