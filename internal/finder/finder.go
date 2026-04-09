@@ -276,8 +276,12 @@ func pathDirectories() []string {
 	dirs := make([]string, 0, len(raw))
 	for _, d := range raw {
 		if d = strings.TrimSpace(d); d != "" {
-			// Normalize for dedup on Windows (case-insensitive, trailing slash).
-			key := strings.ToLower(strings.TrimRight(d, `\/`))
+			// Normalize for dedup: trim trailing slashes on all platforms,
+			// lowercase only on Windows (case-insensitive filesystem).
+			key := strings.TrimRight(d, `\/`)
+			if runtime.GOOS == "windows" {
+				key = strings.ToLower(key)
+			}
 			if _, exists := seen[key]; !exists {
 				seen[key] = struct{}{}
 				dirs = append(dirs, d)

@@ -732,7 +732,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		// On Backup tab (idle), execute the selected menu item.
 		if m.activeTab == tabBackup && m.backupMode == backupModeIdle {
-			if m.cursor == backupMenuExport {
+			switch m.cursor {
+			case backupMenuExport:
 				// Export installed tools.
 				if m.phase < phaseDone {
 					m.statusMsg = "Still scanning — please wait..."
@@ -758,7 +759,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.cursor = 0
 				m.statusMsg = "Exporting..."
 				return m, exportToolsCmd(m.tools)
-			} else if m.cursor == backupMenuImport {
+			case backupMenuImport:
 				// Import from manifest — enter path input mode.
 				if m.phase < phaseDone {
 					m.statusMsg = "Still scanning — please wait..."
@@ -766,7 +767,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				m.importingPath = true
 				return m, m.importInput.Focus()
-			} else if m.cursor == backupMenuShare {
+			case backupMenuShare:
 				// Share — generate a share token.
 				if m.phase < phaseDone {
 					m.statusMsg = "Still scanning — please wait..."
@@ -774,7 +775,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				m.statusMsg = "Generating share token..."
 				return m, shareToolsCmd(m.tools)
-			} else if m.cursor == backupMenuOpenToken {
+			case backupMenuOpenToken:
 				// Open Token — enter token input mode.
 				if m.phase < phaseDone {
 					m.statusMsg = "Still scanning — please wait..."

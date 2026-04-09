@@ -20,7 +20,7 @@ func registryPATH() string {
 		if v, _, err := k.GetStringValue("Path"); err == nil {
 			parts = append(parts, v)
 		}
-		k.Close()
+		_ = k.Close()
 	}
 
 	// User PATH: HKCU\Environment
@@ -29,7 +29,7 @@ func registryPATH() string {
 		if v, _, err := k.GetStringValue("Path"); err == nil {
 			parts = append(parts, v)
 		}
-		k.Close()
+		_ = k.Close()
 	}
 
 	return strings.Join(parts, string(os.PathListSeparator))

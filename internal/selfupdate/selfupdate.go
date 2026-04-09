@@ -141,8 +141,14 @@ func Update(ctx context.Context, currentVersion string, opts *Options) (*Result,
 	return result, nil
 }
 
+// maxDownloadSize limits the total download size to prevent memory exhaustion
+// from a corrupted response or misconfigured server. Release archives are
+// typically 10-20 MB; 200 MB is a generous upper bound.
+const maxDownloadSize = 200 << 20 // 200 MB
+
 // downloadAsset fetches an archive from the given URL and returns a reader
 // over its contents along with the filename (derived from the URL path).
+// The download is capped at maxDownloadSize to prevent unbounded memory usage.
 func downloadAsset(ctx context.Context, client *http.Client, url string) (io.Reader, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -159,9 +165,17 @@ func downloadAsset(ctx context.Context, client *http.Client, url string) (io.Rea
 		return nil, "", fmt.Errorf("download returned %s", resp.Status)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	// Early reject if Content-Length is reported and exceeds the limit.
+	if resp.ContentLength > maxDownloadSize {
+		return nil, "", fmt.Errorf("download too large: %d bytes (max %d)", resp.ContentLength, maxDownloadSize)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSize+1))
 	if err != nil {
 		return nil, "", fmt.Errorf("reading download body: %w", err)
+	}
+	if int64(len(body)) > maxDownloadSize {
+		return nil, "", fmt.Errorf("download too large: exceeded %d bytes", maxDownloadSize)
 	}
 
 	name := filepath.Base(url)

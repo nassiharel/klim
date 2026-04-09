@@ -187,7 +187,7 @@ func (m Model) renderHeader() string {
 			headerStyle.Render(fixedWidth("SOURCE", colSource)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
 	case tabUpdates:
-		return "  " +
+		return "      " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("UPDATE", colVersion)) + "  " +
 			headerStyle.Render(fixedWidth("SOURCE", colSource)) + "  " +
@@ -526,10 +526,11 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		keys := dim("y") + " confirm   " + dim("Esc") + " cancel"
 		b.WriteString(prompt + "  " + keys)
 	default:
-		var hints []string
-		hints = append(hints, dim("↑↓")+" navigate")
-		hints = append(hints, dim("Enter")+" select")
-		hints = append(hints, dim("Esc")+" back")
+		hints := []string{
+			dim("↑↓") + " navigate",
+			dim("Enter") + " select",
+			dim("Esc") + " back",
+		}
 		b.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
 	}
 
@@ -587,7 +588,8 @@ func derivePlatforms(pkgs registry.PackageIDs) []string {
 	return platforms
 }
 
-// wordWrap breaks text into lines that fit within maxWidth characters.
+// wordWrap breaks text into lines that fit within maxWidth display columns.
+// Uses lipgloss.Width for correct handling of multi-byte UTF-8 and wide characters.
 func wordWrap(text string, maxWidth int) []string {
 	if maxWidth <= 0 {
 		return []string{text}
@@ -600,7 +602,7 @@ func wordWrap(text string, maxWidth int) []string {
 	var lines []string
 	current := words[0]
 	for _, word := range words[1:] {
-		if len(current)+1+len(word) > maxWidth {
+		if lipgloss.Width(current)+1+lipgloss.Width(word) > maxWidth {
 			lines = append(lines, current)
 			current = word
 		} else {
@@ -988,14 +990,15 @@ func (m Model) renderHelp() string {
 
 	switch m.activeTab {
 	case tabBackup:
-		if m.backupMode == backupModeIdle {
+		switch {
+		case m.backupMode == backupModeIdle:
 			parts = []string{
 				dimVersion.Render("↑↓") + " navigate",
 				dimVersion.Render("←→") + " tab",
 				dimVersion.Render("Enter") + " select",
 				dimVersion.Render("q") + " quit",
 			}
-		} else if m.backupConfirm {
+		case m.backupConfirm:
 			parts = []string{
 				dimVersion.Render("↑↓") + " navigate",
 				dimVersion.Render("Space") + " toggle",
@@ -1003,13 +1006,13 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("Enter") + " confirm",
 				dimVersion.Render("Esc") + " cancel",
 			}
-		} else if m.backupMode == backupModeShare {
+		case m.backupMode == backupModeShare:
 			parts = []string{
 				dimVersion.Render("c") + " copy to clipboard",
 				dimVersion.Render("Esc") + " back",
 				dimVersion.Render("q") + " quit",
 			}
-		} else {
+		default:
 			parts = []string{
 				dimVersion.Render("←→") + " tab",
 				dimVersion.Render("Esc") + " back",
