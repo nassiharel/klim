@@ -3,16 +3,10 @@ package cli
 import (
 	"fmt"
 	"os"
-	"runtime"
-	"sort"
-	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/detector"
-	"github.com/nassiharel/clim/internal/finder"
-	"github.com/nassiharel/clim/internal/pkgmgr"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -23,20 +17,11 @@ var listCmd = &cobra.Command{
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	tools := registry.DefaultTools()
-
-	fmt.Fprintln(os.Stderr, "Finding tools...")
-	if err := finder.FindAll(tools); err != nil {
+	fmt.Fprintln(os.Stderr, "Finding tools and checking versions...")
+	tools, err := svc.LoadAndResolve(cmd.Context())
+	if err != nil {
 		return err
 	}
-
-	fmt.Fprintln(os.Stderr, "Checking versions...")
-	pkgmgr.ResolveVersions(tools, runtime.NumCPU())
-	detector.EnrichFallback(tools)
-
-	sort.Slice(tools, func(i, j int) bool {
-		return strings.ToLower(tools[i].Name) < strings.ToLower(tools[j].Name)
-	})
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	_, _ = fmt.Fprintln(w, "TOOL\tVERSION\tLATEST\tSOURCE\tSTATUS\tPATH")

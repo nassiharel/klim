@@ -1,6 +1,7 @@
 package share
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -60,22 +61,19 @@ func TestRoundTrip(t *testing.T) {
 
 func TestEncode_Empty(t *testing.T) {
 	_, err := Encode(nil)
-	if err == nil {
-		t.Fatal("expected error for empty input")
+	if !errors.Is(err, ErrEmptyToolList) {
+		t.Fatalf("expected ErrEmptyToolList, got %v", err)
 	}
 	_, err = Encode([]string{})
-	if err == nil {
-		t.Fatal("expected error for empty slice")
+	if !errors.Is(err, ErrEmptyToolList) {
+		t.Fatalf("expected ErrEmptyToolList, got %v", err)
 	}
 }
 
 func TestDecode_InvalidPrefix(t *testing.T) {
 	_, err := Decode("garbage")
-	if err == nil {
-		t.Fatal("expected error for garbage input")
-	}
-	if !strings.Contains(err.Error(), "not a valid") {
-		t.Errorf("unexpected error: %v", err)
+	if !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("expected ErrInvalidToken, got %v", err)
 	}
 }
 
@@ -111,8 +109,8 @@ func TestDecode_CorruptGzip(t *testing.T) {
 
 func TestDecode_EmptyPayload(t *testing.T) {
 	_, err := Decode("clim:v1:")
-	if err == nil {
-		t.Fatal("expected error for empty payload")
+	if !errors.Is(err, ErrEmptyToken) {
+		t.Fatalf("expected ErrEmptyToken, got %v", err)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -304,18 +305,15 @@ func TestReplaceBinary_Symlink(t *testing.T) {
 
 func TestUpdate_DevBuildBlocked(t *testing.T) {
 	_, err := Update(context.Background(), "dev", nil)
-	if err == nil {
-		t.Fatal("expected error for dev build")
-	}
-	if !strings.Contains(err.Error(), "cannot self-update a development build") {
-		t.Errorf("unexpected error: %v", err)
+	if !errors.Is(err, ErrDevBuild) {
+		t.Fatalf("expected ErrDevBuild, got %v", err)
 	}
 }
 
 func TestUpdate_EmptyVersionBlocked(t *testing.T) {
 	_, err := Update(context.Background(), "", nil)
-	if err == nil {
-		t.Fatal("expected error for empty version")
+	if !errors.Is(err, ErrDevBuild) {
+		t.Fatalf("expected ErrDevBuild, got %v", err)
 	}
 }
 
@@ -326,7 +324,7 @@ func TestUpdate_AlreadyUpToDate(t *testing.T) {
 	defer srv.Close()
 
 	result, err := Update(context.Background(), "1.0.0", &Options{
-		GitHubClient: &GitHubClient{BaseURL: srv.URL},
+		ReleaseChecker: &GitHubClient{BaseURL: srv.URL},
 	})
 	if err != nil {
 		t.Fatalf("Update() error: %v", err)
@@ -346,7 +344,7 @@ func TestUpdate_CurrentNewerThanLatest(t *testing.T) {
 	defer srv.Close()
 
 	result, err := Update(context.Background(), "2.0.0", &Options{
-		GitHubClient: &GitHubClient{BaseURL: srv.URL},
+		ReleaseChecker: &GitHubClient{BaseURL: srv.URL},
 	})
 	if err != nil {
 		t.Fatalf("Update() error: %v", err)
@@ -389,11 +387,11 @@ func TestUpdate_EndToEnd(t *testing.T) {
 	}
 
 	result, err := Update(context.Background(), "1.0.0", &Options{
-		ExecPath:     execPath,
-		GOOS:         "linux",
-		GOARCH:       "amd64",
-		GitHubClient: &GitHubClient{BaseURL: srv.URL},
-		HTTPClient:   srv.Client(),
+		ExecPath:       execPath,
+		GOOS:           "linux",
+		GOARCH:         "amd64",
+		ReleaseChecker: &GitHubClient{BaseURL: srv.URL},
+		HTTPClient:     srv.Client(),
 	})
 	if err != nil {
 		t.Fatalf("Update() error: %v", err)
@@ -422,8 +420,8 @@ func TestUpdate_CheckOnly(t *testing.T) {
 	defer srv.Close()
 
 	result, err := Update(context.Background(), "1.0.0", &Options{
-		CheckOnly:    true,
-		GitHubClient: &GitHubClient{BaseURL: srv.URL},
+		CheckOnly:      true,
+		ReleaseChecker: &GitHubClient{BaseURL: srv.URL},
 	})
 	if err != nil {
 		t.Fatalf("Update() error: %v", err)

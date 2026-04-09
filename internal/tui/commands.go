@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -14,11 +15,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/detector"
-	"github.com/nassiharel/clim/internal/finder"
 	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/pkgmgr"
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/share"
 )
 
@@ -136,19 +135,19 @@ type shareFinishedMsg struct {
 
 // --- Scan & version commands ---
 
-func findToolsCmd() func() scanResultMsg {
+func findToolsCmd(svc *service.ToolService) func() scanResultMsg {
 	return func() scanResultMsg {
-		tools := registry.DefaultTools()
-		err := finder.FindAll(tools)
+		ctx := context.Background()
+		tools, err := svc.LoadAndScan(ctx)
 		return scanResultMsg{tools: tools, err: err}
 	}
 }
 
-func resolveToolVersionCmd(index int, gen int, tool registry.Tool) func() toolVersionMsg {
+func resolveToolVersionCmd(svc *service.ToolService, index int, gen int, tool registry.Tool) func() toolVersionMsg {
 	return func() toolVersionMsg {
+		ctx := context.Background()
 		if tool.IsInstalled() && !tool.Disabled {
-			pkgmgr.ResolveOne(&tool)
-			detector.EnrichOne(&tool)
+			svc.ResolveOne(ctx, &tool)
 		}
 		return toolVersionMsg{index: index, gen: gen, tool: tool}
 	}
@@ -167,23 +166,19 @@ func execToolActionCmd(pa pendingAction) tea.Cmd {
 	})
 }
 
-func refreshSingleToolCmd(idx int, tool registry.Tool) tea.Cmd {
+func refreshSingleToolCmd(svc *service.ToolService, idx int, tool registry.Tool) tea.Cmd {
 	return func() tea.Msg {
-		singleTool := []registry.Tool{tool}
-		_ = finder.FindAll(singleTool) // best-effort: user already warned on initial scan
-		tool = singleTool[0]
-		if tool.IsInstalled() {
-			pkgmgr.ResolveOne(&tool)
-			detector.EnrichOne(&tool)
-		}
-		return refreshToolMsg{toolIdx: idx, tool: tool}
+		ctx := context.Background()
+		refreshed := svc.RefreshTool(ctx, tool)
+		return refreshToolMsg{toolIdx: idx, tool: refreshed}
 	}
 }
 
 // fetchToolInfoCmd fetches rich metadata for a tool in the background.
-func fetchToolInfoCmd(idx int, tool registry.Tool) tea.Cmd {
+func fetchToolInfoCmd(svc *service.ToolService, idx int, tool registry.Tool) tea.Cmd {
 	return func() tea.Msg {
-		pkgmgr.FetchToolInfo(&tool)
+		ctx := context.Background()
+		svc.FetchToolInfo(ctx, &tool)
 		return toolInfoMsg{toolIdx: idx, info: tool.Info}
 	}
 }
@@ -251,7 +246,7 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 // --- Import commands ---
 
 // buildImportPlanCmd reads a manifest, scans PATH, and builds a backup plan.
-func buildImportPlanCmd(path string) tea.Cmd {
+func buildImportPlanCmd(svc *service.ToolService, path string) tea.Cmd {
 	return func() tea.Msg {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -270,8 +265,9 @@ func buildImportPlanCmd(path string) tea.Cmd {
 		}
 
 		// Load registry and scan PATH.
-		regTools := registry.DefaultTools()
-		if err := finder.FindAll(regTools); err != nil {
+		ctx := context.Background()
+		regTools, err := svc.ScanOnly(ctx)
+		if err != nil {
 			return backupPlanMsg{items: []backupItem{{
 				name: "error", display: "Error", status: backupFailed,
 				errMsg: fmt.Sprintf("scanning PATH: %v", err),
@@ -382,7 +378,7 @@ func shareToolsCmd(tools []registry.Tool) tea.Cmd {
 }
 
 // buildTokenImportPlanCmd decodes a share token and builds an import plan.
-func buildTokenImportPlanCmd(token string) tea.Cmd {
+func buildTokenImportPlanCmd(svc *service.ToolService, token string) tea.Cmd {
 	return func() tea.Msg {
 		names, err := share.Decode(token)
 		if err != nil {
@@ -393,8 +389,9 @@ func buildTokenImportPlanCmd(token string) tea.Cmd {
 		}
 
 		// Load registry and scan PATH.
-		regTools := registry.DefaultTools()
-		if err := finder.FindAll(regTools); err != nil {
+		ctx := context.Background()
+		regTools, err := svc.ScanOnly(ctx)
+		if err != nil {
 			return backupPlanMsg{items: []backupItem{{
 				name: "error", display: "Error", status: backupFailed,
 				errMsg: fmt.Sprintf("scanning PATH: %v", err),

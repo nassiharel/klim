@@ -12,14 +12,38 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nassiharel/clim/internal/detector"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
 const cmdTimeout = 10 * time.Second
 
-// ResolveVersions populates Version on each instance and Latest on each tool,
-// using the appropriate package manager for each install source.
-func ResolveVersions(tools []registry.Tool, concurrency int) {
+// VersionResolver abstracts version querying and metadata fetching for tools.
+type VersionResolver interface {
+	ResolveVersions(ctx context.Context, tools []registry.Tool, concurrency int)
+	ResolveOne(ctx context.Context, tool *registry.Tool)
+	FetchToolInfo(ctx context.Context, tool *registry.Tool)
+}
+
+// PackageManagerResolver is the default VersionResolver that queries
+// native package managers (winget, brew, apt, choco, snap, npm) and
+// falls back to binary detection (Go buildinfo, PE version resources).
+type PackageManagerResolver struct{}
+
+// NewResolver returns the default package-manager-based version resolver.
+func NewResolver() VersionResolver {
+	return &PackageManagerResolver{}
+}
+
+var defaultResolver VersionResolver = &PackageManagerResolver{}
+
+// ResolveVersions is a convenience wrapper around the default resolver.
+func ResolveVersions(ctx context.Context, tools []registry.Tool, concurrency int) {
+	defaultResolver.ResolveVersions(ctx, tools, concurrency)
+}
+
+// ResolveVersions implements VersionResolver.
+func (r *PackageManagerResolver) ResolveVersions(ctx context.Context, tools []registry.Tool, concurrency int) {
 	if concurrency <= 0 {
 		concurrency = runtime.NumCPU()
 	}
@@ -36,43 +60,50 @@ func ResolveVersions(tools []registry.Tool, concurrency int) {
 		go func(t *registry.Tool) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			resolveOne(t)
+			resolveOne(ctx, t)
+			detector.EnrichOne(t)
 		}(&tools[i])
 	}
 	wg.Wait()
 }
 
-// ResolveOne populates versions for a single tool.
-func ResolveOne(tool *registry.Tool) {
-	resolveOne(tool)
+// ResolveOne is a convenience wrapper around the default resolver.
+func ResolveOne(ctx context.Context, tool *registry.Tool) {
+	defaultResolver.ResolveOne(ctx, tool)
 }
 
-func resolveOne(tool *registry.Tool) {
+// ResolveOne implements VersionResolver.
+func (r *PackageManagerResolver) ResolveOne(ctx context.Context, tool *registry.Tool) {
+	resolveOne(ctx, tool)
+	detector.EnrichOne(tool)
+}
+
+func resolveOne(ctx context.Context, tool *registry.Tool) {
 	for j := range tool.Instances {
 		inst := &tool.Instances[j]
-		inst.Version = installedVersion(inst.Source, tool.Packages)
+		inst.Version = installedVersion(ctx, inst.Source, tool.Packages)
 	}
 
 	if primary := tool.PrimaryInstance(); primary != nil {
-		latest, from := latestVersion(primary.Source, tool.Packages)
+		latest, from := latestVersion(ctx, primary.Source, tool.Packages)
 		tool.Latest = latest
 		tool.LatestFrom = from
 	}
 }
 
-func installedVersion(source registry.InstallSource, pkgs registry.PackageIDs) string {
+func installedVersion(ctx context.Context, source registry.InstallSource, pkgs registry.PackageIDs) string {
 	switch source {
 	case registry.SourceWinget:
 		if pkgs.Winget != "" {
-			return wingetInstalledVersion(pkgs.Winget)
+			return wingetInstalledVersion(ctx, pkgs.Winget)
 		}
 	case registry.SourceChoco:
 		if pkgs.Choco != "" {
-			return chocoInstalledVersion(pkgs.Choco)
+			return chocoInstalledVersion(ctx, pkgs.Choco)
 		}
 	case registry.SourceBrew:
 		if pkgs.Brew != "" {
-			return brewInstalledVersion(pkgs.Brew)
+			return brewInstalledVersion(ctx, pkgs.Brew)
 		}
 	case registry.SourceApt:
 		if pkgs.Apt != "" {
@@ -80,52 +111,52 @@ func installedVersion(source registry.InstallSource, pkgs registry.PackageIDs) s
 		}
 	case registry.SourceSnap:
 		if pkgs.Snap != "" {
-			return snapInstalledVersion(pkgs.Snap)
+			return snapInstalledVersion(ctx, pkgs.Snap)
 		}
 	case registry.SourceNPM:
 		if pkgs.NPM != "" {
-			return npmInstalledVersion(pkgs.NPM)
+			return npmInstalledVersion(ctx, pkgs.NPM)
 		}
 	}
 	// Sources like "go", "cargo", "pip", "manual" — handled by detector fallback.
 	return ""
 }
 
-func latestVersion(source registry.InstallSource, pkgs registry.PackageIDs) (version string, from string) {
+func latestVersion(ctx context.Context, source registry.InstallSource, pkgs registry.PackageIDs) (version string, from string) {
 	switch source {
 	case registry.SourceWinget:
 		if pkgs.Winget != "" {
-			if v := wingetVersion(pkgs.Winget); v != "" {
+			if v := wingetVersion(ctx, pkgs.Winget); v != "" {
 				return v, "winget"
 			}
 		}
 	case registry.SourceChoco:
 		if pkgs.Choco != "" {
-			if v := chocoLatestVersion(pkgs.Choco); v != "" {
+			if v := chocoLatestVersion(ctx, pkgs.Choco); v != "" {
 				return v, "choco"
 			}
 		}
 	case registry.SourceBrew:
 		if pkgs.Brew != "" {
-			if v := brewLatestVersion(pkgs.Brew); v != "" {
+			if v := brewLatestVersion(ctx, pkgs.Brew); v != "" {
 				return v, "brew"
 			}
 		}
 	case registry.SourceApt:
 		if pkgs.Apt != "" {
-			if v := aptLatestVersion(pkgs.Apt); v != "" {
+			if v := aptLatestVersion(ctx, pkgs.Apt); v != "" {
 				return v, "apt"
 			}
 		}
 	case registry.SourceSnap:
 		if pkgs.Snap != "" {
-			if v := snapLatestVersion(pkgs.Snap); v != "" {
+			if v := snapLatestVersion(ctx, pkgs.Snap); v != "" {
 				return v, "snap"
 			}
 		}
 	case registry.SourceNPM:
 		if pkgs.NPM != "" {
-			if v := npmLatestVersion(pkgs.NPM); v != "" {
+			if v := npmLatestVersion(ctx, pkgs.NPM); v != "" {
 				return v, "npm"
 			}
 		}
@@ -134,27 +165,20 @@ func latestVersion(source registry.InstallSource, pkgs registry.PackageIDs) (ver
 }
 
 // --- winget ---
-// wingetVersion returns the latest available version from the winget catalog.
-func wingetVersion(id string) string {
-	out := runCmd("winget", "show", "--id", id, "--accept-source-agreements")
+
+func wingetVersion(ctx context.Context, id string) string {
+	out := runCmd(ctx, "winget", "show", "--id", id, "--accept-source-agreements")
 	return parseKeyValue(out, "Version")
 }
 
-// wingetInstalledVersion returns the locally installed version via winget list.
-func wingetInstalledVersion(id string) string {
-	out := runCmd("winget", "list", "--id", id, "--exact", "--accept-source-agreements")
-	// Output format (fixed-width columns):
-	//   Name Id           Version Available Source
-	//   ------------------------------------------
-	//   fzf  junegunn.fzf 0.70.0  0.71.0    winget
-	// Find the line containing the exact package ID and extract the version field after it.
+func wingetInstalledVersion(ctx context.Context, id string) string {
+	out := runCmd(ctx, "winget", "list", "--id", id, "--exact", "--accept-source-agreements")
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
 		fields := strings.Fields(line)
 		for i, f := range fields {
 			if strings.EqualFold(f, id) && i+1 < len(fields) {
 				ver := fields[i+1]
-				// Skip if it looks like a header separator.
 				if strings.HasPrefix(ver, "-") {
 					continue
 				}
@@ -167,20 +191,20 @@ func wingetInstalledVersion(id string) string {
 
 // --- choco ---
 
-func chocoInstalledVersion(pkg string) string {
-	out := runCmd("choco", "list", "--limit-output", "--exact", pkg)
+func chocoInstalledVersion(ctx context.Context, pkg string) string {
+	out := runCmd(ctx, "choco", "list", "--limit-output", "--exact", pkg)
 	return parsePipeSeparated(out, pkg)
 }
 
-func chocoLatestVersion(pkg string) string {
-	out := runCmd("choco", "search", "--exact", "--limit-output", pkg)
+func chocoLatestVersion(ctx context.Context, pkg string) string {
+	out := runCmd(ctx, "choco", "search", "--exact", "--limit-output", pkg)
 	return parsePipeSeparated(out, pkg)
 }
 
 // --- brew ---
 
-func brewInstalledVersion(formula string) string {
-	out := runCmd("brew", "list", "--versions", formula)
+func brewInstalledVersion(ctx context.Context, formula string) string {
+	out := runCmd(ctx, "brew", "list", "--versions", formula)
 	parts := strings.Fields(strings.TrimSpace(out))
 	if len(parts) >= 2 {
 		return parts[1]
@@ -188,8 +212,8 @@ func brewInstalledVersion(formula string) string {
 	return ""
 }
 
-func brewLatestVersion(formula string) string {
-	out := runCmd("brew", "info", "--json=v2", formula)
+func brewLatestVersion(ctx context.Context, formula string) string {
+	out := runCmd(ctx, "brew", "info", "--json=v2", formula)
 	if out == "" {
 		return ""
 	}
@@ -215,8 +239,8 @@ func dpkgInstalledVersion(pkg string) string {
 	return ""
 }
 
-func aptLatestVersion(pkg string) string {
-	out := runCmd("apt-cache", "policy", pkg)
+func aptLatestVersion(ctx context.Context, pkg string) string {
+	out := runCmd(ctx, "apt-cache", "policy", pkg)
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "Candidate:") {
@@ -231,8 +255,8 @@ func aptLatestVersion(pkg string) string {
 
 // --- snap ---
 
-func snapInstalledVersion(pkg string) string {
-	out := runCmd("snap", "list", pkg)
+func snapInstalledVersion(ctx context.Context, pkg string) string {
+	out := runCmd(ctx, "snap", "list", pkg)
 	lines := strings.Split(out, "\n")
 	if len(lines) >= 2 {
 		fields := strings.Fields(lines[1])
@@ -243,8 +267,8 @@ func snapInstalledVersion(pkg string) string {
 	return ""
 }
 
-func snapLatestVersion(pkg string) string {
-	out := runCmd("snap", "info", pkg)
+func snapLatestVersion(ctx context.Context, pkg string) string {
+	out := runCmd(ctx, "snap", "info", pkg)
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "latest/stable:") {
@@ -264,8 +288,8 @@ var (
 	npmOnce        sync.Once
 )
 
-func loadNpmGlobals() map[string]string {
-	out := runCmd("npm", "list", "-g", "--depth=0", "--json")
+func loadNpmGlobals(ctx context.Context) map[string]string {
+	out := runCmd(ctx, "npm", "list", "-g", "--depth=0", "--json")
 	if out == "" {
 		return nil
 	}
@@ -284,8 +308,8 @@ func loadNpmGlobals() map[string]string {
 	return m
 }
 
-func npmInstalledVersion(pkg string) string {
-	npmOnce.Do(func() { npmGlobalCache = loadNpmGlobals() })
+func npmInstalledVersion(ctx context.Context, pkg string) string {
+	npmOnce.Do(func() { npmGlobalCache = loadNpmGlobals(ctx) })
 	if npmGlobalCache == nil {
 		return ""
 	}
@@ -301,8 +325,8 @@ func npmInstalledVersion(pkg string) string {
 	return ""
 }
 
-func npmLatestVersion(pkg string) string {
-	out := runCmd("npm", "view", pkg, "version")
+func npmLatestVersion(ctx context.Context, pkg string) string {
+	out := runCmd(ctx, "npm", "view", pkg, "version")
 	return strings.TrimSpace(out)
 }
 
@@ -367,8 +391,8 @@ func cleanDebianVersion(v string) string {
 
 // --- Helpers ---
 
-func runCmd(name string, args ...string) string {
-	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+func runCmd(ctx context.Context, name string, args ...string) string {
+	ctx, cancel := context.WithTimeout(ctx, cmdTimeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, name, args...)
@@ -408,10 +432,13 @@ func parsePipeSeparated(output, pkg string) string {
 
 // --- Tool info ---
 
-// FetchToolInfo retrieves rich metadata from the package manager for display.
-// Uses the primary instance's source to determine which PM to query.
-// Falls back to any available source if the primary has no package ID.
-func FetchToolInfo(tool *registry.Tool) {
+// FetchToolInfo is a convenience wrapper around the default resolver.
+func FetchToolInfo(ctx context.Context, tool *registry.Tool) {
+	defaultResolver.FetchToolInfo(ctx, tool)
+}
+
+// FetchToolInfo implements VersionResolver.
+func (r *PackageManagerResolver) FetchToolInfo(ctx context.Context, tool *registry.Tool) {
 	if tool.Info != nil {
 		return // already fetched
 	}
@@ -423,15 +450,15 @@ func FetchToolInfo(tool *registry.Tool) {
 
 	switch source {
 	case registry.SourceWinget:
-		tool.Info = fetchWingetInfo(pkgID)
+		tool.Info = fetchWingetInfo(ctx, pkgID)
 	case registry.SourceBrew:
-		tool.Info = fetchBrewInfo(pkgID)
+		tool.Info = fetchBrewInfo(ctx, pkgID)
 	case registry.SourceApt:
-		tool.Info = fetchAptInfo(pkgID)
+		tool.Info = fetchAptInfo(ctx, pkgID)
 	case registry.SourceSnap:
-		tool.Info = fetchSnapInfo(pkgID)
+		tool.Info = fetchSnapInfo(ctx, pkgID)
 	case registry.SourceNPM:
-		tool.Info = fetchNpmInfo(pkgID)
+		tool.Info = fetchNpmInfo(ctx, pkgID)
 	}
 }
 
@@ -447,11 +474,7 @@ var supportedInfoSources = map[registry.InstallSource]bool{
 }
 
 // bestInfoSource picks the best source+pkgID for fetching tool info.
-// Prefers the primary instance's source, falls back through all available sources
-// in priority order (winget is richest, then brew, apt, snap, npm).
-// Only returns sources that FetchToolInfo knows how to query.
 func bestInfoSource(tool *registry.Tool) (registry.InstallSource, string) {
-	// Try the primary instance's source first.
 	if primary := tool.PrimaryInstance(); primary != nil {
 		if supportedInfoSources[primary.Source] {
 			if id := pkgIDForSource(tool, primary.Source); id != "" {
@@ -460,7 +483,6 @@ func bestInfoSource(tool *registry.Tool) (registry.InstallSource, string) {
 		}
 	}
 
-	// Fallback: try sources in priority order (richest info first).
 	fallback := []struct {
 		src registry.InstallSource
 		id  string
@@ -497,8 +519,8 @@ func pkgIDForSource(tool *registry.Tool, source registry.InstallSource) string {
 	return ""
 }
 
-func fetchWingetInfo(id string) *registry.ToolInfo {
-	out := runCmd("winget", "show", "--id", id, "--accept-source-agreements")
+func fetchWingetInfo(ctx context.Context, id string) *registry.ToolInfo {
+	out := runCmd(ctx, "winget", "show", "--id", id, "--accept-source-agreements")
 	if out == "" {
 		return nil
 	}
@@ -542,8 +564,8 @@ func parseWingetDescription(output string) string {
 	return strings.Join(desc, " ")
 }
 
-func fetchBrewInfo(formula string) *registry.ToolInfo {
-	out := runCmd("brew", "info", "--json=v2", formula)
+func fetchBrewInfo(ctx context.Context, formula string) *registry.ToolInfo {
+	out := runCmd(ctx, "brew", "info", "--json=v2", formula)
 	if out == "" {
 		return nil
 	}
@@ -568,8 +590,8 @@ func fetchBrewInfo(formula string) *registry.ToolInfo {
 	}
 }
 
-func fetchAptInfo(pkg string) *registry.ToolInfo {
-	out := runCmd("apt-cache", "show", pkg)
+func fetchAptInfo(ctx context.Context, pkg string) *registry.ToolInfo {
+	out := runCmd(ctx, "apt-cache", "show", pkg)
 	if out == "" {
 		return nil
 	}
@@ -584,8 +606,8 @@ func fetchAptInfo(pkg string) *registry.ToolInfo {
 	}
 }
 
-func fetchSnapInfo(pkg string) *registry.ToolInfo {
-	out := runCmd("snap", "info", pkg)
+func fetchSnapInfo(ctx context.Context, pkg string) *registry.ToolInfo {
+	out := runCmd(ctx, "snap", "info", pkg)
 	if out == "" {
 		return nil
 	}
@@ -600,10 +622,10 @@ func fetchSnapInfo(pkg string) *registry.ToolInfo {
 	}
 }
 
-func fetchNpmInfo(pkg string) *registry.ToolInfo {
-	desc := strings.TrimSpace(runCmd("npm", "view", pkg, "description"))
-	homepage := strings.TrimSpace(runCmd("npm", "view", pkg, "homepage"))
-	license := strings.TrimSpace(runCmd("npm", "view", pkg, "license"))
+func fetchNpmInfo(ctx context.Context, pkg string) *registry.ToolInfo {
+	desc := strings.TrimSpace(runCmd(ctx, "npm", "view", pkg, "description"))
+	homepage := strings.TrimSpace(runCmd(ctx, "npm", "view", pkg, "homepage"))
+	license := strings.TrimSpace(runCmd(ctx, "npm", "view", pkg, "license"))
 	if desc == "" && homepage == "" {
 		return nil
 	}

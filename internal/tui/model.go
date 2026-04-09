@@ -10,9 +10,9 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/atotto/clipboard"
 
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/service"
 )
 
 const (
@@ -25,8 +25,49 @@ const (
 	tabCount // total number of tabs, used for modular cycling
 )
 
+// Scan phases — the loading lifecycle.
+const (
+	phaseScanning  = 0 // PATH scan in progress
+	phaseResolving = 1 // version resolution in progress
+	phaseDone      = 2 // all tools resolved
+)
+
+// Backup tab menu indices.
+const (
+	backupMenuExport    = 0
+	backupMenuImport    = 1
+	backupMenuShare     = 2
+	backupMenuOpenToken = 3
+	backupMenuCount     = 4
+)
+
+// Sentinel values.
+const (
+	noDetail = -1 // detailIdx when no detail view is open
+	noMenu   = -1 // toolMenu when no action menu is shown
+)
+
+// Backup mode states.
+const (
+	backupModeIdle   = ""
+	backupModeExport = "export"
+	backupModeImport = "import"
+	backupModeShare  = "share"
+)
+
+// Tool action names.
+const (
+	actionInstall = "install"
+	actionUpgrade = "upgrade"
+	actionRemove  = "remove"
+)
+
 // Model is the Bubbletea model for the interactive TUI.
 type Model struct {
+	// Dependencies.
+	svc  *service.ToolService
+	clip Clipboard
+
 	tools   []registry.Tool
 	cursor  int
 	spinner spinner.Model
@@ -64,7 +105,7 @@ type Model struct {
 	pendingAction *pendingAction // nil = no pending confirmation
 
 	// Tool action menu (Upgrade/Remove/Install).
-	toolMenu      int              // -1 = hidden; 0+ = selected action index
+	toolMenu      int              // noMenu = hidden; 0+ = selected action index
 	toolMenuItems []toolMenuAction // resolved actions for the current tool
 
 	// Import file path input.
@@ -109,6 +150,8 @@ func NewModel() Model {
 	ti2.CharLimit = 1000
 
 	return Model{
+		svc:            service.New(),
+		clip:           systemClipboard{},
 		spinner:        s,
 		filterInput:    ti,
 		importInput:    ii,
@@ -116,10 +159,10 @@ func NewModel() Model {
 		backupBar:      progress.New(progress.WithWidth(40)),
 		updateSelected: make(map[int]bool),
 		loading:        true,
-		phase:          0,
+		phase:          phaseScanning,
 		activeTab:      tabInstalled,
-		detailIdx:      -1,
-		toolMenu:       -1,
+		detailIdx:      noDetail,
+		toolMenu:       noMenu,
 		width:          80,
 		height:         24,
 	}
@@ -129,7 +172,7 @@ func NewModel() Model {
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
-		func() tea.Msg { return findToolsCmd()() },
+		func() tea.Msg { return findToolsCmd(m.svc)() },
 	)
 }
 
@@ -144,7 +187,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sort.Slice(m.tools, func(i, j int) bool {
 			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
 		})
-		m.phase = 1
+		m.phase = phaseResolving
 		m.pending = 0
 		m.scanGen++
 		if msg.err != nil {
@@ -160,11 +203,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pending++
 				idx := i
 				t := tool // capture
-				cmds = append(cmds, func() tea.Msg { return resolveToolVersionCmd(idx, gen, t)() })
+				cmds = append(cmds, func() tea.Msg { return resolveToolVersionCmd(m.svc, idx, gen, t)() })
 			}
 		}
 		if len(cmds) == 0 {
-			m.phase = 2
+			m.phase = phaseDone
 			m.loading = false
 			m.statusMsg = ""
 		}
@@ -187,7 +230,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.pending--
 		if m.pending <= 0 {
-			m.phase = 2
+			m.phase = phaseDone
 			m.loading = false
 			m.statusMsg = ""
 		}
@@ -201,7 +244,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = fmt.Sprintf("✓ %s succeeded — refreshing...", msg.action)
 		// Re-scan the affected tool to pick up changes.
 		tool := m.tools[msg.toolIdx]
-		return m, refreshSingleToolCmd(msg.toolIdx, tool)
+		return m, refreshSingleToolCmd(m.svc, msg.toolIdx, tool)
 
 	case refreshToolMsg:
 		if msg.toolIdx < len(m.tools) {
@@ -289,12 +332,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// All done — refresh tools to pick up newly installed ones.
 		m.statusMsg = "✓ Import complete — refreshing..."
 		m.loading = true
-		m.phase = 0
+		m.phase = phaseScanning
 		m.tools = nil
 		m.filteredIndex = nil
 		return m, tea.Batch(
 			m.spinner.Tick,
-			func() tea.Msg { return findToolsCmd()() },
+			func() tea.Msg { return findToolsCmd(m.svc)() },
 		)
 
 	case batchUpgradeItemMsg:
@@ -314,10 +357,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.sharedToken = msg.token
-		m.backupMode = "share"
+		m.backupMode = backupModeShare
 		m.tokenCopied = false
 		// Auto-copy to clipboard.
-		if err := clipboard.WriteAll(msg.token); err != nil {
+		if err := m.clip.WriteAll(msg.token); err != nil {
 			m.statusMsg = fmt.Sprintf("✓ Token generated (%d tools)", msg.count)
 		} else {
 			m.tokenCopied = true
@@ -372,199 +415,218 @@ func Run() error {
 // --- Key handling ---
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Confirmation mode — intercept all keys.
+	// Modal key handlers — each intercepts all keys when active.
 	if m.pendingAction != nil {
-		switch msg.String() {
-		case "y", "Y":
-			action := *m.pendingAction
-			m.pendingAction = nil
-			m.statusMsg = fmt.Sprintf("Running %s...", action.action)
-			return m, execToolActionCmd(action)
-		case "n", "N", "esc":
-			m.pendingAction = nil
-			m.statusMsg = ""
-			return m, nil
-		}
-		return m, nil // swallow all other keys
+		return m.handleKeyConfirmation(msg)
 	}
-
-	// Import path input mode.
 	if m.importingPath {
-		switch msg.String() {
-		case "esc":
-			m.importingPath = false
-			m.importInput.SetValue("")
-			return m, nil
-		case "enter":
-			path := strings.TrimSpace(m.importInput.Value())
-			m.importingPath = false
-			m.importInput.SetValue("")
-			if path == "" {
-				return m, nil
-			}
-			m.backupItems = nil
-			m.backupDone = 0
-			m.backupMode = "import"
-			m.activeTab = tabBackup
-			m.cursor = 0
-			m.statusMsg = "Building import plan..."
-			return m, buildImportPlanCmd(path)
-		default:
-			var cmd tea.Cmd
-			m.importInput, cmd = m.importInput.Update(msg)
-			return m, cmd
-		}
+		return m.handleKeyImportPath(msg)
 	}
-
-	// Token input mode (Open Token).
 	if m.enteringToken {
-		switch msg.String() {
-		case "esc":
-			m.enteringToken = false
-			m.tokenInput.SetValue("")
-			return m, nil
-		case "enter":
-			token := strings.TrimSpace(m.tokenInput.Value())
-			m.enteringToken = false
-			m.tokenInput.SetValue("")
-			if token == "" {
-				return m, nil
-			}
-			m.backupItems = nil
-			m.backupDone = 0
-			m.backupMode = "import"
-			m.activeTab = tabBackup
-			m.cursor = 0
-			m.statusMsg = "Decoding share token..."
-			return m, buildTokenImportPlanCmd(token)
-		default:
-			var cmd tea.Cmd
-			m.tokenInput, cmd = m.tokenInput.Update(msg)
-			return m, cmd
-		}
+		return m.handleKeyTokenInput(msg)
 	}
-
-	// Import confirm mode — user reviews plan before installing.
 	if m.backupConfirm {
-		switch msg.String() {
-		case "enter", "y", "Y":
-			m.backupConfirm = false
-			// Mark deselected pending items as skipped.
-			for i := range m.backupItems {
-				if m.backupItems[i].status == backupPending && !m.backupItems[i].selected {
-					m.backupItems[i].status = backupSkipped
-					m.backupItems[i].errMsg = "deselected"
-					m.backupDone++
-				}
-			}
-			cmd := m.nextBackupInstall()
-			if cmd == nil {
-				// Nothing to install — all items were skipped/failed/deselected.
-				m.statusMsg = "Nothing to install — all tools skipped."
-				return m, nil
-			}
-			m.statusMsg = "Installing..."
-			return m, cmd
-		case "esc", "n", "N":
-			m.backupConfirm = false
-			m.backupMode = ""
-			m.backupItems = nil
-			m.backupDone = 0
-			m.statusMsg = ""
+		return m.handleKeyBackupConfirm(msg)
+	}
+	if m.showDetail {
+		return m.handleKeyDetail(msg)
+	}
+	if m.filtering {
+		return m.handleKeyFilter(msg)
+	}
+	return m.handleKeyDefault(msg)
+}
+
+// handleKeyConfirmation handles y/n confirmation for tool actions.
+func (m Model) handleKeyConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		action := *m.pendingAction
+		m.pendingAction = nil
+		m.statusMsg = fmt.Sprintf("Running %s...", action.action)
+		return m, execToolActionCmd(action)
+	case "n", "N", "esc":
+		m.pendingAction = nil
+		m.statusMsg = ""
+		return m, nil
+	}
+	return m, nil // swallow all other keys
+}
+
+// handleKeyImportPath handles text input for the import file path.
+func (m Model) handleKeyImportPath(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.importingPath = false
+		m.importInput.SetValue("")
+		return m, nil
+	case "enter":
+		path := strings.TrimSpace(m.importInput.Value())
+		m.importingPath = false
+		m.importInput.SetValue("")
+		if path == "" {
 			return m, nil
-		case "space":
-			// Toggle selection of the current item (only pending items).
-			if m.cursor < len(m.backupItems) && m.backupItems[m.cursor].status == backupPending {
-				m.backupItems[m.cursor].selected = !m.backupItems[m.cursor].selected
-				// Advance cursor to next item.
-				if m.cursor < len(m.backupItems)-1 {
-					m.cursor++
-				}
-			}
+		}
+		m.backupItems = nil
+		m.backupDone = 0
+		m.backupMode = backupModeImport
+		m.activeTab = tabBackup
+		m.cursor = 0
+		m.statusMsg = "Building import plan..."
+		return m, buildImportPlanCmd(m.svc, path)
+	default:
+		var cmd tea.Cmd
+		m.importInput, cmd = m.importInput.Update(msg)
+		return m, cmd
+	}
+}
+
+// handleKeyTokenInput handles text input for the share token.
+func (m Model) handleKeyTokenInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.enteringToken = false
+		m.tokenInput.SetValue("")
+		return m, nil
+	case "enter":
+		token := strings.TrimSpace(m.tokenInput.Value())
+		m.enteringToken = false
+		m.tokenInput.SetValue("")
+		if token == "" {
 			return m, nil
-		case "a":
-			// Smart toggle all: if any pending item is selected, deselect all; otherwise select all.
-			anySelected := false
-			for _, item := range m.backupItems {
-				if item.status == backupPending && item.selected {
-					anySelected = true
-					break
-				}
+		}
+		m.backupItems = nil
+		m.backupDone = 0
+		m.backupMode = backupModeImport
+		m.activeTab = tabBackup
+		m.cursor = 0
+		m.statusMsg = "Decoding share token..."
+		return m, buildTokenImportPlanCmd(m.svc, token)
+	default:
+		var cmd tea.Cmd
+		m.tokenInput, cmd = m.tokenInput.Update(msg)
+		return m, cmd
+	}
+}
+
+// handleKeyBackupConfirm handles the import plan review and item selection.
+func (m Model) handleKeyBackupConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter", "y", "Y":
+		m.backupConfirm = false
+		for i := range m.backupItems {
+			if m.backupItems[i].status == backupPending && !m.backupItems[i].selected {
+				m.backupItems[i].status = backupSkipped
+				m.backupItems[i].errMsg = "deselected"
+				m.backupDone++
 			}
-			for i := range m.backupItems {
-				if m.backupItems[i].status == backupPending {
-					m.backupItems[i].selected = !anySelected
-				}
-			}
+		}
+		cmd := m.nextBackupInstall()
+		if cmd == nil {
+			m.statusMsg = "Nothing to install — all tools skipped."
 			return m, nil
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down", "j":
+		}
+		m.statusMsg = "Installing..."
+		return m, cmd
+	case "esc", "n", "N":
+		m.backupConfirm = false
+		m.backupMode = ""
+		m.backupItems = nil
+		m.backupDone = 0
+		m.statusMsg = ""
+		return m, nil
+	case "space":
+		if m.cursor < len(m.backupItems) && m.backupItems[m.cursor].status == backupPending {
+			m.backupItems[m.cursor].selected = !m.backupItems[m.cursor].selected
 			if m.cursor < len(m.backupItems)-1 {
 				m.cursor++
 			}
 		}
 		return m, nil
-	}
-
-	// Detail view — navigate action menu, Esc goes back.
-	if m.showDetail {
-		switch msg.String() {
-		case "esc", "q", "backspace":
-			m.showDetail = false
-			m.toolMenu = -1
-			m.toolMenuItems = nil
-			return m, nil
-		case "up", "k":
-			if m.toolMenu > 0 {
-				m.toolMenu--
+	case "a":
+		anySelected := false
+		for _, item := range m.backupItems {
+			if item.status == backupPending && item.selected {
+				anySelected = true
+				break
 			}
-		case "down", "j":
-			if m.toolMenu < len(m.toolMenuItems)-1 {
-				m.toolMenu++
-			}
-		case "enter":
-			if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
-				action := m.toolMenuItems[m.toolMenu]
-				m.toolMenu = -1
-				m.toolMenuItems = nil
-				m.startAction(action.picker)
+		}
+		for i := range m.backupItems {
+			if m.backupItems[i].status == backupPending {
+				m.backupItems[i].selected = !anySelected
 			}
 		}
 		return m, nil
-	}
-
-	// Filter mode.
-	if m.filtering {
-		switch msg.String() {
-		case "esc":
-			m.filtering = false
-			m.filterText = ""
-			m.filterInput.SetValue("")
-			m.applyFilter()
-			return m, nil
-		case "enter":
-			m.filtering = false
-			return m, nil
-		default:
-			var cmd tea.Cmd
-			m.filterInput, cmd = m.filterInput.Update(msg)
-			m.filterText = m.filterInput.Value()
-			m.applyFilter()
-			return m, cmd
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < len(m.backupItems)-1 {
+			m.cursor++
 		}
 	}
+	return m, nil
+}
 
+// handleKeyDetail handles navigation in the tool detail/action menu view.
+func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q", "backspace":
+		m.showDetail = false
+		m.toolMenu = noMenu
+		m.toolMenuItems = nil
+		return m, nil
+	case "up", "k":
+		if m.toolMenu > 0 {
+			m.toolMenu--
+		}
+	case "down", "j":
+		if m.toolMenu < len(m.toolMenuItems)-1 {
+			m.toolMenu++
+		}
+	case "enter":
+		if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
+			action := m.toolMenuItems[m.toolMenu]
+			m.toolMenu = noMenu
+			m.toolMenuItems = nil
+			m.startAction(action.picker)
+		}
+	}
+	return m, nil
+}
+
+// handleKeyFilter handles the search/filter text input mode.
+func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.filtering = false
+		m.filterText = ""
+		m.filterInput.SetValue("")
+		m.applyFilter()
+		return m, nil
+	case "enter":
+		m.filtering = false
+		return m, nil
+	default:
+		var cmd tea.Cmd
+		m.filterInput, cmd = m.filterInput.Update(msg)
+		m.filterText = m.filterInput.Value()
+		m.applyFilter()
+		return m, cmd
+	}
+}
+
+// handleKeyDefault handles keys when no modal is active — tabs, navigation, actions.
+func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
 	case "c":
 		// Copy share token to clipboard.
-		if m.activeTab == tabBackup && m.backupMode == "share" && m.sharedToken != "" {
-			if err := clipboard.WriteAll(m.sharedToken); err != nil {
+		if m.activeTab == tabBackup && m.backupMode == backupModeShare && m.sharedToken != "" {
+			if err := m.clip.WriteAll(m.sharedToken); err != nil {
 				m.statusMsg = "⚠ Clipboard unavailable"
 			} else {
 				m.tokenCopied = true
@@ -574,7 +636,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "esc":
 		// Reset completed backup back to idle.
-		if m.activeTab == tabBackup && m.backupMode != "" {
+		if m.activeTab == tabBackup && m.backupMode != backupModeIdle {
 			m.backupMode = ""
 			m.backupItems = nil
 			m.backupDone = 0
@@ -669,10 +731,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		// On Backup tab (idle), execute the selected menu item.
-		if m.activeTab == tabBackup && m.backupMode == "" {
-			if m.cursor == 0 {
+		if m.activeTab == tabBackup && m.backupMode == backupModeIdle {
+			if m.cursor == backupMenuExport {
 				// Export installed tools.
-				if m.phase < 2 {
+				if m.phase < phaseDone {
 					m.statusMsg = "Still scanning — please wait..."
 					return m, nil
 				}
@@ -692,29 +754,29 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						})
 					}
 				}
-				m.backupMode = "export"
+				m.backupMode = backupModeExport
 				m.cursor = 0
 				m.statusMsg = "Exporting..."
 				return m, exportToolsCmd(m.tools)
-			} else if m.cursor == 1 {
+			} else if m.cursor == backupMenuImport {
 				// Import from manifest — enter path input mode.
-				if m.phase < 2 {
+				if m.phase < phaseDone {
 					m.statusMsg = "Still scanning — please wait..."
 					return m, nil
 				}
 				m.importingPath = true
 				return m, m.importInput.Focus()
-			} else if m.cursor == 2 {
+			} else if m.cursor == backupMenuShare {
 				// Share — generate a share token.
-				if m.phase < 2 {
+				if m.phase < phaseDone {
 					m.statusMsg = "Still scanning — please wait..."
 					return m, nil
 				}
 				m.statusMsg = "Generating share token..."
 				return m, shareToolsCmd(m.tools)
-			} else if m.cursor == 3 {
+			} else if m.cursor == backupMenuOpenToken {
 				// Open Token — enter token input mode.
-				if m.phase < 2 {
+				if m.phase < phaseDone {
 					m.statusMsg = "Still scanning — please wait..."
 					return m, nil
 				}
@@ -731,7 +793,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Fetch tool info lazily if not already fetched.
 			tool := m.tools[m.detailIdx]
 			if !tool.InfoFetched {
-				return m, fetchToolInfoCmd(m.detailIdx, tool)
+				return m, fetchToolInfoCmd(m.svc, m.detailIdx, tool)
 			}
 		}
 		return m, nil
@@ -761,7 +823,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "r":
 		m.loading = true
-		m.phase = 0
+		m.phase = phaseScanning
 		m.tools = nil
 		m.filteredIndex = nil
 		m.cursor = 0
@@ -769,7 +831,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.batchUpdating = false
 		return m, tea.Batch(
 			m.spinner.Tick,
-			func() tea.Msg { return findToolsCmd()() },
+			func() tea.Msg { return findToolsCmd(m.svc)() },
 		)
 	}
 	return m, nil
@@ -895,7 +957,7 @@ func (m *Model) buildToolMenu() bool {
 						label: "Install via " + string(c.source),
 						picker: &sourcePicker{
 							toolIdx: idx,
-							action:  "install",
+							action:  actionInstall,
 							choices: []sourceChoice{c},
 						},
 					})
@@ -950,7 +1012,7 @@ func (m Model) resolveInstallAction() *sourcePicker {
 	}
 	return &sourcePicker{
 		toolIdx: m.currentToolIdx(),
-		action:  "install",
+		action:  actionInstall,
 		choices: choices,
 	}
 }
@@ -972,7 +1034,7 @@ func (m Model) resolveUpgradeAction() *sourcePicker {
 	}
 	return &sourcePicker{
 		toolIdx: m.currentToolIdx(),
-		action:  "upgrade",
+		action:  actionUpgrade,
 		choices: choices,
 	}
 }
@@ -994,7 +1056,7 @@ func (m Model) resolveRemoveAction() *sourcePicker {
 	}
 	return &sourcePicker{
 		toolIdx: m.currentToolIdx(),
-		action:  "remove",
+		action:  actionRemove,
 		choices: choices,
 	}
 }
@@ -1005,8 +1067,8 @@ func (m Model) resolveRemoveAction() *sourcePicker {
 func (m Model) rowCount() int {
 	switch m.activeTab {
 	case tabBackup:
-		if m.backupMode == "" {
-			return 4 // Export, Import, Share, Open Token menu items
+		if m.backupMode == backupModeIdle {
+			return backupMenuCount
 		}
 		return len(m.backupItems)
 	case tabConfig:
@@ -1071,13 +1133,13 @@ func (m Model) fireNextBatchUpgrade() (tea.Model, tea.Cmd) {
 		m.batchUpdating = false
 		m.statusMsg = "✓ Batch upgrade complete — refreshing..."
 		m.loading = true
-		m.phase = 0
+		m.phase = phaseScanning
 		m.tools = nil
 		m.filteredIndex = nil
 		m.updateSelected = make(map[int]bool)
 		return m, tea.Batch(
 			m.spinner.Tick,
-			func() tea.Msg { return findToolsCmd()() },
+			func() tea.Msg { return findToolsCmd(m.svc)() },
 		)
 	}
 	idx := m.batchQueue[0]

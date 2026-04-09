@@ -1,16 +1,11 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
-	"runtime"
-	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/finder"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/share"
 )
@@ -49,9 +44,9 @@ func runOpen(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "Share token: %d tools\n", len(names))
 
 	// Load registry and scan PATH.
-	regTools := registry.DefaultTools()
-	if err := finder.FindAll(regTools); err != nil {
-		return fmt.Errorf("scanning PATH: %w", err)
+	regTools, err := svc.ScanOnly(cmd.Context())
+	if err != nil {
+		return err
 	}
 
 	regMap := make(map[string]*registry.Tool, len(regTools))
@@ -59,116 +54,55 @@ func runOpen(cmd *cobra.Command, args []string) error {
 		regMap[regTools[i].Name] = &regTools[i]
 	}
 
-	// Build install plan — same logic as import.go.
-	type installPlan struct {
-		name    string
-		display string
-		cmdArgs []string
-		source  string
+	// Build install plan.
+	ps := buildTokenPlan(names, regMap)
+
+	printPlanSummary(fmt.Sprintf("Share Token Summary — %d tools", len(names)), ps)
+
+	if len(ps.toInstall) == 0 {
+		fmt.Fprintln(os.Stderr, "  Nothing to install — all tools are present!")
+		return nil
 	}
 
-	var toInstall []installPlan
-	var alreadyInstalled []string
-	var noPackage []string
-	var unknown []string
+	if !confirmInstall(openYesFlag) {
+		fmt.Fprintln(os.Stderr, "  Cancelled.")
+		return nil
+	}
+
+	succeeded, failed := executeInstalls(ps.toInstall)
+	fmt.Fprintf(os.Stderr, "\n──── Done: %d installed, %d failed, %d already present ────\n",
+		succeeded, failed, len(ps.alreadyInstalled))
+	return nil
+}
+
+// buildTokenPlan classifies token tool names into install/skip/error categories.
+func buildTokenPlan(names []string, regMap map[string]*registry.Tool) planSummary {
+	var ps planSummary
 
 	for _, name := range names {
 		rt, exists := regMap[name]
 		if !exists {
-			unknown = append(unknown, name)
+			ps.unknown = append(ps.unknown, name)
 			continue
 		}
 
 		if rt.IsInstalled() {
-			alreadyInstalled = append(alreadyInstalled, rt.DisplayName)
+			ps.alreadyInstalled = append(ps.alreadyInstalled, rt.DisplayName)
 			continue
 		}
 
 		src := rt.Packages.BestInstallSource()
 		installArgs := rt.Packages.InstallArgs(src)
 		if installArgs == nil {
-			noPackage = append(noPackage, name)
+			ps.noPackage = append(ps.noPackage, name)
 			continue
 		}
 
-		toInstall = append(toInstall, installPlan{
-			name:    rt.Name,
-			display: rt.DisplayName,
-			cmdArgs: installArgs,
-			source:  string(src),
+		ps.toInstall = append(ps.toInstall, installPlan{
+			name: rt.Name, display: rt.DisplayName,
+			cmdArgs: installArgs, source: string(src),
 		})
 	}
 
-	// Print summary.
-	fmt.Fprintf(os.Stderr, "\n──── Share Token Summary ────\n\n")
-	fmt.Fprintf(os.Stderr, "  Token:  %d tools\n\n", len(names))
-
-	if len(alreadyInstalled) > 0 {
-		fmt.Fprintf(os.Stderr, "  ✓ Already installed (%d):\n", len(alreadyInstalled))
-		for _, name := range alreadyInstalled {
-			fmt.Fprintf(os.Stderr, "    · %s\n", name)
-		}
-		fmt.Fprintln(os.Stderr)
-	}
-	if len(unknown) > 0 {
-		fmt.Fprintf(os.Stderr, "  ⚠ Not in catalog (%d):\n", len(unknown))
-		for _, name := range unknown {
-			fmt.Fprintf(os.Stderr, "    · %s\n", name)
-		}
-		fmt.Fprintln(os.Stderr)
-	}
-	if len(noPackage) > 0 {
-		fmt.Fprintf(os.Stderr, "  ⚠ No package for %s (%d):\n", runtime.GOOS, len(noPackage))
-		for _, name := range noPackage {
-			fmt.Fprintf(os.Stderr, "    · %s\n", name)
-		}
-		fmt.Fprintln(os.Stderr)
-	}
-	if len(toInstall) == 0 {
-		fmt.Fprintln(os.Stderr, "  Nothing to install — all tools are present!")
-		fmt.Fprintln(os.Stderr, "\n────────────────────────────")
-		return nil
-	}
-
-	fmt.Fprintf(os.Stderr, "  To install (%d):\n", len(toInstall))
-	for _, p := range toInstall {
-		fmt.Fprintf(os.Stderr, "    · %-20s  via %s\n", p.display, p.source)
-	}
-	fmt.Fprintln(os.Stderr)
-
-	// Confirm.
-	if !openYesFlag {
-		fmt.Fprint(os.Stderr, "  Proceed? [y/N] ")
-		reader := bufio.NewReader(os.Stdin)
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(strings.ToLower(line))
-		if line != "y" && line != "yes" {
-			fmt.Fprintln(os.Stderr, "  Cancelled.")
-			return nil
-		}
-	}
-
-	// Install sequentially.
-	succeeded := 0
-	failed := 0
-	for _, p := range toInstall {
-		fmt.Fprintf(os.Stderr, "\n──── Installing %s via %s ────\n", p.display, p.source)
-
-		c := exec.Command(p.cmdArgs[0], p.cmdArgs[1:]...)
-		c.Stdin = os.Stdin
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
-
-		if err := c.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "  ✗ %s failed: %s\n", p.display, err)
-			failed++
-		} else {
-			fmt.Fprintf(os.Stderr, "  ✓ %s installed\n", p.display)
-			succeeded++
-		}
-	}
-
-	fmt.Fprintf(os.Stderr, "\n──── Done: %d installed, %d failed, %d already present ────\n",
-		succeeded, failed, len(alreadyInstalled))
-	return nil
+	return ps
 }

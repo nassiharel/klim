@@ -1,6 +1,7 @@
 package finder
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -13,10 +14,26 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
+// ErrEmptyPATH is returned when the PATH environment variable is empty or not set.
+var ErrEmptyPATH = errors.New("PATH is empty or not set")
+
 // Cached PATHEXT extensions (Windows), computed once.
 var cachedPathExts struct {
 	once sync.Once
 	exts []string
+}
+
+// ToolFinder abstracts tool discovery on the filesystem.
+type ToolFinder interface {
+	FindAll(ctx context.Context, tools []registry.Tool) error
+}
+
+// PathFinder is the default ToolFinder that scans PATH directories.
+type PathFinder struct{}
+
+// NewFinder returns the default PATH-based tool finder.
+func NewFinder() ToolFinder {
+	return &PathFinder{}
 }
 
 // toolRef links a binary name to its tool index.
@@ -32,13 +49,18 @@ type match struct {
 	instance registry.Instance // Path is the resolved (EvalSymlinks) path
 }
 
-// FindAll locates all installations of each curated tool across PATH.
-// It populates the Instances field of each non-disabled tool in-place.
-// Returns an error if PATH is empty or not set.
-func FindAll(tools []registry.Tool) error {
+// FindAll is a convenience wrapper around the default PathFinder.
+func FindAll(ctx context.Context, tools []registry.Tool) error {
+	return defaultFinder.FindAll(ctx, tools)
+}
+
+var defaultFinder ToolFinder = &PathFinder{}
+
+// FindAll implements ToolFinder by scanning PATH directories.
+func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error {
 	pathDirs := pathDirectories()
 	if len(pathDirs) == 0 {
-		return errors.New("PATH is empty or not set")
+		return ErrEmptyPATH
 	}
 
 	// Phase 1: Build a map of all binary names we're looking for.

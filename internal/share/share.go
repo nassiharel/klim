@@ -21,11 +21,20 @@ const (
 	maxTokenSize = 64 << 10 // 64 KB
 )
 
+// Sentinel errors for token encoding/decoding.
+var (
+	ErrEmptyToolList  = errors.New("no tools to encode")
+	ErrInvalidToken   = errors.New("not a valid clim share token")
+	ErrMalformedToken = errors.New("malformed share token")
+	ErrEmptyToken     = errors.New("empty share token")
+	ErrNoToolsInToken = errors.New("share token contains no tools")
+)
+
 // Encode converts a list of tool names into a compact, URL-safe share token.
 // The format is: clim:v1:<base64url(gzip(comma-separated names))>
 func Encode(names []string) (string, error) {
 	if len(names) == 0 {
-		return "", errors.New("no tools to encode")
+		return "", ErrEmptyToolList
 	}
 
 	payload := strings.Join(names, ",")
@@ -50,7 +59,7 @@ func Decode(token string) ([]string, error) {
 	token = strings.TrimSpace(token)
 
 	if !strings.HasPrefix(token, "clim:") {
-		return nil, errors.New("not a valid clim share token")
+		return nil, ErrInvalidToken
 	}
 
 	if !strings.HasPrefix(token, tokenPrefix) {
@@ -59,12 +68,12 @@ func Decode(token string) ([]string, error) {
 		if len(ver) >= 2 {
 			return nil, fmt.Errorf("unsupported token version %q (this clim supports v1)", ver[1])
 		}
-		return nil, errors.New("malformed share token")
+		return nil, ErrMalformedToken
 	}
 
 	data := strings.TrimPrefix(token, tokenPrefix)
 	if data == "" {
-		return nil, errors.New("empty share token")
+		return nil, ErrEmptyToken
 	}
 
 	compressed, err := base64.RawURLEncoding.DecodeString(data)
@@ -85,7 +94,7 @@ func Decode(token string) ([]string, error) {
 
 	raw := strings.TrimSpace(string(payload))
 	if raw == "" {
-		return nil, errors.New("share token contains no tools")
+		return nil, ErrNoToolsInToken
 	}
 
 	names := strings.Split(raw, ",")
@@ -100,7 +109,7 @@ func Decode(token string) ([]string, error) {
 	}
 
 	if len(cleaned) == 0 {
-		return nil, errors.New("share token contains no tools")
+		return nil, ErrNoToolsInToken
 	}
 
 	return cleaned, nil

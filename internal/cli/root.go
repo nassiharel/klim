@@ -8,8 +8,12 @@ import (
 	"golang.org/x/term"
 
 	"github.com/nassiharel/clim/internal/build"
+	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/tui"
 )
+
+// svc is the shared ToolService used by all CLI subcommands.
+var svc = service.New()
 
 var rootCmd = &cobra.Command{
 	Use:   "clim",

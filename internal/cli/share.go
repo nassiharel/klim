@@ -3,13 +3,9 @@ package cli
 import (
 	"fmt"
 	"os"
-	"sort"
-	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/finder"
-	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/share"
 )
 
@@ -35,16 +31,11 @@ func init() {
 }
 
 func runShare(cmd *cobra.Command, args []string) error {
-	tools := registry.DefaultTools()
-
 	fmt.Fprintln(os.Stderr, "Scanning installed tools...")
-	if err := finder.FindAll(tools); err != nil {
-		return fmt.Errorf("scanning PATH: %w", err)
+	tools, err := svc.ScanOnly(cmd.Context())
+	if err != nil {
+		return err
 	}
-
-	sort.Slice(tools, func(i, j int) bool {
-		return strings.ToLower(tools[i].Name) < strings.ToLower(tools[j].Name)
-	})
 
 	// Collect names of installed, enabled tools.
 	var names []string

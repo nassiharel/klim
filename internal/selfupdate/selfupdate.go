@@ -14,6 +14,9 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
+// ErrDevBuild is returned when attempting to self-update a development build.
+var ErrDevBuild = errors.New("cannot self-update a development build; install a release binary or use 'go install'")
+
 // Result describes what happened during an update attempt.
 type Result struct {
 	CurrentVersion string
@@ -27,14 +30,19 @@ func (r *Result) UpdateAvailable() bool {
 		registry.CompareVersions(r.CurrentVersion, r.LatestVersion) < 0
 }
 
+// ReleaseChecker abstracts fetching the latest release information.
+type ReleaseChecker interface {
+	FetchLatestRelease(ctx context.Context) (*Release, error)
+}
+
 // Options allows callers to override defaults (primarily for testing).
 type Options struct {
-	CheckOnly    bool          // if true, only check — don't download or install
-	ExecPath     string        // overrides os.Executable()
-	GOOS         string        // overrides runtime.GOOS
-	GOARCH       string        // overrides runtime.GOARCH
-	GitHubClient *GitHubClient // overrides default client
-	HTTPClient   *http.Client  // used for asset downloads
+	CheckOnly      bool           // if true, only check — don't download or install
+	ExecPath       string         // overrides os.Executable()
+	GOOS           string         // overrides runtime.GOOS
+	GOARCH         string         // overrides runtime.GOARCH
+	ReleaseChecker ReleaseChecker // overrides default GitHubClient
+	HTTPClient     *http.Client   // used for asset downloads
 }
 
 func (o *Options) goos() string {
@@ -58,9 +66,9 @@ func (o *Options) execPath() (string, error) {
 	return os.Executable()
 }
 
-func (o *Options) githubClient() *GitHubClient {
-	if o != nil && o.GitHubClient != nil {
-		return o.GitHubClient
+func (o *Options) releaseChecker() ReleaseChecker {
+	if o != nil && o.ReleaseChecker != nil {
+		return o.ReleaseChecker
 	}
 	return &GitHubClient{}
 }
@@ -80,12 +88,11 @@ func Update(ctx context.Context, currentVersion string, opts *Options) (*Result,
 
 	// Guard: dev builds cannot self-update.
 	if currentVersion == "dev" || currentVersion == "" {
-		return nil, errors.New(
-			"cannot self-update a development build; install a release binary or use 'go install'")
+		return nil, ErrDevBuild
 	}
 
 	// 1. Fetch latest release from GitHub.
-	gh := opts.githubClient()
+	gh := opts.releaseChecker()
 	rel, err := gh.FetchLatestRelease(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("checking for updates: %w", err)

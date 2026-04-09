@@ -60,7 +60,7 @@ func (m Model) renderView() string {
 	}
 
 	// Header row.
-	if m.phase >= 1 && len(m.filteredIndex) > 0 {
+	if m.phase >= phaseResolving && len(m.filteredIndex) > 0 {
 		b.WriteString(m.renderHeader() + "\n")
 	}
 
@@ -89,7 +89,7 @@ func (m Model) renderView() string {
 	}
 
 	// Empty state.
-	if len(m.filteredIndex) == 0 && m.phase >= 2 {
+	if len(m.filteredIndex) == 0 && m.phase >= phaseDone {
 		msg := ""
 		switch m.activeTab {
 		case tabInstalled:
@@ -129,10 +129,10 @@ func (m Model) renderView() string {
 func (m Model) renderTitleBar() string {
 	title := titleStyle.Render("  clim")
 
-	if m.phase == 0 {
+	if m.phase == phaseScanning {
 		return title + "  " + loadingStyle.Render(m.spinner.View()+" finding tools...")
 	}
-	if m.phase == 1 && m.pending > 0 {
+	if m.phase == phaseResolving && m.pending > 0 {
 		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s checking versions (%d remaining)...", m.spinner.View(), m.pending))
 	}
 
@@ -327,7 +327,7 @@ func (m Model) renderDisabledRow(tool registry.Tool, selected bool) string {
 
 func (m Model) versionInfoPlain(tool registry.Tool) string {
 	// Tool still resolving — show spinner placeholder.
-	if m.phase < 2 && !toolResolved(tool) {
+	if m.phase < phaseDone && !toolResolved(tool) {
 		return "…"
 	}
 
@@ -700,7 +700,7 @@ func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 func (m Model) renderBackupView() string {
 	var b strings.Builder
 
-	if m.backupMode == "" {
+	if m.backupMode == backupModeIdle {
 		b.WriteString("\n")
 
 		type menuItem struct {
@@ -739,7 +739,7 @@ func (m Model) renderBackupView() string {
 	}
 
 	// Share token display mode.
-	if m.backupMode == "share" {
+	if m.backupMode == backupModeShare {
 		b.WriteString("\n")
 		b.WriteString("  " + detailTitleStyle.Render("Share Token") + "\n\n")
 		b.WriteString("  " + dimVersion.Render("Send this token via Slack, Teams, or any chat:") + "\n\n")
@@ -988,7 +988,7 @@ func (m Model) renderHelp() string {
 
 	switch m.activeTab {
 	case tabBackup:
-		if m.backupMode == "" {
+		if m.backupMode == backupModeIdle {
 			parts = []string{
 				dimVersion.Render("↑↓") + " navigate",
 				dimVersion.Render("←→") + " tab",
@@ -1003,7 +1003,7 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("Enter") + " confirm",
 				dimVersion.Render("Esc") + " cancel",
 			}
-		} else if m.backupMode == "share" {
+		} else if m.backupMode == backupModeShare {
 			parts = []string{
 				dimVersion.Render("c") + " copy to clipboard",
 				dimVersion.Render("Esc") + " back",
