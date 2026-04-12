@@ -15,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"gopkg.in/yaml.v3"
 
+	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/manifest"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
@@ -133,6 +134,11 @@ type shareFinishedMsg struct {
 	err   error
 }
 
+type marketplaceRefreshMsg struct {
+	result *catalog.RefreshResult
+	err    error
+}
+
 // --- Scan & version commands ---
 
 func findToolsCmd(svc *service.ToolService) func() scanResultMsg {
@@ -180,6 +186,16 @@ func fetchToolInfoCmd(svc *service.ToolService, idx int, tool registry.Tool) tea
 		ctx := context.Background()
 		svc.FetchToolInfo(ctx, &tool)
 		return toolInfoMsg{toolIdx: idx, info: tool.Info}
+	}
+}
+
+// refreshMarketplaceCmd fetches the latest marketplace catalog from GitHub,
+// diffs it against the local cache, and returns the result.
+func refreshMarketplaceCmd(fetcher catalog.MarketplaceFetcher) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		result, err := catalog.Refresh(ctx, fetcher)
+		return marketplaceRefreshMsg{result: result, err: err}
 	}
 }
 

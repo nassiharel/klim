@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/clim/internal/build"
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -59,13 +60,16 @@ func (m Model) renderView() string {
 		return b.String()
 	}
 
+	// Search bar + category chips.
+	b.WriteString(m.renderSearchBar() + "\n")
+
 	// Header row.
 	if m.phase >= phaseResolving && len(m.filteredIndex) > 0 {
 		b.WriteString(m.renderHeader() + "\n")
 	}
 
 	// Rows.
-	visibleRows := m.height - 7
+	visibleRows := m.height - 8 // one extra line for the search bar
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
@@ -97,7 +101,7 @@ func (m Model) renderView() string {
 		case tabUpdates:
 			msg = "  All tools are up to date! ✓"
 		case tabDiscover:
-			msg = "  All curated tools are already installed!"
+			msg = "  All marketplace tools are already installed!"
 		case tabDisabled:
 			msg = "  No disabled tools."
 		case tabBackup:
@@ -109,17 +113,7 @@ func (m Model) renderView() string {
 	}
 
 	b.WriteString("\n")
-
-	switch {
-	case m.filtering:
-		b.WriteString("  " + filterPromptStyle.Render("/") + " " + m.filterInput.View())
-	case m.importingPath:
-		b.WriteString("  " + confirmStyle.Render("Import:") + " " + m.importInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
-	case m.enteringToken:
-		b.WriteString("  " + confirmStyle.Render("Token:") + " " + m.tokenInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
-	default:
-		b.WriteString(m.renderHelp())
-	}
+	b.WriteString(m.renderHelp())
 
 	return b.String()
 }
@@ -143,7 +137,7 @@ func (m Model) renderTitleBar() string {
 		summary += " · " + upgradableStyle.Render(strconv.Itoa(upd)+" updates")
 	}
 	if notInst > 0 {
-		summary += fmt.Sprintf(" · %d to discover", notInst)
+		summary += fmt.Sprintf(" · %d in marketplace", notInst)
 	}
 	if disabled > 0 {
 		summary += fmt.Sprintf(" · %d disabled", disabled)
@@ -158,7 +152,7 @@ func (m Model) renderTabBar() string {
 	}{
 		{"Installed", tabInstalled},
 		{"Updates", tabUpdates},
-		{"Discover", tabDiscover},
+		{"Marketplace", tabDiscover},
 		{"Disabled", tabDisabled},
 		{"Backup", tabBackup},
 		{"Config", tabConfig},
@@ -174,6 +168,50 @@ func (m Model) renderTabBar() string {
 	}
 
 	return "  " + strings.Join(parts, " ")
+}
+
+// --- Search Bar ---
+
+// renderSearchBar renders the always-visible search box with category filter chips.
+// Press / to focus the search box. Tab/Shift+Tab cycles categories when focused.
+func (m Model) renderSearchBar() string {
+	var b strings.Builder
+
+	// Search input.
+	if m.filtering {
+		b.WriteString("  " + filterPromptStyle.Render("/") + " " + m.filterInput.View())
+	} else if m.filterText != "" {
+		b.WriteString("  " + filterPromptStyle.Render("/") + " " + dimVersion.Render(m.filterText))
+	} else {
+		b.WriteString("  " + dimVersion.Render("/ search..."))
+	}
+
+	// Category chips.
+	if len(m.categories) > 0 {
+		b.WriteString("    ")
+
+		// "All" chip.
+		if m.categoryFilter == "" {
+			b.WriteString(activeTabStyle.Render("All"))
+		} else {
+			b.WriteString(dimVersion.Render("All"))
+		}
+
+		for _, cat := range m.categories {
+			b.WriteString(" ")
+			if strings.EqualFold(cat, m.categoryFilter) {
+				b.WriteString(activeTabStyle.Render(cat))
+			} else {
+				b.WriteString(dimVersion.Render(cat))
+			}
+		}
+
+		if m.filtering {
+			b.WriteString("  " + dimVersion.Render("Tab") + " " + dimVersion.Render("cycle"))
+		}
+	}
+
+	return b.String()
 }
 
 // --- Header ---
@@ -195,7 +233,8 @@ func (m Model) renderHeader() string {
 	case tabDiscover:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
-			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
+			headerStyle.Render(fixedWidth("CATEGORY", colCategory)) + "  " +
+			headerStyle.Render("STATUS")
 	case tabDisabled:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
@@ -307,7 +346,15 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
-	return cursor + nameCell + "  " + catCell
+	var badge string
+	switch tool.MarketplaceStatus {
+	case registry.StatusNew:
+		badge = "  " + upgradableStyle.Render("NEW")
+	case registry.StatusChanged:
+		badge = "  " + detailTitleStyle.Render("UPDATED")
+	}
+
+	return cursor + nameCell + "  " + catCell + badge
 }
 
 func (m Model) renderDisabledRow(tool registry.Tool, selected bool) string {
@@ -367,7 +414,7 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	}
 	b.WriteString("  " + detailTitleStyle.Render(nameLabel))
 	b.WriteString("  " + categoryStyle.Render(tool.Category))
-	divLen := max(m.width-len(nameLabel)-len(tool.Category)-8, 10)
+	divLen := max(m.width-lipgloss.Width(nameLabel)-lipgloss.Width(tool.Category)-8, 10)
 	b.WriteString("  " + strings.Repeat("─", divLen))
 	b.WriteString("\n\n")
 
@@ -922,13 +969,19 @@ func (m Model) renderConfigView() string {
 	fmt.Fprintf(&b, "  %s  %s / %s\n", label(fixedWidth("OS / Arch", 18)), runtime.GOOS, runtime.GOARCH)
 	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Go", 18)), runtime.Version())
 
-	// Config file path.
+	// File paths.
 	b.WriteString("\n")
-	configPath := dim("(unknown)")
+	marketplacePath := dim("(unknown)")
 	if p, err := registry.ToolsPath(); err == nil {
+		marketplacePath = p
+	}
+	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Marketplace", 18)), marketplacePath)
+
+	configPath := dim("(unknown)")
+	if p, err := config.Path(); err == nil {
 		configPath = p
 	}
-	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Config File", 18)), configPath)
+	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Config", 18)), configPath)
 
 	// Editor.
 	editor := os.Getenv("EDITOR")
@@ -941,6 +994,21 @@ func (m Model) renderConfigView() string {
 		editor += "  " + dim("($EDITOR)")
 	}
 	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Editor", 18)), editor)
+
+	// Configuration values.
+	if m.cfg != nil {
+		b.WriteString("\n")
+		b.WriteString("  " + label("Configuration") + "\n")
+		fmt.Fprintf(&b, "    %-22s %s\n", dim("github.owner"), m.cfg.GitHub.Owner)
+		fmt.Fprintf(&b, "    %-22s %s\n", dim("github.repo"), m.cfg.GitHub.Repo)
+		fmt.Fprintf(&b, "    %-22s %s\n", dim("github.branch"), m.cfg.GitHub.Branch)
+		fmt.Fprintf(&b, "    %-22s %v\n", dim("marketplace.auto_refresh"), m.cfg.Marketplace.AutoRefresh)
+		fmt.Fprintf(&b, "    %-22s %s\n", dim("marketplace.interval"), m.cfg.Marketplace.RefreshInterval.Duration)
+		fmt.Fprintf(&b, "    %-22s %d %s\n", dim("performance.concurrency"), m.cfg.Performance.Concurrency, dim("(0=auto)"))
+		fmt.Fprintf(&b, "    %-22s %s\n", dim("performance.timeout"), m.cfg.Performance.CommandTimeout.Duration)
+		fmt.Fprintf(&b, "    %-22s %s\n", dim("ui.default_tab"), m.cfg.UI.DefaultTab)
+		fmt.Fprintf(&b, "    %-22s %v\n", dim("ui.show_path"), m.cfg.UI.ShowPath)
+	}
 
 	// Package managers.
 	b.WriteString("\n")
@@ -963,7 +1031,7 @@ func (m Model) renderConfigView() string {
 		label(fixedWidth("Tools", 18)), total, inst, upd, disabled)
 
 	// Pad remaining height.
-	used := 10 + len(registry.AllPMStatusForOS())
+	used := 18 + len(registry.AllPMStatusForOS())
 	if remaining := m.height - used - 6; remaining > 0 {
 		b.WriteString(strings.Repeat("\n", remaining))
 	}
@@ -1031,7 +1099,6 @@ func (m Model) renderHelp() string {
 			dimVersion.Render("←→") + " tab",
 			dimVersion.Render("Enter") + " detail",
 			dimVersion.Render("x") + " " + toggleLabel,
-			dimVersion.Render("/") + " filter",
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
 		}
@@ -1042,7 +1109,6 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("a") + " select all",
 				dimVersion.Render("u") + " upgrade",
 				dimVersion.Render("Enter") + " detail",
-				dimVersion.Render("/") + " filter",
 				dimVersion.Render("q") + " quit",
 			}
 		}

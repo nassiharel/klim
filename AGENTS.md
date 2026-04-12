@@ -34,7 +34,7 @@ It does three things:
 |---|---|---|
 | Interactive TUI | `clim` (stdout is a TTY) | Bubbletea full-screen with 6 tabs: Installed, Updates, Discover, Disabled, Backup, Config |
 | Non-interactive list | `clim list` or piped | Tab-aligned table to stdout via `text/tabwriter` |
-| Subcommands | `clim export/import/update/tools/version` | Specific operations |
+| Subcommands | `clim export/import/open/share/update/tools/version` | Specific operations |
 
 Supported tools are defined in `marketplace.yaml` (70+ curated tools). The catalog is embedded into the binary at compile time and merged with the user's local copy on startup.
 
@@ -59,6 +59,9 @@ clim/
 │   │   ├── tools.go              # `clim tools` + `clim tools path/edit` subcommands
 │   │   ├── export.go             # `clim export` subcommand
 │   │   ├── import.go             # `clim import <file>` subcommand
+│   │   ├── open.go               # `clim open <token>` subcommand — install from share token
+│   │   ├── share.go              # `clim share` subcommand — generate share token
+│   │   ├── installplan.go        # Shared install plan types and execution helpers
 │   │   └── update.go             # `clim update` subcommand — self-update from GitHub Releases
 │   ├── detector/
 │   │   ├── detector.go           # Fallback binary version detection (Go buildinfo)
@@ -83,6 +86,10 @@ clim/
 │   │   ├── replace.go            # Cross-platform binary replacement (rename-swap)
 │   │   ├── replace_unix.go       # Unix cleanup helper
 │   │   └── replace_windows.go    # Windows cleanup helper
+│   ├── service/
+│   │   └── service.go            # ToolService: composition root wiring catalog, finder, resolver
+│   ├── share/
+│   │   └── share.go              # Compact token encode/decode for sharing tool lists
 │   └── tui/
 │       ├── model.go              # Bubbletea Model, Init/Update, all key handling
 │       ├── commands.go           # tea.Cmd factories (find, resolve, exec, export, import)
@@ -94,7 +101,7 @@ clim/
 ├── Makefile                      # build/test/lint/run/clean targets
 ├── .goreleaser.yml               # Multi-platform release config
 ├── .golangci.yml                 # Linter config
-├── .go-version                   # Go 1.25.8
+├── .go-version                   # Go 1.25.9
 ├── README.md                     # User-facing docs
 ├── CONTRIBUTING.md               # Dev workflow docs
 ├── AGENTS.md                     # This file
@@ -107,24 +114,36 @@ clim/
 
 ### 3.1 Tool Discovery & Version Resolution
 
+All CLI commands and the TUI access tool discovery through **`ToolService`** (`internal/service`), which composes a `ToolCatalog`, `ToolFinder`, and `VersionResolver` behind clean interfaces.
+
 ```
-marketplace.yaml (//go:embed) ──► DefaultTools() ──► merge with user YAML
-                                        │
-                                        ├──[parallel]──► finder.FindAll()
-                                        │                  └── exec.LookPath for each binary name
-                                        │                  └── detect install source from path
-                                        │
-                                        ├──[parallel]──► pkgmgr.ResolveVersions()
-                                        │                  └── query installed version via PM
-                                        │                  └── query latest version via PM
-                                        │
-                                        └──[fallback]──► detector.EnrichFallback()
-                                                           └── Go buildinfo / PE version resources
+                              ToolService
+                                  │
+                    ┌─────────────┼─────────────┐
+                    ▼             ▼              ▼
+              ToolCatalog    ToolFinder    VersionResolver
+              (Catalog)       (Finder)      (Resolver)
+                    │             │              │
+                    ▼             ▼              ▼
+            DefaultTools()   PathFinder    PackageManagerResolver
+            load + merge     LookPath      ├── query installed version via PM
+            marketplace.yaml detect src    ├── query latest version via PM
+                                           └── detector.EnrichOne() fallback
 ```
 
-The **TUI** fires individual `tea.Cmd` goroutines per tool for PATH scanning (`findToolsCmd`) and version resolution (`resolveToolVersionCmd`), counting down `m.pending` as results arrive.
+**Pipelines exposed by `ToolService`:**
 
-The **CLI** calls batch functions: `finder.FindAll(tools)` → `pkgmgr.ResolveVersions(tools, NumCPU)` → `detector.EnrichFallback(tools)`.
+| Method | Pipeline | Used by |
+|---|---|---|
+| `LoadAndResolve()` | Catalog → Finder → Resolver (includes detector enrichment) | `clim list`, `clim export` |
+| `ScanOnly()` | Catalog → Finder (no version resolution) | `clim import`, `clim open`, `clim share` |
+| `LoadAndScan()` | Catalog → Finder (sorted, no versions) | TUI initial scan phase |
+| `ResolveOne()` | Resolver for a single tool | TUI per-tool version resolution |
+| `RefreshTool()` | Finder → Resolver for a single tool | TUI after install/upgrade/remove |
+
+The **TUI** fires individual `tea.Cmd` goroutines per tool for PATH scanning (`findToolsCmd` → `svc.LoadAndScan`) and version resolution (`resolveToolVersionCmd` → `svc.ResolveOne`), counting down `m.pending` as results arrive.
+
+The **CLI** calls `svc.LoadAndResolve()` which internally runs `Finder.FindAll` → `Resolver.ResolveVersions` (bounded worker pool with detector enrichment per tool).
 
 ### 3.2 TUI Message Flow
 
@@ -133,7 +152,7 @@ Model.Init()
   └─► tea.Batch(spinner.Tick, findToolsCmd)
         │
         ▼
-  findToolsCmd runs finder.FindAll and returns scanResultMsg
+  findToolsCmd runs svc.LoadAndScan and returns scanResultMsg
         │
         ▼
   scanResultMsg ──► Update() ──► dispatch resolveToolVersionCmd per installed tool
@@ -193,12 +212,14 @@ build.VersionOnly() ──► GitHub Releases API ──► CompareVersions()
 | `cmd/clim` | Binary entry point | `main()` |
 | `embed.go` (root) | Embeds `marketplace.yaml` | `MarketplaceYAML []byte` |
 | `internal/build` | Compile-time metadata | `Version`, `Commit`, `Date`, `Info()`, `VersionOnly()` |
-| `internal/cli` | Cobra command tree | `Execute()`, subcommands: `list`, `version`, `tools`, `export`, `import`, `update` |
+| `internal/cli` | Cobra command tree | `Execute()`, subcommands: `list`, `version`, `tools`, `export`, `import`, `open`, `share`, `update` |
 | `internal/registry` | Tool catalogue, version comparison | `Tool`, `Instance`, `PackageIDs`, `DefaultTools()`, `VersionsMatch()`, `CompareVersions()`, `ToolsPath()`, `SetToolEnabled()` |
-| `internal/finder` | PATH scanning, source detection | `FindAll(tools)` |
-| `internal/pkgmgr` | Package manager queries | `ResolveVersions(tools, concurrency)`, `ResolveOne(tool)`, `FetchToolInfo(tool)` |
-| `internal/detector` | Fallback version extraction | `EnrichFallback(tools)`, `EnrichOne(tool)` |
+| `internal/service` | Composition root wiring catalog, finder, resolver | `ToolService`, `New()`, `LoadAndResolve()`, `ScanOnly()`, `LoadAndScan()`, `ResolveOne()`, `RefreshTool()` |
+| `internal/finder` | PATH scanning, source detection | `ToolFinder`, `NewFinder()`, `PathFinder`, `FindAll(tools)` |
+| `internal/pkgmgr` | Package manager queries + detector enrichment | `VersionResolver`, `NewResolver()`, `PackageManagerResolver`, `ResolveVersions()`, `ResolveOne()`, `FetchToolInfo()` |
+| `internal/detector` | Fallback version extraction | `EnrichOne(tool)` |
 | `internal/manifest` | YAML schema for export/import | `Manifest`, `Tool`, `Packages` |
+| `internal/share` | Compact token encode/decode for tool sharing | `Encode(names)`, `Decode(token)` |
 | `internal/selfupdate` | Self-update from GitHub Releases | `Update(ctx, version, opts)`, `Result`, `Options` |
 | `internal/tui` | Bubbletea interactive UI | `Model`, `NewModel()`, `Run()` |
 
@@ -409,6 +430,7 @@ import (
 - `internal/registry/version_test.go`, `tool_test.go`, `known_test.go`
 - `internal/pkgmgr/pkgmgr_test.go`
 - `internal/finder/finder_test.go`
+- `internal/share/share_test.go`
 - `internal/selfupdate/selfupdate_test.go`
 
 ---
@@ -476,6 +498,6 @@ All dependencies are pure Go (CGO_ENABLED=0). No C libraries, fully static binar
 - **Package manager queries are synchronous subprocesses** with a 10-second timeout. If a PM hangs, the timeout kills it and returns an empty string.
 - **Version comparison stops at the first non-numeric segment.** `"2.53.0.windows.1"` is compared as `[2, 53, 0]`. This is intentional — non-numeric suffixes are platform metadata, not version info.
 - **`VersionsMatch` handles PE padding** (e.g. `1400` ≈ `14`) but `CompareVersions` does not. Callers that need PE-aware comparison should use `VersionsMatch` as a guard first (as `HasUpdate()` does).
-- **The TUI calls `pkgmgr.ResolveOne` per tool** (individual goroutines via Bubbletea commands), while the **CLI calls `pkgmgr.ResolveVersions`** (worker pool). Both reach the same result via different concurrency models.
+- **The TUI calls `svc.ResolveOne` per tool** (individual goroutines via Bubbletea commands), while the **CLI calls `svc.LoadAndResolve`** which internally uses `Resolver.ResolveVersions` (worker pool). Both reach the same result via different concurrency models.
 - **Windows cannot delete a running executable.** The self-update `ReplaceBinary` leaves a `.old` file that is cleaned up on the next invocation.
 - **`sync.Once` in `pmAvailability`** caches package manager availability permanently for the process lifetime. Tests must set `pmAvailableFunc` before any real call.

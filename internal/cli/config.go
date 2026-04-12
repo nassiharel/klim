@@ -7,19 +7,19 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/config"
 )
 
-var toolsCmd = &cobra.Command{
-	Use:   "tools",
-	Short: "Manage the tool definitions",
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Manage clim configuration",
 }
 
-var toolsPathCmd = &cobra.Command{
+var configPathCmd = &cobra.Command{
 	Use:   "path",
-	Short: "Print the path to marketplace.yaml",
+	Short: "Print the path to config.yaml",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := registry.ToolsPath()
+		path, err := config.Path()
 		if err != nil {
 			return err
 		}
@@ -28,17 +28,18 @@ var toolsPathCmd = &cobra.Command{
 	},
 }
 
-var toolsEditCmd = &cobra.Command{
+var configEditCmd = &cobra.Command{
 	Use:   "edit",
-	Short: "Open marketplace.yaml in your editor",
+	Short: "Open config.yaml in your editor",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := registry.ToolsPath()
+		path, err := config.Path()
 		if err != nil {
 			return err
 		}
 
+		// Ensure the file exists with defaults before opening.
 		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
-			return fmt.Errorf("marketplace file not found at %s; run clim first to fetch it", path)
+			_, _ = config.Load() // creates the default file
 		}
 
 		editor := os.Getenv("EDITOR")
@@ -58,6 +59,7 @@ var toolsEditCmd = &cobra.Command{
 }
 
 func init() {
-	toolsCmd.AddCommand(toolsPathCmd)
-	toolsCmd.AddCommand(toolsEditCmd)
+	configCmd.AddCommand(configPathCmd)
+	configCmd.AddCommand(configEditCmd)
+	rootCmd.AddCommand(configCmd)
 }

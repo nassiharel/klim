@@ -11,6 +11,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/nassiharel/clim/internal/catalog"
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
 )
@@ -67,6 +69,7 @@ type Model struct {
 	// Dependencies.
 	svc  *service.ToolService
 	clip Clipboard
+	cfg  *config.Config
 
 	tools   []registry.Tool
 	cursor  int
@@ -76,10 +79,15 @@ type Model struct {
 	activeTab int
 
 	// Filter.
-	filterInput   textinput.Model
-	filtering     bool
-	filterText    string
-	filteredIndex []int
+	filterInput    textinput.Model
+	filtering      bool
+	filterText     string
+	filteredIndex  []int
+	categoryFilter string   // "" = all categories; non-empty = only this category
+	categories     []string // sorted unique categories, computed once after scan
+
+	// Marketplace refresh diff — carried across rescans to apply badges.
+	lastDiff *catalog.DiffResult
 
 	// Detail view.
 	detailIdx  int // index into m.tools, -1 = no detail
@@ -138,7 +146,7 @@ func NewModel() Model {
 	s.Spinner = spinner.Dot
 
 	ti := textinput.New()
-	ti.Placeholder = "filter..."
+	ti.Placeholder = "search tools..."
 	ti.CharLimit = 30
 
 	ii := textinput.New()
@@ -168,6 +176,35 @@ func NewModel() Model {
 	}
 }
 
+// NewModelWithConfig creates a new TUI model configured from the given Config.
+func NewModelWithConfig(cfg *config.Config) Model {
+	m := NewModel()
+	m.svc = service.NewWithConfig(cfg)
+	m.activeTab = tabFromName(cfg.UI.DefaultTab)
+	m.cfg = cfg
+	return m
+}
+
+// tabFromName maps a config tab name string to the tab constant.
+func tabFromName(name string) int {
+	switch name {
+	case "installed":
+		return tabInstalled
+	case "updates":
+		return tabUpdates
+	case "marketplace":
+		return tabDiscover
+	case "disabled":
+		return tabDisabled
+	case "backup":
+		return tabBackup
+	case "config":
+		return tabConfig
+	default:
+		return tabInstalled
+	}
+}
+
 // Init starts the initial tool discovery process.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
@@ -193,6 +230,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
 		}
+
+		// Compute sorted unique categories for the category cycling filter.
+		m.categories = collectCategories(m.tools)
+		m.categoryFilter = ""
+
+		// Apply marketplace refresh badges if a diff is pending.
+		if m.lastDiff != nil {
+			newSet := make(map[string]struct{}, len(m.lastDiff.NewTools))
+			for _, name := range m.lastDiff.NewTools {
+				newSet[name] = struct{}{}
+			}
+			for i := range m.tools {
+				if _, ok := newSet[m.tools[i].Name]; ok {
+					m.tools[i].MarketplaceStatus = registry.StatusNew
+				} else if _, ok := m.lastDiff.ChangedTools[m.tools[i].Name]; ok {
+					m.tools[i].MarketplaceStatus = registry.StatusChanged
+				}
+			}
+			m.lastDiff = nil
+		}
+
 		m.applyFilter()
 
 		// Fire per-tool version resolution commands.
@@ -263,6 +321,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tools[msg.toolIdx].Info = msg.info
 			m.tools[msg.toolIdx].InfoFetched = true
 		}
+		return m, nil
+
+	case marketplaceRefreshMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("⚠ Refresh failed: %s", msg.err)
+			return m, nil
+		}
+		diff := msg.result.Diff
+		// Store diff so badges survive the subsequent rescan.
+		m.lastDiff = &diff
+		// Reload tools from the updated cache so new tools appear.
+		if msg.result.Updated {
+			m.loading = true
+			m.phase = phaseScanning
+			m.statusMsg = fmt.Sprintf("✓ Marketplace updated: %d new, %d changed",
+				len(diff.NewTools), len(diff.ChangedTools))
+			return m, tea.Batch(
+				m.spinner.Tick,
+				func() tea.Msg { return findToolsCmd(m.svc)() },
+			)
+		}
+		m.statusMsg = "✓ Marketplace is up to date"
 		return m, nil
 
 	case exportFinishedMsg:
@@ -403,7 +483,12 @@ func (m Model) View() tea.View {
 
 // Run starts the interactive TUI.
 func Run() error {
-	model := NewModel()
+	return RunWithConfig(config.Default())
+}
+
+// RunWithConfig launches the TUI with the given configuration.
+func RunWithConfig(cfg *config.Config) error {
+	model := NewModelWithConfig(cfg)
 	p := tea.NewProgram(model)
 	_, err := p.Run()
 	if err != nil {
@@ -597,16 +682,34 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleKeyFilter handles the search/filter text input mode.
+// The search box is focused — typing goes into it. Tab cycles categories.
 func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.filtering = false
 		m.filterText = ""
 		m.filterInput.SetValue("")
+		m.categoryFilter = ""
 		m.applyFilter()
 		return m, nil
 	case "enter":
 		m.filtering = false
+		return m, nil
+	case "tab":
+		// Cycle category forward: "" → cat[0] → ... → cat[N-1] → ""
+		if len(m.categories) > 0 {
+			m.categoryFilter = nextCategory(m.categoryFilter, m.categories, 1)
+			m.cursor = 0
+			m.applyFilter()
+		}
+		return m, nil
+	case "shift+tab":
+		// Cycle category backward: "" → cat[N-1] → ... → cat[0] → ""
+		if len(m.categories) > 0 {
+			m.categoryFilter = nextCategory(m.categoryFilter, m.categories, -1)
+			m.cursor = 0
+			m.applyFilter()
+		}
 		return m, nil
 	default:
 		var cmd tea.Cmd
@@ -624,7 +727,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "c":
-		// Copy share token to clipboard.
+		// Copy share token to clipboard (Backup tab only).
 		if m.activeTab == tabBackup && m.backupMode == backupModeShare && m.sharedToken != "" {
 			if err := m.clip.WriteAll(m.sharedToken); err != nil {
 				m.statusMsg = "⚠ Clipboard unavailable"
@@ -642,6 +745,13 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.backupDone = 0
 			m.backupConfirm = false
 			m.statusMsg = ""
+			return m, nil
+		}
+		// Clear active category filter.
+		if m.categoryFilter != "" {
+			m.categoryFilter = ""
+			m.cursor = 0
+			m.applyFilter()
 			return m, nil
 		}
 	case "right", "tab":
@@ -823,6 +933,13 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "r":
+		// On the Marketplace tab, refresh the catalog from GitHub.
+		if m.activeTab == tabDiscover {
+			m.statusMsg = "Refreshing marketplace..."
+			fetcher := &catalog.GitHubFetcher{}
+			return m, refreshMarketplaceCmd(fetcher)
+		}
+		// On other tabs, do a full rescan.
 		m.loading = true
 		m.phase = phaseScanning
 		m.tools = nil
@@ -848,10 +965,15 @@ func (m *Model) applyFilter() {
 		if !m.matchesTab(tool) {
 			continue
 		}
+		// Structured category filter (cycled via 'c' key).
+		if m.categoryFilter != "" && !strings.EqualFold(tool.Category, m.categoryFilter) {
+			continue
+		}
 		if filter != "" &&
 			!strings.Contains(strings.ToLower(tool.DisplayName), filter) &&
 			!strings.Contains(strings.ToLower(tool.Name), filter) &&
-			!strings.Contains(strings.ToLower(tool.Category), filter) {
+			!strings.Contains(strings.ToLower(tool.Category), filter) &&
+			!matchesTags(tool.Tags, filter) {
 			continue
 		}
 		m.filteredIndex = append(m.filteredIndex, i)
@@ -859,6 +981,16 @@ func (m *Model) applyFilter() {
 	if m.cursor >= len(m.filteredIndex) {
 		m.cursor = max(0, len(m.filteredIndex)-1)
 	}
+}
+
+// matchesTags reports whether any tag contains the filter substring.
+func matchesTags(tags []string, filter string) bool {
+	for _, tag := range tags {
+		if strings.Contains(strings.ToLower(tag), filter) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Model) matchesTab(tool registry.Tool) bool {
@@ -877,6 +1009,43 @@ func (m *Model) matchesTab(tool registry.Tool) bool {
 		return false // Config tab renders static content, not tools
 	}
 	return false
+}
+
+// collectCategories returns sorted unique category names from the tool list.
+func collectCategories(tools []registry.Tool) []string {
+	seen := make(map[string]struct{})
+	for _, t := range tools {
+		if t.Category != "" {
+			seen[t.Category] = struct{}{}
+		}
+	}
+	cats := make([]string, 0, len(seen))
+	for cat := range seen {
+		cats = append(cats, cat)
+	}
+	sort.Strings(cats)
+	return cats
+}
+
+// nextCategory cycles the category filter by direction (+1 forward, -1 backward).
+// The cycle is: "" → categories[0] → ... → categories[N-1] → "" (wraps around).
+func nextCategory(current string, categories []string, direction int) string {
+	if current == "" {
+		if direction > 0 {
+			return categories[0]
+		}
+		return categories[len(categories)-1]
+	}
+	for i, cat := range categories {
+		if strings.EqualFold(cat, current) {
+			next := i + direction
+			if next < 0 || next >= len(categories) {
+				return "" // wrap to "All"
+			}
+			return categories[next]
+		}
+	}
+	return "" // current not found, reset
 }
 
 // --- Stats ---

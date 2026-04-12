@@ -28,11 +28,25 @@ type VersionResolver interface {
 // PackageManagerResolver is the default VersionResolver that queries
 // native package managers (winget, brew, apt, choco, snap, npm) and
 // falls back to binary detection (Go buildinfo, PE version resources).
-type PackageManagerResolver struct{}
+type PackageManagerResolver struct {
+	Timeout time.Duration // timeout for package manager subprocess calls; 0 = default (10s)
+}
 
 // NewResolver returns the default package-manager-based version resolver.
 func NewResolver() VersionResolver {
 	return &PackageManagerResolver{}
+}
+
+// NewResolverWithTimeout returns a resolver with a custom command timeout.
+func NewResolverWithTimeout(timeout time.Duration) VersionResolver {
+	return &PackageManagerResolver{Timeout: timeout}
+}
+
+func (r *PackageManagerResolver) timeout() time.Duration {
+	if r.Timeout > 0 {
+		return r.Timeout
+	}
+	return cmdTimeout
 }
 
 var defaultResolver VersionResolver = &PackageManagerResolver{}

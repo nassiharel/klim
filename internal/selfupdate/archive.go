@@ -57,9 +57,17 @@ func extractFromTarGz(r io.Reader, goos string) ([]byte, error) {
 		}
 		// Match basename — archives may have a top-level directory.
 		if filepath.Base(hdr.Name) == target && hdr.Typeflag == tar.TypeReg {
-			data, err := io.ReadAll(io.LimitReader(tr, maxBinarySize))
+			if hdr.Size > maxBinarySize {
+				return nil, fmt.Errorf("binary in archive is too large (%d bytes, max %d)", hdr.Size, maxBinarySize)
+			}
+			// Read up to maxBinarySize + 1 so we can detect truncation even
+			// if the tar header size is untrustworthy.
+			data, err := io.ReadAll(io.LimitReader(tr, maxBinarySize+1))
 			if err != nil {
 				return nil, fmt.Errorf("reading binary from archive: %w", err)
+			}
+			if int64(len(data)) > maxBinarySize {
+				return nil, fmt.Errorf("binary in archive exceeds maximum size (%d bytes)", maxBinarySize)
 			}
 			return data, nil
 		}
@@ -83,15 +91,23 @@ func extractFromZip(r io.Reader, goos string) ([]byte, error) {
 	target := binaryName(goos)
 	for _, f := range zr.File {
 		if filepath.Base(f.Name) == target {
+			if f.UncompressedSize64 > maxBinarySize {
+				return nil, fmt.Errorf("binary in zip is too large (%d bytes, max %d)", f.UncompressedSize64, maxBinarySize)
+			}
 			rc, err := f.Open()
 			if err != nil {
 				return nil, fmt.Errorf("opening zip entry: %w", err)
 			}
 
-			data, err := io.ReadAll(io.LimitReader(rc, maxBinarySize))
+			// Read up to maxBinarySize + 1 so we can detect truncation even
+			// if the zip header size is untrustworthy.
+			data, err := io.ReadAll(io.LimitReader(rc, maxBinarySize+1))
 			_ = rc.Close()
 			if err != nil {
 				return nil, fmt.Errorf("reading binary from zip: %w", err)
+			}
+			if int64(len(data)) > maxBinarySize {
+				return nil, fmt.Errorf("binary in zip exceeds maximum size (%d bytes)", maxBinarySize)
 			}
 			return data, nil
 		}

@@ -94,7 +94,11 @@ func buildTokenPlan(names []string, regMap map[string]*registry.Tool) planSummar
 		src := rt.Packages.BestInstallSource()
 		installArgs := rt.Packages.InstallArgs(src)
 		if installArgs == nil {
-			ps.noPackage = append(ps.noPackage, name)
+			if rt.Packages.HasAnyPackageForOS() {
+				ps.noPkgMgr = append(ps.noPkgMgr, name)
+			} else {
+				ps.noPackage = append(ps.noPackage, name)
+			}
 			continue
 		}
 

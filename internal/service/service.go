@@ -8,10 +8,11 @@ package service
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sort"
 	"strings"
 
+	"github.com/nassiharel/clim/internal/catalog"
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/finder"
 	"github.com/nassiharel/clim/internal/pkgmgr"
 	"github.com/nassiharel/clim/internal/registry"
@@ -19,37 +20,53 @@ import (
 
 // ToolCatalog abstracts loading the tool definitions.
 type ToolCatalog interface {
-	LoadTools() []registry.Tool
+	LoadTools(ctx context.Context) ([]registry.Tool, error)
 }
 
 // ToolService orchestrates tool discovery and version resolution.
 // It composes a catalog, a finder, and a resolver behind clean interfaces.
 type ToolService struct {
-	Catalog  ToolCatalog
-	Finder   finder.ToolFinder
-	Resolver pkgmgr.VersionResolver
+	Catalog     ToolCatalog
+	Finder      finder.ToolFinder
+	Resolver    pkgmgr.VersionResolver
+	Concurrency int // 0 = auto (runtime.NumCPU)
 }
 
 // New returns a ToolService wired with the default implementations.
 func New() *ToolService {
+	return NewWithConfig(config.Default())
+}
+
+// NewWithConfig returns a ToolService configured from the given Config.
+func NewWithConfig(cfg *config.Config) *ToolService {
+	fetcher := &catalog.GitHubFetcher{
+		Owner:  cfg.GitHub.Owner,
+		Repo:   cfg.GitHub.Repo,
+		Branch: cfg.GitHub.Branch,
+	}
+
 	return &ToolService{
-		Catalog:  &DefaultCatalog{},
-		Finder:   finder.NewFinder(),
-		Resolver: pkgmgr.NewResolver(),
+		Catalog:     &DefaultCatalog{Fetcher: fetcher},
+		Finder:      finder.NewFinder(),
+		Resolver:    pkgmgr.NewResolverWithTimeout(cfg.Performance.CommandTimeout.Duration),
+		Concurrency: cfg.Performance.Concurrency,
 	}
 }
 
 // LoadAndResolve loads the tool catalog, scans PATH, resolves versions,
 // and returns the tools sorted by name. This is the full pipeline used
-// by `clim list`, `clim export`, and `clim share`.
+// by `clim list` and `clim export`.
 func (s *ToolService) LoadAndResolve(ctx context.Context) ([]registry.Tool, error) {
-	tools := s.Catalog.LoadTools()
+	tools, err := s.Catalog.LoadTools(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("loading catalog: %w", err)
+	}
 
 	if err := s.Finder.FindAll(ctx, tools); err != nil {
 		return nil, fmt.Errorf("scanning PATH: %w", err)
 	}
 
-	s.Resolver.ResolveVersions(ctx, tools, runtime.NumCPU())
+	s.Resolver.ResolveVersions(ctx, tools, s.Concurrency)
 	sortToolsByName(tools)
 	return tools, nil
 }
@@ -58,7 +75,10 @@ func (s *ToolService) LoadAndResolve(ctx context.Context) ([]registry.Tool, erro
 // Used by `clim import`, `clim open`, and the TUI import plan builder
 // where only installed/not-installed status is needed.
 func (s *ToolService) ScanOnly(ctx context.Context) ([]registry.Tool, error) {
-	tools := s.Catalog.LoadTools()
+	tools, err := s.Catalog.LoadTools(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("loading catalog: %w", err)
+	}
 
 	if err := s.Finder.FindAll(ctx, tools); err != nil {
 		return nil, fmt.Errorf("scanning PATH: %w", err)
@@ -70,7 +90,10 @@ func (s *ToolService) ScanOnly(ctx context.Context) ([]registry.Tool, error) {
 // LoadAndScan loads the catalog and scans PATH (no version resolution).
 // Returns tools sorted by name. Used by the TUI's initial scan phase.
 func (s *ToolService) LoadAndScan(ctx context.Context) ([]registry.Tool, error) {
-	tools := s.Catalog.LoadTools()
+	tools, err := s.Catalog.LoadTools(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("loading catalog: %w", err)
+	}
 
 	if err := s.Finder.FindAll(ctx, tools); err != nil {
 		return tools, err // return partial results with error
@@ -107,10 +130,21 @@ func sortToolsByName(tools []registry.Tool) {
 	})
 }
 
-// DefaultCatalog loads tools from the embedded + user marketplace YAML.
-type DefaultCatalog struct{}
+// DefaultCatalog loads tools by fetching/caching the marketplace from GitHub,
+// then merging with user customizations.
+type DefaultCatalog struct {
+	Fetcher catalog.MarketplaceFetcher
+}
 
 // LoadTools implements ToolCatalog.
-func (c *DefaultCatalog) LoadTools() []registry.Tool {
-	return registry.DefaultTools()
+func (c *DefaultCatalog) LoadTools(ctx context.Context) ([]registry.Tool, error) {
+	data, err := catalog.LoadOrFetch(ctx, c.Fetcher)
+	if err != nil {
+		return nil, err
+	}
+	tools := registry.DefaultToolsFromBytes(data)
+	if tools == nil {
+		return nil, fmt.Errorf("failed to parse marketplace catalog")
+	}
+	return tools, nil
 }

@@ -17,8 +17,13 @@ const (
 	// tokenPrefix is prepended to every share token for recognition and versioning.
 	tokenPrefix = "clim:v1:"
 
-	// maxTokenSize limits the decoded payload to prevent abuse.
+	// maxTokenSize limits the decompressed payload to prevent abuse.
 	maxTokenSize = 64 << 10 // 64 KB
+
+	// maxEncodedLen caps the base64-encoded portion of the token to prevent
+	// a large allocation before decoding even begins. Legitimate tokens are
+	// small (gzip-compressed tool names); this is intentionally generous.
+	maxEncodedLen = 256 << 10 // 256 KB
 )
 
 // Sentinel errors for token encoding/decoding.
@@ -76,6 +81,10 @@ func Decode(token string) ([]string, error) {
 		return nil, ErrEmptyToken
 	}
 
+	if len(data) > maxEncodedLen {
+		return nil, fmt.Errorf("share token too large (%d bytes, max %d)", len(data), maxEncodedLen)
+	}
+
 	compressed, err := base64.RawURLEncoding.DecodeString(data)
 	if err != nil {
 		return nil, fmt.Errorf("invalid token encoding: %w", err)
@@ -87,9 +96,14 @@ func Decode(token string) ([]string, error) {
 	}
 	defer func() { _ = gz.Close() }()
 
-	payload, err := io.ReadAll(io.LimitReader(gz, maxTokenSize))
+	// Read one extra byte beyond the limit so we can distinguish a
+	// payload that fits from one that exceeds maxTokenSize.
+	payload, err := io.ReadAll(io.LimitReader(gz, maxTokenSize+1))
 	if err != nil {
 		return nil, fmt.Errorf("decompressing token: %w", err)
+	}
+	if int64(len(payload)) > maxTokenSize {
+		return nil, fmt.Errorf("decompressed token payload too large (max %d bytes)", maxTokenSize)
 	}
 
 	raw := strings.TrimSpace(string(payload))

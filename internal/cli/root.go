@@ -8,12 +8,16 @@ import (
 	"golang.org/x/term"
 
 	"github.com/nassiharel/clim/internal/build"
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/tui"
 )
 
+// cfg is the global configuration loaded once on startup.
+var cfg = config.MustLoad()
+
 // svc is the shared ToolService used by all CLI subcommands.
-var svc = service.New()
+var svc = service.NewWithConfig(cfg)
 
 var rootCmd = &cobra.Command{
 	Use:   "clim",
@@ -27,7 +31,7 @@ for non-interactive operation.`,
 	Version: build.Version,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if term.IsTerminal(int(os.Stdout.Fd())) {
-			return tui.Run()
+			return tui.RunWithConfig(cfg)
 		}
 		return runList(cmd, args)
 	},
