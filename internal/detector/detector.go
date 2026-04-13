@@ -86,8 +86,9 @@ func resolveChocoShim(path string) string {
 	return resolveChocoShimPlatform(path)
 }
 
-// versionRe matches semver-like version strings: 1.2.3, 0.71.0, 2.53.0.windows.1, etc.
-var versionRe = regexp.MustCompile(`\b(\d+\.\d+(?:\.\d+)?(?:[.\-]\w+)*)\b`)
+// versionRe matches semver-like version strings with an optional v/go prefix:
+// v1.2.3, go1.23.4, 0.71.0, 2.53.0, etc. Captures only the numeric version.
+var versionRe = regexp.MustCompile(`(?:^|[^.\w])(?:v|go)?(\d+\.\d+(?:\.\d+)*)`)
 
 // detectCLIVersion executes the binary with --version and parses the output.
 // This is a last-resort fallback — only called when static detection fails.
@@ -109,8 +110,8 @@ func detectCLIVersion(path string) string {
 	}
 
 	// Extract the first semver-like version from the line.
-	if m := versionRe.FindString(first); m != "" {
-		return m
+	if m := versionRe.FindStringSubmatch(first); len(m) >= 2 {
+		return m[1]
 	}
 
 	return ""

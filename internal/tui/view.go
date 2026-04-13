@@ -232,8 +232,8 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 	nameText := toolLabel(tool)
 	nameCell := nameStyle.Render(fixedWidth(nameText, colName))
 
-	// Version column: build plain version info, then pad.
-	verCell := fixedWidth(m.versionInfoPlain(tool), colVersion)
+	// Version column: styled version info, then pad to fixed width.
+	verCell := fixedWidthANSI(m.versionInfoStyled(tool), colVersion)
 
 	// Source column.
 	src := ""
@@ -306,7 +306,7 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 
 // --- Version info (plain text, no ANSI) ---
 
-func (m Model) versionInfoPlain(tool registry.Tool) string {
+func (m Model) versionInfoStyled(tool registry.Tool) string {
 	// Tool still resolving — show spinner placeholder.
 	if m.phase < phaseDone && !toolResolved(tool) {
 		return "…"
@@ -328,10 +328,10 @@ func (m Model) versionInfoPlain(tool registry.Tool) string {
 	if ver == "" && latest != "" {
 		return "— → " + latest + " ?"
 	}
-	if registry.VersionsMatch(ver, latest) {
-		return ver + " ✓"
+	if tool.HasUpdate() {
+		return ver + " → " + upgradableStyle.Render(latest+" ⬆")
 	}
-	return ver + " → " + latest + " ⬆"
+	return ver + " " + upToDateStyle.Render("✓")
 }
 
 // --- Detail view ---

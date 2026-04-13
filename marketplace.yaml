@@ -171,6 +171,7 @@ tools:
     tags: [kubernetes, k8s, logs, tail, multi-pod]
     binary_names: [stern]
     packages:
+      winget: "stern.stern"
       choco: "stern"
       brew: "stern"
 
@@ -180,6 +181,7 @@ tools:
     tags: [kubernetes, k8s, context, cluster-switching]
     binary_names: [kubectx]
     packages:
+      winget: "ahmetb.kubectx"
       choco: "kubectx"
       brew: "kubectx"
       apt: "kubectx"
@@ -190,6 +192,7 @@ tools:
     tags: [kubernetes, k8s, namespace, cluster-switching]
     binary_names: [kubens]
     packages:
+      winget: "ahmetb.kubens"
       choco: "kubens"
       brew: "kubectx"
       apt: "kubectx"

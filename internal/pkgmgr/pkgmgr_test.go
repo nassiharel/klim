@@ -1,6 +1,9 @@
 package pkgmgr
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseKeyValue(t *testing.T) {
 	tests := []struct {
@@ -135,4 +138,125 @@ func TestParseDpkgStatus(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestCleanWingetOutput(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string // expected after cleaning — \r normalised to \n
+	}{
+		{
+			"clean output",
+			"Name Id Version Source\nfzf junegunn.fzf 0.71.0 winget\n",
+			"Name Id Version Source\nfzf junegunn.fzf 0.71.0 winget\n",
+		},
+		{
+			"CRLF line endings",
+			"Name Id Version Source\r\nfzf junegunn.fzf 0.71.0 winget\r\n",
+			"Name Id Version Source\nfzf junegunn.fzf 0.71.0 winget\n",
+		},
+		{
+			"spinner with CR overwrites",
+			"-\r\\\r|\r/\r-\rName Id Version Source\r\n---\r\nfzf junegunn.fzf 0.71.0 winget\r\n",
+			"-\n\\\n|\n/\n-\nName Id Version Source\n---\nfzf junegunn.fzf 0.71.0 winget\n",
+		},
+		{
+			"empty output",
+			"",
+			"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cleanWingetOutput(tt.raw)
+			if got != tt.want {
+				t.Errorf("cleanWingetOutput() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWingetInstalledVersionParsing(t *testing.T) {
+	// We can't call wingetInstalledVersion directly (it runs a subprocess),
+	// but we can test the parsing logic by simulating what cleanWingetOutput
+	// produces and running the same field-matching loop.
+
+	tests := []struct {
+		name   string
+		output string // cleaned winget list output
+		id     string
+		want   string
+	}{
+		{
+			"standard output",
+			"Name Id Version Source\n---------------------------------\nfzf  junegunn.fzf 0.71.0  winget\n",
+			"junegunn.fzf",
+			"0.71.0",
+		},
+		{
+			"FFmpeg with short version",
+			"Name   Id           Version Source\n---------------------------------\nFFmpeg Gyan.FFmpeg 8.1     winget\n",
+			"Gyan.FFmpeg",
+			"8.1",
+		},
+		{
+			"Git with long name",
+			"Name Id      Version  Source\n-----------------------------\nGit  Git.Git 2.47.1.2 winget\n",
+			"Git.Git",
+			"2.47.1.2",
+		},
+		{
+			"not found",
+			"Name Id Version Source\n---------------------------------\n",
+			"junegunn.fzf",
+			"",
+		},
+		{
+			"empty output",
+			"",
+			"junegunn.fzf",
+			"",
+		},
+		{
+			"spinner noise before data",
+			"-\n\\\n|\n/\n-\nName Id Version Source\n---------------------------------\nfzf  junegunn.fzf 0.71.0  winget\n",
+			"junegunn.fzf",
+			"0.71.0",
+		},
+		{
+			"separator line skipped",
+			"Name Id Version Source\n---------------------------------\n",
+			"---------------------------------",
+			"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseWingetListVersion(tt.output, tt.id)
+			if got != tt.want {
+				t.Errorf("parseWingetListVersion(%q) = %q, want %q", tt.id, got, tt.want)
+			}
+		})
+	}
+}
+
+// parseWingetListVersion extracts the version from cleaned winget list output.
+// This mirrors the parsing logic in wingetInstalledVersion for testability.
+func parseWingetListVersion(output, id string) string {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		for i, f := range fields {
+			if strings.EqualFold(f, id) && i+1 < len(fields) {
+				ver := fields[i+1]
+				if strings.HasPrefix(ver, "-") {
+					continue
+				}
+				return ver
+			}
+		}
+	}
+	return ""
 }
