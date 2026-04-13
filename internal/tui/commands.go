@@ -110,7 +110,9 @@ type exportFinishedMsg struct {
 }
 
 type backupPlanMsg struct {
-	items []backupItem
+	items     []backupItem
+	err       error // non-nil when the entire import failed (bad path, invalid YAML, etc.)
+	fromToken bool  // true if this came from a share token import
 }
 
 type backupItemDoneMsg struct {
@@ -126,6 +128,16 @@ type batchUpgradeItemMsg struct {
 
 // backupTickMsg advances the animated progress by marking the next pending item as done.
 type backupTickMsg struct{}
+
+// --- Sidebar types ---
+
+// sidebarItem represents one entry in the filter sidebar.
+type sidebarItem struct {
+	label    string // display text ("All", "Cloud", "kubernetes", etc.)
+	section  string // "category", "tag", "platform"
+	value    string // filter value; "" = show all for that section
+	isHeader bool   // true = section header, not selectable
+}
 
 // shareFinishedMsg is sent when share token generation completes.
 type shareFinishedMsg struct {
@@ -266,28 +278,19 @@ func buildImportPlanCmd(svc *service.ToolService, path string) tea.Cmd {
 	return func() tea.Msg {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return backupPlanMsg{items: []backupItem{{
-				name: "error", display: "Error", status: backupFailed,
-				errMsg: fmt.Sprintf("reading manifest: %v", err),
-			}}}
+			return backupPlanMsg{err: fmt.Errorf("reading manifest: %w", err)}
 		}
 
 		var m manifest.Manifest
 		if err := yaml.Unmarshal(data, &m); err != nil {
-			return backupPlanMsg{items: []backupItem{{
-				name: "error", display: "Error", status: backupFailed,
-				errMsg: fmt.Sprintf("parsing manifest: %v", err),
-			}}}
+			return backupPlanMsg{err: fmt.Errorf("parsing manifest: %w", err)}
 		}
 
 		// Load registry and scan PATH.
 		ctx := context.Background()
 		regTools, err := svc.ScanOnly(ctx)
 		if err != nil {
-			return backupPlanMsg{items: []backupItem{{
-				name: "error", display: "Error", status: backupFailed,
-				errMsg: fmt.Sprintf("scanning PATH: %v", err),
-			}}}
+			return backupPlanMsg{err: fmt.Errorf("scanning PATH: %w", err)}
 		}
 
 		regMap := make(map[string]*registry.Tool, len(regTools))
@@ -398,20 +401,14 @@ func buildTokenImportPlanCmd(svc *service.ToolService, token string) tea.Cmd {
 	return func() tea.Msg {
 		names, err := share.Decode(token)
 		if err != nil {
-			return backupPlanMsg{items: []backupItem{{
-				name: "error", display: "Error", status: backupFailed,
-				errMsg: fmt.Sprintf("invalid token: %v", err),
-			}}}
+			return backupPlanMsg{err: fmt.Errorf("invalid token: %w", err), fromToken: true}
 		}
 
 		// Load registry and scan PATH.
 		ctx := context.Background()
 		regTools, err := svc.ScanOnly(ctx)
 		if err != nil {
-			return backupPlanMsg{items: []backupItem{{
-				name: "error", display: "Error", status: backupFailed,
-				errMsg: fmt.Sprintf("scanning PATH: %v", err),
-			}}}
+			return backupPlanMsg{err: fmt.Errorf("scanning PATH: %w", err), fromToken: true}
 		}
 
 		regMap := make(map[string]*registry.Tool, len(regTools))
@@ -470,7 +467,7 @@ func buildTokenImportPlanCmd(svc *service.ToolService, token string) tea.Cmd {
 			})
 		}
 
-		return backupPlanMsg{items: items}
+		return backupPlanMsg{items: items, fromToken: true}
 	}
 }
 

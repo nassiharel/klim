@@ -23,22 +23,25 @@ type MarketplaceFetcher interface {
 	Fetch(ctx context.Context) ([]byte, error)
 }
 
-// GitHubFetcher fetches marketplace.yaml from GitHub raw content.
+// defaultMarketplaceURL is the canonical marketplace.yaml location on GitHub.
+const defaultMarketplaceURL = "https://raw.githubusercontent.com/nassiharel/clim/main/marketplace.yaml"
+
+// GitHubFetcher fetches marketplace.yaml from a configured URL,
+// defaulting to GitHub raw content if no URL is set.
 type GitHubFetcher struct {
 	HTTPClient *http.Client // defaults to http.DefaultClient
-	Owner      string       // defaults to "nassiharel"
-	Repo       string       // defaults to "clim"
-	Branch     string       // defaults to "main"
-	BaseURL    string       // defaults to "https://raw.githubusercontent.com"
+	URL        string       // marketplace URL; empty = defaultMarketplaceURL
 }
 
 // maxCatalogSize caps the downloaded catalog to prevent memory exhaustion.
 const maxCatalogSize = 2 << 20 // 2 MB — marketplace.yaml is ~20 KB
 
-// Fetch downloads the marketplace.yaml from GitHub raw content.
+// Fetch downloads the marketplace.yaml from the configured URL.
 func (f *GitHubFetcher) Fetch(ctx context.Context) ([]byte, error) {
-	url := fmt.Sprintf("%s/%s/%s/%s/marketplace.yaml",
-		f.baseURL(), f.owner(), f.repo(), f.branch())
+	url := f.URL
+	if url == "" {
+		url = defaultMarketplaceURL
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -52,7 +55,7 @@ func (f *GitHubFetcher) Fetch(ctx context.Context) ([]byte, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("github returned %s", resp.Status)
+		return nil, fmt.Errorf("server returned %s", resp.Status)
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxCatalogSize+1))
@@ -73,62 +76,40 @@ func (f *GitHubFetcher) httpClient() *http.Client {
 	return http.DefaultClient
 }
 
-func (f *GitHubFetcher) owner() string {
-	if f.Owner != "" {
-		return f.Owner
-	}
-	return "nassiharel"
-}
-
-func (f *GitHubFetcher) repo() string {
-	if f.Repo != "" {
-		return f.Repo
-	}
-	return "clim"
-}
-
-func (f *GitHubFetcher) branch() string {
-	if f.Branch != "" {
-		return f.Branch
-	}
-	return "main"
-}
-
-func (f *GitHubFetcher) baseURL() string {
-	if f.BaseURL != "" {
-		return f.BaseURL
-	}
-	return "https://raw.githubusercontent.com"
-}
-
 // --- Cache ---
 
-// CachePath returns the path to the locally cached marketplace.yaml.
+// CachePath returns the path to the remote marketplace cache.
+// This is separate from the user's marketplace.yaml (which holds
+// customizations like enabled/disabled flags and user-added tools).
 func CachePath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "clim", "marketplace.yaml"), nil
+	return filepath.Join(dir, "clim", "marketplace-cache.yaml"), nil
 }
 
-// LoadOrFetch loads the cached marketplace YAML. If the cache doesn't exist,
-// it fetches from GitHub and writes the cache. Returns the raw YAML bytes.
+// LoadOrFetch loads the cached marketplace YAML. If the cache doesn't exist
+// or contains invalid YAML, it fetches from GitHub and rewrites the cache.
+// Returns the raw YAML bytes.
 func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error) {
 	path, err := CachePath()
 	if err != nil {
 		return nil, fmt.Errorf("resolving cache path: %w", err)
 	}
 
-	// Try reading the local cache first.
+	// Try reading and validating the local cache.
 	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
-		return data, nil
+		if isValidCatalog(data) {
+			return data, nil
+		}
+		// Corrupted/partial cache — fall through to refetch.
 	}
 
-	// No cache — fetch from remote.
+	// No valid cache — fetch from remote.
 	data, err := fetcher.Fetch(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("fetching marketplace (no local cache): %w", err)
+		return nil, fmt.Errorf("fetching marketplace (no valid local cache): %w", err)
 	}
 
 	// Write cache.
@@ -137,6 +118,12 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error
 	}
 
 	return data, nil
+}
+
+// isValidCatalog checks whether data is parseable YAML with at least one tool.
+func isValidCatalog(data []byte) bool {
+	defs := parseToolDefs(data)
+	return len(defs) > 0
 }
 
 // --- Diff ---
@@ -255,15 +242,19 @@ type RefreshResult struct {
 }
 
 // Refresh fetches the latest catalog from the remote, diffs it against the
-// local cache, updates the cache if changed, and returns the result.
+// user's marketplace.yaml (not the cache), updates the cache, and returns
+// the result. The diff reflects what the user will see as new or changed
+// relative to their current tool list.
 func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, error) {
-	path, err := CachePath()
+	cachePath, err := CachePath()
 	if err != nil {
 		return nil, fmt.Errorf("resolving cache path: %w", err)
 	}
 
-	// Read current local cache.
-	local, _ := os.ReadFile(path) // may be empty/missing — that's fine
+	// Read the user's current marketplace file for diffing.
+	// This is what they actually see — not the remote cache.
+	userPath, _ := userMarketplacePath()
+	local, _ := os.ReadFile(userPath) // may be empty/missing — that's fine
 
 	// Fetch latest from remote.
 	remote, err := fetcher.Fetch(ctx)
@@ -271,16 +262,26 @@ func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, e
 		return nil, fmt.Errorf("fetching latest marketplace: %w", err)
 	}
 
-	// Diff.
+	// Diff against what the user currently has.
 	diff := Diff(local, remote)
 
-	// Update local cache with the remote version.
-	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr == nil {
-		_ = os.WriteFile(path, remote, 0o644)
+	// Update the remote cache (not the user file — the merge in registry
+	// will incorporate new tools on next load).
+	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr == nil {
+		_ = os.WriteFile(cachePath, remote, 0o644)
 	}
 
 	return &RefreshResult{
 		Diff:    diff,
 		Updated: diff.HasChanges(),
 	}, nil
+}
+
+// userMarketplacePath returns the path to the user's marketplace.yaml.
+func userMarketplacePath() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "clim", "marketplace.yaml"), nil
 }

@@ -13,22 +13,14 @@ import (
 
 // Config holds all clim configuration.
 type Config struct {
-	GitHub      GitHubConfig      `yaml:"github"`
 	Marketplace MarketplaceConfig `yaml:"marketplace"`
 	Performance PerformanceConfig `yaml:"performance"`
 	UI          UIConfig          `yaml:"ui"`
 }
 
-// GitHubConfig configures the GitHub repository used for self-update
-// and marketplace catalog fetching.
-type GitHubConfig struct {
-	Owner  string `yaml:"owner"`
-	Repo   string `yaml:"repo"`
-	Branch string `yaml:"branch"`
-}
-
 // MarketplaceConfig controls marketplace catalog behavior.
 type MarketplaceConfig struct {
+	URL             string   `yaml:"url"`              // full URL override; if set, skips GitHub URL construction
 	AutoRefresh     bool     `yaml:"auto_refresh"`
 	RefreshInterval Duration `yaml:"refresh_interval"`
 }
@@ -41,8 +33,9 @@ type PerformanceConfig struct {
 
 // UIConfig controls user interface preferences.
 type UIConfig struct {
-	DefaultTab string `yaml:"default_tab"`
-	ShowPath   bool   `yaml:"show_path"`
+	DefaultTab   string `yaml:"default_tab"`
+	ShowPath     bool   `yaml:"show_path"`
+	SidebarRight bool   `yaml:"sidebar_right"` // true = filter sidebar on right side
 }
 
 // Duration wraps time.Duration for YAML marshaling as a human-readable string
@@ -53,7 +46,7 @@ type Duration struct {
 
 // MarshalYAML encodes a Duration as a string like "10s" or "24h".
 func (d Duration) MarshalYAML() (interface{}, error) {
-	return d.Duration.String(), nil
+	return d.String(), nil
 }
 
 // UnmarshalYAML decodes a Duration from a string like "10s" or "24h".
@@ -73,11 +66,6 @@ func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 // Default returns a Config with all defaults populated.
 func Default() *Config {
 	return &Config{
-		GitHub: GitHubConfig{
-			Owner:  "nassiharel",
-			Repo:   "clim",
-			Branch: "main",
-		},
 		Marketplace: MarketplaceConfig{
 			AutoRefresh:     false,
 			RefreshInterval: Duration{24 * time.Hour},
@@ -119,7 +107,7 @@ func Load() (*Config, error) {
 			_ = writeDefault(path, cfg)
 			return cfg, nil
 		}
-		return Default(), nil // unreadable — fall back to defaults
+		return nil, fmt.Errorf("reading config.yaml: %w", err) // permission error, etc.
 	}
 
 	// Start from defaults, then overlay the file values.
@@ -146,14 +134,9 @@ const defaultConfigTemplate = `# clim — Configuration
 # All values are optional. Defaults are shown below.
 # Restart clim after editing for changes to take effect.
 
-# GitHub repository for self-update and marketplace catalog.
-github:
-  owner: nassiharel
-  repo: clim
-  branch: main
-
 # Marketplace settings.
 marketplace:
+  # url: ""              # full URL override (e.g. http://localhost:5000/marketplace.yaml)
   auto_refresh: false    # auto-fetch latest catalog on startup
   refresh_interval: 24h  # minimum time between auto-refreshes
 
@@ -166,6 +149,7 @@ performance:
 ui:
   default_tab: installed # startup tab: installed, updates, marketplace, disabled, backup, config
   show_path: true        # show PATH column in list output
+  sidebar_right: false   # true = filter sidebar on right side
 `
 
 func writeDefault(path string, _ *Config) error {

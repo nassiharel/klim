@@ -185,14 +185,15 @@ func mergeToolDefs(catalog, user []toolDef) ([]toolDef, bool) {
 		}
 
 		// Tool exists in both — merge fields.
-		m := e // start from catalog (authority on display_name, category, binary_names)
+		m := e // start from catalog (authority on display_name, category, binary_names, tags)
 		m.Enabled = u.Enabled
 		m.Packages = mergePackages(e.Packages, u.Packages)
 
 		if m.Packages != u.Packages {
 			changed = true
 		}
-		if m.DisplayName != u.DisplayName || m.Category != u.Category || !slicesEqual(m.BinaryNames, u.BinaryNames) {
+		if m.DisplayName != u.DisplayName || m.Category != u.Category ||
+			!slicesEqual(m.BinaryNames, u.BinaryNames) || !slicesEqual(m.Tags, u.Tags) {
 			changed = true
 		}
 

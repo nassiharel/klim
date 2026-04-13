@@ -7,6 +7,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -40,9 +41,7 @@ func New() *ToolService {
 // NewWithConfig returns a ToolService configured from the given Config.
 func NewWithConfig(cfg *config.Config) *ToolService {
 	fetcher := &catalog.GitHubFetcher{
-		Owner:  cfg.GitHub.Owner,
-		Repo:   cfg.GitHub.Repo,
-		Branch: cfg.GitHub.Branch,
+		URL: cfg.Marketplace.URL,
 	}
 
 	return &ToolService{
@@ -144,7 +143,7 @@ func (c *DefaultCatalog) LoadTools(ctx context.Context) ([]registry.Tool, error)
 	}
 	tools := registry.DefaultToolsFromBytes(data)
 	if tools == nil {
-		return nil, fmt.Errorf("failed to parse marketplace catalog")
+		return nil, errors.New("failed to parse marketplace catalog")
 	}
 	return tools, nil
 }

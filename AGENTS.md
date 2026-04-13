@@ -34,9 +34,9 @@ It does three things:
 |---|---|---|
 | Interactive TUI | `clim` (stdout is a TTY) | Bubbletea full-screen with 6 tabs: Installed, Updates, Discover, Disabled, Backup, Config |
 | Non-interactive list | `clim list` or piped | Tab-aligned table to stdout via `text/tabwriter` |
-| Subcommands | `clim export/import/open/share/update/tools/version` | Specific operations |
+| Subcommands | `clim export/import/open/share/update/tools/config/version` | Specific operations |
 
-Supported tools are defined in `marketplace.yaml` (70+ curated tools). The catalog is embedded into the binary at compile time and merged with the user's local copy on startup.
+Supported tools are defined in `marketplace.yaml` (70+ curated tools). The catalog is fetched from GitHub at runtime, cached locally, and merged with the user's customizations on startup.
 
 ---
 
@@ -47,22 +47,26 @@ clim/
 ├── cmd/
 │   └── clim/
 │       └── main.go               # Entry point — calls cli.Execute()
-├── embed.go                       # //go:embed for marketplace.yaml → clim.MarketplaceYAML
 ├── marketplace.yaml               # Curated tool catalog (70+ tools, all config)
 ├── internal/
 │   ├── build/
 │   │   └── build.go              # Version/Commit/Date vars (ldflags) + Info(), VersionOnly()
+│   ├── catalog/
+│   │   └── catalog.go            # GitHubFetcher, LoadOrFetch, cache, Diff, Refresh
 │   ├── cli/
 │   │   ├── root.go               # rootCmd (cobra), Execute(), TUI vs list dispatch
 │   │   ├── list.go               # `clim list` subcommand + runList() (used as TTY fallback)
 │   │   ├── version.go            # `clim version` subcommand — prints build.Info()
 │   │   ├── tools.go              # `clim tools` + `clim tools path/edit` subcommands
+│   │   ├── config.go             # `clim config` + `clim config path/edit` subcommands
 │   │   ├── export.go             # `clim export` subcommand
 │   │   ├── import.go             # `clim import <file>` subcommand
 │   │   ├── open.go               # `clim open <token>` subcommand — install from share token
 │   │   ├── share.go              # `clim share` subcommand — generate share token
 │   │   ├── installplan.go        # Shared install plan types and execution helpers
 │   │   └── update.go             # `clim update` subcommand — self-update from GitHub Releases
+│   ├── config/
+│   │   └── config.go             # Config struct, YAML load/save, defaults, Duration type
 │   ├── detector/
 │   │   ├── detector.go           # Fallback binary version detection (Go buildinfo)
 │   │   ├── pe_windows.go         # Windows PE resource version extraction
@@ -76,7 +80,7 @@ clim/
 │   ├── pkgmgr/
 │   │   └── pkgmgr.go             # Package manager queries (winget/brew/apt/choco/snap/npm)
 │   ├── registry/
-│   │   ├── known.go              # DefaultTools(): loads + merges marketplace.yaml
+│   │   ├── known.go              # DefaultToolsFromBytes(): parses catalog + merges with user YAML
 │   │   ├── tool.go               # Tool, Instance, PackageIDs structs; command builders
 │   │   └── version.go            # VersionsMatch(), CompareVersions()
 │   ├── selfupdate/
@@ -94,7 +98,8 @@ clim/
 │       ├── model.go              # Bubbletea Model, Init/Update, all key handling
 │       ├── commands.go           # tea.Cmd factories (find, resolve, exec, export, import)
 │       ├── view.go               # All rendering (tabs, rows, detail, backup, config)
-│       └── styles.go             # lipgloss color palette and style variables
+│       ├── styles.go             # lipgloss color palette and style variables
+│       └── clipboard.go          # Clipboard interface + system clipboard wrapper
 │
 ├── go.mod                        # Module deps
 ├── go.sum
@@ -105,7 +110,7 @@ clim/
 ├── README.md                     # User-facing docs
 ├── CONTRIBUTING.md               # Dev workflow docs
 ├── AGENTS.md                     # This file
-└── marketplace.yaml              # The source-of-truth tool catalog
+└── marketplace.yaml              # Source-of-truth tool catalog (also fetched from GitHub at runtime)
 ```
 
 ---
@@ -125,10 +130,10 @@ All CLI commands and the TUI access tool discovery through **`ToolService`** (`i
               (Catalog)       (Finder)      (Resolver)
                     │             │              │
                     ▼             ▼              ▼
-            DefaultTools()   PathFinder    PackageManagerResolver
-            load + merge     LookPath      ├── query installed version via PM
-            marketplace.yaml detect src    ├── query latest version via PM
-                                           └── detector.EnrichOne() fallback
+            DefaultCatalog   PathFinder    PackageManagerResolver
+            LoadOrFetch()    LookPath      ├── query installed version via PM
+            fetch/cache      detect src    ├── query latest version via PM
+            marketplace.yaml               └── detector.EnrichOne() fallback
 ```
 
 **Pipelines exposed by `ToolService`:**
@@ -172,14 +177,41 @@ Uses custom numeric segment comparison in `registry/version.go`:
 - `VersionsMatch` handles trailing `.0` segments and PE version padding (×100)
 - `CompareVersions` returns -1/0/1 for segment-by-segment comparison
 
-### 3.4 Marketplace YAML Merge
+### 3.4 Marketplace YAML: Fetch, Cache & Merge
 
-The `marketplace.yaml` is embedded into the binary via `//go:embed` in `embed.go`. On startup:
+The `marketplace.yaml` in the repository is the source of truth, but it is **not embedded** into the binary. Instead, it is fetched at runtime from GitHub and cached locally by the `internal/catalog` package.
 
-1. Embedded YAML is the authority for `display_name`, `category`, `binary_names`, new tools
-2. User YAML (`~/.config/clim/marketplace.yaml`) is the authority for `enabled` flag
-3. `mergeToolDefs()` adds new tools from embedded, updates metadata, preserves user customizations
-4. User file is rewritten if anything changed
+**Flow:**
+
+```
+GitHubFetcher.Fetch()                    marketplace-cache.yaml (local cache)
+  │ GET raw.githubusercontent.com            │
+  │ /nassiharel/clim/main/marketplace.yaml   │
+  └──────────────┬───────────────────────────┘
+                 │
+           catalog.LoadOrFetch()
+           1. Try reading marketplace-cache.yaml
+           2. If valid → use it
+           3. If missing/corrupt → fetch from GitHub → write cache
+                 │
+                 ▼
+      registry.DefaultToolsFromBytes(data)
+           1. Parse cached YAML as catalog definitions
+           2. Read user YAML (~/.config/clim/marketplace.yaml)
+           3. mergeToolDefs(): catalog is authority for display_name,
+              category, binary_names, tags; user is authority for
+              enabled flag and user-added custom tools
+           4. User file is rewritten if anything changed
+```
+
+**Cache vs user file:**
+
+| File | Path | Purpose |
+|---|---|---|
+| Remote cache | `~/.config/clim/marketplace-cache.yaml` | Last-fetched catalog from GitHub |
+| User file | `~/.config/clim/marketplace.yaml` | User customizations (enabled/disabled, custom tools) |
+
+**Refresh:** `catalog.Refresh()` re-fetches from GitHub, diffs against the user's file, and updates the cache. The merge in `registry.DefaultToolsFromBytes` incorporates new tools on the next load.
 
 ### 3.5 Self-Update Flow
 
@@ -210,11 +242,12 @@ build.VersionOnly() ──► GitHub Releases API ──► CompareVersions()
 | Package | Responsibility | Key exports |
 |---|---|---|
 | `cmd/clim` | Binary entry point | `main()` |
-| `embed.go` (root) | Embeds `marketplace.yaml` | `MarketplaceYAML []byte` |
 | `internal/build` | Compile-time metadata | `Version`, `Commit`, `Date`, `Info()`, `VersionOnly()` |
-| `internal/cli` | Cobra command tree | `Execute()`, subcommands: `list`, `version`, `tools`, `export`, `import`, `open`, `share`, `update` |
-| `internal/registry` | Tool catalogue, version comparison | `Tool`, `Instance`, `PackageIDs`, `DefaultTools()`, `VersionsMatch()`, `CompareVersions()`, `ToolsPath()`, `SetToolEnabled()` |
-| `internal/service` | Composition root wiring catalog, finder, resolver | `ToolService`, `New()`, `LoadAndResolve()`, `ScanOnly()`, `LoadAndScan()`, `ResolveOne()`, `RefreshTool()` |
+| `internal/catalog` | Fetch, cache, diff, refresh marketplace from GitHub | `GitHubFetcher`, `LoadOrFetch()`, `CachePath()`, `Diff()`, `Refresh()`, `RefreshResult` |
+| `internal/cli` | Cobra command tree | `Execute()`, subcommands: `list`, `version`, `tools`, `config`, `export`, `import`, `open`, `share`, `update` |
+| `internal/config` | Configuration file management | `Config`, `Default()`, `Load()`, `MustLoad()`, `Path()`, `Duration` |
+| `internal/registry` | Tool catalogue, version comparison | `Tool`, `Instance`, `PackageIDs`, `DefaultToolsFromBytes()`, `VersionsMatch()`, `CompareVersions()`, `ToolsPath()`, `SetToolEnabled()` |
+| `internal/service` | Composition root wiring catalog, finder, resolver | `ToolService`, `New()`, `NewWithConfig()`, `LoadAndResolve()`, `ScanOnly()`, `LoadAndScan()`, `ResolveOne()`, `RefreshTool()` |
 | `internal/finder` | PATH scanning, source detection | `ToolFinder`, `NewFinder()`, `PathFinder`, `FindAll(tools)` |
 | `internal/pkgmgr` | Package manager queries + detector enrichment | `VersionResolver`, `NewResolver()`, `PackageManagerResolver`, `ResolveVersions()`, `ResolveOne()`, `FetchToolInfo()` |
 | `internal/detector` | Fallback version extraction | `EnrichOne(tool)` |
@@ -223,7 +256,7 @@ build.VersionOnly() ──► GitHub Releases API ──► CompareVersions()
 | `internal/selfupdate` | Self-update from GitHub Releases | `Update(ctx, version, opts)`, `Result`, `Options` |
 | `internal/tui` | Bubbletea interactive UI | `Model`, `NewModel()`, `Run()` |
 
-All packages live under `internal/` — nothing is exported for external consumption (except `embed.go` at root, which `registry` imports for the embedded YAML).
+All packages live under `internal/` — nothing is exported for external consumption.
 
 ---
 
@@ -360,7 +393,7 @@ import (
 - Use `sync.WaitGroup` + semaphore channel for bounded concurrency in batch operations.
 - Always `defer wg.Done()` immediately after `wg.Add(1)`.
 - Pass loop variables explicitly into goroutine closures.
-- Package manager subprocess calls use `context.WithTimeout` with a 10-second timeout.
+- Package manager subprocess calls use `context.WithTimeout` with a configurable timeout (default 10s via `config.yaml`).
 
 ### 6.7 TUI Patterns (Bubbletea v2)
 
@@ -394,9 +427,9 @@ import (
        winget: "Publisher.MyTool"
    ```
 
-2. That's it. The tool is automatically detected, version-checked, and manageable via the TUI and CLI on the next run. The embedded YAML is merged with the user's local copy.
+2. That's it. The tool is automatically detected, version-checked, and manageable via the TUI and CLI on the next run. The catalog fetched from GitHub is merged with the user's local copy.
 
-3. **Custom user-only tools** — users can add tools to their local `marketplace.yaml` that aren't in the embedded catalog. These are preserved across updates.
+3. **Custom user-only tools** — users can add tools to their local `marketplace.yaml` that aren't in the upstream catalog. These are preserved across updates.
 
 ---
 
@@ -480,22 +513,24 @@ When installed via `go install`, version info is automatically read from Go modu
 
 | Dependency | Version | Purpose |
 |---|---|---|
-| `github.com/spf13/cobra` | v1.8.1 | CLI command framework |
+| `github.com/spf13/cobra` | v1.10.2 | CLI command framework |
 | `charm.land/bubbletea/v2` | v2.0.2 | Terminal UI framework |
 | `charm.land/bubbles/v2` | v2.1.0 | TUI components (spinner, text input, progress) |
 | `charm.land/lipgloss/v2` | v2.0.2 | Terminal styling |
+| `github.com/atotto/clipboard` | v0.1.4 | System clipboard access (share token copy) |
 | `golang.org/x/term` | v0.41.0 | TTY detection |
-| `gopkg.in/yaml.v3` | v3.0.1 | YAML parsing for marketplace and manifests |
+| `gopkg.in/yaml.v3` | v3.0.1 | YAML parsing for marketplace, manifests, and config |
 
-All dependencies are pure Go (CGO_ENABLED=0). No C libraries, fully static binaries.
+All direct dependencies are pure Go (CGO_ENABLED=0). No C libraries, fully static binaries. The `clipboard` package shells out to OS clipboard utilities (`xclip`/`xsel`/`pbcopy`/`clip.exe`) at runtime.
 
 ---
 
 ## 13. Known Constraints & Gotchas
 
 - **`marketplace.yaml` is the single source of truth for tools.** Do not hardcode tool definitions in Go files. All tool metadata (names, binary names, package IDs) must go in the YAML.
-- **`embed.go` lives at the module root**, not in `internal/`. This is because `//go:embed` can only access files in the embedding package's directory. `internal/registry` imports the root `clim` package to get `clim.MarketplaceYAML`.
-- **Package manager queries are synchronous subprocesses** with a 10-second timeout. If a PM hangs, the timeout kills it and returns an empty string.
+- **The marketplace catalog is fetched from GitHub at runtime**, not embedded into the binary. `internal/catalog` manages fetching, caching (`marketplace-cache.yaml`), and diffing. If no cache exists and the network is unavailable, catalog loading will fail. The user's `marketplace.yaml` holds only customizations (enabled/disabled, custom tools) and is never overwritten wholesale — `mergeToolDefs` preserves user changes.
+- **`config.yaml` is optional.** `internal/config.Load()` returns sensible defaults if the file is missing. On first run it writes a commented default file. All configuration (GitHub owner/repo/branch, concurrency, timeouts, UI preferences) lives here.
+- **Package manager queries are synchronous subprocesses** with a configurable timeout (default 10 seconds, set via `config.yaml`). If a PM hangs, the timeout kills it and returns an empty string.
 - **Version comparison stops at the first non-numeric segment.** `"2.53.0.windows.1"` is compared as `[2, 53, 0]`. This is intentional — non-numeric suffixes are platform metadata, not version info.
 - **`VersionsMatch` handles PE padding** (e.g. `1400` ≈ `14`) but `CompareVersions` does not. Callers that need PE-aware comparison should use `VersionsMatch` as a guard first (as `HasUpdate()` does).
 - **The TUI calls `svc.ResolveOne` per tool** (individual goroutines via Bubbletea commands), while the **CLI calls `svc.LoadAndResolve`** which internally uses `Resolver.ResolveVersions` (worker pool). Both reach the same result via different concurrency models.

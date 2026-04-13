@@ -42,13 +42,6 @@ func NewResolverWithTimeout(timeout time.Duration) VersionResolver {
 	return &PackageManagerResolver{Timeout: timeout}
 }
 
-func (r *PackageManagerResolver) timeout() time.Duration {
-	if r.Timeout > 0 {
-		return r.Timeout
-	}
-	return cmdTimeout
-}
-
 var defaultResolver VersionResolver = &PackageManagerResolver{}
 
 // ResolveVersions is a convenience wrapper around the default resolver.

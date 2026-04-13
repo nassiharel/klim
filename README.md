@@ -193,6 +193,10 @@ clim update --check                # check only, don't install
 clim tools path                    # show marketplace.yaml location
 clim tools edit                    # open catalog in $EDITOR
 
+# Manage configuration
+clim config path                   # show config.yaml location
+clim config edit                   # open config in $EDITOR
+
 # Show clim version
 clim version
 ```
@@ -201,7 +205,7 @@ clim version
 
 ## Tool Catalog
 
-clim ships with a curated catalog of **70+ developer tools** defined in `marketplace.yaml`. The catalog is embedded into the binary at compile time and merged with the user's local copy on startup. New tools from updated releases appear automatically.
+clim ships with a curated catalog of **70+ developer tools** defined in `marketplace.yaml`. The catalog is fetched from GitHub on first run and cached locally. On each startup, the cached catalog is merged with the user's local customizations. New tools from upstream appear automatically after a refresh.
 
 Tools include: `az`, `azd`, `gh`, `copilot`, `kubectl`, `docker`, `terraform`, `helm`, `go`, `node`, `python`, `git`, `jq`, `yq`, `ripgrep`, `fzf`, `bat`, `exa`, `fd`, `delta`, `zoxide`, `starship`, `tmux`, `neovim`, `curl`, `wget`, `make`, `cmake`, `rust/cargo`, `ruby`, `java`, `dotnet`, `aws`, `gcloud`, `pulumi`, `vault`, `consul`, `packer`, and many more.
 
@@ -215,10 +219,14 @@ clim tools edit
 
 ## Architecture
 
-clim is built for speed. The tool catalog is loaded from embedded YAML, PATH is scanned concurrently, and version queries go through native package managers in parallel.
+clim is built for speed. The tool catalog is fetched from GitHub and cached locally, PATH is scanned concurrently, and version queries go through native package managers in parallel.
 
 ```
-marketplace.yaml (embedded) ──► DefaultTools() ──► merge with user YAML
+marketplace.yaml (GitHub) ──► catalog.LoadOrFetch() ──► cache locally
+                                      │
+                         registry.DefaultToolsFromBytes()
+                                      │
+                                      ├── merge with user YAML (customizations)
                                       │
                                       ├──[parallel]──► finder.FindAll()     (exec.LookPath across PATH)
                                       │
@@ -266,7 +274,7 @@ marketplace.yaml (embedded) ──► DefaultTools() ──► merge with user Y
 
 ### Tool Catalog
 
-The tool catalog is stored at:
+The user's tool catalog (customizations, enabled/disabled state, custom tools) is stored at:
 
 | OS | Path |
 |----|------|
@@ -274,7 +282,18 @@ The tool catalog is stored at:
 | Linux | `~/.config/clim/marketplace.yaml` |
 | Windows | `%AppData%\clim\marketplace.yaml` |
 
-Edit it with `clim tools edit` or directly. User customizations (enabled/disabled state, custom tools) are preserved across updates.
+The remote catalog cache (fetched from GitHub) is stored alongside it as `marketplace-cache.yaml`.
+
+Edit the user catalog with `clim tools edit` or directly. User customizations (enabled/disabled state, custom tools) are preserved across updates.
+
+### Config File
+
+clim's configuration file (`config.yaml`) lives in the same directory as the tool catalog. It controls GitHub source, marketplace refresh behavior, concurrency, timeouts, and UI preferences. All values are optional with sensible defaults.
+
+```bash
+clim config path   # show config.yaml location
+clim config edit   # open config.yaml in $EDITOR
+```
 
 ---
 

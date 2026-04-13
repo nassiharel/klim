@@ -84,7 +84,16 @@ type Model struct {
 	filterText     string
 	filteredIndex  []int
 	categoryFilter string   // "" = all categories; non-empty = only this category
+	tagFilter      string   // "" = all tags; non-empty = only tools with this tag
+	platformFilter string   // "" = all platforms; non-empty = only this platform
 	categories     []string // sorted unique categories, computed once after scan
+	tags           []string // sorted unique tags, computed once after scan
+	platforms      []string // sorted unique platforms, computed once after scan
+
+	// Sidebar filter panel.
+	categoryPicker bool           // true = sidebar is focused
+	sidebarIdx     int            // cursor position in flat sidebar item list
+	sidebarItems   []sidebarItem  // flat list of sidebar entries (headers + items)
 
 	// Marketplace refresh diff — carried across rescans to apply badges.
 	lastDiff *catalog.DiffResult
@@ -231,9 +240,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
 		}
 
-		// Compute sorted unique categories for the category cycling filter.
+		// Compute sorted unique filter values.
 		m.categories = collectCategories(m.tools)
+		m.tags = collectTags(m.tools)
+		m.platforms = collectPlatforms(m.tools)
+		m.sidebarItems = buildSidebarItems(m.categories, m.tags, m.platforms)
 		m.categoryFilter = ""
+		m.tagFilter = ""
+		m.platformFilter = ""
 
 		// Apply marketplace refresh badges if a diff is pending.
 		if m.lastDiff != nil {
@@ -382,6 +396,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case backupPlanMsg:
+		if msg.err != nil {
+			// Import failed entirely — show error and return to idle menu.
+			m.backupMode = backupModeIdle
+			m.backupItems = nil
+			m.backupDone = 0
+			m.backupConfirm = false
+			m.cursor = backupMenuImport
+			if msg.fromToken {
+				m.cursor = backupMenuOpenToken
+			}
+			m.statusMsg = fmt.Sprintf("✗ Import failed: %s", msg.err)
+			return m, nil
+		}
 		m.backupItems = msg.items
 		m.backupDone = 0
 		// Count already-skipped items as "done" for progress.
@@ -512,6 +539,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.backupConfirm {
 		return m.handleKeyBackupConfirm(msg)
+	}
+	if m.categoryPicker {
+		return m.handleKeySidebar(msg)
 	}
 	if m.showDetail {
 		return m.handleKeyDetail(msg)
@@ -654,6 +684,59 @@ func (m Model) handleKeyBackupConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleKeySidebar handles navigation in the filter sidebar panel.
+func (m Model) handleKeySidebar(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "f":
+		m.categoryPicker = false
+		return m, nil
+	case "enter":
+		// Apply the selected filter.
+		if m.sidebarIdx >= 0 && m.sidebarIdx < len(m.sidebarItems) {
+			item := m.sidebarItems[m.sidebarIdx]
+			if !item.isHeader {
+				switch item.section {
+				case "category":
+					m.categoryFilter = item.value
+				case "tag":
+					m.tagFilter = item.value
+				case "platform":
+					m.platformFilter = item.value
+				}
+				m.cursor = 0
+				m.applyFilter()
+			}
+		}
+		m.categoryPicker = false
+		return m, nil
+	case "up", "k":
+		m.sidebarIdx = m.prevSelectableIdx(m.sidebarIdx)
+	case "down", "j":
+		m.sidebarIdx = m.nextSelectableIdx(m.sidebarIdx)
+	}
+	return m, nil
+}
+
+// nextSelectableIdx returns the next non-header index after idx, or idx if at end.
+func (m Model) nextSelectableIdx(idx int) int {
+	for i := idx + 1; i < len(m.sidebarItems); i++ {
+		if !m.sidebarItems[i].isHeader {
+			return i
+		}
+	}
+	return idx
+}
+
+// prevSelectableIdx returns the previous non-header index before idx, or idx if at start.
+func (m Model) prevSelectableIdx(idx int) int {
+	for i := idx - 1; i >= 0; i-- {
+		if !m.sidebarItems[i].isHeader {
+			return i
+		}
+	}
+	return idx
+}
+
 // handleKeyDetail handles navigation in the tool detail/action menu view.
 func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -695,22 +778,6 @@ func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.filtering = false
 		return m, nil
-	case "tab":
-		// Cycle category forward: "" → cat[0] → ... → cat[N-1] → ""
-		if len(m.categories) > 0 {
-			m.categoryFilter = nextCategory(m.categoryFilter, m.categories, 1)
-			m.cursor = 0
-			m.applyFilter()
-		}
-		return m, nil
-	case "shift+tab":
-		// Cycle category backward: "" → cat[N-1] → ... → cat[0] → ""
-		if len(m.categories) > 0 {
-			m.categoryFilter = nextCategory(m.categoryFilter, m.categories, -1)
-			m.cursor = 0
-			m.applyFilter()
-		}
-		return m, nil
 	default:
 		var cmd tea.Cmd
 		m.filterInput, cmd = m.filterInput.Update(msg)
@@ -722,6 +789,9 @@ func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyDefault handles keys when no modal is active — tabs, navigation, actions.
 func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Clear transient status message on any keypress so stale errors don't linger.
+	m.statusMsg = ""
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		m.quitting = true
@@ -747,9 +817,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = ""
 			return m, nil
 		}
-		// Clear active category filter.
-		if m.categoryFilter != "" {
+		// Clear active filters.
+		if m.categoryFilter != "" || m.tagFilter != "" || m.platformFilter != "" {
 			m.categoryFilter = ""
+			m.tagFilter = ""
+			m.platformFilter = ""
 			m.cursor = 0
 			m.applyFilter()
 			return m, nil
@@ -807,6 +879,20 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		m.filtering = true
 		return m, m.filterInput.Focus()
+	case "f":
+		// Focus the filter sidebar on tool-list tabs.
+		if m.activeTab <= tabDisabled && len(m.sidebarItems) > 0 {
+			m.categoryPicker = true
+			// Position cursor on first selectable item.
+			m.sidebarIdx = 0
+			for i, item := range m.sidebarItems {
+				if !item.isHeader {
+					m.sidebarIdx = i
+					break
+				}
+			}
+			return m, nil
+		}
 	case "space":
 		// Toggle selection for batch upgrade (Updates tab only).
 		if m.activeTab == tabUpdates && m.cursor < len(m.filteredIndex) {
@@ -936,7 +1022,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// On the Marketplace tab, refresh the catalog from GitHub.
 		if m.activeTab == tabDiscover {
 			m.statusMsg = "Refreshing marketplace..."
-			fetcher := &catalog.GitHubFetcher{}
+			var marketplaceURL string
+			if m.cfg != nil {
+				marketplaceURL = m.cfg.Marketplace.URL
+			}
+			fetcher := &catalog.GitHubFetcher{URL: marketplaceURL}
 			return m, refreshMarketplaceCmd(fetcher)
 		}
 		// On other tabs, do a full rescan.
@@ -965,8 +1055,16 @@ func (m *Model) applyFilter() {
 		if !m.matchesTab(tool) {
 			continue
 		}
-		// Structured category filter (cycled via 'c' key).
+		// Structured category filter.
 		if m.categoryFilter != "" && !strings.EqualFold(tool.Category, m.categoryFilter) {
+			continue
+		}
+		// Tag filter.
+		if m.tagFilter != "" && !hasTag(tool.Tags, m.tagFilter) {
+			continue
+		}
+		// Platform filter.
+		if m.platformFilter != "" && !hasPlatform(tool.Packages, m.platformFilter) {
 			continue
 		}
 		if filter != "" &&
@@ -987,6 +1085,26 @@ func (m *Model) applyFilter() {
 func matchesTags(tags []string, filter string) bool {
 	for _, tag := range tags {
 		if strings.Contains(strings.ToLower(tag), filter) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasTag reports whether the tool has an exact tag match (case-insensitive).
+func hasTag(tags []string, tag string) bool {
+	for _, t := range tags {
+		if strings.EqualFold(t, tag) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasPlatform reports whether the tool supports the given platform.
+func hasPlatform(pkgs registry.PackageIDs, platform string) bool {
+	for _, p := range derivePlatforms(pkgs) {
+		if strings.EqualFold(p, platform) {
 			return true
 		}
 	}
@@ -1027,25 +1145,70 @@ func collectCategories(tools []registry.Tool) []string {
 	return cats
 }
 
-// nextCategory cycles the category filter by direction (+1 forward, -1 backward).
-// The cycle is: "" → categories[0] → ... → categories[N-1] → "" (wraps around).
-func nextCategory(current string, categories []string, direction int) string {
-	if current == "" {
-		if direction > 0 {
-			return categories[0]
-		}
-		return categories[len(categories)-1]
-	}
-	for i, cat := range categories {
-		if strings.EqualFold(cat, current) {
-			next := i + direction
-			if next < 0 || next >= len(categories) {
-				return "" // wrap to "All"
+// collectTags returns sorted unique tag names from the tool list.
+func collectTags(tools []registry.Tool) []string {
+	seen := make(map[string]struct{})
+	for _, t := range tools {
+		for _, tag := range t.Tags {
+			if tag != "" {
+				seen[tag] = struct{}{}
 			}
-			return categories[next]
 		}
 	}
-	return "" // current not found, reset
+	tags := make([]string, 0, len(seen))
+	for tag := range seen {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	return tags
+}
+
+// collectPlatforms returns sorted unique platform names inferred from all tools.
+func collectPlatforms(tools []registry.Tool) []string {
+	seen := make(map[string]struct{})
+	for _, t := range tools {
+		for _, p := range derivePlatforms(t.Packages) {
+			seen[p] = struct{}{}
+		}
+	}
+	platforms := make([]string, 0, len(seen))
+	for p := range seen {
+		platforms = append(platforms, p)
+	}
+	sort.Strings(platforms)
+	return platforms
+}
+
+// buildSidebarItems constructs the flat sidebar item list from categories, tags, and platforms.
+func buildSidebarItems(categories, tags, platforms []string) []sidebarItem {
+	var items []sidebarItem
+
+	// Category section.
+	items = append(items, sidebarItem{label: "CATEGORY", isHeader: true})
+	items = append(items, sidebarItem{label: "All", section: "category", value: ""})
+	for _, cat := range categories {
+		items = append(items, sidebarItem{label: cat, section: "category", value: cat})
+	}
+
+	// Tag section.
+	if len(tags) > 0 {
+		items = append(items, sidebarItem{label: "TAG", isHeader: true})
+		items = append(items, sidebarItem{label: "All", section: "tag", value: ""})
+		for _, tag := range tags {
+			items = append(items, sidebarItem{label: tag, section: "tag", value: tag})
+		}
+	}
+
+	// Platform section.
+	if len(platforms) > 0 {
+		items = append(items, sidebarItem{label: "PLATFORM", isHeader: true})
+		items = append(items, sidebarItem{label: "All", section: "platform", value: ""})
+		for _, p := range platforms {
+			items = append(items, sidebarItem{label: p, section: "platform", value: p})
+		}
+	}
+
+	return items
 }
 
 // --- Stats ---

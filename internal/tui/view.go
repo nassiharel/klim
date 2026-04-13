@@ -20,6 +20,7 @@ const (
 	colSource   = 8  // width for source column
 	colCategory = 12 // width for category column
 	colStatus   = 18 // width for backup status column
+	colSidebar  = 18 // width for filter sidebar panel
 )
 
 func (m Model) renderView() string {
@@ -60,56 +61,36 @@ func (m Model) renderView() string {
 		return b.String()
 	}
 
-	// Search bar + category chips.
+	// Search bar.
 	b.WriteString(m.renderSearchBar() + "\n")
 
-	// Header row.
-	if m.phase >= phaseResolving && len(m.filteredIndex) > 0 {
-		b.WriteString(m.renderHeader() + "\n")
-	}
-
-	// Rows.
-	visibleRows := m.height - 8 // one extra line for the search bar
+	// Two-column layout: sidebar | tool list.
+	visibleRows := m.height - 8
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
 
-	start := 0
-	if m.cursor >= visibleRows {
-		start = m.cursor - visibleRows + 1
-	}
+	sidebarLines := m.buildSidebarLines(visibleRows)
+	toolLines := m.buildToolLines(visibleRows)
 
-	for vi := start; vi < len(m.filteredIndex) && vi < start+visibleRows; vi++ {
-		toolIdx := m.filteredIndex[vi]
-		tool := m.tools[toolIdx]
-		selected := vi == m.cursor
-		b.WriteString(m.renderRow(tool, toolIdx, selected) + "\n")
-	}
+	totalLines := max(len(sidebarLines), len(toolLines))
+	sidebarOnRight := m.cfg != nil && m.cfg.UI.SidebarRight
 
-	// Pad.
-	rendered := min(len(m.filteredIndex)-start, visibleRows)
-	for range max(visibleRows-rendered, 0) {
-		b.WriteString("\n")
-	}
-
-	// Empty state.
-	if len(m.filteredIndex) == 0 && m.phase >= phaseDone {
-		msg := ""
-		switch m.activeTab {
-		case tabInstalled:
-			msg = "  No installed tools found."
-		case tabUpdates:
-			msg = "  All tools are up to date! ✓"
-		case tabDiscover:
-			msg = "  All marketplace tools are already installed!"
-		case tabDisabled:
-			msg = "  No disabled tools."
-		case tabBackup:
-			msg = "" // handled by renderBackupView
-		case tabConfig:
-			msg = "" // handled by renderConfigView
+	for i := range totalLines {
+		left := ""
+		if i < len(sidebarLines) {
+			left = sidebarLines[i]
 		}
-		b.WriteString("\n" + dimVersion.Render(msg) + "\n")
+		right := ""
+		if i < len(toolLines) {
+			right = toolLines[i]
+		}
+
+		if sidebarOnRight {
+			b.WriteString(right + " │ " + left + "\n")
+		} else {
+			b.WriteString(fixedWidthANSI(left, colSidebar) + " │ " + right + "\n")
+		}
 	}
 
 	b.WriteString("\n")
@@ -172,43 +153,19 @@ func (m Model) renderTabBar() string {
 
 // --- Search Bar ---
 
-// renderSearchBar renders the always-visible search box with category filter chips.
-// Press / to focus the search box. Tab/Shift+Tab cycles categories when focused.
+// renderSearchBar renders the search box.
+// Press / to focus the search box. Press f to focus the filter sidebar.
 func (m Model) renderSearchBar() string {
 	var b strings.Builder
 
 	// Search input.
-	if m.filtering {
+	switch {
+	case m.filtering:
 		b.WriteString("  " + filterPromptStyle.Render("/") + " " + m.filterInput.View())
-	} else if m.filterText != "" {
+	case m.filterText != "":
 		b.WriteString("  " + filterPromptStyle.Render("/") + " " + dimVersion.Render(m.filterText))
-	} else {
+	default:
 		b.WriteString("  " + dimVersion.Render("/ search..."))
-	}
-
-	// Category chips.
-	if len(m.categories) > 0 {
-		b.WriteString("    ")
-
-		// "All" chip.
-		if m.categoryFilter == "" {
-			b.WriteString(activeTabStyle.Render("All"))
-		} else {
-			b.WriteString(dimVersion.Render("All"))
-		}
-
-		for _, cat := range m.categories {
-			b.WriteString(" ")
-			if strings.EqualFold(cat, m.categoryFilter) {
-				b.WriteString(activeTabStyle.Render(cat))
-			} else {
-				b.WriteString(dimVersion.Render(cat))
-			}
-		}
-
-		if m.filtering {
-			b.WriteString("  " + dimVersion.Render("Tab") + " " + dimVersion.Render("cycle"))
-		}
 	}
 
 	return b.String()
@@ -977,6 +934,10 @@ func (m Model) renderConfigView() string {
 	}
 	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Marketplace", 18)), marketplacePath)
 
+	if m.cfg != nil && m.cfg.Marketplace.URL != "" {
+		fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Catalog URL", 18)), m.cfg.Marketplace.URL)
+	}
+
 	configPath := dim("(unknown)")
 	if p, err := config.Path(); err == nil {
 		configPath = p
@@ -999,9 +960,11 @@ func (m Model) renderConfigView() string {
 	if m.cfg != nil {
 		b.WriteString("\n")
 		b.WriteString("  " + label("Configuration") + "\n")
-		fmt.Fprintf(&b, "    %-22s %s\n", dim("github.owner"), m.cfg.GitHub.Owner)
-		fmt.Fprintf(&b, "    %-22s %s\n", dim("github.repo"), m.cfg.GitHub.Repo)
-		fmt.Fprintf(&b, "    %-22s %s\n", dim("github.branch"), m.cfg.GitHub.Branch)
+		if m.cfg.Marketplace.URL != "" {
+			fmt.Fprintf(&b, "    %-22s %s\n", dim("marketplace.url"), m.cfg.Marketplace.URL)
+		} else {
+			fmt.Fprintf(&b, "    %-22s %s\n", dim("marketplace.url"), dim("(default)"))
+		}
 		fmt.Fprintf(&b, "    %-22s %v\n", dim("marketplace.auto_refresh"), m.cfg.Marketplace.AutoRefresh)
 		fmt.Fprintf(&b, "    %-22s %s\n", dim("marketplace.interval"), m.cfg.Marketplace.RefreshInterval.Duration)
 		fmt.Fprintf(&b, "    %-22s %d %s\n", dim("performance.concurrency"), m.cfg.Performance.Concurrency, dim("(0=auto)"))
@@ -1098,6 +1061,7 @@ func (m Model) renderHelp() string {
 			dimVersion.Render("↑↓") + " navigate",
 			dimVersion.Render("←→") + " tab",
 			dimVersion.Render("Enter") + " detail",
+			dimVersion.Render("f") + " category",
 			dimVersion.Render("x") + " " + toggleLabel,
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
@@ -1108,6 +1072,7 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("Space") + " toggle",
 				dimVersion.Render("a") + " select all",
 				dimVersion.Render("u") + " upgrade",
+				dimVersion.Render("f") + " category",
 				dimVersion.Render("Enter") + " detail",
 				dimVersion.Render("q") + " quit",
 			}
@@ -1119,6 +1084,143 @@ func (m Model) renderHelp() string {
 		help += "  " + upgradableStyle.Render(m.statusMsg)
 	}
 	return help
+}
+
+// --- Two-column layout builders ---
+
+// buildSidebarLines renders the filter sidebar as a slice of fixed-width strings.
+func (m Model) buildSidebarLines(maxRows int) []string {
+	if len(m.sidebarItems) == 0 {
+		return nil
+	}
+
+	lines := make([]string, 0, maxRows)
+
+	for i, item := range m.sidebarItems {
+		if len(lines) >= maxRows {
+			break
+		}
+
+		if item.isHeader {
+			// Section header.
+			lines = append(lines, headerStyle.Render(fixedWidth(item.label, colSidebar-2)))
+			continue
+		}
+
+		cursor := "  "
+		if m.categoryPicker && i == m.sidebarIdx {
+			cursor = "▸ "
+		}
+
+		// Highlight the currently active filter value.
+		style := dimVersion
+		isActive := false
+		switch item.section {
+		case "category":
+			isActive = (item.value == "" && m.categoryFilter == "") ||
+				(item.value != "" && strings.EqualFold(item.value, m.categoryFilter))
+		case "tag":
+			isActive = (item.value == "" && m.tagFilter == "") ||
+				(item.value != "" && strings.EqualFold(item.value, m.tagFilter))
+		case "platform":
+			isActive = (item.value == "" && m.platformFilter == "") ||
+				(item.value != "" && strings.EqualFold(item.value, m.platformFilter))
+		}
+		if isActive {
+			style = nameStyle
+		}
+
+		label := fixedWidth(item.label, colSidebar-4)
+		line := cursor + style.Render(label)
+
+		if m.categoryPicker && i == m.sidebarIdx {
+			line = selectedRowStyle.Render(fixedWidth(line, colSidebar))
+		}
+
+		lines = append(lines, line)
+	}
+
+	// Pad to maxRows.
+	for len(lines) < maxRows {
+		lines = append(lines, "")
+	}
+
+	return lines
+}
+
+// buildToolLines renders the header + tool rows + empty state as a slice of strings.
+func (m Model) buildToolLines(maxRows int) []string {
+	lines := make([]string, 0, maxRows+1)
+
+	// Header row.
+	if m.phase >= phaseResolving && len(m.filteredIndex) > 0 {
+		lines = append(lines, m.renderHeader())
+	} else {
+		lines = append(lines, "") // blank header line for alignment
+	}
+
+	// Tool rows.
+	start := 0
+	if m.cursor >= maxRows {
+		start = m.cursor - maxRows + 1
+	}
+
+	rowCount := 0
+	for vi := start; vi < len(m.filteredIndex) && rowCount < maxRows; vi++ {
+		toolIdx := m.filteredIndex[vi]
+		tool := m.tools[toolIdx]
+		selected := vi == m.cursor && !m.categoryPicker
+		lines = append(lines, m.renderRow(tool, toolIdx, selected))
+		rowCount++
+	}
+
+	// Empty state.
+	if len(m.filteredIndex) == 0 && m.phase >= phaseDone {
+		msg := ""
+		noCatalog := len(m.tools) == 0
+		switch m.activeTab {
+		case tabInstalled:
+			if noCatalog {
+				msg = "No tools loaded."
+			} else {
+				msg = "No installed tools found."
+			}
+		case tabUpdates:
+			if noCatalog {
+				msg = "No tools loaded."
+			} else {
+				msg = "All tools are up to date! ✓"
+			}
+		case tabDiscover:
+			if noCatalog {
+				msg = "No tools loaded."
+			} else {
+				msg = "All marketplace tools are installed!"
+			}
+		case tabDisabled:
+			msg = "No disabled tools."
+		}
+		if msg != "" {
+			lines = append(lines, dimVersion.Render(msg))
+		}
+	}
+
+	// Pad to maxRows + 1 (header + rows).
+	for len(lines) < maxRows+1 {
+		lines = append(lines, "")
+	}
+
+	return lines
+}
+
+// fixedWidthANSI pads a styled string (which may contain ANSI codes) to the
+// given display width using lipgloss.Width for measurement.
+func fixedWidthANSI(s string, width int) string {
+	w := lipgloss.Width(s)
+	if w < width {
+		return s + strings.Repeat(" ", width-w)
+	}
+	return s
 }
 
 // --- Helpers ---
@@ -1135,12 +1237,9 @@ func toolResolved(tool registry.Tool) bool {
 	return false
 }
 
-// toolLabel returns "name (DisplayName)" or just "name" if they match.
+// toolLabel returns the tool's short name for list rows.
 func toolLabel(tool registry.Tool) string {
-	if tool.DisplayName == "" || strings.EqualFold(tool.Name, tool.DisplayName) {
-		return tool.Name
-	}
-	return tool.Name + " (" + tool.DisplayName + ")"
+	return tool.Name
 }
 
 // fixedWidth pads or truncates a plain string to exactly `width` characters.
