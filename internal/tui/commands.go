@@ -164,7 +164,7 @@ func findToolsCmd(svc *service.ToolService) func() scanResultMsg {
 func resolveToolVersionCmd(svc *service.ToolService, index int, gen int, tool registry.Tool) func() toolVersionMsg {
 	return func() toolVersionMsg {
 		ctx := context.Background()
-		if tool.IsInstalled() && !tool.Disabled {
+		if tool.IsInstalled() {
 			svc.ResolveOne(ctx, &tool)
 		}
 		return toolVersionMsg{index: index, gen: gen, tool: tool}
@@ -223,7 +223,7 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 
 		var exported []manifest.Tool
 		for _, tool := range sorted {
-			if !tool.IsInstalled() || tool.Disabled {
+			if !tool.IsInstalled() {
 				continue
 			}
 			primary := tool.PrimaryInstance()
@@ -380,7 +380,7 @@ func shareToolsCmd(tools []registry.Tool) tea.Cmd {
 	return func() tea.Msg {
 		var names []string
 		for _, tool := range tools {
-			if tool.IsInstalled() && !tool.Disabled {
+			if tool.IsInstalled() {
 				names = append(names, tool.Name)
 			}
 		}

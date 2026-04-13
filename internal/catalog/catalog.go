@@ -80,7 +80,7 @@ func (f *GitHubFetcher) httpClient() *http.Client {
 
 // CachePath returns the path to the remote marketplace cache.
 // This is separate from the user's marketplace.yaml (which holds
-// customizations like enabled/disabled flags and user-added tools).
+// customizations like user-added tools and package ID overrides).
 func CachePath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
@@ -145,7 +145,6 @@ type toolDef struct {
 	DisplayName string     `yaml:"display_name"`
 	Category    string     `yaml:"category"`
 	Tags        []string   `yaml:"tags,omitempty"`
-	Enabled     bool       `yaml:"enabled"`
 	BinaryNames []string   `yaml:"binary_names"`
 	Packages    packageDef `yaml:"packages"`
 }

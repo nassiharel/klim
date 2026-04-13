@@ -68,9 +68,6 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 	// lowercase. On Unix/macOS they are case-sensitive and kept as-is.
 	wantedBins := make(map[string][]toolRef) // normalised binary name → tool refs
 	for i := range tools {
-		if tools[i].Disabled {
-			continue
-		}
 		for _, bin := range tools[i].BinaryNames {
 			key := normaliseName(bin)
 			wantedBins[key] = append(wantedBins[key], toolRef{toolIdx: i, binName: bin})
@@ -132,9 +129,6 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 	}
 
 	for i := range tools {
-		if tools[i].Disabled {
-			continue
-		}
 		// Clear previous instances so rescans don't accumulate duplicates.
 		tools[i].Instances = nil
 
@@ -166,7 +160,7 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 
 	// Phase 4: Fallback via exec.LookPath for tools with no instances.
 	for i := range tools {
-		if tools[i].Disabled || len(tools[i].Instances) > 0 {
+		if len(tools[i].Instances) > 0 {
 			continue
 		}
 		for _, binName := range tools[i].BinaryNames {

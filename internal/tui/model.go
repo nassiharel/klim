@@ -21,7 +21,6 @@ const (
 	tabInstalled = iota
 	tabUpdates
 	tabDiscover
-	tabDisabled
 	tabBackup
 	tabConfig
 	tabCount // total number of tabs, used for modular cycling
@@ -203,8 +202,6 @@ func tabFromName(name string) int {
 		return tabUpdates
 	case "marketplace":
 		return tabDiscover
-	case "disabled":
-		return tabDisabled
 	case "backup":
 		return tabBackup
 	case "config":
@@ -240,11 +237,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
 		}
 
-		// Compute sorted unique filter values.
-		m.categories = collectCategories(m.tools)
-		m.tags = collectTags(m.tools)
-		m.platforms = collectPlatforms(m.tools)
-		m.sidebarItems = buildSidebarItems(m.categories, m.tags, m.platforms)
+		// Reset filters — applyFilter() will rebuild sidebar items contextually.
 		m.categoryFilter = ""
 		m.tagFilter = ""
 		m.platformFilter = ""
@@ -271,7 +264,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		gen := m.scanGen
 		var cmds []tea.Cmd
 		for i, tool := range m.tools {
-			if tool.IsInstalled() && !tool.Disabled {
+			if tool.IsInstalled() {
 				m.pending++
 				idx := i
 				t := tool // capture
@@ -852,15 +845,10 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.applyFilter()
 		return m, nil
 	case "4":
-		m.activeTab = tabDisabled
-		m.cursor = 0
-		m.applyFilter()
-		return m, nil
-	case "5":
 		m.activeTab = tabBackup
 		m.cursor = 0
 		return m, nil
-	case "6":
+	case "5":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		return m, nil
@@ -881,7 +869,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.filterInput.Focus()
 	case "f":
 		// Focus the filter sidebar on tool-list tabs.
-		if m.activeTab <= tabDisabled && len(m.sidebarItems) > 0 {
+		if m.activeTab <= tabDiscover && len(m.sidebarItems) > 0 {
 			m.categoryPicker = true
 			// Position cursor on first selectable item.
 			m.sidebarIdx = 0
@@ -942,7 +930,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.backupItems = nil
 				m.backupDone = 0
 				for _, tool := range m.tools {
-					if tool.IsInstalled() && !tool.Disabled {
+					if tool.IsInstalled() {
 						m.backupItems = append(m.backupItems, backupItem{
 							name:    tool.Name,
 							display: tool.DisplayName,
@@ -994,30 +982,6 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case "x":
-		if m.cursor < len(m.filteredIndex) {
-			idx := m.filteredIndex[m.cursor]
-			tool := &m.tools[idx]
-			if m.activeTab == tabDisabled {
-				// Re-enable.
-				if err := registry.SetToolEnabled(tool.Name, true); err != nil {
-					m.statusMsg = fmt.Sprintf("⚠ Could not save config: %v", err)
-				} else {
-					m.statusMsg = ""
-				}
-				tool.Disabled = false
-			} else {
-				// Disable.
-				if err := registry.SetToolEnabled(tool.Name, false); err != nil {
-					m.statusMsg = fmt.Sprintf("⚠ Could not save config: %v", err)
-				} else {
-					m.statusMsg = ""
-				}
-				tool.Disabled = true
-			}
-			m.applyFilter()
-		}
-		return m, nil
 	case "r":
 		// On the Marketplace tab, refresh the catalog from GitHub.
 		if m.activeTab == tabDiscover {
@@ -1051,6 +1015,21 @@ func (m *Model) applyFilter() {
 	m.filteredIndex = nil
 	filter := strings.ToLower(m.filterText)
 
+	// First pass: collect tools matching the current tab (for contextual sidebar).
+	var tabTools []registry.Tool
+	for _, tool := range m.tools {
+		if m.matchesTab(tool) {
+			tabTools = append(tabTools, tool)
+		}
+	}
+
+	// Rebuild sidebar items from tab-scoped tools only.
+	m.categories = collectCategories(tabTools)
+	m.tags = collectTags(tabTools)
+	m.platforms = collectPlatforms(tabTools)
+	m.sidebarItems = buildSidebarItems(m.categories, m.tags, m.platforms, tabTools)
+
+	// Second pass: apply all filters (sidebar + text search).
 	for i, tool := range m.tools {
 		if !m.matchesTab(tool) {
 			continue
@@ -1114,13 +1093,11 @@ func hasPlatform(pkgs registry.PackageIDs, platform string) bool {
 func (m *Model) matchesTab(tool registry.Tool) bool {
 	switch m.activeTab {
 	case tabInstalled:
-		return !tool.Disabled && tool.IsInstalled()
+		return tool.IsInstalled()
 	case tabUpdates:
-		return !tool.Disabled && tool.HasUpdate()
+		return tool.HasUpdate()
 	case tabDiscover:
-		return !tool.Disabled && !tool.IsInstalled()
-	case tabDisabled:
-		return tool.Disabled
+		return !tool.IsInstalled()
 	case tabBackup:
 		return false // Backup tab renders from backupItems, not tools
 	case tabConfig:
@@ -1180,31 +1157,58 @@ func collectPlatforms(tools []registry.Tool) []string {
 }
 
 // buildSidebarItems constructs the flat sidebar item list from categories, tags, and platforms.
-func buildSidebarItems(categories, tags, platforms []string) []sidebarItem {
+// tabTools are the tools visible on the current tab, used for counting.
+func buildSidebarItems(categories, tags, platforms []string, tabTools []registry.Tool) []sidebarItem {
 	var items []sidebarItem
+
+	// Count tools per category.
+	catCount := make(map[string]int, len(categories))
+	for _, t := range tabTools {
+		if t.Category != "" {
+			catCount[t.Category]++
+		}
+	}
+
+	// Count tools per tag.
+	tagCount := make(map[string]int, len(tags))
+	for _, t := range tabTools {
+		for _, tag := range t.Tags {
+			tagCount[tag]++
+		}
+	}
+
+	// Count tools per platform.
+	platCount := make(map[string]int, len(platforms))
+	for _, t := range tabTools {
+		for _, p := range derivePlatforms(t.Packages) {
+			platCount[p]++
+		}
+	}
+
+	totalCount := len(tabTools)
 
 	// Category section.
 	items = append(items, sidebarItem{label: "CATEGORY", isHeader: true})
-	items = append(items, sidebarItem{label: "All", section: "category", value: ""})
+	items = append(items, sidebarItem{label: fmt.Sprintf("All (%d)", totalCount), section: "category", value: ""})
 	for _, cat := range categories {
-		items = append(items, sidebarItem{label: cat, section: "category", value: cat})
-	}
-
-	// Tag section.
-	if len(tags) > 0 {
-		items = append(items, sidebarItem{label: "TAG", isHeader: true})
-		items = append(items, sidebarItem{label: "All", section: "tag", value: ""})
-		for _, tag := range tags {
-			items = append(items, sidebarItem{label: tag, section: "tag", value: tag})
-		}
+		items = append(items, sidebarItem{label: fmt.Sprintf("%s (%d)", cat, catCount[cat]), section: "category", value: cat})
 	}
 
 	// Platform section.
 	if len(platforms) > 0 {
 		items = append(items, sidebarItem{label: "PLATFORM", isHeader: true})
-		items = append(items, sidebarItem{label: "All", section: "platform", value: ""})
+		items = append(items, sidebarItem{label: fmt.Sprintf("All (%d)", totalCount), section: "platform", value: ""})
 		for _, p := range platforms {
-			items = append(items, sidebarItem{label: p, section: "platform", value: p})
+			items = append(items, sidebarItem{label: fmt.Sprintf("%s (%d)", p, platCount[p]), section: "platform", value: p})
+		}
+	}
+
+	// Tag section.
+	if len(tags) > 0 {
+		items = append(items, sidebarItem{label: "TAG", isHeader: true})
+		items = append(items, sidebarItem{label: fmt.Sprintf("All (%d)", totalCount), section: "tag", value: ""})
+		for _, tag := range tags {
+			items = append(items, sidebarItem{label: fmt.Sprintf("%s (%d)", tag, tagCount[tag]), section: "tag", value: tag})
 		}
 	}
 
@@ -1213,12 +1217,8 @@ func buildSidebarItems(categories, tags, platforms []string) []sidebarItem {
 
 // --- Stats ---
 
-func (m Model) stats() (installed, updates, notInstalled, disabled int) {
+func (m Model) stats() (installed, updates, notInstalled int) {
 	for _, tool := range m.tools {
-		if tool.Disabled {
-			disabled++
-			continue
-		}
 		if tool.IsInstalled() {
 			installed++
 			if tool.HasUpdate() {

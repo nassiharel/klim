@@ -37,10 +37,10 @@ func runShare(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Collect names of installed, enabled tools.
+	// Collect names of installed tools.
 	var names []string
 	for _, tool := range tools {
-		if tool.IsInstalled() && !tool.Disabled {
+		if tool.IsInstalled() {
 			names = append(names, tool.Name)
 		}
 	}

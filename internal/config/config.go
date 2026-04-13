@@ -147,7 +147,7 @@ performance:
 
 # UI preferences.
 ui:
-  default_tab: installed # startup tab: installed, updates, marketplace, disabled, backup, config
+  default_tab: installed # startup tab: installed, updates, marketplace, backup, config
   show_path: true        # show PATH column in list output
   sidebar_right: false   # true = filter sidebar on right side
 `

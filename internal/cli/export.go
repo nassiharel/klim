@@ -38,7 +38,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 
 	var exported []manifest.Tool
 	for _, tool := range tools {
-		if !tool.IsInstalled() || tool.Disabled {
+		if !tool.IsInstalled() {
 			continue
 		}
 		primary := tool.PrimaryInstance()

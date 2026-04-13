@@ -4,11 +4,11 @@ import "testing"
 
 func TestMergeToolDefs_NewEmbeddedToolAdded(t *testing.T) {
 	embedded := []toolDef{
-		{Name: "git", DisplayName: "Git", Enabled: true, Packages: packageDef{Brew: "git"}},
-		{Name: "rg", DisplayName: "ripgrep", Enabled: true, Packages: packageDef{Brew: "ripgrep"}},
+		{Name: "git", DisplayName: "Git",Packages: packageDef{Brew: "git"}},
+		{Name: "rg", DisplayName: "ripgrep",Packages: packageDef{Brew: "ripgrep"}},
 	}
 	user := []toolDef{
-		{Name: "git", DisplayName: "Git", Enabled: true, Packages: packageDef{Brew: "git"}},
+		{Name: "git", DisplayName: "Git",Packages: packageDef{Brew: "git"}},
 	}
 
 	merged, changed := mergeToolDefs(embedded, user)
@@ -26,11 +26,11 @@ func TestMergeToolDefs_NewEmbeddedToolAdded(t *testing.T) {
 
 func TestMergeToolDefs_UserCustomToolPreserved(t *testing.T) {
 	embedded := []toolDef{
-		{Name: "git", DisplayName: "Git", Enabled: true},
+		{Name: "git", DisplayName: "Git"},
 	}
 	user := []toolDef{
-		{Name: "git", DisplayName: "Git", Enabled: true},
-		{Name: "my-tool", DisplayName: "My Tool", Enabled: true, Packages: packageDef{Brew: "my-tool"}},
+		{Name: "git", DisplayName: "Git"},
+		{Name: "my-tool", DisplayName: "My Tool",Packages: packageDef{Brew: "my-tool"}},
 	}
 
 	merged, _ := mergeToolDefs(embedded, user)
@@ -46,24 +46,9 @@ func TestMergeToolDefs_UserCustomToolPreserved(t *testing.T) {
 	}
 }
 
-func TestMergeToolDefs_UserEnabledPreserved(t *testing.T) {
-	embedded := []toolDef{
-		{Name: "git", DisplayName: "Git", Enabled: true},
-	}
-	user := []toolDef{
-		{Name: "git", DisplayName: "Git", Enabled: false}, // user disabled it
-	}
-
-	merged, _ := mergeToolDefs(embedded, user)
-
-	if merged[0].Enabled {
-		t.Error("expected user's enabled=false to be preserved")
-	}
-}
-
 func TestMergeToolDefs_EmbeddedFillsPackageGaps(t *testing.T) {
 	embedded := []toolDef{
-		{Name: "bat", Enabled: true, Packages: packageDef{
+		{Name: "bat",Packages: packageDef{
 			Winget: "sharkdp.bat",
 			Choco:  "bat",
 			Brew:   "bat",
@@ -71,7 +56,7 @@ func TestMergeToolDefs_EmbeddedFillsPackageGaps(t *testing.T) {
 		}},
 	}
 	user := []toolDef{
-		{Name: "bat", Enabled: true, Packages: packageDef{
+		{Name: "bat",Packages: packageDef{
 			Winget: "sharkdp.bat",
 			// choco, brew, apt missing — should be filled from embedded
 		}},
@@ -95,10 +80,10 @@ func TestMergeToolDefs_EmbeddedFillsPackageGaps(t *testing.T) {
 
 func TestMergeToolDefs_UserPackageOverridesEmbedded(t *testing.T) {
 	embedded := []toolDef{
-		{Name: "git", Enabled: true, Packages: packageDef{Brew: "git"}},
+		{Name: "git",Packages: packageDef{Brew: "git"}},
 	}
 	user := []toolDef{
-		{Name: "git", Enabled: true, Packages: packageDef{Brew: "git-custom"}},
+		{Name: "git",Packages: packageDef{Brew: "git-custom"}},
 	}
 
 	merged, _ := mergeToolDefs(embedded, user)
@@ -110,7 +95,7 @@ func TestMergeToolDefs_UserPackageOverridesEmbedded(t *testing.T) {
 
 func TestMergeToolDefs_NoChangesReturnsFalse(t *testing.T) {
 	defs := []toolDef{
-		{Name: "git", DisplayName: "Git", Enabled: true, Packages: packageDef{Brew: "git"}},
+		{Name: "git", DisplayName: "Git",Packages: packageDef{Brew: "git"}},
 	}
 
 	_, changed := mergeToolDefs(defs, defs)
@@ -122,10 +107,10 @@ func TestMergeToolDefs_NoChangesReturnsFalse(t *testing.T) {
 
 func TestMergeToolDefs_EmbeddedMetadataWins(t *testing.T) {
 	embedded := []toolDef{
-		{Name: "git", DisplayName: "Git (Updated)", Category: "VCS", BinaryNames: []string{"git"}, Enabled: true},
+		{Name: "git", DisplayName: "Git (Updated)", Category: "VCS", BinaryNames: []string{"git"}},
 	}
 	user := []toolDef{
-		{Name: "git", DisplayName: "Git (Old)", Category: "Old Category", BinaryNames: []string{"old-git"}, Enabled: true},
+		{Name: "git", DisplayName: "Git (Old)", Category: "Old Category", BinaryNames: []string{"old-git"}},
 	}
 
 	merged, changed := mergeToolDefs(embedded, user)
@@ -146,13 +131,13 @@ func TestMergeToolDefs_EmbeddedMetadataWins(t *testing.T) {
 
 func TestMergeToolDefs_OrderEmbeddedFirstThenUserCustom(t *testing.T) {
 	embedded := []toolDef{
-		{Name: "b-tool", Enabled: true},
-		{Name: "a-tool", Enabled: true},
+		{Name: "b-tool"},
+		{Name: "a-tool"},
 	}
 	user := []toolDef{
-		{Name: "a-tool", Enabled: true},
-		{Name: "z-custom", Enabled: true},
-		{Name: "b-tool", Enabled: true},
+		{Name: "a-tool"},
+		{Name: "z-custom"},
+		{Name: "b-tool"},
 	}
 
 	merged, _ := mergeToolDefs(embedded, user)

@@ -47,7 +47,6 @@ type Tool struct {
 	Instances         []Instance
 	Latest            string
 	LatestFrom        string
-	Disabled          bool
 	Info              *ToolInfo         // rich metadata, fetched lazily
 	InfoFetched       bool              // true once info fetch completed (Info may still be nil)
 	MarketplaceStatus MarketplaceStatus // set after a marketplace refresh

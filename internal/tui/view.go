@@ -111,7 +111,7 @@ func (m Model) renderTitleBar() string {
 		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s checking versions (%d remaining)...", m.spinner.View(), m.pending))
 	}
 
-	inst, upd, notInst, disabled := m.stats()
+	inst, upd, notInst := m.stats()
 	active := inst + notInst
 	summary := fmt.Sprintf("%d/%d installed", inst, active)
 	if upd > 0 {
@@ -119,9 +119,6 @@ func (m Model) renderTitleBar() string {
 	}
 	if notInst > 0 {
 		summary += fmt.Sprintf(" · %d in marketplace", notInst)
-	}
-	if disabled > 0 {
-		summary += fmt.Sprintf(" · %d disabled", disabled)
 	}
 	return title + "  " + summaryStyle.Render(summary)
 }
@@ -134,7 +131,6 @@ func (m Model) renderTabBar() string {
 		{"Installed", tabInstalled},
 		{"Updates", tabUpdates},
 		{"Marketplace", tabDiscover},
-		{"Disabled", tabDisabled},
 		{"Backup", tabBackup},
 		{"Config", tabConfig},
 	}
@@ -192,10 +188,6 @@ func (m Model) renderHeader() string {
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory)) + "  " +
 			headerStyle.Render("STATUS")
-	case tabDisabled:
-		return "  " +
-			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
-			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
 	case tabBackup:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
@@ -217,8 +209,6 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 		line = m.renderUpdateRow(tool, toolIdx, selected)
 	case tabDiscover:
 		line = m.renderDiscoverRow(tool, selected)
-	case tabDisabled:
-		line = m.renderDisabledRow(tool, selected)
 	}
 
 	if selected {
@@ -312,19 +302,6 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	}
 
 	return cursor + nameCell + "  " + catCell + badge
-}
-
-func (m Model) renderDisabledRow(tool registry.Tool, selected bool) string {
-	cursor := "  "
-	if selected {
-		cursor = "▸ "
-	}
-
-	nameText := toolLabel(tool)
-	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
-	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
-
-	return cursor + nameCell + "  " + catCell
 }
 
 // --- Version info (plain text, no ANSI) ---
@@ -988,10 +965,10 @@ func (m Model) renderConfigView() string {
 
 	// Tool stats.
 	b.WriteString("\n")
-	inst, upd, notInst, disabled := m.stats()
-	total := inst + notInst + disabled
-	fmt.Fprintf(&b, "  %s  %d total · %d installed · %d updates · %d disabled\n",
-		label(fixedWidth("Tools", 18)), total, inst, upd, disabled)
+	inst, upd, notInst := m.stats()
+	total := inst + notInst
+	fmt.Fprintf(&b, "  %s  %d total · %d installed · %d updates\n",
+		label(fixedWidth("Tools", 18)), total, inst, upd)
 
 	// Pad remaining height.
 	used := 18 + len(registry.AllPMStatusForOS())
@@ -1010,11 +987,6 @@ func (m Model) renderHelp() string {
 		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
 		keys := dimVersion.Render("y") + " confirm   " + dimVersion.Render("Esc") + " cancel"
 		return prompt + "  " + keys
-	}
-
-	toggleLabel := "disable"
-	if m.activeTab == tabDisabled {
-		toggleLabel = "enable"
 	}
 
 	var parts []string
@@ -1061,8 +1033,7 @@ func (m Model) renderHelp() string {
 			dimVersion.Render("↑↓") + " navigate",
 			dimVersion.Render("←→") + " tab",
 			dimVersion.Render("Enter") + " detail",
-			dimVersion.Render("f") + " category",
-			dimVersion.Render("x") + " " + toggleLabel,
+			dimVersion.Render("f") + " filter",
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
 		}
@@ -1094,16 +1065,13 @@ func (m Model) buildSidebarLines(maxRows int) []string {
 		return nil
 	}
 
-	lines := make([]string, 0, maxRows)
+	// Render all sidebar items into a full list.
+	all := make([]string, 0, len(m.sidebarItems))
 
 	for i, item := range m.sidebarItems {
-		if len(lines) >= maxRows {
-			break
-		}
-
 		if item.isHeader {
 			// Section header.
-			lines = append(lines, headerStyle.Render(fixedWidth(item.label, colSidebar-2)))
+			all = append(all, headerStyle.Render(fixedWidth(item.label, colSidebar-2)))
 			continue
 		}
 
@@ -1137,15 +1105,40 @@ func (m Model) buildSidebarLines(maxRows int) []string {
 			line = selectedRowStyle.Render(fixedWidth(line, colSidebar))
 		}
 
-		lines = append(lines, line)
+		all = append(all, line)
 	}
 
-	// Pad to maxRows.
-	for len(lines) < maxRows {
-		lines = append(lines, "")
+	// Apply scrolling viewport to keep sidebarIdx visible.
+	if len(all) <= maxRows {
+		// Everything fits — pad and return.
+		for len(all) < maxRows {
+			all = append(all, "")
+		}
+		return all
 	}
 
-	return lines
+	// Find which rendered line corresponds to sidebarIdx.
+	cursorLine := 0
+	if m.categoryPicker {
+		cursorLine = m.sidebarIdx // items and rendered lines are 1:1
+		if cursorLine >= len(all) {
+			cursorLine = len(all) - 1
+		}
+	}
+
+	// Compute scroll start so cursor is visible.
+	start := 0
+	if cursorLine >= maxRows {
+		start = cursorLine - maxRows + 1
+	}
+	if start+maxRows > len(all) {
+		start = len(all) - maxRows
+	}
+	if start < 0 {
+		start = 0
+	}
+
+	return all[start : start+maxRows]
 }
 
 // buildToolLines renders the header + tool rows + empty state as a slice of strings.
@@ -1197,8 +1190,6 @@ func (m Model) buildToolLines(maxRows int) []string {
 			} else {
 				msg = "All marketplace tools are installed!"
 			}
-		case tabDisabled:
-			msg = "No disabled tools."
 		}
 		if msg != "" {
 			lines = append(lines, dimVersion.Render(msg))

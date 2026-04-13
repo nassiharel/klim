@@ -1,7 +1,6 @@
 package registry
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -17,7 +16,6 @@ type toolDef struct {
 	DisplayName string     `yaml:"display_name"`
 	Category    string     `yaml:"category"`
 	Tags        []string   `yaml:"tags,omitempty"`
-	Enabled     bool       `yaml:"enabled"`
 	BinaryNames []string   `yaml:"binary_names"`
 	Packages    packageDef `yaml:"packages"`
 }
@@ -42,9 +40,9 @@ func ToolsPath() (string, error) {
 }
 
 // DefaultToolsFromBytes loads tools from raw catalog YAML bytes, merging with
-// the user's local customizations (enabled/disabled state, custom tools).
-// The catalogData is the authority for tool metadata; the user file is the
-// authority for the enabled flag and user-added custom tools.
+// the user's local customizations (custom tools, package ID overrides).
+// The catalogData is the authority for tool metadata; the user file preserves
+// user-added custom tools and non-empty package ID overrides.
 func DefaultToolsFromBytes(catalogData []byte) []Tool {
 	catalogDefs := parseToolDefs(catalogData)
 	if catalogDefs == nil {
@@ -80,34 +78,6 @@ func DefaultToolsFromBytes(catalogData []byte) []Tool {
 	return defsToTools(merged)
 }
 
-// SetToolEnabled sets the enabled flag for a tool by name in the YAML file.
-func SetToolEnabled(name string, enabled bool) error {
-	path, err := ToolsPath()
-	if err != nil {
-		return err
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	defs := parseToolDefs(data)
-	found := false
-	for i := range defs {
-		if defs[i].Name == name {
-			defs[i].Enabled = enabled
-			found = true
-			break
-		}
-	}
-	if !found {
-		return fmt.Errorf("tool %q not found", name)
-	}
-
-	return writeToolDefs(path, defs)
-}
-
 func writeToolDefs(path string, defs []toolDef) error {
 	f := toolsFile{Tools: defs}
 	data, err := yaml.Marshal(&f)
@@ -115,7 +85,7 @@ func writeToolDefs(path string, defs []toolDef) error {
 		return err
 	}
 
-	header := "# clim — Tool Marketplace\n# Edit this file to add, remove, or configure tools.\n# Set enabled: false to hide a tool from clim.\n\n"
+	header := "# clim — Tool Marketplace\n# Edit this file to add, remove, or configure tools.\n\n"
 	return os.WriteFile(path, []byte(header+string(data)), 0o644)
 }
 
@@ -136,7 +106,6 @@ func defsToTools(defs []toolDef) []Tool {
 			Category:    d.Category,
 			Tags:        d.Tags,
 			BinaryNames: d.BinaryNames,
-			Disabled:    !d.Enabled,
 			Packages: PackageIDs{
 				Winget: d.Packages.Winget,
 				Choco:  d.Packages.Choco,
@@ -158,8 +127,8 @@ func defsToTools(defs []toolDef) []Tool {
 }
 
 // mergeToolDefs merges catalog defaults with user-customized definitions.
-// Catalog tools provide the base; user file overrides enabled state
-// and non-empty package IDs. User-added custom tools (not in catalog) are preserved.
+// Catalog tools provide the base; user file overrides non-empty package IDs.
+// User-added custom tools (not in catalog) are preserved.
 // Returns the merged list and whether anything changed vs the user's original.
 func mergeToolDefs(catalog, user []toolDef) ([]toolDef, bool) {
 	// Index user defs by name for O(1) lookup.
@@ -186,7 +155,6 @@ func mergeToolDefs(catalog, user []toolDef) ([]toolDef, bool) {
 
 		// Tool exists in both — merge fields.
 		m := e // start from catalog (authority on display_name, category, binary_names, tags)
-		m.Enabled = u.Enabled
 		m.Packages = mergePackages(e.Packages, u.Packages)
 
 		if m.Packages != u.Packages {

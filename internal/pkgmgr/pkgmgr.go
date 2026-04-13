@@ -16,7 +16,7 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
-const cmdTimeout = 10 * time.Second
+const cmdTimeout = 30 * time.Second
 
 // VersionResolver abstracts version querying and metadata fetching for tools.
 type VersionResolver interface {
@@ -174,14 +174,13 @@ func latestVersion(ctx context.Context, source registry.InstallSource, pkgs regi
 // --- winget ---
 
 func wingetVersion(ctx context.Context, id string) string {
-	out := runCmd(ctx, "winget", "show", "--id", id, "--accept-source-agreements")
+	out := cleanWingetOutput(runCmd(ctx, "winget", "show", "--id", id, "--accept-source-agreements"))
 	return parseKeyValue(out, "Version")
 }
 
 func wingetInstalledVersion(ctx context.Context, id string) string {
-	out := runCmd(ctx, "winget", "list", "--id", id, "--exact", "--accept-source-agreements")
+	out := cleanWingetOutput(runCmd(ctx, "winget", "list", "--id", id, "--exact", "--accept-source-agreements"))
 	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
 		fields := strings.Fields(line)
 		for i, f := range fields {
 			if strings.EqualFold(f, id) && i+1 < len(fields) {
@@ -194,6 +193,16 @@ func wingetInstalledVersion(ctx context.Context, id string) string {
 		}
 	}
 	return ""
+}
+
+// cleanWingetOutput strips winget's VT100 progress spinner noise from captured
+// stdout. Winget uses \r (carriage return without newline) to animate the
+// spinner — when captured in a buffer these \r segments accumulate into one
+// long line. We normalise \r to \n so downstream line-based parsers work.
+func cleanWingetOutput(out string) string {
+	out = strings.ReplaceAll(out, "\r\n", "\n")
+	out = strings.ReplaceAll(out, "\r", "\n")
+	return out
 }
 
 // --- choco ---
@@ -527,7 +536,7 @@ func pkgIDForSource(tool *registry.Tool, source registry.InstallSource) string {
 }
 
 func fetchWingetInfo(ctx context.Context, id string) *registry.ToolInfo {
-	out := runCmd(ctx, "winget", "show", "--id", id, "--accept-source-agreements")
+	out := cleanWingetOutput(runCmd(ctx, "winget", "show", "--id", id, "--accept-source-agreements"))
 	if out == "" {
 		return nil
 	}
