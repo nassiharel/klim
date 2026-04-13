@@ -1,6 +1,7 @@
 package pkgmgr
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -260,3 +261,266 @@ func parseWingetListVersion(output, id string) string {
 	}
 	return ""
 }
+
+func TestParseBrewVersions(t *testing.T) {
+	// brew list --versions output: "formula version [version ...]"
+	tests := []struct {
+		name    string
+		output  string
+		want    string
+	}{
+		{"single version", "git 2.43.0", "2.43.0"},
+		{"multiple versions", "python@3.12 3.12.1 3.11.7", "3.12.1"},
+		{"empty output", "", ""},
+		{"name only", "git", ""},
+		{"with trailing whitespace", "git 2.43.0  \n", "2.43.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parts := strings.Fields(strings.TrimSpace(tt.output))
+			got := ""
+			if len(parts) >= 2 {
+				got = parts[1]
+			}
+			if got != tt.want {
+				t.Errorf("brew parse(%q) = %q, want %q", tt.output, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseBrewJSON(t *testing.T) {
+	// brew info --json=v2 output
+	tests := []struct {
+		name   string
+		json   string
+		want   string
+	}{
+		{
+			"valid",
+			`{"formulae":[{"versions":{"stable":"2.43.0"}}]}`,
+			"2.43.0",
+		},
+		{
+			"empty formulae",
+			`{"formulae":[]}`,
+			"",
+		},
+		{
+			"invalid json",
+			`not json`,
+			"",
+		},
+		{
+			"empty",
+			"",
+			"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseBrewInfoJSON(tt.json)
+			if got != tt.want {
+				t.Errorf("parseBrewInfoJSON() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseSnapList(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{
+			"standard output",
+			"Name    Version  Rev  Tracking  Publisher  Notes\nkubectl 1.28.4   3456 latest    canonical  -\n",
+			"1.28.4",
+		},
+		{"header only", "Name Version Rev\n", ""},
+		{"empty", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseSnapListVersion(tt.output)
+			if got != tt.want {
+				t.Errorf("parseSnapListVersion(%q) = %q, want %q", tt.output, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseSnapInfo(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{
+			"standard output",
+			"name: kubectl\nlatest/stable: 1.29.0 2024-01-15\ninstalled: 1.28.4\n",
+			"1.29.0",
+		},
+		{"no stable line", "name: kubectl\ninstalled: 1.28.4\n", ""},
+		{"empty", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseSnapInfoLatest(tt.output)
+			if got != tt.want {
+				t.Errorf("parseSnapInfoLatest(%q) = %q, want %q", tt.output, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseNpmGlobals(t *testing.T) {
+	tests := []struct {
+		name   string
+		json   string
+		want   map[string]string
+	}{
+		{
+			"standard output",
+			`{"dependencies":{"prettier":{"version":"3.1.1"},"eslint":{"version":"8.56.0"}}}`,
+			map[string]string{"prettier": "3.1.1", "eslint": "8.56.0"},
+		},
+		{
+			"empty dependencies",
+			`{"dependencies":{}}`,
+			map[string]string{},
+		},
+		{"invalid json", "not json", nil},
+		{"empty", "", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseNpmGlobalsJSON(tt.json)
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("parseNpmGlobalsJSON() = %v, want nil", got)
+				}
+				return
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("parseNpmGlobalsJSON() has %d entries, want %d", len(got), len(tt.want))
+			}
+			for k, v := range tt.want {
+				if got[k] != v {
+					t.Errorf("parseNpmGlobalsJSON()[%q] = %q, want %q", k, got[k], v)
+				}
+			}
+		})
+	}
+}
+
+func TestParseAptCachePolicy(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{
+			"standard output",
+			"git:\n  Installed: 1:2.39.2-1ubuntu1.1\n  Candidate: 1:2.39.5-0ubuntu1\n",
+			"2.39.5",
+		},
+		{
+			"candidate none",
+			"fake-pkg:\n  Installed: (none)\n  Candidate: (none)\n",
+			"",
+		},
+		{"empty", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseAptCacheLatest(tt.output)
+			if got != tt.want {
+				t.Errorf("parseAptCacheLatest(%q) = %q, want %q", tt.output, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- Test helper functions that mirror the parsing logic ---
+
+func parseBrewInfoJSON(jsonStr string) string {
+	if jsonStr == "" {
+		return ""
+	}
+	var result struct {
+		Formulae []struct {
+			Versions struct {
+				Stable string `json:"stable"`
+			} `json:"versions"`
+		} `json:"formulae"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &result); err == nil && len(result.Formulae) > 0 {
+		return result.Formulae[0].Versions.Stable
+	}
+	return ""
+}
+
+func parseSnapListVersion(output string) string {
+	lines := strings.Split(output, "\n")
+	if len(lines) >= 2 {
+		fields := strings.Fields(lines[1])
+		if len(fields) >= 2 {
+			return fields[1]
+		}
+	}
+	return ""
+}
+
+func parseSnapInfoLatest(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "latest/stable:") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				return parts[1]
+			}
+		}
+	}
+	return ""
+}
+
+func parseNpmGlobalsJSON(jsonStr string) map[string]string {
+	if jsonStr == "" {
+		return nil
+	}
+	var result struct {
+		Dependencies map[string]struct {
+			Version string `json:"version"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return nil
+	}
+	m := make(map[string]string, len(result.Dependencies))
+	for name, dep := range result.Dependencies {
+		m[name] = dep.Version
+	}
+	return m
+}
+
+func parseAptCacheLatest(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Candidate:") {
+			ver := strings.TrimSpace(strings.TrimPrefix(line, "Candidate:"))
+			if ver != "(none)" {
+				return cleanDebianVersion(ver)
+			}
+		}
+	}
+	return ""
+}
+

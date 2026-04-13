@@ -1,6 +1,9 @@
 package catalog
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -190,5 +193,65 @@ func TestIsValidCatalog(t *testing.T) {
 				t.Errorf("isValidCatalog() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFetch_Success(t *testing.T) {
+	yamlData := "tools:\n  - name: git\n    display_name: Git\n"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(yamlData))
+	}))
+	defer srv.Close()
+
+	fetcher := &GitHubFetcher{URL: srv.URL + "/marketplace.yaml"}
+	data, err := fetcher.Fetch(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != yamlData {
+		t.Errorf("Fetch() = %q, want %q", string(data), yamlData)
+	}
+}
+
+func TestFetch_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	fetcher := &GitHubFetcher{URL: srv.URL + "/marketplace.yaml"}
+	_, err := fetcher.Fetch(context.Background())
+	if err == nil {
+		t.Fatal("expected error for 404")
+	}
+}
+
+func TestFetch_TooLarge(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, maxCatalogSize+100)
+		w.Write(data)
+	}))
+	defer srv.Close()
+
+	fetcher := &GitHubFetcher{URL: srv.URL + "/marketplace.yaml"}
+	_, err := fetcher.Fetch(context.Background())
+	if err == nil {
+		t.Fatal("expected error for oversized response")
+	}
+}
+
+func TestFetch_CancelledContext(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("tools:\n  - name: test\n"))
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	fetcher := &GitHubFetcher{URL: srv.URL}
+	_, err := fetcher.Fetch(ctx)
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
 	}
 }
