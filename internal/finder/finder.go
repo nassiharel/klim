@@ -3,6 +3,7 @@ package finder
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -179,6 +180,14 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 			break
 		}
 	}
+
+	found := 0
+	for _, t := range tools {
+		if len(t.Instances) > 0 {
+			found++
+		}
+	}
+	slog.Debug("PATH scan complete", "dirs", len(pathDirs), "tools_found", found, "tools_total", len(tools))
 
 	return nil
 }

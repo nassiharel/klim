@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -102,12 +103,14 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error
 	// Try reading and validating the local cache.
 	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
 		if isValidCatalog(data) {
+			slog.Debug("catalog cache hit", "path", path, "bytes", len(data))
 			return data, nil
 		}
-		// Corrupted/partial cache — fall through to refetch.
+		slog.Warn("catalog cache invalid, refetching", "path", path)
 	}
 
 	// No valid cache — fetch from remote.
+	slog.Debug("catalog cache miss, fetching from remote")
 	data, err := fetcher.Fetch(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetching marketplace (no valid local cache): %w", err)
@@ -115,8 +118,11 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error
 
 	// Validate before caching — don't poison the cache with HTML/garbage.
 	if !isValidCatalog(data) {
+		slog.Warn("fetched catalog is invalid", "bytes", len(data))
 		return nil, errors.New("fetched catalog is invalid (not parseable YAML with tools)")
 	}
+
+	slog.Debug("catalog fetched and cached", "path", path, "bytes", len(data))
 
 	// Write cache.
 	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr == nil {

@@ -10,6 +10,15 @@ import (
 func TestDefault(t *testing.T) {
 	cfg := Default()
 
+	if cfg.Logging.Level != "debug" {
+		t.Errorf("default logging level = %q, want debug", cfg.Logging.Level)
+	}
+	if cfg.Logging.File != true {
+		t.Error("default logging file should be true")
+	}
+	if cfg.Logging.Verbose != false {
+		t.Error("default logging verbose should be false")
+	}
 	if cfg.Marketplace.URL != "" {
 		t.Errorf("default marketplace URL should be empty, got %q", cfg.Marketplace.URL)
 	}

@@ -2,6 +2,7 @@ package detector
 
 import (
 	"debug/buildinfo"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -18,13 +19,16 @@ func FallbackDetect(path string) string {
 	}
 
 	if ver := detectGoBuildInfo(path); ver != "" {
+		slog.Debug("version via Go buildinfo", "path", path, "version", ver)
 		return ver
 	}
 
 	if ver := detectPE(path); ver != "" {
+		slog.Debug("version via PE resource", "path", path, "version", ver)
 		return ver
 	}
 
+	slog.Debug("fallback detection found nothing", "path", path)
 	return ""
 }
 

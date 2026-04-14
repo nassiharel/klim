@@ -11,6 +11,7 @@ import (
 
 	"github.com/nassiharel/clim/internal/build"
 	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/clim/internal/logging"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -921,6 +922,12 @@ func (m Model) renderConfigView() string {
 	}
 	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Config", 18)), configPath)
 
+	logPath := logging.Path()
+	if logPath == "" {
+		logPath = dim("(unavailable)")
+	}
+	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Log", 18)), logPath)
+
 	// Editor.
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
@@ -932,23 +939,6 @@ func (m Model) renderConfigView() string {
 		editor += "  " + dim("($EDITOR)")
 	}
 	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Editor", 18)), editor)
-
-	// Configuration values.
-	if m.cfg != nil {
-		b.WriteString("\n")
-		b.WriteString("  " + label("Configuration") + "\n")
-		if m.cfg.Marketplace.URL != "" {
-			fmt.Fprintf(&b, "    %-22s %s\n", dim("marketplace.url"), m.cfg.Marketplace.URL)
-		} else {
-			fmt.Fprintf(&b, "    %-22s %s\n", dim("marketplace.url"), dim("(default)"))
-		}
-		fmt.Fprintf(&b, "    %-22s %v\n", dim("marketplace.auto_refresh"), m.cfg.Marketplace.AutoRefresh)
-		fmt.Fprintf(&b, "    %-22s %s\n", dim("marketplace.interval"), m.cfg.Marketplace.RefreshInterval.Duration)
-		fmt.Fprintf(&b, "    %-22s %d %s\n", dim("performance.concurrency"), m.cfg.Performance.Concurrency, dim("(0=auto)"))
-		fmt.Fprintf(&b, "    %-22s %s\n", dim("performance.timeout"), m.cfg.Performance.CommandTimeout.Duration)
-		fmt.Fprintf(&b, "    %-22s %s\n", dim("ui.default_tab"), m.cfg.UI.DefaultTab)
-		fmt.Fprintf(&b, "    %-22s %v\n", dim("ui.show_path"), m.cfg.UI.ShowPath)
-	}
 
 	// Package managers.
 	b.WriteString("\n")

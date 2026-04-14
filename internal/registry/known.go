@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -72,6 +73,7 @@ func DefaultToolsFromBytes(catalogData []byte) []Tool {
 
 	merged, changed := mergeToolDefs(catalogDefs, userDefs)
 	if changed {
+		slog.Debug("marketplace merge updated user file", "path", path, "tools", len(merged))
 		_ = writeToolDefs(path, merged)
 	}
 
