@@ -341,10 +341,8 @@ func loadNpmGlobals(ctx context.Context) map[string]string {
 func npmInstalledVersion(ctx context.Context, pkg string) string {
 	npmMu.Lock()
 	if !npmCacheLoaded {
-		if cache := loadNpmGlobals(ctx); cache != nil {
-			npmGlobalCache = cache
-			npmCacheLoaded = true
-		}
+		npmGlobalCache = loadNpmGlobals(ctx)
+		npmCacheLoaded = true
 	}
 	cache := npmGlobalCache
 	npmMu.Unlock()

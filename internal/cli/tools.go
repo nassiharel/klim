@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -41,7 +40,7 @@ var toolsEditCmd = &cobra.Command{
 		// Ensure the file exists by loading the catalog (which creates it on first run).
 		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
 			fmt.Fprintln(os.Stderr, "Fetching marketplace catalog...")
-			if _, loadErr := svc.LoadAndScan(context.Background()); loadErr != nil {
+			if _, loadErr := svc.Catalog.LoadTools(cmd.Context()); loadErr != nil {
 				return fmt.Errorf("could not create marketplace file: %w", loadErr)
 			}
 		}
