@@ -333,3 +333,75 @@ func TestMergeToolDefs_EmptyInputs(t *testing.T) {
 		}
 	})
 }
+
+func TestParsePacksFromBytes(t *testing.T) {
+	t.Run("valid packs", func(t *testing.T) {
+		data := []byte(`tools:
+  - name: git
+    display_name: Git
+    binary_names: [git]
+packs:
+  - name: my-pack
+    display_name: My Pack
+    description: A test pack.
+    tools: [git, gh, fzf]
+  - name: mini
+    tools: [git]
+`)
+		packs := ParsePacksFromBytes(data)
+		if len(packs) != 2 {
+			t.Fatalf("expected 2 packs, got %d", len(packs))
+		}
+		if packs[0].Name != "my-pack" {
+			t.Errorf("pack 0 name = %q, want my-pack", packs[0].Name)
+		}
+		if packs[0].DisplayName != "My Pack" {
+			t.Errorf("pack 0 display_name = %q, want My Pack", packs[0].DisplayName)
+		}
+		if packs[0].Description != "A test pack." {
+			t.Errorf("pack 0 description = %q, want A test pack.", packs[0].Description)
+		}
+		if len(packs[0].ToolNames) != 3 {
+			t.Errorf("pack 0 tools = %v, want 3 tools", packs[0].ToolNames)
+		}
+		// Mini pack: display_name defaults to name.
+		if packs[1].DisplayName != "mini" {
+			t.Errorf("pack 1 display_name = %q, want mini (defaulted from name)", packs[1].DisplayName)
+		}
+	})
+
+	t.Run("no packs section", func(t *testing.T) {
+		data := []byte(`tools:
+  - name: git
+    binary_names: [git]
+`)
+		packs := ParsePacksFromBytes(data)
+		if len(packs) != 0 {
+			t.Errorf("expected 0 packs, got %d", len(packs))
+		}
+	})
+
+	t.Run("empty packs", func(t *testing.T) {
+		data := []byte(`tools: []
+packs: []
+`)
+		packs := ParsePacksFromBytes(data)
+		if len(packs) != 0 {
+			t.Errorf("expected 0 packs, got %d", len(packs))
+		}
+	})
+
+	t.Run("invalid yaml", func(t *testing.T) {
+		packs := ParsePacksFromBytes([]byte("{{invalid"))
+		if packs != nil {
+			t.Errorf("expected nil for invalid YAML, got %v", packs)
+		}
+	})
+
+	t.Run("nil input", func(t *testing.T) {
+		packs := ParsePacksFromBytes(nil)
+		if len(packs) != 0 {
+			t.Errorf("expected 0 packs for nil input, got %d", len(packs))
+		}
+	})
+}

@@ -52,6 +52,14 @@ type Tool struct {
 	MarketplaceStatus MarketplaceStatus // set after a marketplace refresh
 }
 
+// Pack represents a curated bundle of tools that can be installed together.
+type Pack struct {
+	Name        string
+	DisplayName string
+	Description string
+	ToolNames   []string // references to tool names in the catalog
+}
+
 // ToolInfo holds rich metadata about a tool, fetched from package managers.
 type ToolInfo struct {
 	Description string
@@ -233,6 +241,12 @@ var pmAvailability struct {
 // pmAvailableFunc can be overridden in tests to stub package manager availability.
 // When nil (the default), the real exec.LookPath check is used.
 var pmAvailableFunc func(InstallSource) bool
+
+// SetPMAvailableFunc overrides the package manager availability check for testing.
+// Pass nil to restore the default exec.LookPath behavior.
+func SetPMAvailableFunc(fn func(InstallSource) bool) {
+	pmAvailableFunc = fn
+}
 
 func pmAvailable(source InstallSource) bool {
 	if fn := pmAvailableFunc; fn != nil {

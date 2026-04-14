@@ -112,6 +112,14 @@ func (s *ToolService) FetchToolInfo(ctx context.Context, tool *registry.Tool) {
 	s.Resolver.FetchToolInfo(ctx, tool)
 }
 
+// LoadPacks returns the curated packs from the catalog.
+func (s *ToolService) LoadPacks(ctx context.Context) ([]registry.Pack, error) {
+	if dc, ok := s.Catalog.(*DefaultCatalog); ok {
+		return dc.LoadPacks(ctx)
+	}
+	return nil, nil
+}
+
 // RefreshTool re-scans a single tool's PATH presence and resolves its versions.
 func (s *ToolService) RefreshTool(ctx context.Context, tool registry.Tool) registry.Tool {
 	singleTool := []registry.Tool{tool}
@@ -146,4 +154,13 @@ func (c *DefaultCatalog) LoadTools(ctx context.Context) ([]registry.Tool, error)
 		return nil, errors.New("failed to parse marketplace catalog")
 	}
 	return tools, nil
+}
+
+// LoadPacks returns the curated packs from the catalog.
+func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error) {
+	data, err := catalog.LoadOrFetch(ctx, c.Fetcher)
+	if err != nil {
+		return nil, err
+	}
+	return registry.ParsePacksFromBytes(data), nil
 }

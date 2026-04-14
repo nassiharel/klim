@@ -34,6 +34,11 @@ func (m Model) renderView() string {
 		return m.renderDetailView(m.tools[m.detailIdx])
 	}
 
+	// Pack detail view.
+	if m.showPackDetail && m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
+		return m.renderPackDetailView(m.packs[m.packDetailIdx])
+	}
+
 	var b strings.Builder
 
 	b.WriteString(m.renderTitleBar() + "\n")
@@ -64,6 +69,19 @@ func (m Model) renderView() string {
 
 	// Search bar.
 	b.WriteString(m.renderSearchBar() + "\n")
+
+	// Marketplace sub-tab bar.
+	if m.activeTab == tabDiscover {
+		b.WriteString(m.renderDiscoverSubTabs() + "\n")
+	}
+
+	// Marketplace Packs sub-tab — separate rendering path.
+	if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
+		b.WriteString(m.renderPacksList())
+		b.WriteString("\n")
+		b.WriteString(m.renderHelp())
+		return b.String()
+	}
 
 	// Two-column layout: sidebar | tool list.
 	visibleRows := m.height - 8
@@ -164,6 +182,220 @@ func (m Model) renderSearchBar() string {
 	default:
 		b.WriteString("  " + dimVersion.Render("/ search..."))
 	}
+
+	return b.String()
+}
+
+// --- Marketplace sub-tabs & packs ---
+
+// renderDiscoverSubTabs renders the [Tools] [Packs] sub-tab bar.
+func (m Model) renderDiscoverSubTabs() string {
+	toolsLabel := "Tools"
+	packsLabel := "Packs"
+	if m.discoverSubTab == discoverTools {
+		toolsLabel = activeTabStyle.Render(toolsLabel)
+		packsLabel = dimVersion.Render(packsLabel)
+	} else {
+		toolsLabel = dimVersion.Render(toolsLabel)
+		packsLabel = activeTabStyle.Render(packsLabel)
+	}
+	return "  " + toolsLabel + "  " + packsLabel
+}
+
+// renderPacksList renders the list of packs for the Packs sub-tab.
+func (m Model) renderPacksList() string {
+	var b strings.Builder
+
+	if len(m.packs) == 0 {
+		b.WriteString("\n  " + dimVersion.Render("No packs available.") + "\n")
+		return b.String()
+	}
+
+	// Header.
+	b.WriteString("  " +
+		headerStyle.Render(fixedWidth("PACK", colName)) + "  " +
+		headerStyle.Render(fixedWidth("TOOLS", 8)) + "  " +
+		headerStyle.Render("STATUS") + "\n")
+
+	toolMap := make(map[string]bool, len(m.tools))
+	for _, t := range m.tools {
+		if t.IsInstalled() {
+			toolMap[t.Name] = true
+		}
+	}
+
+	visibleRows := m.height - 12
+	if visibleRows < 3 {
+		visibleRows = 3
+	}
+	start := 0
+	if m.cursor >= visibleRows {
+		start = m.cursor - visibleRows + 1
+	}
+
+	for vi := start; vi < len(m.packs) && vi < start+visibleRows; vi++ {
+		pack := m.packs[vi]
+		selected := vi == m.cursor
+
+		cursor := "  "
+		if selected {
+			cursor = "▸ "
+		}
+
+		nameCell := nameStyle.Render(fixedWidth(pack.DisplayName, colName))
+		toolCount := fixedWidth(fmt.Sprintf("%d tools", len(pack.ToolNames)), 8)
+
+		// Compute install status.
+		installed := 0
+		for _, name := range pack.ToolNames {
+			if toolMap[name] {
+				installed++
+			}
+		}
+		var status string
+		switch {
+		case installed == len(pack.ToolNames):
+			status = upToDateStyle.Render("✓ installed")
+		case installed > 0:
+			status = dimVersion.Render(fmt.Sprintf("%d/%d installed", installed, len(pack.ToolNames)))
+		default:
+			status = dimVersion.Render("not installed")
+		}
+
+		line := cursor + nameCell + "  " + toolCount + "  " + status
+		if selected {
+			w := lipgloss.Width(line)
+			if w < m.width {
+				line += strings.Repeat(" ", m.width-w)
+			}
+			line = selectedRowStyle.Render(line)
+		}
+		b.WriteString(line + "\n")
+	}
+
+	// Pad remaining rows.
+	rendered := min(len(m.packs)-start, visibleRows)
+	for range max(visibleRows-rendered, 0) {
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// renderPackDetailView renders the detail view for a selected pack.
+func (m Model) renderPackDetailView(pack registry.Pack) string {
+	var b strings.Builder
+	label := detailLabelStyle.Render
+	dim := dimVersion.Render
+
+	// Header.
+	b.WriteString("  " + detailTitleStyle.Render("📦 "+pack.DisplayName))
+	divLen := max(m.width-lipgloss.Width(pack.DisplayName)-8, 10)
+	b.WriteString("  " + strings.Repeat("─", divLen))
+	b.WriteString("\n\n")
+
+	// Description.
+	if pack.Description != "" {
+		maxW := m.width - 6
+		if maxW < 20 {
+			maxW = 20
+		}
+		for _, line := range wordWrap(pack.Description, maxW) {
+			b.WriteString("  " + dim(line) + "\n")
+		}
+		b.WriteString("\n")
+	}
+
+	// If a pack operation is in progress, show live progress.
+	if len(m.packItems) > 0 {
+		b.WriteString("  " + label("Progress:") + "\n\n")
+
+		for _, item := range m.packItems {
+			var icon, status string
+			switch item.status {
+			case packItemPending:
+				icon = dim("○")
+				status = dim("pending")
+			case packItemRunning:
+				icon = upgradableStyle.Render("◉")
+				status = upgradableStyle.Render("running...")
+			case packItemDone:
+				icon = upToDateStyle.Render("✓")
+				status = upToDateStyle.Render("done")
+			case packItemFailed:
+				icon = upgradableStyle.Render("✗")
+				if item.errMsg != "" {
+					status = upgradableStyle.Render(item.errMsg)
+				} else {
+					status = upgradableStyle.Render("failed")
+				}
+			case packItemSkipped:
+				icon = dim("–")
+				if item.errMsg != "" {
+					status = dim(item.errMsg)
+				} else {
+					status = dim("skipped")
+				}
+			}
+			b.WriteString(fmt.Sprintf("    %s  %-20s %s\n", icon, item.display, status))
+		}
+
+		pending := 0
+		for _, item := range m.packItems {
+			if item.status == packItemPending || item.status == packItemRunning {
+				pending++
+			}
+		}
+		b.WriteString(fmt.Sprintf("\n  %d/%d complete\n", m.packDone, len(m.packItems)))
+
+		if pending == 0 && !m.packInstalling {
+			b.WriteString("\n  " + dim("Esc") + " back")
+		}
+
+		return b.String()
+	}
+
+	// Static view — show tool list with install status.
+	b.WriteString("  " + label("Tools:") + "\n\n")
+
+	toolMap := make(map[string]bool, len(m.tools))
+	for _, t := range m.tools {
+		if t.IsInstalled() {
+			toolMap[t.Name] = true
+		}
+	}
+
+	installed := 0
+	for _, name := range pack.ToolNames {
+		isInstalled := toolMap[name]
+		if isInstalled {
+			installed++
+		}
+		icon := dim("○")
+		status := dim("not installed")
+		if isInstalled {
+			icon = upToDateStyle.Render("✓")
+			status = upToDateStyle.Render("installed")
+		}
+		b.WriteString(fmt.Sprintf("    %s  %-20s %s\n", icon, name, status))
+	}
+
+	b.WriteString(fmt.Sprintf("\n  %s  %d/%d installed\n\n", label("Status:"), installed, len(pack.ToolNames)))
+
+	// Actions.
+	if installed < len(pack.ToolNames) {
+		b.WriteString("  " + nameStyle.Render("Press Enter or i to install missing tools") + "\n")
+	} else {
+		b.WriteString("  " + upToDateStyle.Render("All tools in this pack are installed! ✓") + "\n")
+	}
+	if installed > 0 {
+		b.WriteString("  " + dimVersion.Render("Press x to remove installed tools") + "\n")
+	}
+	b.WriteString("\n")
+
+	// Help.
+	hints := dim("Enter/i") + " install   " + dim("x") + " remove   " + dim("Esc") + " back"
+	b.WriteString("  " + helpStyle.Render(hints))
 
 	return b.String()
 }

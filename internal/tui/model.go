@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -24,6 +25,12 @@ const (
 	tabBackup
 	tabConfig
 	tabCount // total number of tabs, used for modular cycling
+)
+
+// Marketplace sub-tabs.
+const (
+	discoverTools = 0
+	discoverPacks = 1
 )
 
 // Scan phases — the loading lifecycle.
@@ -93,6 +100,17 @@ type Model struct {
 	categoryPicker bool
 	sidebarIdx     int
 	sidebarItems   []sidebarItem
+
+	// Marketplace sub-tabs (Tools / Packs).
+	discoverSubTab int // 0=tools, 1=packs
+	packs          []registry.Pack
+	showPackDetail bool
+	packDetailIdx  int // index into m.packs
+
+	// Pack install/remove state (inline in pack detail view).
+	packItems      []packItem // per-tool status during pack install/remove
+	packInstalling bool       // true while a pack operation is in progress
+	packDone       int        // count of completed items
 
 	// Marketplace refresh diff — carried across rescans to apply badges.
 	lastDiff *catalog.DiffResult
@@ -241,6 +259,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.categoryFilter = ""
 		m.tagFilter = ""
 		m.platformFilter = ""
+
+		// Load packs.
+		if packs, err := m.svc.LoadPacks(context.Background()); err == nil {
+			m.packs = packs
+		}
 
 		// Apply marketplace refresh badges if a diff is pending.
 		if m.lastDiff != nil {
@@ -468,6 +491,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case packItemDoneMsg:
+		if msg.idx < len(m.packItems) {
+			if msg.err != nil {
+				m.packItems[msg.idx].status = packItemFailed
+				m.packItems[msg.idx].errMsg = msg.err.Error()
+			} else {
+				m.packItems[msg.idx].status = packItemDone
+			}
+			m.packDone++
+		}
+		// Fire the next item, or finish.
+		if cmd := m.nextPackItem(); cmd != nil {
+			return m, cmd
+		}
+		// All done — refresh tools to pick up changes.
+		m.packInstalling = false
+		m.statusMsg = "✓ Pack operation complete — refreshing..."
+		m.loading = true
+		m.phase = phaseScanning
+		m.tools = nil
+		m.filteredIndex = nil
+		return m, tea.Batch(
+			m.spinner.Tick,
+			func() tea.Msg { return findToolsCmd(m.svc)() },
+		)
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -538,6 +587,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.showDetail {
 		return m.handleKeyDetail(msg)
+	}
+	if m.showPackDetail {
+		return m.handleKeyPackDetail(msg)
 	}
 	if m.filtering {
 		return m.handleKeyFilter(msg)
@@ -757,6 +809,73 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleKeyPackDetail handles navigation in the pack detail view.
+func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// While a pack operation is running, only allow Esc to cancel.
+	if m.packInstalling {
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "esc", "q", "backspace":
+		m.showPackDetail = false
+		m.packItems = nil
+		m.packInstalling = false
+		m.packDone = 0
+		return m, nil
+	case "enter", "i":
+		// Install missing tools.
+		if m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
+			pack := m.packs[m.packDetailIdx]
+			m.packItems = buildPackInstallItems(m.tools, pack)
+			m.packDone = countPackSkipped(m.packItems)
+			m.packInstalling = true
+			if cmd := m.nextPackItem(); cmd != nil {
+				return m, cmd
+			}
+			m.packInstalling = false
+			m.statusMsg = "Nothing to install — all tools skipped."
+		}
+		return m, nil
+	case "x":
+		// Remove installed tools.
+		if m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
+			pack := m.packs[m.packDetailIdx]
+			m.packItems = buildPackRemoveItems(m.tools, pack)
+			m.packDone = countPackSkipped(m.packItems)
+			m.packInstalling = true
+			if cmd := m.nextPackItem(); cmd != nil {
+				return m, cmd
+			}
+			m.packInstalling = false
+			m.statusMsg = "Nothing to remove — all tools skipped."
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+// nextPackItem finds the next pending pack item and fires its command.
+func (m *Model) nextPackItem() tea.Cmd {
+	for i := range m.packItems {
+		if m.packItems[i].status == packItemPending {
+			m.packItems[i].status = packItemRunning
+			return execPackItemCmd(i, m.packItems[i].cmdArgs)
+		}
+	}
+	return nil
+}
+
+func countPackSkipped(items []packItem) int {
+	n := 0
+	for _, item := range items {
+		if item.status == packItemSkipped {
+			n++
+		}
+	}
+	return n
+}
+
 // handleKeyFilter handles the search/filter text input mode.
 // The search box is focused — typing goes into it. Tab cycles categories.
 func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -820,13 +939,27 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case "right", "tab":
+		// On Marketplace tab, cycle sub-tabs before switching main tabs.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverTools {
+			m.discoverSubTab = discoverPacks
+			m.cursor = 0
+			return m, nil
+		}
 		m.activeTab = (m.activeTab + 1) % tabCount
 		m.cursor = 0
+		m.discoverSubTab = discoverTools
 		m.applyFilter()
 		return m, nil
 	case "left", "shift+tab":
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
+			m.discoverSubTab = discoverTools
+			m.cursor = 0
+			m.applyFilter()
+			return m, nil
+		}
 		m.activeTab = (m.activeTab + tabCount - 1) % tabCount
 		m.cursor = 0
+		m.discoverSubTab = discoverTools
 		m.applyFilter()
 		return m, nil
 	case "1":
@@ -971,7 +1104,15 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.cursor < len(m.filteredIndex) {
-			// Open detail view.
+			// On Marketplace Packs sub-tab, open pack detail.
+			if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
+				if m.cursor < len(m.packs) {
+					m.packDetailIdx = m.cursor
+					m.showPackDetail = true
+				}
+				return m, nil
+			}
+			// Open tool detail view.
 			m.detailIdx = m.filteredIndex[m.cursor]
 			m.showDetail = true
 			m.buildToolMenu()
@@ -1405,6 +1546,11 @@ func (m Model) resolveRemoveAction() *sourcePicker {
 // rowCount returns the number of navigable rows for the current tab.
 func (m Model) rowCount() int {
 	switch m.activeTab {
+	case tabDiscover:
+		if m.discoverSubTab == discoverPacks {
+			return len(m.packs)
+		}
+		return len(m.filteredIndex)
 	case tabBackup:
 		if m.backupMode == backupModeIdle {
 			return backupMenuCount
