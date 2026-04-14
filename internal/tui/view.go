@@ -254,6 +254,8 @@ func (m Model) renderPacksList() string {
 		}
 		var status string
 		switch {
+		case len(pack.ToolNames) == 0:
+			status = dimVersion.Render("empty pack")
 		case installed == len(pack.ToolNames):
 			status = upToDateStyle.Render("✓ installed")
 		case installed > 0:
@@ -289,8 +291,9 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 	dim := dimVersion.Render
 
 	// Header.
-	b.WriteString("  " + detailTitleStyle.Render("📦 "+pack.DisplayName))
-	divLen := max(m.width-lipgloss.Width(pack.DisplayName)-8, 10)
+	title := detailTitleStyle.Render("📦 " + pack.DisplayName)
+	b.WriteString("  " + title)
+	divLen := max(m.width-lipgloss.Width(title)-6, 10)
 	b.WriteString("  " + strings.Repeat("─", divLen))
 	b.WriteString("\n\n")
 
@@ -337,7 +340,7 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 					status = dim("skipped")
 				}
 			}
-			b.WriteString(fmt.Sprintf("    %s  %-20s %s\n", icon, item.display, status))
+			fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, item.display, status)
 		}
 
 		pending := 0
@@ -346,7 +349,7 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 				pending++
 			}
 		}
-		b.WriteString(fmt.Sprintf("\n  %d/%d complete\n", m.packDone, len(m.packItems)))
+		fmt.Fprintf(&b, "\n  %d/%d complete\n", m.packDone, len(m.packItems))
 
 		if pending == 0 && !m.packInstalling {
 			b.WriteString("\n  " + dim("Esc") + " back")
@@ -377,19 +380,26 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 			icon = upToDateStyle.Render("✓")
 			status = upToDateStyle.Render("installed")
 		}
-		b.WriteString(fmt.Sprintf("    %s  %-20s %s\n", icon, name, status))
+		fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, name, status)
 	}
 
-	b.WriteString(fmt.Sprintf("\n  %s  %d/%d installed\n\n", label("Status:"), installed, len(pack.ToolNames)))
-
 	// Actions.
+	if len(pack.ToolNames) == 0 {
+		b.WriteString("  " + dim("This pack has no tools defined.") + "\n\n")
+		hints := dim("Esc") + " back"
+		b.WriteString("  " + helpStyle.Render(hints))
+		return b.String()
+	}
+
+	fmt.Fprintf(&b, "\n  %s  %d/%d installed\n\n", label("Status:"), installed, len(pack.ToolNames))
+
 	if installed < len(pack.ToolNames) {
 		b.WriteString("  " + nameStyle.Render("Press Enter or i to install missing tools") + "\n")
 	} else {
 		b.WriteString("  " + upToDateStyle.Render("All tools in this pack are installed! ✓") + "\n")
 	}
 	if installed > 0 {
-		b.WriteString("  " + dimVersion.Render("Press x to remove installed tools") + "\n")
+		b.WriteString("  " + dim("Press x to remove installed tools") + "\n")
 	}
 	b.WriteString("\n")
 

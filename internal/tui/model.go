@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -261,7 +262,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.platformFilter = ""
 
 		// Load packs.
-		if packs, err := m.svc.LoadPacks(context.Background()); err == nil {
+		if packs, err := m.svc.LoadPacks(context.Background()); err != nil {
+			m.packs = nil
+			slog.Warn("failed to load packs", "error", err)
+		} else {
 			m.packs = packs
 		}
 
@@ -811,8 +815,16 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyPackDetail handles navigation in the pack detail view.
 func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// While a pack operation is running, only allow Esc to cancel.
+	// While a pack operation is running, only allow viewing — no new actions.
 	if m.packInstalling {
+		if msg.String() == "esc" || msg.String() == "q" {
+			// Let the user dismiss the view; the operation continues in background.
+			m.showPackDetail = false
+			m.packItems = nil
+			m.packInstalling = false
+			m.packDone = 0
+			return m, nil
+		}
 		return m, nil
 	}
 
@@ -1103,15 +1115,15 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if m.cursor < len(m.filteredIndex) {
-			// On Marketplace Packs sub-tab, open pack detail.
-			if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
-				if m.cursor < len(m.packs) {
-					m.packDetailIdx = m.cursor
-					m.showPackDetail = true
-				}
-				return m, nil
+		// On Marketplace Packs sub-tab, open pack detail.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
+			if m.cursor < len(m.packs) {
+				m.packDetailIdx = m.cursor
+				m.showPackDetail = true
 			}
+			return m, nil
+		}
+		if m.cursor < len(m.filteredIndex) {
 			// Open tool detail view.
 			m.detailIdx = m.filteredIndex[m.cursor]
 			m.showDetail = true

@@ -472,10 +472,20 @@ func buildPackRemoveItems(tools []registry.Tool, pack registry.Pack) []packItem 
 	for _, name := range pack.ToolNames {
 		rt, exists := toolMap[name]
 
-		if !exists || !rt.IsInstalled() {
+		if !exists {
 			items = append(items, packItem{
 				name:    name,
 				display: name,
+				status:  packItemSkipped,
+				errMsg:  "not in catalog",
+			})
+			continue
+		}
+
+		if !rt.IsInstalled() {
+			items = append(items, packItem{
+				name:    name,
+				display: rt.DisplayName,
 				status:  packItemSkipped,
 				errMsg:  "not installed",
 			})
