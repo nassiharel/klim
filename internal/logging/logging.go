@@ -19,6 +19,7 @@ var logPath string
 // Call once at startup, before any other package uses slog.
 // The verbose parameter (from --verbose flag) is OR'd with the config setting.
 func Init(level string, fileEnabled bool, verbose bool) {
+	logPath = "" // reset in case of repeated calls
 	var writers []io.Writer
 
 	if fileEnabled {
