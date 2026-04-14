@@ -83,6 +83,14 @@ func (m Model) renderView() string {
 		return b.String()
 	}
 
+	// Marketplace For You sub-tab — separate rendering path.
+	if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
+		b.WriteString(m.renderForYouList())
+		b.WriteString("\n")
+		b.WriteString(m.renderHelp())
+		return b.String()
+	}
+
 	// Two-column layout: sidebar | tool list.
 	visibleRows := m.height - 8
 	if visibleRows < 3 {
@@ -188,18 +196,25 @@ func (m Model) renderSearchBar() string {
 
 // --- Marketplace sub-tabs & packs ---
 
-// renderDiscoverSubTabs renders the [Tools] [Packs] sub-tab bar.
+// renderDiscoverSubTabs renders the [Tools] [Packs] [For You] sub-tab bar.
 func (m Model) renderDiscoverSubTabs() string {
-	toolsLabel := "Tools"
-	packsLabel := "Packs"
-	if m.discoverSubTab == discoverTools {
-		toolsLabel = activeTabStyle.Render(toolsLabel)
-		packsLabel = dimVersion.Render(packsLabel)
-	} else {
-		toolsLabel = dimVersion.Render(toolsLabel)
-		packsLabel = activeTabStyle.Render(packsLabel)
+	labels := []struct {
+		name string
+		idx  int
+	}{
+		{"Tools", discoverTools},
+		{"Packs", discoverPacks},
+		{"For You", discoverForYou},
 	}
-	return "  " + toolsLabel + "  " + packsLabel
+	var parts []string
+	for _, l := range labels {
+		if l.idx == m.discoverSubTab {
+			parts = append(parts, activeTabStyle.Render(l.name))
+		} else {
+			parts = append(parts, dimVersion.Render(l.name))
+		}
+	}
+	return "  " + strings.Join(parts, "  ")
 }
 
 // renderPacksList renders the list of packs for the Packs sub-tab.
@@ -277,6 +292,79 @@ func (m Model) renderPacksList() string {
 
 	// Pad remaining rows.
 	rendered := max(min(len(m.packs)-start, visibleRows), 0)
+	for range max(visibleRows-rendered, 0) {
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// renderForYouList renders the smart recommendations for the For You sub-tab.
+func (m Model) renderForYouList() string {
+	var b strings.Builder
+
+	if len(m.recommendations) == 0 {
+		b.WriteString("\n  " + dimVersion.Render("No recommendations — install some tools first!") + "\n")
+		return b.String()
+	}
+
+	// Header.
+	b.WriteString("  " +
+		headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
+		headerStyle.Render(fixedWidth("MATCH", 6)) + "  " +
+		headerStyle.Render("BECAUSE YOU HAVE") + "\n")
+
+	visibleRows := m.height - 12
+	if visibleRows < 3 {
+		visibleRows = 3
+	}
+	start := 0
+	if m.cursor >= visibleRows {
+		start = m.cursor - visibleRows + 1
+	}
+
+	// Find max score for relative bar sizing.
+	maxScore := 1
+	for _, rec := range m.recommendations {
+		if rec.score > maxScore {
+			maxScore = rec.score
+		}
+	}
+
+	for vi := start; vi < len(m.recommendations) && vi < start+visibleRows; vi++ {
+		rec := m.recommendations[vi]
+		tool := m.tools[rec.toolIdx]
+		selected := vi == m.cursor
+
+		cursor := "  "
+		if selected {
+			cursor = "▸ "
+		}
+
+		nameCell := nameStyle.Render(fixedWidth(tool.Name, colName))
+
+		// Score bar: scale to 5 chars max.
+		barLen := (rec.score * 5) / maxScore
+		if barLen < 1 {
+			barLen = 1
+		}
+		bar := upgradableStyle.Render(strings.Repeat("█", barLen) + strings.Repeat("░", 5-barLen))
+
+		reasonCell := dimVersion.Render(rec.reason)
+
+		line := cursor + nameCell + "  " + bar + " " + reasonCell
+		if selected {
+			w := lipgloss.Width(line)
+			if w < m.width {
+				line += strings.Repeat(" ", m.width-w)
+			}
+			line = selectedRowStyle.Render(line)
+		}
+		b.WriteString(line + "\n")
+	}
+
+	// Pad remaining rows.
+	rendered := max(min(len(m.recommendations)-start, visibleRows), 0)
 	for range max(visibleRows-rendered, 0) {
 		b.WriteString("\n")
 	}

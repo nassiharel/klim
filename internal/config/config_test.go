@@ -19,8 +19,8 @@ func TestDefault(t *testing.T) {
 	if cfg.Logging.Verbose != false {
 		t.Error("default logging verbose should be false")
 	}
-	if cfg.Marketplace.URL != "" {
-		t.Errorf("default marketplace URL should be empty, got %q", cfg.Marketplace.URL)
+	if cfg.Marketplace.URL != DefaultMarketplaceURL {
+		t.Errorf("default marketplace URL = %q, want DefaultMarketplaceURL", cfg.Marketplace.URL)
 	}
 	if cfg.Marketplace.AutoRefresh != false {
 		t.Error("default auto_refresh should be false")

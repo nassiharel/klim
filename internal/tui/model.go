@@ -30,8 +30,10 @@ const (
 
 // Marketplace sub-tabs.
 const (
-	discoverTools = 0
-	discoverPacks = 1
+	discoverTools       = 0
+	discoverPacks       = 1
+	discoverForYou      = 2
+	discoverSubTabCount = 3
 )
 
 // Scan phases — the loading lifecycle.
@@ -102,11 +104,12 @@ type Model struct {
 	sidebarIdx     int
 	sidebarItems   []sidebarItem
 
-	// Marketplace sub-tabs (Tools / Packs).
-	discoverSubTab int // 0=tools, 1=packs
-	packs          []registry.Pack
-	showPackDetail bool
-	packDetailIdx  int // index into m.packs
+	// Marketplace sub-tabs (Tools / Packs / For You).
+	discoverSubTab  int // 0=tools, 1=packs, 2=forYou
+	packs           []registry.Pack
+	recommendations []recommendation // tag-based, computed after scan
+	showPackDetail  bool
+	packDetailIdx   int // index into m.packs
 
 	// Pack install/remove state (inline in pack detail view).
 	packItems      []packItem // per-tool status during pack install/remove
@@ -265,6 +268,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if packs, err := m.svc.LoadPacks(context.Background()); err != nil {
 			m.packs = nil
 			slog.Warn("failed to load packs", "error", err)
+			if m.statusMsg == "" {
+				m.statusMsg = fmt.Sprintf("⚠ Marketplace unavailable: %v", err)
+			}
 		} else {
 			m.packs = packs
 		}
@@ -275,6 +281,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.discoverSubTab == discoverPacks && m.cursor >= len(m.packs) {
 			m.cursor = max(0, len(m.packs)-1)
+		}
+
+		// Compute smart recommendations from tag overlap.
+		m.recommendations = computeRecommendations(m.tools)
+		if m.discoverSubTab == discoverForYou && m.cursor >= len(m.recommendations) {
+			m.cursor = max(0, len(m.recommendations)-1)
 		}
 
 		// Apply marketplace refresh badges if a diff is pending.
@@ -959,8 +971,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "right", "tab":
 		// On Marketplace tab, cycle sub-tabs before switching main tabs.
-		if m.activeTab == tabDiscover && m.discoverSubTab == discoverTools {
-			m.discoverSubTab = discoverPacks
+		if m.activeTab == tabDiscover && m.discoverSubTab < discoverSubTabCount-1 {
+			m.discoverSubTab++
 			m.cursor = 0
 			return m, nil
 		}
@@ -970,10 +982,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.applyFilter()
 		return m, nil
 	case "left", "shift+tab":
-		if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
-			m.discoverSubTab = discoverTools
+		if m.activeTab == tabDiscover && m.discoverSubTab > discoverTools {
+			m.discoverSubTab--
 			m.cursor = 0
-			m.applyFilter()
+			if m.discoverSubTab == discoverTools {
+				m.applyFilter()
+			}
 			return m, nil
 		}
 		m.activeTab = (m.activeTab + tabCount - 1) % tabCount
@@ -1133,6 +1147,19 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.showPackDetail = true
 				m.packItems = nil // clear any leftover progress from a previous pack
 				m.packDone = 0
+			}
+			return m, nil
+		}
+		// On Marketplace For You sub-tab, open the recommended tool's detail.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
+			if m.cursor < len(m.recommendations) {
+				m.detailIdx = m.recommendations[m.cursor].toolIdx
+				m.showDetail = true
+				m.buildToolMenu()
+				tool := m.tools[m.detailIdx]
+				if !tool.InfoFetched {
+					return m, fetchToolInfoCmd(m.svc, m.detailIdx, tool)
+				}
 			}
 			return m, nil
 		}
@@ -1574,6 +1601,9 @@ func (m Model) rowCount() int {
 	case tabDiscover:
 		if m.discoverSubTab == discoverPacks {
 			return len(m.packs)
+		}
+		if m.discoverSubTab == discoverForYou {
+			return len(m.recommendations)
 		}
 		return len(m.filteredIndex)
 	case tabBackup:
