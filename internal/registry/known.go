@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -108,10 +109,12 @@ func parseToolDefs(data []byte) []toolDef {
 }
 
 // ParsePacksFromBytes parses the packs section from catalog YAML bytes.
-func ParsePacksFromBytes(data []byte) []Pack {
+// Returns an error if the YAML is unparseable. Returns an empty (non-nil)
+// slice if the YAML is valid but contains no packs.
+func ParsePacksFromBytes(data []byte) ([]Pack, error) {
 	var f toolsFile
 	if err := yaml.Unmarshal(data, &f); err != nil {
-		return nil
+		return nil, fmt.Errorf("parsing packs: %w", err)
 	}
 	packs := make([]Pack, 0, len(f.Packs))
 	for _, pd := range f.Packs {
@@ -126,7 +129,7 @@ func ParsePacksFromBytes(data []byte) []Pack {
 		}
 		packs = append(packs, p)
 	}
-	return packs
+	return packs, nil
 }
 
 func defsToTools(defs []toolDef) []Tool {

@@ -22,6 +22,11 @@ import (
 	"github.com/nassiharel/clim/internal/share"
 )
 
+// resolveSem limits concurrent version resolution goroutines in the TUI.
+// Without this, Bubbletea fires all tools at once, spawning 40+ concurrent
+// subprocess calls that overwhelm package managers and cause timeouts.
+var resolveSem = make(chan struct{}, 4)
+
 // --- Scan & version resolution messages ---
 
 type scanResultMsg struct {
@@ -163,6 +168,9 @@ func findToolsCmd(svc *service.ToolService) func() scanResultMsg {
 
 func resolveToolVersionCmd(svc *service.ToolService, index int, gen int, tool registry.Tool) func() toolVersionMsg {
 	return func() toolVersionMsg {
+		resolveSem <- struct{}{}        // acquire
+		defer func() { <-resolveSem }() // release
+
 		ctx := context.Background()
 		if tool.IsInstalled() {
 			svc.ResolveOne(ctx, &tool)

@@ -269,6 +269,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.packs = packs
 		}
 
+		// Clamp pack-related indices to the new list size.
+		if m.showPackDetail && m.packDetailIdx >= len(m.packs) {
+			m.showPackDetail = false
+		}
+		if m.discoverSubTab == discoverPacks && m.cursor >= len(m.packs) {
+			m.cursor = max(0, len(m.packs)-1)
+		}
+
 		// Apply marketplace refresh badges if a diff is pending.
 		if m.lastDiff != nil {
 			newSet := make(map[string]struct{}, len(m.lastDiff.NewTools))
@@ -815,14 +823,13 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyPackDetail handles navigation in the pack detail view.
 func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// While a pack operation is running, only allow viewing — no new actions.
+	// While a pack operation is running, allow dismissing the view
+	// but keep the operation running in the background.
 	if m.packInstalling {
 		if msg.String() == "esc" || msg.String() == "q" {
-			// Let the user dismiss the view; the operation continues in background.
 			m.showPackDetail = false
-			m.packItems = nil
-			m.packInstalling = false
-			m.packDone = 0
+			// packItems and packInstalling remain — the queue continues
+			// and packItemDoneMsg will fire the next item when it arrives.
 			return m, nil
 		}
 		return m, nil
@@ -1581,7 +1588,7 @@ func (m *Model) nextBackupInstall() tea.Cmd {
 	for i := range m.backupItems {
 		if m.backupItems[i].status == backupPending {
 			m.backupItems[i].status = backupRunning
-			m.statusMsg = fmt.Sprintf("Installing %s...", m.backupItems[i].display)
+			m.statusMsg = fmt.Sprintf("Installing %s...", m.backupItems[i].name)
 			return execBackupInstallCmd(i, m.backupItems[i].cmdArgs)
 		}
 	}

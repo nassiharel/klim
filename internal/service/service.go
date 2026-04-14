@@ -112,12 +112,18 @@ func (s *ToolService) FetchToolInfo(ctx context.Context, tool *registry.Tool) {
 	s.Resolver.FetchToolInfo(ctx, tool)
 }
 
+// PackLoader is an optional interface that catalogs can implement to provide packs.
+type PackLoader interface {
+	LoadPacks(ctx context.Context) ([]registry.Pack, error)
+}
+
 // LoadPacks returns the curated packs from the catalog.
+// Returns an empty slice if the catalog doesn't support packs.
 func (s *ToolService) LoadPacks(ctx context.Context) ([]registry.Pack, error) {
-	if dc, ok := s.Catalog.(*DefaultCatalog); ok {
-		return dc.LoadPacks(ctx)
+	if pl, ok := s.Catalog.(PackLoader); ok {
+		return pl.LoadPacks(ctx)
 	}
-	return nil, nil
+	return []registry.Pack{}, nil
 }
 
 // RefreshTool re-scans a single tool's PATH presence and resolves its versions.
@@ -162,5 +168,5 @@ func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error)
 	if err != nil {
 		return nil, err
 	}
-	return registry.ParsePacksFromBytes(data), nil
+	return registry.ParsePacksFromBytes(data)
 }

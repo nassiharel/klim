@@ -276,7 +276,7 @@ func (m Model) renderPacksList() string {
 	}
 
 	// Pad remaining rows.
-	rendered := min(len(m.packs)-start, visibleRows)
+	rendered := max(min(len(m.packs)-start, visibleRows), 0)
 	for range max(visibleRows-rendered, 0) {
 		b.WriteString("\n")
 	}
@@ -340,7 +340,7 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 					status = dim("skipped")
 				}
 			}
-			fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, item.display, status)
+			fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, item.name, status)
 		}
 
 		pending := 0
@@ -432,7 +432,7 @@ func (m Model) renderHeader() string {
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory)) + "  " +
 			headerStyle.Render("STATUS")
 	case tabBackup:
-		return "  " +
+		return "    " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("STATUS", colStatus)) + "  " +
 			headerStyle.Render(fixedWidth("SOURCE", colSource))
@@ -1071,34 +1071,33 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 		cursor = "▸ "
 	}
 
-	// Status icon + label. Compute plain text first, style after fixedWidth.
+	// Status icon (fixed 2-char width: icon + space).
 	var icon string
 	var statusLabel string
 	var statusStyle lipgloss.Style
 	switch item.status {
 	case backupPending:
 		if confirmMode {
-			// Show selection checkbox during confirm mode.
 			if item.selected {
-				icon = upToDateStyle.Render("[✓]")
+				icon = upToDateStyle.Render("✓ ")
 			} else {
-				icon = dimVersion.Render("[ ]")
+				icon = dimVersion.Render("· ")
 			}
 		} else {
-			icon = dimVersion.Render(" ○ ")
+			icon = dimVersion.Render("○ ")
 		}
 		statusLabel = "pending"
 		statusStyle = dimVersion
 	case backupRunning:
-		icon = upgradableStyle.Render(" ◉ ")
+		icon = upgradableStyle.Render("◉ ")
 		statusLabel = "installing"
 		statusStyle = upgradableStyle
 	case backupDone:
-		icon = upToDateStyle.Render(" ✓ ")
+		icon = upToDateStyle.Render("✓ ")
 		statusLabel = "done"
 		statusStyle = upToDateStyle
 	case backupFailed:
-		icon = upgradableStyle.Render(" ✗ ")
+		icon = upgradableStyle.Render("✗ ")
 		if item.errMsg != "" {
 			statusLabel = item.errMsg
 		} else {
@@ -1106,7 +1105,7 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 		}
 		statusStyle = upgradableStyle
 	case backupSkipped:
-		icon = dimVersion.Render(" – ")
+		icon = dimVersion.Render("– ")
 		if item.errMsg != "" {
 			statusLabel = item.errMsg
 		} else {
@@ -1115,11 +1114,11 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 		statusStyle = dimVersion
 	}
 
-	nameCell := nameStyle.Render(fixedWidth(item.display, colName))
+	nameCell := nameStyle.Render(fixedWidth(item.name, colName))
 	statusCell := statusStyle.Render(fixedWidth(statusLabel, colStatus))
 	sourceCell := sourceStyle.Render(fixedWidth(item.source, colSource))
 
-	line := cursor + icon + " " + nameCell + "  " + statusCell + "  " + sourceCell
+	line := cursor + icon + nameCell + "  " + statusCell + "  " + sourceCell
 
 	if selected {
 		// Pad to full width for selection highlight.

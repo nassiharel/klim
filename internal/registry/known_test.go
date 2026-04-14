@@ -348,7 +348,10 @@ packs:
   - name: mini
     tools: [git]
 `)
-		packs := ParsePacksFromBytes(data)
+		packs, err := ParsePacksFromBytes(data)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(packs) != 2 {
 			t.Fatalf("expected 2 packs, got %d", len(packs))
 		}
@@ -375,7 +378,10 @@ packs:
   - name: git
     binary_names: [git]
 `)
-		packs := ParsePacksFromBytes(data)
+		packs, err := ParsePacksFromBytes(data)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(packs) != 0 {
 			t.Errorf("expected 0 packs, got %d", len(packs))
 		}
@@ -385,21 +391,27 @@ packs:
 		data := []byte(`tools: []
 packs: []
 `)
-		packs := ParsePacksFromBytes(data)
+		packs, err := ParsePacksFromBytes(data)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(packs) != 0 {
 			t.Errorf("expected 0 packs, got %d", len(packs))
 		}
 	})
 
 	t.Run("invalid yaml", func(t *testing.T) {
-		packs := ParsePacksFromBytes([]byte("{{invalid"))
-		if packs != nil {
-			t.Errorf("expected nil for invalid YAML, got %v", packs)
+		_, err := ParsePacksFromBytes([]byte("{{invalid"))
+		if err == nil {
+			t.Error("expected error for invalid YAML")
 		}
 	})
 
 	t.Run("nil input", func(t *testing.T) {
-		packs := ParsePacksFromBytes(nil)
+		packs, err := ParsePacksFromBytes(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if len(packs) != 0 {
 			t.Errorf("expected 0 packs for nil input, got %d", len(packs))
 		}
