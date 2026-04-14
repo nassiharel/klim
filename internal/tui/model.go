@@ -1124,9 +1124,15 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		// On Marketplace Packs sub-tab, open pack detail.
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
+			if m.packInstalling {
+				m.statusMsg = "Pack operation in progress — please wait..."
+				return m, nil
+			}
 			if m.cursor < len(m.packs) {
 				m.packDetailIdx = m.cursor
 				m.showPackDetail = true
+				m.packItems = nil // clear any leftover progress from a previous pack
+				m.packDone = 0
 			}
 			return m, nil
 		}
@@ -1588,7 +1594,7 @@ func (m *Model) nextBackupInstall() tea.Cmd {
 	for i := range m.backupItems {
 		if m.backupItems[i].status == backupPending {
 			m.backupItems[i].status = backupRunning
-			m.statusMsg = fmt.Sprintf("Installing %s...", m.backupItems[i].name)
+			m.statusMsg = fmt.Sprintf("Installing %s...", itemLabel(m.backupItems[i].name, m.backupItems[i].display))
 			return execBackupInstallCmd(i, m.backupItems[i].cmdArgs)
 		}
 	}

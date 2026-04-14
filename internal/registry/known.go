@@ -109,7 +109,7 @@ func parseToolDefs(data []byte) []toolDef {
 }
 
 // ParsePacksFromBytes parses the packs section from catalog YAML bytes.
-// Returns an error if the YAML is unparseable. Returns an empty (non-nil)
+// Returns an error if the YAML is unparsable. Returns an empty (non-nil)
 // slice if the YAML is valid but contains no packs.
 func ParsePacksFromBytes(data []byte) ([]Pack, error) {
 	var f toolsFile

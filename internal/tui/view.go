@@ -340,7 +340,7 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 					status = dim("skipped")
 				}
 			}
-			fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, item.name, status)
+			fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, itemLabel(item.name, item.display), status)
 		}
 
 		pending := 0
@@ -1114,7 +1114,7 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 		statusStyle = dimVersion
 	}
 
-	nameCell := nameStyle.Render(fixedWidth(item.name, colName))
+	nameCell := nameStyle.Render(fixedWidth(itemLabel(item.name, item.display), colName))
 	statusCell := statusStyle.Render(fixedWidth(statusLabel, colStatus))
 	sourceCell := sourceStyle.Render(fixedWidth(item.source, colSource))
 
@@ -1462,6 +1462,14 @@ func toolResolved(tool registry.Tool) bool {
 // toolLabel returns the tool's short name for list rows.
 func toolLabel(tool registry.Tool) string {
 	return tool.Name
+}
+
+// itemLabel returns display if non-empty, otherwise name.
+func itemLabel(name, display string) string {
+	if display != "" {
+		return display
+	}
+	return name
 }
 
 // fixedWidth pads or truncates a plain string to exactly `width` characters.
