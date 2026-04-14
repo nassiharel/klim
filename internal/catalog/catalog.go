@@ -6,6 +6,7 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,7 +115,7 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error
 
 	// Validate before caching — don't poison the cache with HTML/garbage.
 	if !isValidCatalog(data) {
-		return nil, fmt.Errorf("fetched catalog is invalid (not parseable YAML with tools)")
+		return nil, errors.New("fetched catalog is invalid (not parseable YAML with tools)")
 	}
 
 	// Write cache.
@@ -268,7 +269,7 @@ func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, e
 
 	// Validate before caching — don't poison the cache with HTML/garbage.
 	if !isValidCatalog(remote) {
-		return nil, fmt.Errorf("fetched catalog is invalid (not parseable YAML with tools)")
+		return nil, errors.New("fetched catalog is invalid (not parseable YAML with tools)")
 	}
 
 	// Diff against what the user currently has.
