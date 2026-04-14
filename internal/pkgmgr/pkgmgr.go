@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"os/exec"
 	"runtime"
@@ -437,8 +438,10 @@ func runCmd(ctx context.Context, name string, args ...string) string {
 	cmd.Stderr = nil
 
 	if err := cmd.Run(); err != nil {
+		slog.Warn("subprocess failed", "cmd", name, "args", args, "error", err)
 		return ""
 	}
+	slog.Debug("subprocess ok", "cmd", name, "args", args, "bytes", stdout.Len())
 	return stdout.String()
 }
 

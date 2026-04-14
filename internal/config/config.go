@@ -13,9 +13,17 @@ import (
 
 // Config holds all clim configuration.
 type Config struct {
+	Logging     LoggingConfig     `yaml:"logging"`
 	Marketplace MarketplaceConfig `yaml:"marketplace"`
 	Performance PerformanceConfig `yaml:"performance"`
 	UI          UIConfig          `yaml:"ui"`
+}
+
+// LoggingConfig controls log output.
+type LoggingConfig struct {
+	Level   string `yaml:"level"`   // debug, info, warn, error; default: debug
+	File    bool   `yaml:"file"`    // write to ~/.config/clim/clim.log; default: true
+	Verbose bool   `yaml:"verbose"` // also log to stderr; default: false
 }
 
 // MarketplaceConfig controls marketplace catalog behavior.
@@ -66,6 +74,11 @@ func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 // Default returns a Config with all defaults populated.
 func Default() *Config {
 	return &Config{
+		Logging: LoggingConfig{
+			Level:   "debug",
+			File:    true,
+			Verbose: false,
+		},
 		Marketplace: MarketplaceConfig{
 			AutoRefresh:     false,
 			RefreshInterval: Duration{24 * time.Hour},
@@ -133,6 +146,12 @@ func MustLoad() *Config {
 const defaultConfigTemplate = `# clim — Configuration
 # All values are optional. Defaults are shown below.
 # Restart clim after editing for changes to take effect.
+
+# Logging settings.
+logging:
+  level: debug             # debug, info, warn, error
+  file: true               # write to ~/.config/clim/clim.log
+  verbose: false           # also log to stderr (same as --verbose flag)
 
 # Marketplace settings.
 marketplace:
