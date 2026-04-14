@@ -84,6 +84,9 @@ func (o *Options) httpClient() *http.Client {
 // installs it by replacing the running binary. It returns a Result describing
 // what happened.
 func Update(ctx context.Context, currentVersion string, opts *Options) (*Result, error) {
+	if opts == nil {
+		opts = &Options{}
+	}
 	result := &Result{CurrentVersion: currentVersion}
 
 	// Guard: dev builds cannot self-update.
@@ -105,7 +108,7 @@ func Update(ctx context.Context, currentVersion string, opts *Options) (*Result,
 	}
 
 	// 3. Check-only mode: report availability without downloading.
-	if opts != nil && opts.CheckOnly {
+	if opts.CheckOnly {
 		return result, nil
 	}
 
