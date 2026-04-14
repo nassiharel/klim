@@ -1580,6 +1580,7 @@ func toolLabel(tool registry.Tool) string {
 
 // itemLabel returns display if non-empty, otherwise name.
 // relatedTools returns up to 5 not-installed tools that share tags with the given tool.
+// Reasons reference installed tools that share those tags.
 func (m Model) relatedTools(tool registry.Tool) []recommendation {
 	if len(tool.Tags) == 0 {
 		return nil
@@ -1589,18 +1590,31 @@ func (m Model) relatedTools(tool registry.Tool) []recommendation {
 		tagSet[tag] = struct{}{}
 	}
 
+	// Build tag → installed tool names for "you have ..." reasons.
+	tagSources := make(map[string][]string)
+	for _, t := range m.tools {
+		if !t.IsInstalled() {
+			continue
+		}
+		for _, tag := range t.Tags {
+			if _, ok := tagSet[tag]; ok {
+				tagSources[tag] = append(tagSources[tag], t.Name)
+			}
+		}
+	}
+
 	var recs []recommendation
 	for i, t := range m.tools {
 		if t.Name == tool.Name || t.IsInstalled() {
 			continue
 		}
 		score := 0
-		var shared []string
+		matchedTools := make(map[string]struct{})
 		for _, tag := range t.Tags {
 			if _, ok := tagSet[tag]; ok {
 				score++
-				if len(shared) < 3 {
-					shared = append(shared, tag)
+				for _, src := range tagSources[tag] {
+					matchedTools[src] = struct{}{}
 				}
 			}
 		}
@@ -1608,10 +1622,24 @@ func (m Model) relatedTools(tool registry.Tool) []recommendation {
 			continue
 		}
 
+		var reasons []string
+		for name := range matchedTools {
+			reasons = append(reasons, name)
+			if len(reasons) >= 3 {
+				break
+			}
+		}
+		sort.Strings(reasons)
+
+		reason := ""
+		if len(reasons) > 0 {
+			reason = "you have " + strings.Join(reasons, ", ")
+		}
+
 		recs = append(recs, recommendation{
 			toolIdx: i,
 			score:   score,
-			reason:  "shared: " + strings.Join(shared, ", "),
+			reason:  reason,
 		})
 	}
 
