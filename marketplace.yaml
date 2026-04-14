@@ -369,6 +369,32 @@ tools:
       apt: "golang-go"
       snap: "go"
 
+  - name: gopls
+    display_name: gopls
+    category: Language
+    tags: [golang, lsp, language-server, editor-tooling]
+    binary_names: [gopls]
+    packages:
+      brew: "gopls"
+
+  - name: golangci-lint
+    display_name: golangci-lint
+    category: Language
+    tags: [golang, linter, static-analysis, code-quality]
+    binary_names: [golangci-lint]
+    packages:
+      winget: "GolangCI.golangci-lint"
+      brew: "golangci-lint"
+      snap: "golangci-lint"
+
+  - name: dlv
+    display_name: Delve
+    category: Language
+    tags: [golang, debugger, debugging]
+    binary_names: [dlv]
+    packages:
+      brew: "delve"
+
   - name: node
     display_name: Node.js
     category: Language

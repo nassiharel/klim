@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // InstallSource identifies how a tool was installed.
@@ -238,19 +239,23 @@ var pmAvailability struct {
 	avail map[InstallSource]bool
 }
 
-// pmAvailableFunc can be overridden in tests to stub package manager availability.
-// When nil (the default), the real exec.LookPath check is used.
-var pmAvailableFunc func(InstallSource) bool
+// pmAvailableOverride holds an optional test stub for package manager availability.
+// Use SetPMAvailableFunc to set it; atomic access avoids data races with concurrent resolvers.
+var pmAvailableOverride atomic.Pointer[func(InstallSource) bool]
 
 // SetPMAvailableFunc overrides the package manager availability check for testing.
 // Pass nil to restore the default exec.LookPath behavior.
 func SetPMAvailableFunc(fn func(InstallSource) bool) {
-	pmAvailableFunc = fn
+	if fn == nil {
+		pmAvailableOverride.Store(nil)
+	} else {
+		pmAvailableOverride.Store(&fn)
+	}
 }
 
 func pmAvailable(source InstallSource) bool {
-	if fn := pmAvailableFunc; fn != nil {
-		return fn(source)
+	if fnp := pmAvailableOverride.Load(); fnp != nil {
+		return (*fnp)(source)
 	}
 	pmAvailability.once.Do(func() {
 		pmAvailability.avail = make(map[InstallSource]bool)

@@ -187,3 +187,84 @@ func TestBuildPackRemoveItems_NoneInstalled(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildPackInstallItems_AllToolsNotInCatalog(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "git", Packages: registry.PackageIDs{Winget: "Git.Git"}},
+	}
+
+	pack := registry.Pack{
+		Name:      "phantom-pack",
+		ToolNames: []string{"nonexistent-a", "nonexistent-b", "nonexistent-c"},
+	}
+
+	items := buildPackInstallItems(tools, pack)
+
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(items))
+	}
+	for _, item := range items {
+		if item.status != packItemSkipped {
+			t.Errorf("%s: status = %d, want skipped", item.name, item.status)
+		}
+		if item.errMsg != "not in catalog" {
+			t.Errorf("%s: errMsg = %q, want 'not in catalog'", item.name, item.errMsg)
+		}
+	}
+}
+
+func TestBuildPackRemoveItems_AllToolsNotInCatalog(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "git", Instances: []registry.Instance{{Path: "/usr/bin/git"}}},
+	}
+
+	pack := registry.Pack{
+		Name:      "phantom-pack",
+		ToolNames: []string{"nonexistent-a", "nonexistent-b"},
+	}
+
+	items := buildPackRemoveItems(tools, pack)
+
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+	for _, item := range items {
+		if item.status != packItemSkipped {
+			t.Errorf("%s: status = %d, want skipped", item.name, item.status)
+		}
+		if item.errMsg != "not in catalog" {
+			t.Errorf("%s: errMsg = %q, want 'not in catalog'", item.name, item.errMsg)
+		}
+	}
+}
+
+func TestBuildPackInstallItems_MixedCatalogAndMissing(t *testing.T) {
+	registry.SetPMAvailableFunc(func(_ registry.InstallSource) bool { return true })
+	t.Cleanup(func() { registry.SetPMAvailableFunc(nil) })
+
+	tools := []registry.Tool{
+		{Name: "git", Packages: registry.PackageIDs{Winget: "Git.Git", Brew: "git"}},
+	}
+
+	pack := registry.Pack{
+		Name:      "mixed-pack",
+		ToolNames: []string{"git", "phantom-tool"},
+	}
+
+	items := buildPackInstallItems(tools, pack)
+
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+	// git — not installed, in catalog → pending.
+	if items[0].status != packItemPending {
+		t.Errorf("git: status = %d, want pending", items[0].status)
+	}
+	// phantom-tool — not in catalog → skipped.
+	if items[1].status != packItemSkipped {
+		t.Errorf("phantom-tool: status = %d, want skipped", items[1].status)
+	}
+	if items[1].errMsg != "not in catalog" {
+		t.Errorf("phantom-tool: errMsg = %q, want 'not in catalog'", items[1].errMsg)
+	}
+}
