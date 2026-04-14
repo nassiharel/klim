@@ -22,8 +22,8 @@ func TestDefault(t *testing.T) {
 	if cfg.Performance.Concurrency != 0 {
 		t.Errorf("default concurrency = %d, want 0", cfg.Performance.Concurrency)
 	}
-	if cfg.Performance.CommandTimeout.Duration != 10*time.Second {
-		t.Errorf("default command_timeout = %v, want 10s", cfg.Performance.CommandTimeout)
+	if cfg.Performance.CommandTimeout.Duration != 30*time.Second {
+		t.Errorf("default command_timeout = %v, want 30s", cfg.Performance.CommandTimeout)
 	}
 	if cfg.UI.DefaultTab != "installed" {
 		t.Errorf("default tab = %q, want installed", cfg.UI.DefaultTab)

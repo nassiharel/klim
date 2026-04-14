@@ -265,9 +265,9 @@ func parseWingetListVersion(output, id string) string {
 func TestParseBrewVersions(t *testing.T) {
 	// brew list --versions output: "formula version [version ...]"
 	tests := []struct {
-		name    string
-		output  string
-		want    string
+		name   string
+		output string
+		want   string
 	}{
 		{"single version", "git 2.43.0", "2.43.0"},
 		{"multiple versions", "python@3.12 3.12.1 3.11.7", "3.12.1"},
@@ -293,9 +293,9 @@ func TestParseBrewVersions(t *testing.T) {
 func TestParseBrewJSON(t *testing.T) {
 	// brew info --json=v2 output
 	tests := []struct {
-		name   string
-		json   string
-		want   string
+		name string
+		json string
+		want string
 	}{
 		{
 			"valid",
@@ -381,9 +381,9 @@ func TestParseSnapInfo(t *testing.T) {
 
 func TestParseNpmGlobals(t *testing.T) {
 	tests := []struct {
-		name   string
-		json   string
-		want   map[string]string
+		name string
+		json string
+		want map[string]string
 	}{
 		{
 			"standard output",
@@ -523,4 +523,3 @@ func parseAptCacheLatest(output string) string {
 	}
 	return ""
 }
-

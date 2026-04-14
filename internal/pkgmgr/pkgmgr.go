@@ -16,7 +16,7 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
-const cmdTimeout = 30 * time.Second
+const defaultCmdTimeout = 30 * time.Second
 
 // VersionResolver abstracts version querying and metadata fetching for tools.
 type VersionResolver interface {
@@ -29,7 +29,15 @@ type VersionResolver interface {
 // native package managers (winget, brew, apt, choco, snap, npm) and
 // falls back to binary detection (Go buildinfo, PE version resources).
 type PackageManagerResolver struct {
-	Timeout time.Duration // timeout for package manager subprocess calls; 0 = default (10s)
+	Timeout time.Duration // timeout per subprocess call; 0 = defaultCmdTimeout
+}
+
+// cmdTimeout returns the effective per-command timeout.
+func (r *PackageManagerResolver) cmdTimeout() time.Duration {
+	if r.Timeout > 0 {
+		return r.Timeout
+	}
+	return defaultCmdTimeout
 }
 
 // NewResolver returns the default package-manager-based version resolver.
@@ -55,6 +63,7 @@ func (r *PackageManagerResolver) ResolveVersions(ctx context.Context, tools []re
 		concurrency = runtime.NumCPU()
 	}
 
+	timeout := r.cmdTimeout()
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 
@@ -67,7 +76,9 @@ func (r *PackageManagerResolver) ResolveVersions(ctx context.Context, tools []re
 		go func(t *registry.Tool) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			resolveOne(ctx, t)
+			toolCtx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			resolveOne(toolCtx, t)
 			detector.EnrichOne(t)
 		}(&tools[i])
 	}
@@ -81,6 +92,8 @@ func ResolveOne(ctx context.Context, tool *registry.Tool) {
 
 // ResolveOne implements VersionResolver.
 func (r *PackageManagerResolver) ResolveOne(ctx context.Context, tool *registry.Tool) {
+	ctx, cancel := context.WithTimeout(ctx, r.cmdTimeout())
+	defer cancel()
 	resolveOne(ctx, tool)
 	detector.EnrichOne(tool)
 }
@@ -301,7 +314,8 @@ func snapLatestVersion(ctx context.Context, pkg string) string {
 
 var (
 	npmGlobalCache map[string]string
-	npmOnce        sync.Once
+	npmCacheLoaded bool
+	npmMu          sync.Mutex
 )
 
 func loadNpmGlobals(ctx context.Context) map[string]string {
@@ -325,15 +339,24 @@ func loadNpmGlobals(ctx context.Context) map[string]string {
 }
 
 func npmInstalledVersion(ctx context.Context, pkg string) string {
-	npmOnce.Do(func() { npmGlobalCache = loadNpmGlobals(ctx) })
-	if npmGlobalCache == nil {
+	npmMu.Lock()
+	if !npmCacheLoaded {
+		if cache := loadNpmGlobals(ctx); cache != nil {
+			npmGlobalCache = cache
+			npmCacheLoaded = true
+		}
+	}
+	cache := npmGlobalCache
+	npmMu.Unlock()
+
+	if cache == nil {
 		return ""
 	}
-	if v, ok := npmGlobalCache[pkg]; ok {
+	if v, ok := cache[pkg]; ok {
 		return v
 	}
 	// Handle scoped packages by suffix match.
-	for name, ver := range npmGlobalCache {
+	for name, ver := range cache {
 		if strings.HasSuffix(name, "/"+pkg) {
 			return ver
 		}
@@ -408,9 +431,6 @@ func cleanDebianVersion(v string) string {
 // --- Helpers ---
 
 func runCmd(ctx context.Context, name string, args ...string) string {
-	ctx, cancel := context.WithTimeout(ctx, cmdTimeout)
-	defer cancel()
-
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin = nil
 
@@ -458,6 +478,9 @@ func (r *PackageManagerResolver) FetchToolInfo(ctx context.Context, tool *regist
 	if tool.Info != nil {
 		return // already fetched
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, r.cmdTimeout())
+	defer cancel()
 
 	source, pkgID := bestInfoSource(tool)
 	if pkgID == "" {

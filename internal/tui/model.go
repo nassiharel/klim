@@ -90,9 +90,9 @@ type Model struct {
 	platforms      []string // sorted unique platforms, computed once after scan
 
 	// Sidebar filter panel.
-	categoryPicker bool           // true = sidebar is focused
-	sidebarIdx     int            // cursor position in flat sidebar item list
-	sidebarItems   []sidebarItem  // flat list of sidebar entries (headers + items)
+	categoryPicker bool
+	sidebarIdx     int
+	sidebarItems   []sidebarItem
 
 	// Marketplace refresh diff — carried across rescans to apply badges.
 	lastDiff *catalog.DiffResult
@@ -1188,16 +1188,20 @@ func buildSidebarItems(categories, tags, platforms []string, tabTools []registry
 	totalCount := len(tabTools)
 
 	// Category section.
-	items = append(items, sidebarItem{label: "CATEGORY", isHeader: true})
-	items = append(items, sidebarItem{label: fmt.Sprintf("All (%d)", totalCount), section: "category", value: ""})
+	items = append(items,
+		sidebarItem{label: "CATEGORY", isHeader: true},
+		sidebarItem{label: fmt.Sprintf("All (%d)", totalCount), section: "category", value: ""},
+	)
 	for _, cat := range categories {
 		items = append(items, sidebarItem{label: fmt.Sprintf("%s (%d)", cat, catCount[cat]), section: "category", value: cat})
 	}
 
 	// Platform section.
 	if len(platforms) > 0 {
-		items = append(items, sidebarItem{label: "PLATFORM", isHeader: true})
-		items = append(items, sidebarItem{label: fmt.Sprintf("All (%d)", totalCount), section: "platform", value: ""})
+		items = append(items,
+			sidebarItem{label: "PLATFORM", isHeader: true},
+			sidebarItem{label: fmt.Sprintf("All (%d)", totalCount), section: "platform", value: ""},
+		)
 		for _, p := range platforms {
 			items = append(items, sidebarItem{label: fmt.Sprintf("%s (%d)", p, platCount[p]), section: "platform", value: p})
 		}
@@ -1205,8 +1209,10 @@ func buildSidebarItems(categories, tags, platforms []string, tabTools []registry
 
 	// Tag section.
 	if len(tags) > 0 {
-		items = append(items, sidebarItem{label: "TAG", isHeader: true})
-		items = append(items, sidebarItem{label: fmt.Sprintf("All (%d)", totalCount), section: "tag", value: ""})
+		items = append(items,
+			sidebarItem{label: "TAG", isHeader: true},
+			sidebarItem{label: fmt.Sprintf("All (%d)", totalCount), section: "tag", value: ""},
+		)
 		for _, tag := range tags {
 			items = append(items, sidebarItem{label: fmt.Sprintf("%s (%d)", tag, tagCount[tag]), section: "tag", value: tag})
 		}

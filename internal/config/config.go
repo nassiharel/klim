@@ -20,7 +20,7 @@ type Config struct {
 
 // MarketplaceConfig controls marketplace catalog behavior.
 type MarketplaceConfig struct {
-	URL             string   `yaml:"url"`              // full URL override; if set, skips GitHub URL construction
+	URL             string   `yaml:"url"`
 	AutoRefresh     bool     `yaml:"auto_refresh"`
 	RefreshInterval Duration `yaml:"refresh_interval"`
 }
@@ -72,7 +72,7 @@ func Default() *Config {
 		},
 		Performance: PerformanceConfig{
 			Concurrency:    0, // 0 = auto (runtime.NumCPU)
-			CommandTimeout: Duration{10 * time.Second},
+			CommandTimeout: Duration{30 * time.Second},
 		},
 		UI: UIConfig{
 			DefaultTab: "installed",
@@ -143,7 +143,7 @@ marketplace:
 # Performance tuning.
 performance:
   concurrency: 0         # max parallel version checks (0 = auto)
-  command_timeout: 10s   # timeout for package manager subprocess calls
+  command_timeout: 30s   # timeout for package manager subprocess calls
 
 # UI preferences.
 ui:

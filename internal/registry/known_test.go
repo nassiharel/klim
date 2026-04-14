@@ -4,11 +4,11 @@ import "testing"
 
 func TestMergeToolDefs_NewEmbeddedToolAdded(t *testing.T) {
 	embedded := []toolDef{
-		{Name: "git", DisplayName: "Git",Packages: packageDef{Brew: "git"}},
-		{Name: "rg", DisplayName: "ripgrep",Packages: packageDef{Brew: "ripgrep"}},
+		{Name: "git", DisplayName: "Git", Packages: packageDef{Brew: "git"}},
+		{Name: "rg", DisplayName: "ripgrep", Packages: packageDef{Brew: "ripgrep"}},
 	}
 	user := []toolDef{
-		{Name: "git", DisplayName: "Git",Packages: packageDef{Brew: "git"}},
+		{Name: "git", DisplayName: "Git", Packages: packageDef{Brew: "git"}},
 	}
 
 	merged, changed := mergeToolDefs(embedded, user)
@@ -30,7 +30,7 @@ func TestMergeToolDefs_UserCustomToolPreserved(t *testing.T) {
 	}
 	user := []toolDef{
 		{Name: "git", DisplayName: "Git"},
-		{Name: "my-tool", DisplayName: "My Tool",Packages: packageDef{Brew: "my-tool"}},
+		{Name: "my-tool", DisplayName: "My Tool", Packages: packageDef{Brew: "my-tool"}},
 	}
 
 	merged, _ := mergeToolDefs(embedded, user)
@@ -48,7 +48,7 @@ func TestMergeToolDefs_UserCustomToolPreserved(t *testing.T) {
 
 func TestMergeToolDefs_EmbeddedFillsPackageGaps(t *testing.T) {
 	embedded := []toolDef{
-		{Name: "bat",Packages: packageDef{
+		{Name: "bat", Packages: packageDef{
 			Winget: "sharkdp.bat",
 			Choco:  "bat",
 			Brew:   "bat",
@@ -56,7 +56,7 @@ func TestMergeToolDefs_EmbeddedFillsPackageGaps(t *testing.T) {
 		}},
 	}
 	user := []toolDef{
-		{Name: "bat",Packages: packageDef{
+		{Name: "bat", Packages: packageDef{
 			Winget: "sharkdp.bat",
 			// choco, brew, apt missing — should be filled from embedded
 		}},
@@ -80,10 +80,10 @@ func TestMergeToolDefs_EmbeddedFillsPackageGaps(t *testing.T) {
 
 func TestMergeToolDefs_UserPackageOverridesEmbedded(t *testing.T) {
 	embedded := []toolDef{
-		{Name: "git",Packages: packageDef{Brew: "git"}},
+		{Name: "git", Packages: packageDef{Brew: "git"}},
 	}
 	user := []toolDef{
-		{Name: "git",Packages: packageDef{Brew: "git-custom"}},
+		{Name: "git", Packages: packageDef{Brew: "git-custom"}},
 	}
 
 	merged, _ := mergeToolDefs(embedded, user)
@@ -95,7 +95,7 @@ func TestMergeToolDefs_UserPackageOverridesEmbedded(t *testing.T) {
 
 func TestMergeToolDefs_NoChangesReturnsFalse(t *testing.T) {
 	defs := []toolDef{
-		{Name: "git", DisplayName: "Git",Packages: packageDef{Brew: "git"}},
+		{Name: "git", DisplayName: "Git", Packages: packageDef{Brew: "git"}},
 	}
 
 	_, changed := mergeToolDefs(defs, defs)
