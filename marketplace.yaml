@@ -369,6 +369,32 @@ tools:
       apt: "golang-go"
       snap: "go"
 
+  - name: gopls
+    display_name: gopls
+    category: Language
+    tags: [golang, lsp, language-server, editor-tooling]
+    binary_names: [gopls]
+    packages:
+      brew: "gopls"
+
+  - name: golangci-lint
+    display_name: golangci-lint
+    category: Language
+    tags: [golang, linter, static-analysis, code-quality]
+    binary_names: [golangci-lint]
+    packages:
+      winget: "GolangCI.golangci-lint"
+      brew: "golangci-lint"
+      snap: "golangci-lint"
+
+  - name: dlv
+    display_name: Delve
+    category: Language
+    tags: [golang, debugger, debugging]
+    binary_names: [dlv]
+    packages:
+      brew: "delve"
+
   - name: node
     display_name: Node.js
     category: Language
@@ -860,3 +886,57 @@ tools:
     binary_names: [github-copilot-cli, copilot]
     packages:
       winget: "GitHub.Copilot"
+
+# --- Packs ---
+# Curated bundles of tools that can be installed together.
+
+packs:
+  - name: k8s-starter
+    display_name: Kubernetes Starter
+    description: Essential Kubernetes tools for cluster management and debugging.
+    tools: [kubectl, helm, k9s, kubectx, kubens, stern]
+
+  - name: k8s-advanced
+    display_name: Kubernetes Advanced
+    description: Full Kubernetes toolkit including local clusters and GitOps.
+    tools: [kubectl, helm, k9s, kubectx, kubens, stern, kind, kustomize, argocd, flux]
+
+  - name: git-power
+    display_name: Git Power User
+    description: Git workflow tools for power users.
+    tools: [git, gh, lazygit, delta, tig]
+
+  - name: cloud-essentials
+    display_name: Cloud Essentials
+    description: CLI tools for the major cloud providers.
+    tools: [az, aws, gcloud, terraform]
+
+  - name: containers
+    display_name: Container Toolkit
+    description: Docker and container runtime essentials.
+    tools: [docker, docker-compose, lazydocker]
+
+  - name: devops-starter
+    display_name: DevOps Starter
+    description: Core tools for infrastructure and deployment workflows.
+    tools: [terraform, kubectl, helm, docker, git, gh]
+
+  - name: cli-essentials
+    display_name: CLI Essentials
+    description: Modern command-line replacements for everyday tools.
+    tools: [ripgrep, fzf, bat, fd, eza, zoxide, delta, jq, yq]
+
+  - name: go-developer
+    display_name: Go Developer
+    description: Tools for Go development.
+    tools: [go, gopls, golangci-lint, dlv]
+
+  - name: node-developer
+    display_name: Node.js Developer
+    description: Tools for Node.js and JavaScript development.
+    tools: [node, deno, bun, npm]
+
+  - name: python-developer
+    display_name: Python Developer
+    description: Tools for Python development.
+    tools: [python, uv]

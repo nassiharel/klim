@@ -22,6 +22,11 @@ import (
 	"github.com/nassiharel/clim/internal/share"
 )
 
+// resolveSem limits concurrent version resolution goroutines in the TUI.
+// Without this, Bubbletea fires all tools at once, spawning 40+ concurrent
+// subprocess calls that overwhelm package managers and cause timeouts.
+var resolveSem = make(chan struct{}, 4)
+
 // --- Scan & version resolution messages ---
 
 type scanResultMsg struct {
@@ -163,6 +168,9 @@ func findToolsCmd(svc *service.ToolService) func() scanResultMsg {
 
 func resolveToolVersionCmd(svc *service.ToolService, index int, gen int, tool registry.Tool) func() toolVersionMsg {
 	return func() toolVersionMsg {
+		resolveSem <- struct{}{}        // acquire
+		defer func() { <-resolveSem }() // release
+
 		ctx := context.Background()
 		if tool.IsInstalled() {
 			svc.ResolveOne(ctx, &tool)
@@ -370,6 +378,156 @@ func execBackupInstallCmd(idx int, args []string) tea.Cmd {
 	cmd := exec.Command(args[0], args[1:]...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return backupItemDoneMsg{idx: idx, err: err}
+	})
+}
+
+// --- Pack types & commands ---
+
+// packItemStatus tracks the state of a single tool in a pack operation.
+type packItemStatus int
+
+const (
+	packItemPending packItemStatus = iota
+	packItemRunning
+	packItemDone
+	packItemFailed
+	packItemSkipped
+)
+
+// packItem represents one tool in a pack install/remove operation.
+type packItem struct {
+	name    string
+	display string
+	cmdArgs []string // install or remove command args
+	source  string
+	status  packItemStatus
+	errMsg  string
+}
+
+// packItemDoneMsg is sent when one pack tool install/remove finishes.
+type packItemDoneMsg struct {
+	idx int
+	err error
+}
+
+// buildPackInstallItems builds the install item list for a pack (synchronous, no tea.Cmd).
+func buildPackInstallItems(tools []registry.Tool, pack registry.Pack) []packItem {
+	toolMap := make(map[string]*registry.Tool, len(tools))
+	for i := range tools {
+		toolMap[tools[i].Name] = &tools[i]
+	}
+
+	var items []packItem
+	for _, name := range pack.ToolNames {
+		rt, exists := toolMap[name]
+
+		if exists && rt.IsInstalled() {
+			items = append(items, packItem{
+				name:    name,
+				display: rt.DisplayName,
+				source:  "—",
+				status:  packItemSkipped,
+				errMsg:  "already installed",
+			})
+			continue
+		}
+
+		if !exists {
+			items = append(items, packItem{
+				name:    name,
+				display: name,
+				status:  packItemSkipped,
+				errMsg:  "not in catalog",
+			})
+			continue
+		}
+
+		src := rt.Packages.BestInstallSource()
+		installArgs := rt.Packages.InstallArgs(src)
+		if installArgs == nil {
+			reason := "no package for " + runtime.GOOS
+			if src == "" && rt.Packages.HasAnyPackageForOS() {
+				reason = "no supported package manager installed"
+			}
+			items = append(items, packItem{
+				name:    name,
+				display: rt.DisplayName,
+				status:  packItemSkipped,
+				errMsg:  reason,
+			})
+			continue
+		}
+
+		items = append(items, packItem{
+			name:    name,
+			display: rt.DisplayName,
+			cmdArgs: installArgs,
+			source:  string(src),
+			status:  packItemPending,
+		})
+	}
+	return items
+}
+
+// buildPackRemoveItems builds the remove item list for a pack (synchronous, no tea.Cmd).
+func buildPackRemoveItems(tools []registry.Tool, pack registry.Pack) []packItem {
+	toolMap := make(map[string]*registry.Tool, len(tools))
+	for i := range tools {
+		toolMap[tools[i].Name] = &tools[i]
+	}
+
+	var items []packItem
+	for _, name := range pack.ToolNames {
+		rt, exists := toolMap[name]
+
+		if !exists {
+			items = append(items, packItem{
+				name:    name,
+				display: name,
+				status:  packItemSkipped,
+				errMsg:  "not in catalog",
+			})
+			continue
+		}
+
+		if !rt.IsInstalled() {
+			items = append(items, packItem{
+				name:    name,
+				display: rt.DisplayName,
+				status:  packItemSkipped,
+				errMsg:  "not installed",
+			})
+			continue
+		}
+
+		primary := rt.PrimaryInstance()
+		removeArgs := rt.Packages.RemoveArgs(primary.Source)
+		if removeArgs == nil {
+			items = append(items, packItem{
+				name:    name,
+				display: rt.DisplayName,
+				status:  packItemSkipped,
+				errMsg:  "no remove command for " + string(primary.Source),
+			})
+			continue
+		}
+
+		items = append(items, packItem{
+			name:    name,
+			display: rt.DisplayName,
+			cmdArgs: removeArgs,
+			source:  string(primary.Source),
+			status:  packItemPending,
+		})
+	}
+	return items
+}
+
+// execPackItemCmd suspends the TUI and runs one pack tool install/remove command.
+func execPackItemCmd(idx int, args []string) tea.Cmd {
+	cmd := exec.Command(args[0], args[1:]...)
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return packItemDoneMsg{idx: idx, err: err}
 	})
 }
 

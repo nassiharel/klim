@@ -299,8 +299,8 @@ func TestHasUpdate(t *testing.T) {
 func TestBestInstallSource(t *testing.T) {
 	// Stub all package managers as available so the test is deterministic
 	// regardless of what's installed on the host.
-	pmAvailableFunc = func(_ InstallSource) bool { return true }
-	t.Cleanup(func() { pmAvailableFunc = nil })
+	SetPMAvailableFunc(func(_ InstallSource) bool { return true })
+	t.Cleanup(func() { SetPMAvailableFunc(nil) })
 
 	pkgs := PackageIDs{
 		Winget: "Git.Git",
@@ -331,8 +331,8 @@ func TestBestInstallSource(t *testing.T) {
 }
 
 func TestBestInstallSource_NPMFallback(t *testing.T) {
-	pmAvailableFunc = func(_ InstallSource) bool { return true }
-	t.Cleanup(func() { pmAvailableFunc = nil })
+	SetPMAvailableFunc(func(_ InstallSource) bool { return true })
+	t.Cleanup(func() { SetPMAvailableFunc(nil) })
 
 	pkgs := PackageIDs{NPM: "prettier"}
 	got := pkgs.BestInstallSource()
@@ -342,8 +342,8 @@ func TestBestInstallSource_NPMFallback(t *testing.T) {
 }
 
 func TestBestInstallSource_Empty(t *testing.T) {
-	pmAvailableFunc = func(_ InstallSource) bool { return true }
-	t.Cleanup(func() { pmAvailableFunc = nil })
+	SetPMAvailableFunc(func(_ InstallSource) bool { return true })
+	t.Cleanup(func() { SetPMAvailableFunc(nil) })
 
 	pkgs := PackageIDs{}
 	got := pkgs.BestInstallSource()
@@ -354,8 +354,8 @@ func TestBestInstallSource_Empty(t *testing.T) {
 
 func TestBestInstallSource_NoPMInstalled(t *testing.T) {
 	// When no package manager is installed, BestInstallSource returns "".
-	pmAvailableFunc = func(_ InstallSource) bool { return false }
-	t.Cleanup(func() { pmAvailableFunc = nil })
+	SetPMAvailableFunc(func(_ InstallSource) bool { return false })
+	t.Cleanup(func() { SetPMAvailableFunc(nil) })
 
 	pkgs := PackageIDs{Winget: "Git.Git", Brew: "git", Apt: "git"}
 	got := pkgs.BestInstallSource()

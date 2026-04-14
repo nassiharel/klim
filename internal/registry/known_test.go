@@ -1,6 +1,10 @@
 package registry
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestMergeToolDefs_NewEmbeddedToolAdded(t *testing.T) {
 	embedded := []toolDef{
@@ -332,4 +336,265 @@ func TestMergeToolDefs_EmptyInputs(t *testing.T) {
 			t.Error("expected changed=true when user has no tools")
 		}
 	})
+}
+
+func TestParsePacksFromBytes(t *testing.T) {
+	t.Run("valid packs", func(t *testing.T) {
+		data := []byte(`tools:
+  - name: git
+    display_name: Git
+    binary_names: [git]
+packs:
+  - name: my-pack
+    display_name: My Pack
+    description: A test pack.
+    tools: [git, gh, fzf]
+  - name: mini
+    tools: [git]
+`)
+		packs, err := ParsePacksFromBytes(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(packs) != 2 {
+			t.Fatalf("expected 2 packs, got %d", len(packs))
+		}
+		if packs[0].Name != "my-pack" {
+			t.Errorf("pack 0 name = %q, want my-pack", packs[0].Name)
+		}
+		if packs[0].DisplayName != "My Pack" {
+			t.Errorf("pack 0 display_name = %q, want My Pack", packs[0].DisplayName)
+		}
+		if packs[0].Description != "A test pack." {
+			t.Errorf("pack 0 description = %q, want A test pack.", packs[0].Description)
+		}
+		if len(packs[0].ToolNames) != 3 {
+			t.Errorf("pack 0 tools = %v, want 3 tools", packs[0].ToolNames)
+		}
+		// Mini pack: display_name defaults to name.
+		if packs[1].DisplayName != "mini" {
+			t.Errorf("pack 1 display_name = %q, want mini (defaulted from name)", packs[1].DisplayName)
+		}
+	})
+
+	t.Run("no packs section", func(t *testing.T) {
+		data := []byte(`tools:
+  - name: git
+    binary_names: [git]
+`)
+		packs, err := ParsePacksFromBytes(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(packs) != 0 {
+			t.Errorf("expected 0 packs, got %d", len(packs))
+		}
+	})
+
+	t.Run("empty packs", func(t *testing.T) {
+		data := []byte(`tools: []
+packs: []
+`)
+		packs, err := ParsePacksFromBytes(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(packs) != 0 {
+			t.Errorf("expected 0 packs, got %d", len(packs))
+		}
+	})
+
+	t.Run("invalid yaml", func(t *testing.T) {
+		_, err := ParsePacksFromBytes([]byte("{{invalid"))
+		if err == nil {
+			t.Error("expected error for invalid YAML")
+		}
+	})
+
+	t.Run("nil input", func(t *testing.T) {
+		packs, err := ParsePacksFromBytes(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(packs) != 0 {
+			t.Errorf("expected 0 packs for nil input, got %d", len(packs))
+		}
+	})
+}
+
+func TestParsePacksFromBytes_ValidateToolReferences(t *testing.T) {
+	data := []byte(`tools:
+  - name: git
+    binary_names: [git]
+  - name: fzf
+    binary_names: [fzf]
+packs:
+  - name: valid-pack
+    tools: [git, fzf]
+  - name: broken-pack
+    tools: [git, nonexistent-tool, also-missing]
+`)
+	tools := parseToolDefs(data)
+	packs, err := ParsePacksFromBytes(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	toolNames := make(map[string]struct{}, len(tools))
+	for _, td := range tools {
+		toolNames[td.Name] = struct{}{}
+	}
+
+	// Verify broken-pack has exactly 2 undefined tool references.
+	broken := 0
+	for _, name := range packs[1].ToolNames {
+		if _, ok := toolNames[name]; !ok {
+			broken++
+		}
+	}
+	if broken != 2 {
+		t.Errorf("broken-pack: expected 2 undefined tools, got %d", broken)
+	}
+
+	// Verify valid-pack has zero undefined tool references.
+	for _, name := range packs[0].ToolNames {
+		if _, ok := toolNames[name]; !ok {
+			t.Errorf("valid-pack references undefined tool %q", name)
+		}
+	}
+}
+
+func TestValidatePackToolReferences(t *testing.T) {
+	validate := func(tools []toolDef, packs []Pack) map[string][]string {
+		toolSet := make(map[string]struct{}, len(tools))
+		for _, td := range tools {
+			toolSet[td.Name] = struct{}{}
+		}
+		missing := make(map[string][]string)
+		for _, pack := range packs {
+			for _, name := range pack.ToolNames {
+				if _, ok := toolSet[name]; !ok {
+					missing[pack.Name] = append(missing[pack.Name], name)
+				}
+			}
+		}
+		return missing
+	}
+
+	t.Run("all references valid", func(t *testing.T) {
+		tools := []toolDef{{Name: "git"}, {Name: "fzf"}}
+		packs := []Pack{{Name: "my-pack", ToolNames: []string{"git", "fzf"}}}
+		missing := validate(tools, packs)
+		if len(missing) != 0 {
+			t.Errorf("expected no missing refs, got %v", missing)
+		}
+	})
+
+	t.Run("some references invalid", func(t *testing.T) {
+		tools := []toolDef{{Name: "git"}}
+		packs := []Pack{{Name: "my-pack", ToolNames: []string{"git", "phantom"}}}
+		missing := validate(tools, packs)
+		if len(missing["my-pack"]) != 1 || missing["my-pack"][0] != "phantom" {
+			t.Errorf("expected [phantom] missing, got %v", missing)
+		}
+	})
+
+	t.Run("empty pack", func(t *testing.T) {
+		tools := []toolDef{{Name: "git"}}
+		packs := []Pack{{Name: "empty", ToolNames: nil}}
+		missing := validate(tools, packs)
+		if len(missing) != 0 {
+			t.Errorf("expected no missing refs for empty pack, got %v", missing)
+		}
+	})
+}
+
+// findRepoRoot walks up from the current directory to find go.mod.
+func findRepoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("could not find repo root (go.mod)")
+		}
+		dir = parent
+	}
+}
+
+// TestMarketplaceYAML_Integrity validates the actual marketplace.yaml file
+// that ships with the repository. This test runs in CI to catch mistakes
+// like duplicate tool names, empty fields, pack references to undefined tools, etc.
+func TestMarketplaceYAML_Integrity(t *testing.T) {
+	root := findRepoRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "marketplace.yaml"))
+	if err != nil {
+		t.Fatalf("reading marketplace.yaml: %v", err)
+	}
+
+	// --- Parse tools ---
+	tools := parseToolDefs(data)
+	if len(tools) == 0 {
+		t.Fatal("marketplace.yaml has no tools")
+	}
+
+	toolNames := make(map[string]struct{}, len(tools))
+	for _, td := range tools {
+		if _, exists := toolNames[td.Name]; exists {
+			t.Errorf("duplicate tool name: %q", td.Name)
+		}
+		toolNames[td.Name] = struct{}{}
+
+		if td.Name == "" {
+			t.Error("tool with empty name")
+		}
+		if len(td.BinaryNames) == 0 {
+			t.Errorf("tool %q has no binary_names", td.Name)
+		}
+	}
+
+	// --- Parse packs ---
+	packs, err := ParsePacksFromBytes(data)
+	if err != nil {
+		t.Fatalf("parsing packs: %v", err)
+	}
+
+	packNames := make(map[string]struct{}, len(packs))
+	for _, pack := range packs {
+		if _, exists := packNames[pack.Name]; exists {
+			t.Errorf("duplicate pack name: %q", pack.Name)
+		}
+		packNames[pack.Name] = struct{}{}
+
+		if pack.Name == "" {
+			t.Error("pack with empty name")
+		}
+		if len(pack.ToolNames) == 0 {
+			t.Errorf("pack %q has no tools", pack.Name)
+		}
+
+		// Every tool referenced by a pack must exist in the tools section.
+		for _, toolName := range pack.ToolNames {
+			if _, ok := toolNames[toolName]; !ok {
+				t.Errorf("pack %q references undefined tool %q", pack.Name, toolName)
+			}
+		}
+
+		// No duplicate tool references within a pack.
+		seen := make(map[string]struct{}, len(pack.ToolNames))
+		for _, toolName := range pack.ToolNames {
+			if _, exists := seen[toolName]; exists {
+				t.Errorf("pack %q has duplicate tool reference %q", pack.Name, toolName)
+			}
+			seen[toolName] = struct{}{}
+		}
+	}
+
+	t.Logf("marketplace.yaml: %d tools, %d packs — all valid", len(tools), len(packs))
 }

@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 
 type toolsFile struct {
 	Tools []toolDef `yaml:"tools"`
+	Packs []packDef `yaml:"packs,omitempty"`
 }
 
 type toolDef struct {
@@ -19,6 +21,13 @@ type toolDef struct {
 	Tags        []string   `yaml:"tags,omitempty"`
 	BinaryNames []string   `yaml:"binary_names"`
 	Packages    packageDef `yaml:"packages"`
+}
+
+type packDef struct {
+	Name        string   `yaml:"name"`
+	DisplayName string   `yaml:"display_name"`
+	Description string   `yaml:"description,omitempty"`
+	Tools       []string `yaml:"tools"`
 }
 
 type packageDef struct {
@@ -97,6 +106,30 @@ func parseToolDefs(data []byte) []toolDef {
 		return nil
 	}
 	return f.Tools
+}
+
+// ParsePacksFromBytes parses the packs section from catalog YAML bytes.
+// Returns an error if the YAML is unparsable. Returns an empty (non-nil)
+// slice if the YAML is valid but contains no packs.
+func ParsePacksFromBytes(data []byte) ([]Pack, error) {
+	var f toolsFile
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return nil, fmt.Errorf("parsing packs: %w", err)
+	}
+	packs := make([]Pack, 0, len(f.Packs))
+	for _, pd := range f.Packs {
+		p := Pack{
+			Name:        pd.Name,
+			DisplayName: pd.DisplayName,
+			Description: pd.Description,
+			ToolNames:   pd.Tools,
+		}
+		if p.DisplayName == "" {
+			p.DisplayName = p.Name
+		}
+		packs = append(packs, p)
+	}
+	return packs, nil
 }
 
 func defsToTools(defs []toolDef) []Tool {

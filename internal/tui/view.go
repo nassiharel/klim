@@ -34,6 +34,11 @@ func (m Model) renderView() string {
 		return m.renderDetailView(m.tools[m.detailIdx])
 	}
 
+	// Pack detail view.
+	if m.showPackDetail && m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
+		return m.renderPackDetailView(m.packs[m.packDetailIdx])
+	}
+
 	var b strings.Builder
 
 	b.WriteString(m.renderTitleBar() + "\n")
@@ -64,6 +69,19 @@ func (m Model) renderView() string {
 
 	// Search bar.
 	b.WriteString(m.renderSearchBar() + "\n")
+
+	// Marketplace sub-tab bar.
+	if m.activeTab == tabDiscover {
+		b.WriteString(m.renderDiscoverSubTabs() + "\n")
+	}
+
+	// Marketplace Packs sub-tab — separate rendering path.
+	if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
+		b.WriteString(m.renderPacksList())
+		b.WriteString("\n")
+		b.WriteString(m.renderHelp())
+		return b.String()
+	}
 
 	// Two-column layout: sidebar | tool list.
 	visibleRows := m.height - 8
@@ -168,6 +186,230 @@ func (m Model) renderSearchBar() string {
 	return b.String()
 }
 
+// --- Marketplace sub-tabs & packs ---
+
+// renderDiscoverSubTabs renders the [Tools] [Packs] sub-tab bar.
+func (m Model) renderDiscoverSubTabs() string {
+	toolsLabel := "Tools"
+	packsLabel := "Packs"
+	if m.discoverSubTab == discoverTools {
+		toolsLabel = activeTabStyle.Render(toolsLabel)
+		packsLabel = dimVersion.Render(packsLabel)
+	} else {
+		toolsLabel = dimVersion.Render(toolsLabel)
+		packsLabel = activeTabStyle.Render(packsLabel)
+	}
+	return "  " + toolsLabel + "  " + packsLabel
+}
+
+// renderPacksList renders the list of packs for the Packs sub-tab.
+func (m Model) renderPacksList() string {
+	var b strings.Builder
+
+	if len(m.packs) == 0 {
+		b.WriteString("\n  " + dimVersion.Render("No packs available.") + "\n")
+		return b.String()
+	}
+
+	// Header.
+	b.WriteString("  " +
+		headerStyle.Render(fixedWidth("PACK", colName)) + "  " +
+		headerStyle.Render(fixedWidth("TOOLS", 8)) + "  " +
+		headerStyle.Render("STATUS") + "\n")
+
+	toolMap := make(map[string]bool, len(m.tools))
+	for _, t := range m.tools {
+		if t.IsInstalled() {
+			toolMap[t.Name] = true
+		}
+	}
+
+	visibleRows := m.height - 12
+	if visibleRows < 3 {
+		visibleRows = 3
+	}
+	start := 0
+	if m.cursor >= visibleRows {
+		start = m.cursor - visibleRows + 1
+	}
+
+	for vi := start; vi < len(m.packs) && vi < start+visibleRows; vi++ {
+		pack := m.packs[vi]
+		selected := vi == m.cursor
+
+		cursor := "  "
+		if selected {
+			cursor = "▸ "
+		}
+
+		nameCell := nameStyle.Render(fixedWidth(pack.DisplayName, colName))
+		toolCount := fixedWidth(fmt.Sprintf("%d tools", len(pack.ToolNames)), 8)
+
+		// Compute install status.
+		installed := 0
+		for _, name := range pack.ToolNames {
+			if toolMap[name] {
+				installed++
+			}
+		}
+		var status string
+		switch {
+		case len(pack.ToolNames) == 0:
+			status = dimVersion.Render("empty pack")
+		case installed == len(pack.ToolNames):
+			status = upToDateStyle.Render("✓ installed")
+		case installed > 0:
+			status = dimVersion.Render(fmt.Sprintf("%d/%d installed", installed, len(pack.ToolNames)))
+		default:
+			status = dimVersion.Render("not installed")
+		}
+
+		line := cursor + nameCell + "  " + toolCount + "  " + status
+		if selected {
+			w := lipgloss.Width(line)
+			if w < m.width {
+				line += strings.Repeat(" ", m.width-w)
+			}
+			line = selectedRowStyle.Render(line)
+		}
+		b.WriteString(line + "\n")
+	}
+
+	// Pad remaining rows.
+	rendered := max(min(len(m.packs)-start, visibleRows), 0)
+	for range max(visibleRows-rendered, 0) {
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// renderPackDetailView renders the detail view for a selected pack.
+func (m Model) renderPackDetailView(pack registry.Pack) string {
+	var b strings.Builder
+	label := detailLabelStyle.Render
+	dim := dimVersion.Render
+
+	// Header.
+	title := detailTitleStyle.Render("📦 " + pack.DisplayName)
+	b.WriteString("  " + title)
+	divLen := max(m.width-lipgloss.Width(title)-6, 10)
+	b.WriteString("  " + strings.Repeat("─", divLen))
+	b.WriteString("\n\n")
+
+	// Description.
+	if pack.Description != "" {
+		maxW := m.width - 6
+		if maxW < 20 {
+			maxW = 20
+		}
+		for _, line := range wordWrap(pack.Description, maxW) {
+			b.WriteString("  " + dim(line) + "\n")
+		}
+		b.WriteString("\n")
+	}
+
+	// If a pack operation is in progress, show live progress.
+	if len(m.packItems) > 0 {
+		b.WriteString("  " + label("Progress:") + "\n\n")
+
+		for _, item := range m.packItems {
+			var icon, status string
+			switch item.status {
+			case packItemPending:
+				icon = dim("○")
+				status = dim("pending")
+			case packItemRunning:
+				icon = upgradableStyle.Render("◉")
+				status = upgradableStyle.Render("running...")
+			case packItemDone:
+				icon = upToDateStyle.Render("✓")
+				status = upToDateStyle.Render("done")
+			case packItemFailed:
+				icon = upgradableStyle.Render("✗")
+				if item.errMsg != "" {
+					status = upgradableStyle.Render(item.errMsg)
+				} else {
+					status = upgradableStyle.Render("failed")
+				}
+			case packItemSkipped:
+				icon = dim("–")
+				if item.errMsg != "" {
+					status = dim(item.errMsg)
+				} else {
+					status = dim("skipped")
+				}
+			}
+			fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, itemLabel(item.name, item.display), status)
+		}
+
+		pending := 0
+		for _, item := range m.packItems {
+			if item.status == packItemPending || item.status == packItemRunning {
+				pending++
+			}
+		}
+		fmt.Fprintf(&b, "\n  %d/%d complete\n", m.packDone, len(m.packItems))
+
+		if pending == 0 && !m.packInstalling {
+			b.WriteString("\n  " + dim("Esc") + " back")
+		}
+
+		return b.String()
+	}
+
+	// Static view — show tool list with install status.
+	b.WriteString("  " + label("Tools:") + "\n\n")
+
+	toolMap := make(map[string]bool, len(m.tools))
+	for _, t := range m.tools {
+		if t.IsInstalled() {
+			toolMap[t.Name] = true
+		}
+	}
+
+	installed := 0
+	for _, name := range pack.ToolNames {
+		isInstalled := toolMap[name]
+		if isInstalled {
+			installed++
+		}
+		icon := dim("○")
+		status := dim("not installed")
+		if isInstalled {
+			icon = upToDateStyle.Render("✓")
+			status = upToDateStyle.Render("installed")
+		}
+		fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, name, status)
+	}
+
+	// Actions.
+	if len(pack.ToolNames) == 0 {
+		b.WriteString("  " + dim("This pack has no tools defined.") + "\n\n")
+		hints := dim("Esc") + " back"
+		b.WriteString("  " + helpStyle.Render(hints))
+		return b.String()
+	}
+
+	fmt.Fprintf(&b, "\n  %s  %d/%d installed\n\n", label("Status:"), installed, len(pack.ToolNames))
+
+	if installed < len(pack.ToolNames) {
+		b.WriteString("  " + nameStyle.Render("Press Enter or i to install missing tools") + "\n")
+	} else {
+		b.WriteString("  " + upToDateStyle.Render("All tools in this pack are installed! ✓") + "\n")
+	}
+	if installed > 0 {
+		b.WriteString("  " + dim("Press x to remove installed tools") + "\n")
+	}
+	b.WriteString("\n")
+
+	// Help.
+	hints := dim("Enter/i") + " install   " + dim("x") + " remove   " + dim("Esc") + " back"
+	b.WriteString("  " + helpStyle.Render(hints))
+
+	return b.String()
+}
+
 // --- Header ---
 
 func (m Model) renderHeader() string {
@@ -190,7 +432,7 @@ func (m Model) renderHeader() string {
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory)) + "  " +
 			headerStyle.Render("STATUS")
 	case tabBackup:
-		return "  " +
+		return "    " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("STATUS", colStatus)) + "  " +
 			headerStyle.Render(fixedWidth("SOURCE", colSource))
@@ -829,34 +1071,33 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 		cursor = "▸ "
 	}
 
-	// Status icon + label. Compute plain text first, style after fixedWidth.
+	// Status icon (fixed 2-char width: icon + space).
 	var icon string
 	var statusLabel string
 	var statusStyle lipgloss.Style
 	switch item.status {
 	case backupPending:
 		if confirmMode {
-			// Show selection checkbox during confirm mode.
 			if item.selected {
-				icon = upToDateStyle.Render("[✓]")
+				icon = upToDateStyle.Render("✓ ")
 			} else {
-				icon = dimVersion.Render("[ ]")
+				icon = dimVersion.Render("· ")
 			}
 		} else {
-			icon = dimVersion.Render(" ○ ")
+			icon = dimVersion.Render("○ ")
 		}
 		statusLabel = "pending"
 		statusStyle = dimVersion
 	case backupRunning:
-		icon = upgradableStyle.Render(" ◉ ")
+		icon = upgradableStyle.Render("◉ ")
 		statusLabel = "installing"
 		statusStyle = upgradableStyle
 	case backupDone:
-		icon = upToDateStyle.Render(" ✓ ")
+		icon = upToDateStyle.Render("✓ ")
 		statusLabel = "done"
 		statusStyle = upToDateStyle
 	case backupFailed:
-		icon = upgradableStyle.Render(" ✗ ")
+		icon = upgradableStyle.Render("✗ ")
 		if item.errMsg != "" {
 			statusLabel = item.errMsg
 		} else {
@@ -864,7 +1105,7 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 		}
 		statusStyle = upgradableStyle
 	case backupSkipped:
-		icon = dimVersion.Render(" – ")
+		icon = dimVersion.Render("– ")
 		if item.errMsg != "" {
 			statusLabel = item.errMsg
 		} else {
@@ -873,11 +1114,11 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 		statusStyle = dimVersion
 	}
 
-	nameCell := nameStyle.Render(fixedWidth(item.display, colName))
+	nameCell := nameStyle.Render(fixedWidth(itemLabel(item.name, item.display), colName))
 	statusCell := statusStyle.Render(fixedWidth(statusLabel, colStatus))
 	sourceCell := sourceStyle.Render(fixedWidth(item.source, colSource))
 
-	line := cursor + icon + " " + nameCell + "  " + statusCell + "  " + sourceCell
+	line := cursor + icon + nameCell + "  " + statusCell + "  " + sourceCell
 
 	if selected {
 		// Pad to full width for selection highlight.
@@ -1221,6 +1462,14 @@ func toolResolved(tool registry.Tool) bool {
 // toolLabel returns the tool's short name for list rows.
 func toolLabel(tool registry.Tool) string {
 	return tool.Name
+}
+
+// itemLabel returns display if non-empty, otherwise name.
+func itemLabel(name, display string) string {
+	if display != "" {
+		return display
+	}
+	return name
 }
 
 // fixedWidth pads or truncates a plain string to exactly `width` characters.
