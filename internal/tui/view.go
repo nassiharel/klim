@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -810,6 +811,31 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		b.WriteString("\n")
 	}
 
+	// ── You might also like ────────────────────────────────────
+	if related := m.relatedTools(tool); len(related) > 0 {
+		b.WriteString("  " + label("You might also like:") + "\n")
+		maxScore := 1
+		for _, r := range related {
+			if r.score > maxScore {
+				maxScore = r.score
+			}
+		}
+		for _, r := range related {
+			rt := m.tools[r.toolIdx]
+			barLen := (r.score * 5) / maxScore
+			if barLen < 1 {
+				barLen = 1
+			}
+			bar := upgradableStyle.Render(strings.Repeat("█", barLen) + strings.Repeat("░", 5-barLen))
+			fmt.Fprintf(&b, "    %s %s %s\n",
+				nameStyle.Render(fixedWidth(rt.Name, 16)),
+				bar,
+				dim(r.reason),
+			)
+		}
+		b.WriteString("\n")
+	}
+
 	// ── Action menu ─────────────────────────────────────────────
 	if len(m.toolMenuItems) > 0 {
 		b.WriteString("  " + label("Actions:") + "\n")
@@ -1553,6 +1579,55 @@ func toolLabel(tool registry.Tool) string {
 }
 
 // itemLabel returns display if non-empty, otherwise name.
+// relatedTools returns up to 5 not-installed tools that share tags with the given tool.
+func (m Model) relatedTools(tool registry.Tool) []recommendation {
+	if len(tool.Tags) == 0 {
+		return nil
+	}
+	tagSet := make(map[string]struct{}, len(tool.Tags))
+	for _, tag := range tool.Tags {
+		tagSet[tag] = struct{}{}
+	}
+
+	var recs []recommendation
+	for i, t := range m.tools {
+		if t.Name == tool.Name || t.IsInstalled() {
+			continue
+		}
+		score := 0
+		var shared []string
+		for _, tag := range t.Tags {
+			if _, ok := tagSet[tag]; ok {
+				score++
+				if len(shared) < 3 {
+					shared = append(shared, tag)
+				}
+			}
+		}
+		if score == 0 {
+			continue
+		}
+
+		recs = append(recs, recommendation{
+			toolIdx: i,
+			score:   score,
+			reason:  "shared: " + strings.Join(shared, ", "),
+		})
+	}
+
+	sort.Slice(recs, func(i, j int) bool {
+		if recs[i].score != recs[j].score {
+			return recs[i].score > recs[j].score
+		}
+		return m.tools[recs[i].toolIdx].Name < m.tools[recs[j].toolIdx].Name
+	})
+
+	if len(recs) > 5 {
+		recs = recs[:5]
+	}
+	return recs
+}
+
 func itemLabel(name, display string) string {
 	if display != "" {
 		return display
