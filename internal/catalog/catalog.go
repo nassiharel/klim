@@ -112,6 +112,11 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error
 		return nil, fmt.Errorf("fetching marketplace (no valid local cache): %w", err)
 	}
 
+	// Validate before caching — don't poison the cache with HTML/garbage.
+	if !isValidCatalog(data) {
+		return nil, fmt.Errorf("fetched catalog is invalid (not parseable YAML with tools)")
+	}
+
 	// Write cache.
 	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr == nil {
 		_ = os.WriteFile(path, data, 0o644)
@@ -259,6 +264,11 @@ func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, e
 	remote, err := fetcher.Fetch(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetching latest marketplace: %w", err)
+	}
+
+	// Validate before caching — don't poison the cache with HTML/garbage.
+	if !isValidCatalog(remote) {
+		return nil, fmt.Errorf("fetched catalog is invalid (not parseable YAML with tools)")
 	}
 
 	// Diff against what the user currently has.
