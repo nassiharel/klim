@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/clim/internal/build"
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -19,6 +20,7 @@ const (
 	colSource   = 8  // width for source column
 	colCategory = 12 // width for category column
 	colStatus   = 18 // width for backup status column
+	colSidebar  = 18 // width for filter sidebar panel
 )
 
 func (m Model) renderView() string {
@@ -40,7 +42,14 @@ func (m Model) renderView() string {
 	if m.activeTab == tabBackup {
 		b.WriteString(m.renderBackupView())
 		b.WriteString("\n")
-		b.WriteString(m.renderHelp())
+		switch {
+		case m.importingPath:
+			b.WriteString("  " + confirmStyle.Render("Import:") + " " + m.importInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
+		case m.enteringToken:
+			b.WriteString("  " + confirmStyle.Render("Token:") + " " + m.tokenInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
+		default:
+			b.WriteString(m.renderHelp())
+		}
 		return b.String()
 	}
 
@@ -52,64 +61,40 @@ func (m Model) renderView() string {
 		return b.String()
 	}
 
-	// Header row.
-	if m.phase >= 1 && len(m.filteredIndex) > 0 {
-		b.WriteString(m.renderHeader() + "\n")
-	}
+	// Search bar.
+	b.WriteString(m.renderSearchBar() + "\n")
 
-	// Rows.
-	visibleRows := m.height - 7
+	// Two-column layout: sidebar | tool list.
+	visibleRows := m.height - 8
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
 
-	start := 0
-	if m.cursor >= visibleRows {
-		start = m.cursor - visibleRows + 1
-	}
+	sidebarLines := m.buildSidebarLines(visibleRows)
+	toolLines := m.buildToolLines(visibleRows)
 
-	for vi := start; vi < len(m.filteredIndex) && vi < start+visibleRows; vi++ {
-		tool := m.tools[m.filteredIndex[vi]]
-		selected := vi == m.cursor
-		b.WriteString(m.renderRow(tool, selected) + "\n")
-	}
+	totalLines := max(len(sidebarLines), len(toolLines))
+	sidebarOnRight := m.cfg != nil && m.cfg.UI.SidebarRight
 
-	// Pad.
-	rendered := min(len(m.filteredIndex)-start, visibleRows)
-	for range max(visibleRows-rendered, 0) {
-		b.WriteString("\n")
-	}
-
-	// Empty state.
-	if len(m.filteredIndex) == 0 && m.phase >= 2 {
-		msg := ""
-		switch m.activeTab {
-		case tabInstalled:
-			msg = "  No installed tools found."
-		case tabUpdates:
-			msg = "  All tools are up to date! ✓"
-		case tabDiscover:
-			msg = "  All curated tools are already installed!"
-		case tabDisabled:
-			msg = "  No disabled tools."
-		case tabBackup:
-			msg = "" // handled by renderBackupView
-		case tabConfig:
-			msg = "" // handled by renderConfigView
+	for i := range totalLines {
+		left := ""
+		if i < len(sidebarLines) {
+			left = sidebarLines[i]
 		}
-		b.WriteString("\n" + dimVersion.Render(msg) + "\n")
+		right := ""
+		if i < len(toolLines) {
+			right = toolLines[i]
+		}
+
+		if sidebarOnRight {
+			b.WriteString(right + " │ " + left + "\n")
+		} else {
+			b.WriteString(fixedWidthANSI(left, colSidebar) + " │ " + right + "\n")
+		}
 	}
 
 	b.WriteString("\n")
-
-	switch {
-	case m.filtering:
-		b.WriteString("  " + filterPromptStyle.Render("/") + " " + m.filterInput.View())
-	case m.importingPath:
-		b.WriteString("  " + confirmStyle.Render("Import:") + " " + m.importInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
-	default:
-		b.WriteString(m.renderHelp())
-	}
+	b.WriteString(m.renderHelp())
 
 	return b.String()
 }
@@ -119,24 +104,21 @@ func (m Model) renderView() string {
 func (m Model) renderTitleBar() string {
 	title := titleStyle.Render("  clim")
 
-	if m.phase == 0 {
+	if m.phase == phaseScanning {
 		return title + "  " + loadingStyle.Render(m.spinner.View()+" finding tools...")
 	}
-	if m.phase == 1 && m.pending > 0 {
+	if m.phase == phaseResolving && m.pending > 0 {
 		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s checking versions (%d remaining)...", m.spinner.View(), m.pending))
 	}
 
-	inst, upd, notInst, disabled := m.stats()
+	inst, upd, notInst := m.stats()
 	active := inst + notInst
 	summary := fmt.Sprintf("%d/%d installed", inst, active)
 	if upd > 0 {
 		summary += " · " + upgradableStyle.Render(strconv.Itoa(upd)+" updates")
 	}
 	if notInst > 0 {
-		summary += fmt.Sprintf(" · %d to discover", notInst)
-	}
-	if disabled > 0 {
-		summary += fmt.Sprintf(" · %d disabled", disabled)
+		summary += fmt.Sprintf(" · %d in marketplace", notInst)
 	}
 	return title + "  " + summaryStyle.Render(summary)
 }
@@ -148,8 +130,7 @@ func (m Model) renderTabBar() string {
 	}{
 		{"Installed", tabInstalled},
 		{"Updates", tabUpdates},
-		{"Discover", tabDiscover},
-		{"Disabled", tabDisabled},
+		{"Marketplace", tabDiscover},
 		{"Backup", tabBackup},
 		{"Config", tabConfig},
 	}
@@ -166,6 +147,26 @@ func (m Model) renderTabBar() string {
 	return "  " + strings.Join(parts, " ")
 }
 
+// --- Search Bar ---
+
+// renderSearchBar renders the search box.
+// Press / to focus the search box. Press f to focus the filter sidebar.
+func (m Model) renderSearchBar() string {
+	var b strings.Builder
+
+	// Search input.
+	switch {
+	case m.filtering:
+		b.WriteString("  " + filterPromptStyle.Render("/") + " " + m.filterInput.View())
+	case m.filterText != "":
+		b.WriteString("  " + filterPromptStyle.Render("/") + " " + dimVersion.Render(m.filterText))
+	default:
+		b.WriteString("  " + dimVersion.Render("/ search..."))
+	}
+
+	return b.String()
+}
+
 // --- Header ---
 
 func (m Model) renderHeader() string {
@@ -177,7 +178,7 @@ func (m Model) renderHeader() string {
 			headerStyle.Render(fixedWidth("SOURCE", colSource)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
 	case tabUpdates:
-		return "  " +
+		return "      " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("UPDATE", colVersion)) + "  " +
 			headerStyle.Render(fixedWidth("SOURCE", colSource)) + "  " +
@@ -185,11 +186,8 @@ func (m Model) renderHeader() string {
 	case tabDiscover:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
-			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
-	case tabDisabled:
-		return "  " +
-			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
-			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
+			headerStyle.Render(fixedWidth("CATEGORY", colCategory)) + "  " +
+			headerStyle.Render("STATUS")
 	case tabBackup:
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
@@ -201,18 +199,16 @@ func (m Model) renderHeader() string {
 
 // --- Row rendering per tab ---
 
-func (m Model) renderRow(tool registry.Tool, selected bool) string {
+func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string {
 	var line string
 
 	switch m.activeTab {
 	case tabInstalled:
 		line = m.renderInstalledRow(tool, selected)
 	case tabUpdates:
-		line = m.renderUpdateRow(tool, selected)
+		line = m.renderUpdateRow(tool, toolIdx, selected)
 	case tabDiscover:
 		line = m.renderDiscoverRow(tool, selected)
-	case tabDisabled:
-		line = m.renderDisabledRow(tool, selected)
 	}
 
 	if selected {
@@ -236,8 +232,8 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 	nameText := toolLabel(tool)
 	nameCell := nameStyle.Render(fixedWidth(nameText, colName))
 
-	// Version column: build plain version info, then pad.
-	verCell := fixedWidth(m.versionInfoPlain(tool), colVersion)
+	// Version column: styled version info, then pad to fixed width.
+	verCell := fixedWidthANSI(m.versionInfoStyled(tool), colVersion)
 
 	// Source column.
 	src := ""
@@ -256,10 +252,18 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 	return line
 }
 
-func (m Model) renderUpdateRow(tool registry.Tool, selected bool) string {
+func (m Model) renderUpdateRow(tool registry.Tool, toolIdx int, selected bool) string {
 	cursor := "  "
 	if selected {
 		cursor = "▸ "
+	}
+
+	// Selection checkbox.
+	check := ""
+	if m.updateSelected[toolIdx] {
+		check = upToDateStyle.Render("[✓]") + " "
+	} else {
+		check = dimVersion.Render("[ ]") + " "
 	}
 
 	nameText := toolLabel(tool)
@@ -276,7 +280,7 @@ func (m Model) renderUpdateRow(tool registry.Tool, selected bool) string {
 	srcCell := sourceStyle.Render(fixedWidth(src, colSource))
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
-	return cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
+	return cursor + check + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 }
 
 func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
@@ -289,27 +293,22 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
-	return cursor + nameCell + "  " + catCell
-}
-
-func (m Model) renderDisabledRow(tool registry.Tool, selected bool) string {
-	cursor := "  "
-	if selected {
-		cursor = "▸ "
+	var badge string
+	switch tool.MarketplaceStatus {
+	case registry.StatusNew:
+		badge = "  " + upgradableStyle.Render("NEW")
+	case registry.StatusChanged:
+		badge = "  " + detailTitleStyle.Render("UPDATED")
 	}
 
-	nameText := toolLabel(tool)
-	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
-	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
-
-	return cursor + nameCell + "  " + catCell
+	return cursor + nameCell + "  " + catCell + badge
 }
 
 // --- Version info (plain text, no ANSI) ---
 
-func (m Model) versionInfoPlain(tool registry.Tool) string {
+func (m Model) versionInfoStyled(tool registry.Tool) string {
 	// Tool still resolving — show spinner placeholder.
-	if m.phase < 2 && !toolResolved(tool) {
+	if m.phase < phaseDone && !toolResolved(tool) {
 		return "…"
 	}
 
@@ -329,65 +328,93 @@ func (m Model) versionInfoPlain(tool registry.Tool) string {
 	if ver == "" && latest != "" {
 		return "— → " + latest + " ?"
 	}
-	if registry.VersionsMatch(ver, latest) {
-		return ver + " ✓"
+	if tool.HasUpdate() {
+		return ver + " → " + upgradableStyle.Render(latest+" ⬆")
 	}
-	return ver + " → " + latest + " ⬆"
+	return ver + " " + upToDateStyle.Render("✓")
 }
 
 // --- Detail view ---
 
 func (m Model) renderDetailView(tool registry.Tool) string {
 	var b strings.Builder
+	label := detailLabelStyle.Render
+	dim := dimVersion.Render
 
-	// Header.
-	label := tool.Name
+	// ── Header ──────────────────────────────────────────────────
+	nameLabel := tool.Name
 	if tool.DisplayName != "" && !strings.EqualFold(tool.Name, tool.DisplayName) {
-		label += " (" + tool.DisplayName + ")"
+		nameLabel += " (" + tool.DisplayName + ")"
 	}
-	b.WriteString("  " + detailTitleStyle.Render(label))
+	b.WriteString("  " + detailTitleStyle.Render(nameLabel))
 	b.WriteString("  " + categoryStyle.Render(tool.Category))
-	b.WriteString("  " + strings.Repeat("─", max(m.width-len(label)-len(tool.Category)-8, 10)))
+	divLen := max(m.width-lipgloss.Width(nameLabel)-lipgloss.Width(tool.Category)-8, 10)
+	b.WriteString("  " + strings.Repeat("─", divLen))
 	b.WriteString("\n\n")
 
-	// Tool info — fetched lazily from package manager.
+	// ── Description (word-wrapped) ──────────────────────────────
 	switch {
 	case tool.Info != nil:
 		if tool.Info.Description != "" {
-			// Word-wrap description to fit width, using rune count to
-			// handle multibyte characters correctly.
-			descRunes := []rune(tool.Info.Description)
-			maxLen := m.width - 6
-			if maxLen > 3 && len(descRunes) > maxLen {
-				descRunes = append(descRunes[:maxLen-3], '.', '.', '.')
+			maxW := m.width - 6
+			if maxW < 20 {
+				maxW = 20
 			}
-			b.WriteString("  " + dimVersion.Render(string(descRunes)) + "\n")
+			for _, line := range wordWrap(tool.Info.Description, maxW) {
+				b.WriteString("  " + dim(line) + "\n")
+			}
+			b.WriteString("\n")
 		}
-		var meta []string
+		// Metadata table.
 		if tool.Info.Publisher != "" {
-			meta = append(meta, detailLabelStyle.Render("Publisher: ")+tool.Info.Publisher)
+			b.WriteString("  " + label("Publisher:  ") + tool.Info.Publisher + "\n")
 		}
 		if tool.Info.Homepage != "" {
-			meta = append(meta, detailLabelStyle.Render("Homepage:  ")+dimVersion.Render(tool.Info.Homepage))
+			b.WriteString("  " + label("Homepage:   ") + dim(tool.Info.Homepage) + "\n")
 		}
 		if tool.Info.License != "" {
-			meta = append(meta, detailLabelStyle.Render("License:   ")+tool.Info.License)
+			b.WriteString("  " + label("License:    ") + tool.Info.License + "\n")
 		}
 		if tool.Info.ReleaseDate != "" {
-			meta = append(meta, detailLabelStyle.Render("Released:  ")+tool.Info.ReleaseDate)
-		}
-		for _, line := range meta {
-			b.WriteString("  " + line + "\n")
+			b.WriteString("  " + label("Released:   ") + tool.Info.ReleaseDate + "\n")
 		}
 		b.WriteString("\n")
 	case tool.InfoFetched:
-		b.WriteString("  " + dimVersion.Render("No metadata available.") + "\n\n")
+		b.WriteString("  " + dim("No metadata available.") + "\n\n")
 	default:
 		b.WriteString("  " + loadingStyle.Render("Loading info...") + "\n\n")
 	}
 
+	// ── Version & Status ────────────────────────────────────────
 	if tool.IsInstalled() {
-		b.WriteString("  " + detailLabelStyle.Render("Instances:") + "\n")
+		ver := tool.InstalledVersion()
+		if ver == "" {
+			ver = "—"
+		}
+		b.WriteString("  " + label("Version:    ") + nameStyle.Render(ver))
+		if tool.Latest != "" {
+			if registry.VersionsMatch(ver, tool.Latest) {
+				b.WriteString("  " + upToDateStyle.Render("✓ up to date"))
+			} else if tool.HasUpdate() {
+				b.WriteString("  " + upgradableStyle.Render("⬆ "+tool.Latest+" available"))
+			}
+			if tool.LatestFrom != "" {
+				b.WriteString("  " + dim("(via "+tool.LatestFrom+")"))
+			}
+		}
+		b.WriteString("\n")
+	} else {
+		b.WriteString("  " + label("Status:     ") + dim("Not installed") + "\n")
+	}
+
+	// ── Instances ───────────────────────────────────────────────
+	if tool.IsInstalled() {
+		b.WriteString("  " + label("Instances:  "))
+		if len(tool.Instances) == 1 {
+			b.WriteString(dim("1 installation") + "\n")
+		} else {
+			b.WriteString(upgradableStyle.Render(fmt.Sprintf("%d installations", len(tool.Instances))) + "\n")
+		}
 		for i, inst := range tool.Instances {
 			bullet := "○"
 			style := detailSecondary
@@ -395,15 +422,15 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 				bullet = "●"
 				style = detailPrimary
 			}
-			ver := inst.Version
-			if ver == "" {
-				ver = "—"
+			instVer := inst.Version
+			if instVer == "" {
+				instVer = "—"
 			}
 			fmt.Fprintf(&b, "    %s  %-14s  %-8s  %s\n",
 				style.Render(bullet),
-				ver,
+				instVer,
 				sourceStyle.Render(string(inst.Source)),
-				dimVersion.Render(registry.TruncatePath(inst.Path, m.width-40)),
+				dim(registry.TruncatePath(inst.Path, m.width-40)),
 			)
 		}
 		b.WriteString("\n")
@@ -412,71 +439,159 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		if len(tool.Instances) > 1 {
 			b.WriteString(m.renderInstanceRecommendations(tool))
 		}
-
-		if tool.Latest != "" {
-			if registry.VersionsMatch(tool.InstalledVersion(), tool.Latest) {
-				b.WriteString("  " + upToDateStyle.Render("✓ Up to date") + "  " + dimVersion.Render("("+tool.Latest+")") + "\n")
-			} else {
-				b.WriteString("  " + upgradableStyle.Render("⬆ Update available: "+tool.Latest) + "\n")
-			}
-			b.WriteString("\n")
-		}
-
-		if primary := tool.PrimaryInstance(); primary != nil {
-			if cmd := tool.Packages.UpgradeCmd(primary.Source); cmd != "" {
-				b.WriteString("  " + detailLabelStyle.Render("Upgrade:") + "  " + detailCmdStyle.Render(cmd) + "\n")
-			}
-			if cmd := tool.Packages.RemoveCmd(primary.Source); cmd != "" {
-				b.WriteString("  " + detailLabelStyle.Render("Remove: ") + "  " + detailCmdStyle.Render(cmd) + "\n")
-			}
-		}
-	} else {
-		b.WriteString("  " + dimVersion.Render("Not installed") + "\n")
-		b.WriteString("  " + dimVersion.Render("Recommended developer tool") + "\n\n")
 	}
 
-	// Install commands — only for the current OS.
-	b.WriteString("\n  " + detailLabelStyle.Render("Install:") + "\n")
-	for _, src := range registry.SourcesForOS() {
-		if cmd := tool.Packages.InstallCmd(src); cmd != "" {
-			fmt.Fprintf(&b, "    %-8s  %s\n",
-				sourceStyle.Render(string(src)),
-				detailCmdStyle.Render(cmd),
-			)
-		}
+	// ── Supported Platforms ─────────────────────────────────────
+	platforms := derivePlatforms(tool.Packages)
+	if len(platforms) > 0 {
+		b.WriteString("  " + label("Platforms:  ") + dim(strings.Join(platforms, ", ")) + "\n")
 	}
 
+	// ── Binary names ────────────────────────────────────────────
+	if len(tool.BinaryNames) > 0 {
+		b.WriteString("  " + label("Binaries:   ") + dim(strings.Join(tool.BinaryNames, ", ")) + "\n")
+	}
 	b.WriteString("\n")
 
-	// Detail view help with action hints.
+	// ── Install / Upgrade / Remove commands ─────────────────────
+	if tool.IsInstalled() {
+		if primary := tool.PrimaryInstance(); primary != nil {
+			if cmd := tool.Packages.UpgradeCmd(primary.Source); cmd != "" {
+				b.WriteString("  " + label("Upgrade:    ") + detailCmdStyle.Render(cmd) + "\n")
+			}
+			if cmd := tool.Packages.RemoveCmd(primary.Source); cmd != "" {
+				b.WriteString("  " + label("Remove:     ") + detailCmdStyle.Render(cmd) + "\n")
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	// Install commands for all available sources on this OS.
+	installCmds := m.collectInstallCmds(tool)
+	if len(installCmds) > 0 {
+		b.WriteString("  " + label("Install:") + "\n")
+		for _, ic := range installCmds {
+			fmt.Fprintf(&b, "    %-8s  %s\n",
+				sourceStyle.Render(ic.source),
+				detailCmdStyle.Render(ic.cmd),
+			)
+		}
+		b.WriteString("\n")
+	}
+
+	// ── Action menu ─────────────────────────────────────────────
+	if len(m.toolMenuItems) > 0 {
+		b.WriteString("  " + label("Actions:") + "\n")
+		for i, item := range m.toolMenuItems {
+			cursor := "  "
+			if i == m.toolMenu {
+				cursor = "▸ "
+			}
+			line := "  " + cursor + nameStyle.Render(item.label)
+			if i == m.toolMenu {
+				w := lipgloss.Width(line)
+				if w < m.width {
+					line += strings.Repeat(" ", m.width-w)
+				}
+				line = selectedRowStyle.Render(line)
+			}
+			b.WriteString(line + "\n")
+		}
+		b.WriteString("\n")
+	}
+
+	// ── Help bar ────────────────────────────────────────────────
 	switch {
 	case m.pendingAction != nil:
 		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
-		keys := dimVersion.Render("y") + " confirm   " + dimVersion.Render("Esc") + " cancel"
+		keys := dim("y") + " confirm   " + dim("Esc") + " cancel"
 		b.WriteString(prompt + "  " + keys)
-	case m.sourcePicker != nil:
-		var parts []string
-		parts = append(parts, confirmStyle.Render(fmt.Sprintf("  %s via:", m.sourcePicker.action)))
-		for i, c := range m.sourcePicker.choices {
-			parts = append(parts, fmt.Sprintf("  %s %s",
-				dimVersion.Render(strconv.Itoa(i+1)),
-				string(c.source),
-			))
-		}
-		parts = append(parts, "  "+dimVersion.Render("Esc")+" cancel")
-		b.WriteString(strings.Join(parts, ""))
 	default:
-		var hints []string
-		if tool.IsInstalled() {
-			hints = append(hints, dimVersion.Render("u")+" upgrade", dimVersion.Render("d")+" remove")
-		} else {
-			hints = append(hints, dimVersion.Render("i")+" install")
+		hints := []string{
+			dim("↑↓") + " navigate",
+			dim("Enter") + " select",
+			dim("Esc") + " back",
 		}
-		hints = append(hints, dimVersion.Render("Esc")+" back")
 		b.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
 	}
 
 	return b.String()
+}
+
+// installCmdEntry pairs a source label with the formatted command string.
+type installCmdEntry struct {
+	source string
+	cmd    string
+}
+
+// collectInstallCmds returns install commands for all available sources on this OS.
+func (m Model) collectInstallCmds(tool registry.Tool) []installCmdEntry {
+	var entries []installCmdEntry
+	for _, src := range registry.SourcesForOS() {
+		if cmd := tool.Packages.InstallCmd(src); cmd != "" {
+			entries = append(entries, installCmdEntry{
+				source: string(src),
+				cmd:    cmd,
+			})
+		}
+	}
+	return entries
+}
+
+// derivePlatforms infers supported operating systems from which package manager
+// IDs are defined. Returns human-readable labels like "Windows", "macOS", "Linux".
+func derivePlatforms(pkgs registry.PackageIDs) []string {
+	var platforms []string
+	seen := make(map[string]bool)
+
+	add := func(label string) {
+		if !seen[label] {
+			seen[label] = true
+			platforms = append(platforms, label)
+		}
+	}
+
+	if pkgs.Winget != "" || pkgs.Choco != "" {
+		add("Windows")
+	}
+	if pkgs.Brew != "" {
+		add("macOS")
+		add("Linux")
+	}
+	if pkgs.Apt != "" || pkgs.Snap != "" {
+		add("Linux")
+	}
+	if pkgs.NPM != "" {
+		add("Windows")
+		add("macOS")
+		add("Linux")
+	}
+	return platforms
+}
+
+// wordWrap breaks text into lines that fit within maxWidth display columns.
+// Uses lipgloss.Width for correct handling of multi-byte UTF-8 and wide characters.
+func wordWrap(text string, maxWidth int) []string {
+	if maxWidth <= 0 {
+		return []string{text}
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return nil
+	}
+
+	var lines []string
+	current := words[0]
+	for _, word := range words[1:] {
+		if lipgloss.Width(current)+1+lipgloss.Width(word) > maxWidth {
+			lines = append(lines, current)
+			current = word
+		} else {
+			current += " " + word
+		}
+	}
+	lines = append(lines, current)
+	return lines
 }
 
 // renderInstanceRecommendations analyzes multiple installations and gives
@@ -568,12 +683,35 @@ func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 func (m Model) renderBackupView() string {
 	var b strings.Builder
 
-	if m.backupMode == "" {
-		// Idle state — show instructions.
+	if m.backupMode == backupModeIdle {
 		b.WriteString("\n")
-		b.WriteString(dimVersion.Render("  No backup in progress.") + "\n\n")
-		b.WriteString(dimVersion.Render("  Press ") + dimVersion.Render("e") + dimVersion.Render(" to export installed tools to a file.") + "\n")
-		b.WriteString(dimVersion.Render("  Press ") + dimVersion.Render("I") + dimVersion.Render(" to import tools from a manifest.") + "\n")
+
+		type menuItem struct {
+			label string
+			desc  string
+		}
+		items := []menuItem{
+			{"Export", "Save installed tools to a manifest file"},
+			{"Import", "Reinstall tools from a manifest file"},
+			{"Share", "Generate a share token for chat/messaging"},
+			{"Open Token", "Install tools from a share token"},
+		}
+
+		for i, item := range items {
+			cursor := "  "
+			if i == m.cursor {
+				cursor = "▸ "
+			}
+			line := cursor + nameStyle.Render(fixedWidth(item.label, 12)) + "  " + dimVersion.Render(item.desc)
+			if i == m.cursor {
+				w := lipgloss.Width(line)
+				if w < m.width {
+					line += strings.Repeat(" ", m.width-w)
+				}
+				line = selectedRowStyle.Render(line)
+			}
+			b.WriteString(line + "\n")
+		}
 
 		// Pad remaining space.
 		visibleRows := m.height - 12
@@ -583,20 +721,76 @@ func (m Model) renderBackupView() string {
 		return b.String()
 	}
 
-	// Progress bar.
-	total := len(m.backupItems)
-	if total > 0 {
-		frac := float64(m.backupDone) / float64(total)
-		barWidth := m.width - 30
-		if barWidth < 20 {
-			barWidth = 20
+	// Share token display mode.
+	if m.backupMode == backupModeShare {
+		b.WriteString("\n")
+		b.WriteString("  " + detailTitleStyle.Render("Share Token") + "\n\n")
+		b.WriteString("  " + dimVersion.Render("Send this token via Slack, Teams, or any chat:") + "\n\n")
+
+		// Word-wrap the token to fit the terminal width.
+		maxW := m.width - 6
+		if maxW < 40 {
+			maxW = 40
 		}
-		m.backupBar.SetWidth(barWidth)
-		fmt.Fprintf(&b, "  %s  %s  %d/%d\n\n",
-			detailLabelStyle.Render("Progress:"),
-			m.backupBar.ViewAs(frac),
-			m.backupDone, total,
-		)
+		for _, line := range wordWrap(m.sharedToken, maxW) {
+			b.WriteString("  " + dimVersion.Render(line) + "\n")
+		}
+
+		b.WriteString("\n")
+
+		// Copy button.
+		if m.tokenCopied {
+			b.WriteString("  " + buttonDoneStyle.Render("✓ Copied to clipboard") + "\n")
+		} else {
+			b.WriteString("  " + buttonStyle.Render("⎘ Copy to clipboard (c)") + "\n")
+		}
+
+		b.WriteString("\n")
+		b.WriteString("  " + dimVersion.Render("Recipients can install with:") + "  " + detailCmdStyle.Render("clim open <token>") + "\n")
+
+		// Pad remaining space.
+		visibleRows := m.height - 16
+		for range max(visibleRows, 0) {
+			b.WriteString("\n")
+		}
+		return b.String()
+	}
+
+	// Confirm mode — show review header instead of progress bar.
+	if m.backupConfirm {
+		pending := 0
+		selected := 0
+		skipped := 0
+		for _, item := range m.backupItems {
+			switch item.status {
+			case backupPending:
+				pending++
+				if item.selected {
+					selected++
+				}
+			case backupSkipped, backupFailed:
+				skipped++
+			}
+		}
+		b.WriteString("\n")
+		b.WriteString(confirmStyle.Render("  Review import plan") + "  " +
+			dimVersion.Render(fmt.Sprintf("%d selected of %d to install, %d skipped", selected, pending, skipped)) + "\n\n")
+	} else {
+		// Progress bar.
+		total := len(m.backupItems)
+		if total > 0 {
+			frac := float64(m.backupDone) / float64(total)
+			barWidth := m.width - 30
+			if barWidth < 20 {
+				barWidth = 20
+			}
+			m.backupBar.SetWidth(barWidth)
+			fmt.Fprintf(&b, "  %s  %s  %d/%d\n\n",
+				detailLabelStyle.Render("Progress:"),
+				m.backupBar.ViewAs(frac),
+				m.backupDone, total,
+			)
+		}
 	}
 
 	// Header.
@@ -616,7 +810,7 @@ func (m Model) renderBackupView() string {
 	for vi := start; vi < len(m.backupItems) && vi < start+visibleRows; vi++ {
 		item := m.backupItems[vi]
 		selected := vi == m.cursor
-		b.WriteString(m.renderBackupRow(item, selected) + "\n")
+		b.WriteString(m.renderBackupRow(item, selected, m.backupConfirm) + "\n")
 	}
 
 	// Pad.
@@ -628,7 +822,7 @@ func (m Model) renderBackupView() string {
 	return b.String()
 }
 
-func (m Model) renderBackupRow(item backupItem, selected bool) string {
+func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool) string {
 	cursor := "  "
 	if selected {
 		cursor = "▸ "
@@ -640,23 +834,36 @@ func (m Model) renderBackupRow(item backupItem, selected bool) string {
 	var statusStyle lipgloss.Style
 	switch item.status {
 	case backupPending:
-		icon = dimVersion.Render("○")
+		if confirmMode {
+			// Show selection checkbox during confirm mode.
+			if item.selected {
+				icon = upToDateStyle.Render("[✓]")
+			} else {
+				icon = dimVersion.Render("[ ]")
+			}
+		} else {
+			icon = dimVersion.Render(" ○ ")
+		}
 		statusLabel = "pending"
 		statusStyle = dimVersion
 	case backupRunning:
-		icon = upgradableStyle.Render("◉")
+		icon = upgradableStyle.Render(" ◉ ")
 		statusLabel = "installing"
 		statusStyle = upgradableStyle
 	case backupDone:
-		icon = upToDateStyle.Render("✓")
+		icon = upToDateStyle.Render(" ✓ ")
 		statusLabel = "done"
 		statusStyle = upToDateStyle
 	case backupFailed:
-		icon = upgradableStyle.Render("✗")
-		statusLabel = "failed"
+		icon = upgradableStyle.Render(" ✗ ")
+		if item.errMsg != "" {
+			statusLabel = item.errMsg
+		} else {
+			statusLabel = "failed"
+		}
 		statusStyle = upgradableStyle
 	case backupSkipped:
-		icon = dimVersion.Render("–")
+		icon = dimVersion.Render(" – ")
 		if item.errMsg != "" {
 			statusLabel = item.errMsg
 		} else {
@@ -673,9 +880,9 @@ func (m Model) renderBackupRow(item backupItem, selected bool) string {
 
 	if selected {
 		// Pad to full width for selection highlight.
-		lineRunes := []rune(line)
-		if len(lineRunes) < m.width {
-			line += strings.Repeat(" ", m.width-len(lineRunes))
+		w := lipgloss.Width(line)
+		if w < m.width {
+			line += strings.Repeat(" ", m.width-w)
 		}
 		line = selectedRowStyle.Render(line)
 	}
@@ -696,13 +903,23 @@ func (m Model) renderConfigView() string {
 	fmt.Fprintf(&b, "  %s  %s / %s\n", label(fixedWidth("OS / Arch", 18)), runtime.GOOS, runtime.GOARCH)
 	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Go", 18)), runtime.Version())
 
-	// Config file path.
+	// File paths.
 	b.WriteString("\n")
-	configPath := dim("(unknown)")
+	marketplacePath := dim("(unknown)")
 	if p, err := registry.ToolsPath(); err == nil {
+		marketplacePath = p
+	}
+	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Marketplace", 18)), marketplacePath)
+
+	if m.cfg != nil && m.cfg.Marketplace.URL != "" {
+		fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Catalog URL", 18)), m.cfg.Marketplace.URL)
+	}
+
+	configPath := dim("(unknown)")
+	if p, err := config.Path(); err == nil {
 		configPath = p
 	}
-	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Config File", 18)), configPath)
+	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Config", 18)), configPath)
 
 	// Editor.
 	editor := os.Getenv("EDITOR")
@@ -715,6 +932,23 @@ func (m Model) renderConfigView() string {
 		editor += "  " + dim("($EDITOR)")
 	}
 	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Editor", 18)), editor)
+
+	// Configuration values.
+	if m.cfg != nil {
+		b.WriteString("\n")
+		b.WriteString("  " + label("Configuration") + "\n")
+		if m.cfg.Marketplace.URL != "" {
+			fmt.Fprintf(&b, "    %-22s %s\n", dim("marketplace.url"), m.cfg.Marketplace.URL)
+		} else {
+			fmt.Fprintf(&b, "    %-22s %s\n", dim("marketplace.url"), dim("(default)"))
+		}
+		fmt.Fprintf(&b, "    %-22s %v\n", dim("marketplace.auto_refresh"), m.cfg.Marketplace.AutoRefresh)
+		fmt.Fprintf(&b, "    %-22s %s\n", dim("marketplace.interval"), m.cfg.Marketplace.RefreshInterval.Duration)
+		fmt.Fprintf(&b, "    %-22s %d %s\n", dim("performance.concurrency"), m.cfg.Performance.Concurrency, dim("(0=auto)"))
+		fmt.Fprintf(&b, "    %-22s %s\n", dim("performance.timeout"), m.cfg.Performance.CommandTimeout.Duration)
+		fmt.Fprintf(&b, "    %-22s %s\n", dim("ui.default_tab"), m.cfg.UI.DefaultTab)
+		fmt.Fprintf(&b, "    %-22s %v\n", dim("ui.show_path"), m.cfg.UI.ShowPath)
+	}
 
 	// Package managers.
 	b.WriteString("\n")
@@ -731,13 +965,13 @@ func (m Model) renderConfigView() string {
 
 	// Tool stats.
 	b.WriteString("\n")
-	inst, upd, notInst, disabled := m.stats()
-	total := inst + notInst + disabled
-	fmt.Fprintf(&b, "  %s  %d total · %d installed · %d updates · %d disabled\n",
-		label(fixedWidth("Tools", 18)), total, inst, upd, disabled)
+	inst, upd, notInst := m.stats()
+	total := inst + notInst
+	fmt.Fprintf(&b, "  %s  %d total · %d installed · %d updates\n",
+		label(fixedWidth("Tools", 18)), total, inst, upd)
 
 	// Pad remaining height.
-	used := 10 + len(registry.AllPMStatusForOS())
+	used := 18 + len(registry.AllPMStatusForOS())
 	if remaining := m.height - used - 6; remaining > 0 {
 		b.WriteString(strings.Repeat("\n", remaining))
 	}
@@ -755,34 +989,38 @@ func (m Model) renderHelp() string {
 		return prompt + "  " + keys
 	}
 
-	// Source picker mode — show numbered choices.
-	if m.sourcePicker != nil {
-		var parts []string
-		parts = append(parts, confirmStyle.Render(fmt.Sprintf("  %s via:", m.sourcePicker.action)))
-		for i, c := range m.sourcePicker.choices {
-			parts = append(parts, fmt.Sprintf("  %s %s",
-				dimVersion.Render(strconv.Itoa(i+1)),
-				string(c.source),
-			))
-		}
-		parts = append(parts, "  "+dimVersion.Render("Esc")+" cancel")
-		return strings.Join(parts, "")
-	}
-
-	toggleLabel := "disable"
-	if m.activeTab == tabDisabled {
-		toggleLabel = "enable"
-	}
-
 	var parts []string
 
 	switch m.activeTab {
 	case tabBackup:
-		parts = []string{
-			dimVersion.Render("←→") + " tab",
-			dimVersion.Render("e") + " export",
-			dimVersion.Render("I") + " import",
-			dimVersion.Render("q") + " quit",
+		switch {
+		case m.backupMode == backupModeIdle:
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("Enter") + " select",
+				dimVersion.Render("q") + " quit",
+			}
+		case m.backupConfirm:
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Space") + " toggle",
+				dimVersion.Render("a") + " select all",
+				dimVersion.Render("Enter") + " confirm",
+				dimVersion.Render("Esc") + " cancel",
+			}
+		case m.backupMode == backupModeShare:
+			parts = []string{
+				dimVersion.Render("c") + " copy to clipboard",
+				dimVersion.Render("Esc") + " back",
+				dimVersion.Render("q") + " quit",
+			}
+		default:
+			parts = []string{
+				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("Esc") + " back",
+				dimVersion.Render("q") + " quit",
+			}
 		}
 	case tabConfig:
 		parts = []string{
@@ -795,10 +1033,20 @@ func (m Model) renderHelp() string {
 			dimVersion.Render("↑↓") + " navigate",
 			dimVersion.Render("←→") + " tab",
 			dimVersion.Render("Enter") + " detail",
-			dimVersion.Render("x") + " " + toggleLabel,
-			dimVersion.Render("/") + " filter",
+			dimVersion.Render("f") + " filter",
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
+		}
+		if m.activeTab == tabUpdates {
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Space") + " toggle",
+				dimVersion.Render("a") + " select all",
+				dimVersion.Render("u") + " upgrade",
+				dimVersion.Render("f") + " category",
+				dimVersion.Render("Enter") + " detail",
+				dimVersion.Render("q") + " quit",
+			}
 		}
 	}
 
@@ -807,6 +1055,163 @@ func (m Model) renderHelp() string {
 		help += "  " + upgradableStyle.Render(m.statusMsg)
 	}
 	return help
+}
+
+// --- Two-column layout builders ---
+
+// buildSidebarLines renders the filter sidebar as a slice of fixed-width strings.
+func (m Model) buildSidebarLines(maxRows int) []string {
+	if len(m.sidebarItems) == 0 {
+		return nil
+	}
+
+	// Render all sidebar items into a full list.
+	all := make([]string, 0, len(m.sidebarItems))
+
+	for i, item := range m.sidebarItems {
+		if item.isHeader {
+			// Section header.
+			all = append(all, headerStyle.Render(fixedWidth(item.label, colSidebar-2)))
+			continue
+		}
+
+		cursor := "  "
+		if m.categoryPicker && i == m.sidebarIdx {
+			cursor = "▸ "
+		}
+
+		// Highlight the currently active filter value.
+		style := dimVersion
+		isActive := false
+		switch item.section {
+		case "category":
+			isActive = (item.value == "" && m.categoryFilter == "") ||
+				(item.value != "" && strings.EqualFold(item.value, m.categoryFilter))
+		case "tag":
+			isActive = (item.value == "" && m.tagFilter == "") ||
+				(item.value != "" && strings.EqualFold(item.value, m.tagFilter))
+		case "platform":
+			isActive = (item.value == "" && m.platformFilter == "") ||
+				(item.value != "" && strings.EqualFold(item.value, m.platformFilter))
+		}
+		if isActive {
+			style = nameStyle
+		}
+
+		label := fixedWidth(item.label, colSidebar-4)
+		line := cursor + style.Render(label)
+
+		if m.categoryPicker && i == m.sidebarIdx {
+			line = selectedRowStyle.Render(fixedWidth(line, colSidebar))
+		}
+
+		all = append(all, line)
+	}
+
+	// Apply scrolling viewport to keep sidebarIdx visible.
+	if len(all) <= maxRows {
+		// Everything fits — pad and return.
+		for len(all) < maxRows {
+			all = append(all, "")
+		}
+		return all
+	}
+
+	// Find which rendered line corresponds to sidebarIdx.
+	cursorLine := 0
+	if m.categoryPicker {
+		cursorLine = m.sidebarIdx // items and rendered lines are 1:1
+		if cursorLine >= len(all) {
+			cursorLine = len(all) - 1
+		}
+	}
+
+	// Compute scroll start so cursor is visible.
+	start := 0
+	if cursorLine >= maxRows {
+		start = cursorLine - maxRows + 1
+	}
+	if start+maxRows > len(all) {
+		start = len(all) - maxRows
+	}
+	if start < 0 {
+		start = 0
+	}
+
+	return all[start : start+maxRows]
+}
+
+// buildToolLines renders the header + tool rows + empty state as a slice of strings.
+func (m Model) buildToolLines(maxRows int) []string {
+	lines := make([]string, 0, maxRows+1)
+
+	// Header row.
+	if m.phase >= phaseResolving && len(m.filteredIndex) > 0 {
+		lines = append(lines, m.renderHeader())
+	} else {
+		lines = append(lines, "") // blank header line for alignment
+	}
+
+	// Tool rows.
+	start := 0
+	if m.cursor >= maxRows {
+		start = m.cursor - maxRows + 1
+	}
+
+	rowCount := 0
+	for vi := start; vi < len(m.filteredIndex) && rowCount < maxRows; vi++ {
+		toolIdx := m.filteredIndex[vi]
+		tool := m.tools[toolIdx]
+		selected := vi == m.cursor && !m.categoryPicker
+		lines = append(lines, m.renderRow(tool, toolIdx, selected))
+		rowCount++
+	}
+
+	// Empty state.
+	if len(m.filteredIndex) == 0 && m.phase >= phaseDone {
+		msg := ""
+		noCatalog := len(m.tools) == 0
+		switch m.activeTab {
+		case tabInstalled:
+			if noCatalog {
+				msg = "No tools loaded."
+			} else {
+				msg = "No installed tools found."
+			}
+		case tabUpdates:
+			if noCatalog {
+				msg = "No tools loaded."
+			} else {
+				msg = "All tools are up to date! ✓"
+			}
+		case tabDiscover:
+			if noCatalog {
+				msg = "No tools loaded."
+			} else {
+				msg = "All marketplace tools are installed!"
+			}
+		}
+		if msg != "" {
+			lines = append(lines, dimVersion.Render(msg))
+		}
+	}
+
+	// Pad to maxRows + 1 (header + rows).
+	for len(lines) < maxRows+1 {
+		lines = append(lines, "")
+	}
+
+	return lines
+}
+
+// fixedWidthANSI pads a styled string (which may contain ANSI codes) to the
+// given display width using lipgloss.Width for measurement.
+func fixedWidthANSI(s string, width int) string {
+	w := lipgloss.Width(s)
+	if w < width {
+		return s + strings.Repeat(" ", width-w)
+	}
+	return s
 }
 
 // --- Helpers ---
@@ -823,12 +1228,9 @@ func toolResolved(tool registry.Tool) bool {
 	return false
 }
 
-// toolLabel returns "name (DisplayName)" or just "name" if they match.
+// toolLabel returns the tool's short name for list rows.
 func toolLabel(tool registry.Tool) string {
-	if tool.DisplayName == "" || strings.EqualFold(tool.Name, tool.DisplayName) {
-		return tool.Name
-	}
-	return tool.Name + " (" + tool.DisplayName + ")"
+	return tool.Name
 }
 
 // fixedWidth pads or truncates a plain string to exactly `width` characters.

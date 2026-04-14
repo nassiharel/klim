@@ -1,9 +1,12 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -12,11 +15,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/detector"
-	"github.com/nassiharel/clim/internal/finder"
+	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/pkgmgr"
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/clim/internal/share"
 )
 
 // --- Scan & version resolution messages ---
@@ -70,6 +73,12 @@ type sourcePicker struct {
 	choices []sourceChoice
 }
 
+// toolMenuAction represents one selectable action in the tool action menu.
+type toolMenuAction struct {
+	label  string        // "Upgrade", "Remove", "Install"
+	picker *sourcePicker // resolved sources for this action
+}
+
 // --- Backup types ---
 
 type backupStatus int
@@ -83,12 +92,13 @@ const (
 )
 
 type backupItem struct {
-	name    string
-	display string
-	cmdArgs []string // install command args (import) or nil (export)
-	source  string
-	status  backupStatus
-	errMsg  string
+	name     string
+	display  string
+	cmdArgs  []string // install command args (import) or nil (export)
+	source   string
+	status   backupStatus
+	errMsg   string
+	selected bool // true = will be installed on confirm (import only)
 }
 
 // --- Backup messages ---
@@ -100,7 +110,9 @@ type exportFinishedMsg struct {
 }
 
 type backupPlanMsg struct {
-	items []backupItem
+	items     []backupItem
+	err       error // non-nil when the entire import failed (bad path, invalid YAML, etc.)
+	fromToken bool  // true if this came from a share token import
 }
 
 type backupItemDoneMsg struct {
@@ -108,21 +120,52 @@ type backupItemDoneMsg struct {
 	err error
 }
 
+// batchUpgradeItemMsg is sent when one batch-upgrade tool finishes.
+type batchUpgradeItemMsg struct {
+	toolIdx int
+	err     error
+}
+
+// backupTickMsg advances the animated progress by marking the next pending item as done.
+type backupTickMsg struct{}
+
+// --- Sidebar types ---
+
+// sidebarItem represents one entry in the filter sidebar.
+type sidebarItem struct {
+	label    string // display text ("All", "Cloud", "kubernetes", etc.)
+	section  string // "category", "tag", "platform"
+	value    string // filter value; "" = show all for that section
+	isHeader bool   // true = section header, not selectable
+}
+
+// shareFinishedMsg is sent when share token generation completes.
+type shareFinishedMsg struct {
+	token string
+	count int
+	err   error
+}
+
+type marketplaceRefreshMsg struct {
+	result *catalog.RefreshResult
+	err    error
+}
+
 // --- Scan & version commands ---
 
-func findToolsCmd() func() scanResultMsg {
+func findToolsCmd(svc *service.ToolService) func() scanResultMsg {
 	return func() scanResultMsg {
-		tools := registry.DefaultTools()
-		err := finder.FindAll(tools)
+		ctx := context.Background()
+		tools, err := svc.LoadAndScan(ctx)
 		return scanResultMsg{tools: tools, err: err}
 	}
 }
 
-func resolveToolVersionCmd(index int, gen int, tool registry.Tool) func() toolVersionMsg {
+func resolveToolVersionCmd(svc *service.ToolService, index int, gen int, tool registry.Tool) func() toolVersionMsg {
 	return func() toolVersionMsg {
-		if tool.IsInstalled() && !tool.Disabled {
-			pkgmgr.ResolveOne(&tool)
-			detector.EnrichOne(&tool)
+		ctx := context.Background()
+		if tool.IsInstalled() {
+			svc.ResolveOne(ctx, &tool)
 		}
 		return toolVersionMsg{index: index, gen: gen, tool: tool}
 	}
@@ -141,24 +184,30 @@ func execToolActionCmd(pa pendingAction) tea.Cmd {
 	})
 }
 
-func refreshSingleToolCmd(idx int, tool registry.Tool) tea.Cmd {
+func refreshSingleToolCmd(svc *service.ToolService, idx int, tool registry.Tool) tea.Cmd {
 	return func() tea.Msg {
-		singleTool := []registry.Tool{tool}
-		_ = finder.FindAll(singleTool) // best-effort: user already warned on initial scan
-		tool = singleTool[0]
-		if tool.IsInstalled() {
-			pkgmgr.ResolveOne(&tool)
-			detector.EnrichOne(&tool)
-		}
-		return refreshToolMsg{toolIdx: idx, tool: tool}
+		ctx := context.Background()
+		refreshed := svc.RefreshTool(ctx, tool)
+		return refreshToolMsg{toolIdx: idx, tool: refreshed}
 	}
 }
 
 // fetchToolInfoCmd fetches rich metadata for a tool in the background.
-func fetchToolInfoCmd(idx int, tool registry.Tool) tea.Cmd {
+func fetchToolInfoCmd(svc *service.ToolService, idx int, tool registry.Tool) tea.Cmd {
 	return func() tea.Msg {
-		pkgmgr.FetchToolInfo(&tool)
+		ctx := context.Background()
+		svc.FetchToolInfo(ctx, &tool)
 		return toolInfoMsg{toolIdx: idx, info: tool.Info}
+	}
+}
+
+// refreshMarketplaceCmd fetches the latest marketplace catalog from GitHub,
+// diffs it against the local cache, and returns the result.
+func refreshMarketplaceCmd(fetcher catalog.MarketplaceFetcher) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		result, err := catalog.Refresh(ctx, fetcher)
+		return marketplaceRefreshMsg{result: result, err: err}
 	}
 }
 
@@ -174,7 +223,7 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 
 		var exported []manifest.Tool
 		for _, tool := range sorted {
-			if !tool.IsInstalled() || tool.Disabled {
+			if !tool.IsInstalled() {
 				continue
 			}
 			primary := tool.PrimaryInstance()
@@ -214,6 +263,10 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 			return exportFinishedMsg{err: err}
 		}
 
+		if abs, err := filepath.Abs(filename); err == nil {
+			filename = abs
+		}
+
 		return exportFinishedMsg{path: filename, count: len(exported)}
 	}
 }
@@ -221,31 +274,23 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 // --- Import commands ---
 
 // buildImportPlanCmd reads a manifest, scans PATH, and builds a backup plan.
-func buildImportPlanCmd(path string) tea.Cmd {
+func buildImportPlanCmd(svc *service.ToolService, path string) tea.Cmd {
 	return func() tea.Msg {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return backupPlanMsg{items: []backupItem{{
-				name: "error", display: "Error", status: backupFailed,
-				errMsg: fmt.Sprintf("reading manifest: %v", err),
-			}}}
+			return backupPlanMsg{err: fmt.Errorf("reading manifest: %w", err)}
 		}
 
 		var m manifest.Manifest
 		if err := yaml.Unmarshal(data, &m); err != nil {
-			return backupPlanMsg{items: []backupItem{{
-				name: "error", display: "Error", status: backupFailed,
-				errMsg: fmt.Sprintf("parsing manifest: %v", err),
-			}}}
+			return backupPlanMsg{err: fmt.Errorf("parsing manifest: %w", err)}
 		}
 
 		// Load registry and scan PATH.
-		regTools := registry.DefaultTools()
-		if err := finder.FindAll(regTools); err != nil {
-			return backupPlanMsg{items: []backupItem{{
-				name: "error", display: "Error", status: backupFailed,
-				errMsg: fmt.Sprintf("scanning PATH: %v", err),
-			}}}
+		ctx := context.Background()
+		regTools, err := svc.ScanOnly(ctx)
+		if err != nil {
+			return backupPlanMsg{err: fmt.Errorf("scanning PATH: %w", err)}
 		}
 
 		regMap := make(map[string]*registry.Tool, len(regTools))
@@ -284,6 +329,13 @@ func buildImportPlanCmd(path string) tea.Cmd {
 			}
 
 			src := pkgs.BestInstallSource()
+			// Prefer the source recorded in the manifest if it's available.
+			if mt.Source != "" {
+				preferred := registry.InstallSource(mt.Source)
+				if args := pkgs.InstallArgs(preferred); args != nil {
+					src = preferred
+				}
+			}
 			installArgs := pkgs.InstallArgs(src)
 			if installArgs == nil {
 				reason := "no package for " + runtime.GOOS
@@ -300,11 +352,12 @@ func buildImportPlanCmd(path string) tea.Cmd {
 			}
 
 			items = append(items, backupItem{
-				name:    mt.Name,
-				display: mt.DisplayName,
-				cmdArgs: installArgs,
-				source:  string(src),
-				status:  backupPending,
+				name:     mt.Name,
+				display:  mt.DisplayName,
+				cmdArgs:  installArgs,
+				source:   string(src),
+				status:   backupPending,
+				selected: true,
 			})
 		}
 
@@ -317,5 +370,111 @@ func execBackupInstallCmd(idx int, args []string) tea.Cmd {
 	cmd := exec.Command(args[0], args[1:]...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return backupItemDoneMsg{idx: idx, err: err}
+	})
+}
+
+// --- Share token commands ---
+
+// shareToolsCmd generates a compact share token from installed tools.
+func shareToolsCmd(tools []registry.Tool) tea.Cmd {
+	return func() tea.Msg {
+		var names []string
+		for _, tool := range tools {
+			if tool.IsInstalled() {
+				names = append(names, tool.Name)
+			}
+		}
+		if len(names) == 0 {
+			return shareFinishedMsg{err: errors.New("no installed tools to share")}
+		}
+
+		token, err := share.Encode(names)
+		if err != nil {
+			return shareFinishedMsg{err: err}
+		}
+		return shareFinishedMsg{token: token, count: len(names)}
+	}
+}
+
+// buildTokenImportPlanCmd decodes a share token and builds an import plan.
+func buildTokenImportPlanCmd(svc *service.ToolService, token string) tea.Cmd {
+	return func() tea.Msg {
+		names, err := share.Decode(token)
+		if err != nil {
+			return backupPlanMsg{err: fmt.Errorf("invalid token: %w", err), fromToken: true}
+		}
+
+		// Load registry and scan PATH.
+		ctx := context.Background()
+		regTools, err := svc.ScanOnly(ctx)
+		if err != nil {
+			return backupPlanMsg{err: fmt.Errorf("scanning PATH: %w", err), fromToken: true}
+		}
+
+		regMap := make(map[string]*registry.Tool, len(regTools))
+		for i := range regTools {
+			regMap[regTools[i].Name] = &regTools[i]
+		}
+
+		var items []backupItem
+		for _, name := range names {
+			rt, exists := regMap[name]
+
+			if !exists {
+				items = append(items, backupItem{
+					name:    name,
+					display: name,
+					status:  backupSkipped,
+					errMsg:  "not in catalog",
+				})
+				continue
+			}
+
+			if rt.IsInstalled() {
+				items = append(items, backupItem{
+					name:    rt.Name,
+					display: rt.DisplayName,
+					source:  "—",
+					status:  backupSkipped,
+					errMsg:  "already installed",
+				})
+				continue
+			}
+
+			src := rt.Packages.BestInstallSource()
+			installArgs := rt.Packages.InstallArgs(src)
+			if installArgs == nil {
+				reason := "no package for " + runtime.GOOS
+				if src == "" && rt.Packages.HasAnyPackageForOS() {
+					reason = "no supported package manager installed"
+				}
+				items = append(items, backupItem{
+					name:    rt.Name,
+					display: rt.DisplayName,
+					status:  backupSkipped,
+					errMsg:  reason,
+				})
+				continue
+			}
+
+			items = append(items, backupItem{
+				name:     rt.Name,
+				display:  rt.DisplayName,
+				cmdArgs:  installArgs,
+				source:   string(src),
+				status:   backupPending,
+				selected: true,
+			})
+		}
+
+		return backupPlanMsg{items: items, fromToken: true}
+	}
+}
+
+// execBatchUpgradeCmd suspends the TUI and runs one upgrade command.
+func execBatchUpgradeCmd(toolIdx int, args []string) tea.Cmd {
+	cmd := exec.Command(args[0], args[1:]...)
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return batchUpgradeItemMsg{toolIdx: toolIdx, err: err}
 	})
 }

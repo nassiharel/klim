@@ -1,0 +1,65 @@
+package cli
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+
+	"github.com/spf13/cobra"
+
+	"github.com/nassiharel/clim/internal/config"
+)
+
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Manage clim configuration",
+}
+
+var configPathCmd = &cobra.Command{
+	Use:   "path",
+	Short: "Print the path to config.yaml",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path, err := config.Path()
+		if err != nil {
+			return err
+		}
+		fmt.Println(path)
+		return nil
+	},
+}
+
+var configEditCmd = &cobra.Command{
+	Use:   "edit",
+	Short: "Open config.yaml in your editor",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path, err := config.Path()
+		if err != nil {
+			return err
+		}
+
+		// Ensure the file exists with defaults before opening.
+		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+			_, _ = config.Load() // creates the default file
+		}
+
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = os.Getenv("VISUAL")
+		}
+		if editor == "" {
+			return fmt.Errorf("no $EDITOR set; edit %s manually", path)
+		}
+
+		c := exec.Command(editor, path)
+		c.Stdin = os.Stdin
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+		return c.Run()
+	},
+}
+
+func init() {
+	configCmd.AddCommand(configPathCmd)
+	configCmd.AddCommand(configEditCmd)
+	rootCmd.AddCommand(configCmd)
+}

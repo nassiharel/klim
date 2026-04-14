@@ -32,9 +32,17 @@ var toolsEditCmd = &cobra.Command{
 	Use:   "edit",
 	Short: "Open marketplace.yaml in your editor",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := registry.EnsureToolsFile()
+		path, err := registry.ToolsPath()
 		if err != nil {
 			return err
+		}
+
+		// Ensure the file exists by loading the catalog (which creates it on first run).
+		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+			fmt.Fprintln(os.Stderr, "Fetching marketplace catalog...")
+			if _, loadErr := svc.Catalog.LoadTools(cmd.Context()); loadErr != nil {
+				return fmt.Errorf("could not create marketplace file: %w", loadErr)
+			}
 		}
 
 		editor := os.Getenv("EDITOR")

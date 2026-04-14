@@ -1,17 +1,12 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
-	"runtime"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/finder"
 	"github.com/nassiharel/clim/internal/manifest"
 	"github.com/nassiharel/clim/internal/registry"
 )
@@ -60,31 +55,42 @@ func runImport(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "Manifest: %d tools (from %s/%s)\n", len(m.Tools), m.OS, m.Arch)
 
 	// Load registry and scan PATH to know what's already installed.
-	regTools := registry.DefaultTools()
-	if err := finder.FindAll(regTools); err != nil {
-		return fmt.Errorf("scanning PATH: %w", err)
+	regTools, err := svc.ScanOnly(cmd.Context())
+	if err != nil {
+		return err
 	}
 
-	// Build a lookup by name.
 	regMap := make(map[string]*registry.Tool, len(regTools))
 	for i := range regTools {
 		regMap[regTools[i].Name] = &regTools[i]
 	}
 
 	// Build the install plan.
-	type installPlan struct {
-		name    string
-		display string
-		cmdArgs []string
-		source  string
+	ps := buildImportPlan(m.Tools, regMap)
+
+	printPlanSummary(fmt.Sprintf("Import Summary — %d tools from %s/%s", len(m.Tools), m.OS, m.Arch), ps)
+
+	if len(ps.toInstall) == 0 {
+		fmt.Fprintln(os.Stderr, "  Nothing to install — all tools are present!")
+		return nil
 	}
 
-	var toInstall []installPlan
-	var alreadyInstalled []string
-	var noPackage []string
-	var noPkgMgr []string
+	if !confirmInstall(yesFlag) {
+		fmt.Fprintln(os.Stderr, "  Cancelled.")
+		return nil
+	}
 
-	for _, mt := range m.Tools {
+	succeeded, failed := executeInstalls(ps.toInstall)
+	fmt.Fprintf(os.Stderr, "\n──── Done: %d installed, %d failed, %d already present ────\n",
+		succeeded, failed, len(ps.alreadyInstalled))
+	return nil
+}
+
+// buildImportPlan classifies manifest tools into install/skip/error categories.
+func buildImportPlan(manifestTools []manifest.Tool, regMap map[string]*registry.Tool) planSummary {
+	var ps planSummary
+
+	for _, mt := range manifestTools {
 		rt, exists := regMap[mt.Name]
 		if !exists {
 			// Tool not in registry — try to use manifest's package IDs directly.
@@ -97,117 +103,55 @@ func runImport(cmd *cobra.Command, args []string) error {
 				NPM:    mt.Packages.NPM,
 			}
 			src := pkgs.BestInstallSource()
+			if mt.Source != "" {
+				preferred := registry.InstallSource(mt.Source)
+				if args := pkgs.InstallArgs(preferred); args != nil {
+					src = preferred
+				}
+			}
 			installArgs := pkgs.InstallArgs(src)
 			if installArgs == nil {
 				if pkgs.HasAnyPackageForOS() {
-					noPkgMgr = append(noPkgMgr, mt.Name)
+					ps.noPkgMgr = append(ps.noPkgMgr, mt.Name)
 				} else {
-					noPackage = append(noPackage, mt.Name)
+					ps.noPackage = append(ps.noPackage, mt.Name)
 				}
 				continue
 			}
-			toInstall = append(toInstall, installPlan{
-				name:    mt.Name,
-				display: mt.DisplayName,
-				cmdArgs: installArgs,
-				source:  string(src),
+			ps.toInstall = append(ps.toInstall, installPlan{
+				name: mt.Name, display: mt.DisplayName,
+				cmdArgs: installArgs, source: string(src),
 			})
 			continue
 		}
 
 		if rt.IsInstalled() {
-			alreadyInstalled = append(alreadyInstalled, mt.DisplayName)
+			ps.alreadyInstalled = append(ps.alreadyInstalled, mt.DisplayName)
 			continue
 		}
 
 		src := rt.Packages.BestInstallSource()
+		if mt.Source != "" {
+			preferred := registry.InstallSource(mt.Source)
+			if args := rt.Packages.InstallArgs(preferred); args != nil {
+				src = preferred
+			}
+		}
 		installArgs := rt.Packages.InstallArgs(src)
 		if installArgs == nil {
 			if rt.Packages.HasAnyPackageForOS() {
-				noPkgMgr = append(noPkgMgr, mt.Name)
+				ps.noPkgMgr = append(ps.noPkgMgr, mt.Name)
 			} else {
-				noPackage = append(noPackage, mt.Name)
+				ps.noPackage = append(ps.noPackage, mt.Name)
 			}
 			continue
 		}
 
-		toInstall = append(toInstall, installPlan{
-			name:    mt.Name,
-			display: mt.DisplayName,
-			cmdArgs: installArgs,
-			source:  string(src),
+		ps.toInstall = append(ps.toInstall, installPlan{
+			name: mt.Name, display: mt.DisplayName,
+			cmdArgs: installArgs, source: string(src),
 		})
 	}
 
-	fmt.Fprintf(os.Stderr, "\n──── Import Summary ────\n\n")
-	fmt.Fprintf(os.Stderr, "  Manifest:  %d tools (from %s/%s)\n\n", len(m.Tools), m.OS, m.Arch)
-
-	if len(alreadyInstalled) > 0 {
-		fmt.Fprintf(os.Stderr, "  ✓ Already installed (%d):\n", len(alreadyInstalled))
-		for _, name := range alreadyInstalled {
-			fmt.Fprintf(os.Stderr, "    · %s\n", name)
-		}
-		fmt.Fprintln(os.Stderr)
-	}
-	if len(noPackage) > 0 {
-		fmt.Fprintf(os.Stderr, "  ⚠ No package for %s (%d):\n", runtime.GOOS, len(noPackage))
-		for _, name := range noPackage {
-			fmt.Fprintf(os.Stderr, "    · %s\n", name)
-		}
-		fmt.Fprintln(os.Stderr)
-	}
-	if len(noPkgMgr) > 0 {
-		fmt.Fprintf(os.Stderr, "  ⚠ No supported package manager (%d):\n", len(noPkgMgr))
-		for _, name := range noPkgMgr {
-			fmt.Fprintf(os.Stderr, "    · %s\n", name)
-		}
-		fmt.Fprintln(os.Stderr)
-	}
-	if len(toInstall) == 0 {
-		fmt.Fprintln(os.Stderr, "  Nothing to install — all tools are present!")
-		fmt.Fprintln(os.Stderr, "\n────────────────────────")
-		return nil
-	}
-
-	fmt.Fprintf(os.Stderr, "  To install (%d):\n", len(toInstall))
-	for _, p := range toInstall {
-		fmt.Fprintf(os.Stderr, "    · %-20s  via %s\n", p.display, p.source)
-	}
-	fmt.Fprintln(os.Stderr)
-
-	// Confirm unless --yes.
-	if !yesFlag {
-		fmt.Fprint(os.Stderr, "  Proceed? [y/N] ")
-		reader := bufio.NewReader(os.Stdin)
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(strings.ToLower(line))
-		if line != "y" && line != "yes" {
-			fmt.Fprintln(os.Stderr, "  Cancelled.")
-			return nil
-		}
-	}
-
-	// Execute installs sequentially with live terminal output.
-	succeeded := 0
-	failed := 0
-	for _, p := range toInstall {
-		fmt.Fprintf(os.Stderr, "\n──── Installing %s via %s ────\n", p.display, p.source)
-
-		c := exec.Command(p.cmdArgs[0], p.cmdArgs[1:]...)
-		c.Stdin = os.Stdin
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
-
-		if err := c.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "  ✗ %s failed: %s\n", p.display, err)
-			failed++
-		} else {
-			fmt.Fprintf(os.Stderr, "  ✓ %s installed\n", p.display)
-			succeeded++
-		}
-	}
-
-	fmt.Fprintf(os.Stderr, "\n──── Done: %d installed, %d failed, %d already present ────\n",
-		succeeded, failed, len(alreadyInstalled))
-	return nil
+	return ps
 }

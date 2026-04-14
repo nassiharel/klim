@@ -3,46 +3,65 @@ package cli
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"sort"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/detector"
-	"github.com/nassiharel/clim/internal/finder"
-	"github.com/nassiharel/clim/internal/pkgmgr"
 	"github.com/nassiharel/clim/internal/registry"
+)
+
+var (
+	listCategoryFlag   string
+	listSourceFlag     string
+	listCategoriesFlag bool
 )
 
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List developer tools with versions, sources, and update status",
-	RunE:  runList,
+	Long: `List installed developer tools with version info, install sources, and update status.
+
+Flags:
+  --category <name>   Show only tools in a specific category (e.g. Cloud, CLI, Containers)
+  --source <name>     Show only tools from a specific install source (e.g. brew, winget, apt)
+  --categories        Print available category names and exit
+
+Examples:
+  clim list                          # all installed tools
+  clim list --category Cloud         # only Cloud tools
+  clim list --source brew            # only Homebrew-installed tools
+  clim list --category IaC --source brew  # combine filters
+  clim list --categories             # list available categories`,
+	RunE: runList,
+}
+
+func init() {
+	listCmd.Flags().StringVarP(&listCategoryFlag, "category", "c", "", "Filter by category (e.g. Cloud, CLI, Containers)")
+	listCmd.Flags().StringVar(&listSourceFlag, "source", "", "Filter by install source (e.g. brew, winget, apt)")
+	listCmd.Flags().BoolVar(&listCategoriesFlag, "categories", false, "Print available category names and exit")
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	tools := registry.DefaultTools()
-
-	fmt.Fprintln(os.Stderr, "Finding tools...")
-	if err := finder.FindAll(tools); err != nil {
+	fmt.Fprintln(os.Stderr, "Finding tools and checking versions...")
+	tools, err := svc.LoadAndResolve(cmd.Context())
+	if err != nil {
 		return err
 	}
 
-	fmt.Fprintln(os.Stderr, "Checking versions...")
-	pkgmgr.ResolveVersions(tools, runtime.NumCPU())
-	detector.EnrichFallback(tools)
-
-	sort.Slice(tools, func(i, j int) bool {
-		return strings.ToLower(tools[i].Name) < strings.ToLower(tools[j].Name)
-	})
+	// --categories: print available categories and exit.
+	if listCategoriesFlag {
+		printCategories(tools)
+		return nil
+	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	_, _ = fmt.Fprintln(w, "TOOL\tVERSION\tLATEST\tSOURCE\tSTATUS\tPATH")
-	_, _ = fmt.Fprintln(w, "────\t───────\t──────\t──────\t──────\t────")
+	_, _ = fmt.Fprintln(w, "TOOL\tCATEGORY\tVERSION\tLATEST\tSOURCE\tSTATUS\tPATH")
+	_, _ = fmt.Fprintln(w, "────\t────────\t───────\t──────\t──────\t──────\t────")
 
 	installed := 0
+	shown := 0
 	for _, tool := range tools {
 		if !tool.IsInstalled() {
 			continue
@@ -50,11 +69,23 @@ func runList(cmd *cobra.Command, args []string) error {
 		installed++
 
 		primary := tool.PrimaryInstance()
+
+		// Apply --category filter.
+		if listCategoryFlag != "" && !strings.EqualFold(tool.Category, listCategoryFlag) {
+			continue
+		}
+		// Apply --source filter.
+		if listSourceFlag != "" && !strings.EqualFold(string(primary.Source), listSourceFlag) {
+			continue
+		}
+
+		shown++
 		ver := or(primary.Version, "—")
 		status := registry.StatusString(primary.Version, tool.Latest)
 
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			tool.DisplayName,
+			tool.Category,
 			ver,
 			tool.Latest,
 			primary.Source,
@@ -63,7 +94,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		)
 
 		for _, inst := range tool.Instances[1:] {
-			_, _ = fmt.Fprintf(w, "  └─ also:\t%s\t\t%s\t\t%s\n",
+			_, _ = fmt.Fprintf(w, "  └─ also:\t\t%s\t\t%s\t\t%s\n",
 				or(inst.Version, "—"),
 				inst.Source,
 				registry.TruncatePath(inst.Path, 45),
@@ -72,8 +103,47 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 
 	_ = w.Flush()
-	fmt.Fprintf(os.Stderr, "\n%d/%d tools installed.\n", installed, len(tools))
+
+	if listCategoryFlag != "" || listSourceFlag != "" {
+		fmt.Fprintf(os.Stderr, "\n%d/%d installed tools shown", shown, installed)
+		var filters []string
+		if listCategoryFlag != "" {
+			filters = append(filters, "category="+listCategoryFlag)
+		}
+		if listSourceFlag != "" {
+			filters = append(filters, "source="+listSourceFlag)
+		}
+		fmt.Fprintf(os.Stderr, " (filtered by %s).\n", strings.Join(filters, ", "))
+	} else {
+		fmt.Fprintf(os.Stderr, "\n%d/%d tools installed.\n", installed, len(tools))
+	}
 	return nil
+}
+
+// printCategories collects and prints all unique categories from the tool catalog.
+func printCategories(tools []registry.Tool) {
+	seen := make(map[string]int) // category → installed count
+	for _, tool := range tools {
+		if tool.Category == "" {
+			continue
+		}
+		if _, exists := seen[tool.Category]; !exists {
+			seen[tool.Category] = 0
+		}
+		if tool.IsInstalled() {
+			seen[tool.Category]++
+		}
+	}
+
+	cats := make([]string, 0, len(seen))
+	for cat := range seen {
+		cats = append(cats, cat)
+	}
+	sort.Strings(cats)
+
+	for _, cat := range cats {
+		fmt.Printf("%-14s (%d installed)\n", cat, seen[cat])
+	}
 }
 
 func or(val, fallback string) string {

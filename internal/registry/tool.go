@@ -25,19 +25,31 @@ const (
 	SourceManual InstallSource = "manual"
 )
 
+// MarketplaceStatus indicates whether a tool was added or changed in
+// the latest marketplace refresh.
+type MarketplaceStatus string
+
+// Marketplace status values set after a catalog refresh.
+const (
+	StatusUnchanged MarketplaceStatus = ""
+	StatusNew       MarketplaceStatus = "new"
+	StatusChanged   MarketplaceStatus = "changed"
+)
+
 // Tool represents a curated developer tool that clim tracks.
 type Tool struct {
-	Name        string
-	DisplayName string
-	Category    string
-	BinaryNames []string
-	Packages    PackageIDs
-	Instances   []Instance
-	Latest      string
-	LatestFrom  string
-	Disabled    bool
-	Info        *ToolInfo // rich metadata, fetched lazily
-	InfoFetched bool      // true once info fetch completed (Info may still be nil)
+	Name              string
+	DisplayName       string
+	Category          string
+	Tags              []string
+	BinaryNames       []string
+	Packages          PackageIDs
+	Instances         []Instance
+	Latest            string
+	LatestFrom        string
+	Info              *ToolInfo         // rich metadata, fetched lazily
+	InfoFetched       bool              // true once info fetch completed (Info may still be nil)
+	MarketplaceStatus MarketplaceStatus // set after a marketplace refresh
 }
 
 // ToolInfo holds rich metadata about a tool, fetched from package managers.

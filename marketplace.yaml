@@ -1,13 +1,12 @@
 # clim — Tool Marketplace
 # Edit this file to add, remove, or configure tools.
-# Set enabled: false to hide a tool from clim.
 
 tools:
   # --- Version Control ---
   - name: git
     display_name: Git
     category: VCS
-    enabled: true
+    tags: [vcs, scm, version-control, dvcs]
     binary_names: [git]
     packages:
       winget: "Git.Git"
@@ -18,7 +17,7 @@ tools:
   - name: gh
     display_name: GitHub CLI
     category: VCS
-    enabled: true
+    tags: [github, pr, issues, vcs, git]
     binary_names: [gh]
     packages:
       winget: "GitHub.cli"
@@ -29,18 +28,29 @@ tools:
   - name: lazygit
     display_name: lazygit
     category: VCS
-    enabled: true
+    tags: [git, tui, terminal-ui, vcs]
     binary_names: [lazygit]
     packages:
       winget: "JesseDuffield.lazygit"
       choco: "lazygit"
       brew: "lazygit"
+      snap: "lazygit"
+
+  - name: tig
+    display_name: tig
+    category: VCS
+    tags: [git, tui, log-viewer, ncurses]
+    binary_names: [tig]
+    packages:
+      choco: "tig"
+      brew: "tig"
+      apt: "tig"
 
   # --- Cloud CLIs ---
   - name: az
     display_name: Azure CLI
     category: Cloud
-    enabled: true
+    tags: [azure, microsoft, cloud, iac]
     binary_names: [az]
     packages:
       winget: "Microsoft.AzureCLI"
@@ -51,28 +61,33 @@ tools:
   - name: azd
     display_name: Azure Dev CLI
     category: Cloud
-    enabled: true
+    tags: [azure, microsoft, cloud, developer]
     binary_names: [azd]
     packages:
       winget: "Microsoft.Azd"
+      choco: "azd"
       brew: "azure/azd/azd"
 
   - name: aws
     display_name: AWS CLI
     category: Cloud
-    enabled: true
+    tags: [aws, amazon, cloud, s3]
     binary_names: [aws]
     packages:
       winget: "Amazon.AWSCLI"
       choco: "awscli"
       brew: "awscli"
+      apt: "awscli"
+      snap: "aws-cli"
 
   - name: gcloud
     display_name: Google Cloud CLI
     category: Cloud
-    enabled: true
+    tags: [gcp, google, cloud, gke]
     binary_names: [gcloud]
     packages:
+      winget: "Google.CloudSDK"
+      choco: "gcloudsdk"
       brew: "google-cloud-sdk"
       snap: "google-cloud-cli"
 
@@ -80,7 +95,7 @@ tools:
   - name: docker
     display_name: Docker
     category: Containers
-    enabled: true
+    tags: [container, oci, image, runtime, devops]
     binary_names: [docker]
     packages:
       winget: "Docker.DockerDesktop"
@@ -91,7 +106,7 @@ tools:
   - name: docker-compose
     display_name: Docker Compose
     category: Containers
-    enabled: true
+    tags: [docker, compose, multi-container, orchestration]
     binary_names: [docker-compose]
     packages:
       choco: "docker-compose"
@@ -100,17 +115,18 @@ tools:
   - name: lazydocker
     display_name: lazydocker
     category: Containers
-    enabled: true
+    tags: [docker, tui, terminal-ui, containers]
     binary_names: [lazydocker]
     packages:
       winget: "JesseDuffield.Lazydocker"
       choco: "lazydocker"
       brew: "lazydocker"
+      snap: "lazydocker"
 
   - name: kubectl
     display_name: kubectl
     category: Containers
-    enabled: true
+    tags: [kubernetes, k8s, cluster, orchestration]
     binary_names: [kubectl]
     packages:
       winget: "Kubernetes.kubectl"
@@ -121,7 +137,7 @@ tools:
   - name: helm
     display_name: Helm
     category: Containers
-    enabled: true
+    tags: [kubernetes, k8s, charts, package-manager]
     binary_names: [helm]
     packages:
       winget: "Helm.Helm"
@@ -132,17 +148,59 @@ tools:
   - name: k9s
     display_name: K9s
     category: Containers
-    enabled: true
+    tags: [kubernetes, k8s, tui, terminal-ui, cluster]
     binary_names: [k9s]
     packages:
       winget: "Derailed.k9s"
       choco: "k9s"
       brew: "derailed/k9s/k9s"
 
+  - name: k3d
+    display_name: k3d
+    category: Containers
+    tags: [kubernetes, k8s, k3s, local-cluster, docker]
+    binary_names: [k3d]
+    packages:
+      winget: "k3d-io.k3d"
+      choco: "k3d"
+      brew: "k3d"
+
+  - name: stern
+    display_name: Stern
+    category: Containers
+    tags: [kubernetes, k8s, logs, tail, multi-pod]
+    binary_names: [stern]
+    packages:
+      winget: "stern.stern"
+      choco: "stern"
+      brew: "stern"
+
+  - name: kubectx
+    display_name: kubectx
+    category: Containers
+    tags: [kubernetes, k8s, context, cluster-switching]
+    binary_names: [kubectx]
+    packages:
+      winget: "ahmetb.kubectx"
+      choco: "kubectx"
+      brew: "kubectx"
+      apt: "kubectx"
+
+  - name: kubens
+    display_name: kubens
+    category: Containers
+    tags: [kubernetes, k8s, namespace, cluster-switching]
+    binary_names: [kubens]
+    packages:
+      winget: "ahmetb.kubens"
+      choco: "kubens"
+      brew: "kubectx"
+      apt: "kubectx"
+
   - name: kubelogin
     display_name: Kubelogin
     category: Containers
-    enabled: true
+    tags: [kubernetes, k8s, azure, auth, login]
     binary_names: [kubelogin]
     packages:
       winget: "Microsoft.Azure.Kubelogin"
@@ -152,7 +210,7 @@ tools:
   - name: kind
     display_name: kind
     category: Containers
-    enabled: true
+    tags: [kubernetes, k8s, local-cluster, docker, testing]
     binary_names: [kind]
     packages:
       winget: "Kubernetes.kind"
@@ -162,7 +220,7 @@ tools:
   - name: minikube
     display_name: Minikube
     category: Containers
-    enabled: true
+    tags: [kubernetes, k8s, local-cluster, vm, testing]
     binary_names: [minikube]
     packages:
       winget: "Kubernetes.minikube"
@@ -172,7 +230,7 @@ tools:
   - name: skaffold
     display_name: Skaffold
     category: Containers
-    enabled: true
+    tags: [kubernetes, k8s, dev-workflow, hot-reload, google]
     binary_names: [skaffold]
     packages:
       winget: "Google.ContainerTools.Skaffold"
@@ -182,24 +240,26 @@ tools:
   - name: istioctl
     display_name: Istio CLI
     category: Containers
-    enabled: true
+    tags: [kubernetes, k8s, service-mesh, istio, networking]
     binary_names: [istioctl]
     packages:
+      choco: "istioctl"
       brew: "istioctl"
 
   - name: argocd
     display_name: Argo CD CLI
     category: Containers
-    enabled: true
+    tags: [kubernetes, k8s, gitops, cd, continuous-delivery]
     binary_names: [argocd]
     packages:
+      winget: "argoproj.argocd"
       choco: "argocd-cli"
       brew: "argocd"
 
   - name: flux
     display_name: Flux CLI
     category: Containers
-    enabled: true
+    tags: [kubernetes, k8s, gitops, cd, continuous-delivery]
     binary_names: [flux]
     packages:
       choco: "flux"
@@ -209,7 +269,7 @@ tools:
   - name: terraform
     display_name: Terraform
     category: IaC
-    enabled: true
+    tags: [hashicorp, hcl, cloud, provisioning, infrastructure]
     binary_names: [terraform]
     packages:
       winget: "Hashicorp.Terraform"
@@ -220,7 +280,7 @@ tools:
   - name: pulumi
     display_name: Pulumi
     category: IaC
-    enabled: true
+    tags: [cloud, provisioning, infrastructure, typescript, python]
     binary_names: [pulumi]
     packages:
       winget: "Pulumi.Pulumi"
@@ -230,7 +290,7 @@ tools:
   - name: terragrunt
     display_name: Terragrunt
     category: IaC
-    enabled: true
+    tags: [terraform, wrapper, dry, infrastructure]
     binary_names: [terragrunt]
     packages:
       winget: "Gruntwork.Terragrunt"
@@ -240,7 +300,7 @@ tools:
   - name: kustomize
     display_name: Kustomize
     category: IaC
-    enabled: true
+    tags: [kubernetes, k8s, yaml, overlay, configuration]
     binary_names: [kustomize]
     packages:
       winget: "Kubernetes.kustomize"
@@ -250,7 +310,7 @@ tools:
   - name: ansible
     display_name: Ansible
     category: IaC
-    enabled: true
+    tags: [automation, configuration-management, ssh, agentless]
     binary_names: [ansible]
     packages:
       brew: "ansible"
@@ -259,7 +319,7 @@ tools:
   - name: vagrant
     display_name: Vagrant
     category: IaC
-    enabled: true
+    tags: [hashicorp, vm, virtual-machine, dev-environment]
     binary_names: [vagrant]
     packages:
       winget: "Hashicorp.Vagrant"
@@ -269,7 +329,7 @@ tools:
   - name: packer
     display_name: Packer
     category: IaC
-    enabled: true
+    tags: [hashicorp, image-builder, ami, vm, automation]
     binary_names: [packer]
     packages:
       winget: "Hashicorp.Packer"
@@ -279,7 +339,7 @@ tools:
   - name: consul
     display_name: Consul
     category: IaC
-    enabled: true
+    tags: [hashicorp, service-mesh, service-discovery, networking]
     binary_names: [consul]
     packages:
       winget: "Hashicorp.Consul"
@@ -289,7 +349,7 @@ tools:
   - name: vault
     display_name: Vault
     category: IaC
-    enabled: true
+    tags: [hashicorp, secrets, encryption, security, auth]
     binary_names: [vault]
     packages:
       winget: "Hashicorp.Vault"
@@ -300,10 +360,11 @@ tools:
   - name: go
     display_name: Go
     category: Language
-    enabled: true
+    tags: [golang, compiler, static, systems, google]
     binary_names: [go]
     packages:
       winget: "GoLang.Go"
+      choco: "golang"
       brew: "go"
       apt: "golang-go"
       snap: "go"
@@ -311,17 +372,19 @@ tools:
   - name: node
     display_name: Node.js
     category: Language
-    enabled: true
+    tags: [javascript, js, v8, runtime, server]
     binary_names: [node]
     packages:
       winget: "OpenJS.NodeJS.LTS"
+      choco: "nodejs"
       brew: "node"
       apt: "nodejs"
+      snap: "node"
 
   - name: deno
     display_name: Deno
     category: Language
-    enabled: true
+    tags: [javascript, typescript, runtime, v8, secure]
     binary_names: [deno]
     packages:
       winget: "DenoLand.Deno"
@@ -331,7 +394,7 @@ tools:
   - name: bun
     display_name: Bun
     category: Language
-    enabled: true
+    tags: [javascript, typescript, runtime, bundler, fast]
     binary_names: [bun]
     packages:
       winget: "Oven-sh.Bun"
@@ -341,20 +404,22 @@ tools:
   - name: python
     display_name: Python
     category: Language
-    enabled: true
+    tags: [scripting, ml, data-science, automation, interpreted]
     binary_names: [python3, python]
     packages:
       winget: "Python.Python.3.12"
+      choco: "python3"
       brew: "python@3"
       apt: "python3"
 
   - name: dotnet
     display_name: .NET
     category: Language
-    enabled: true
+    tags: [csharp, fsharp, microsoft, sdk, framework]
     binary_names: [dotnet]
     packages:
       winget: "Microsoft.DotNet.SDK.8"
+      choco: "dotnet-sdk"
       brew: "dotnet"
       apt: "dotnet-sdk-8.0"
       snap: "dotnet-sdk"
@@ -362,7 +427,7 @@ tools:
   - name: rustc
     display_name: Rust
     category: Language
-    enabled: true
+    tags: [systems, compiler, memory-safe, performance, wasm]
     binary_names: [rustc]
     packages:
       brew: "rust"
@@ -371,7 +436,7 @@ tools:
   - name: cargo
     display_name: Cargo
     category: Language
-    enabled: true
+    tags: [rust, package-manager, build-tool, crates]
     binary_names: [cargo]
     packages:
       brew: "rust"
@@ -380,29 +445,34 @@ tools:
   - name: java
     display_name: Java
     category: Language
-    enabled: true
+    tags: [jvm, openjdk, enterprise, cross-platform]
     binary_names: [java]
     packages:
       winget: "Microsoft.OpenJDK.21"
+      choco: "openjdk"
       brew: "openjdk"
       apt: "default-jdk"
+      snap: "openjdk"
 
   - name: ruby
     display_name: Ruby
     category: Language
-    enabled: true
+    tags: [scripting, rails, gems, interpreted, dynamic]
     binary_names: [ruby]
     packages:
-      winget: "RubyInstallerTeam.Ruby"
+      winget: "RubyInstallerTeam.Ruby.3.4"
+      choco: "ruby"
       brew: "ruby"
       apt: "ruby"
 
   - name: zig
     display_name: Zig
     category: Language
-    enabled: true
+    tags: [systems, compiler, low-level, c-interop, performance]
     binary_names: [zig]
     packages:
+      winget: "zig.zig"
+      choco: "zig"
       brew: "zig"
       snap: "zig"
 
@@ -410,48 +480,81 @@ tools:
   - name: npm
     display_name: npm
     category: PkgMgr
-    enabled: true
+    tags: [javascript, node, registry, packages]
     binary_names: [npm]
     packages:
       npm: "npm"
 
+  - name: pnpm
+    display_name: pnpm
+    category: PkgMgr
+    tags: [javascript, node, fast, disk-efficient, monorepo]
+    binary_names: [pnpm]
+    packages:
+      winget: "pnpm.pnpm"
+      choco: "pnpm"
+      brew: "pnpm"
+      npm: "pnpm"
+
   - name: uv
     display_name: uv
     category: PkgMgr
-    enabled: true
+    tags: [python, pip, fast, rust, virtualenv]
     binary_names: [uv]
     packages:
       winget: "astral-sh.uv"
       choco: "uv"
       brew: "uv"
 
+  # --- Version Managers ---
+  - name: asdf
+    display_name: asdf
+    category: PkgMgr
+    tags: [version-manager, polyglot, plugins, runtime]
+    binary_names: [asdf]
+    packages:
+      brew: "asdf"
+      apt: "asdf"
+
+  - name: mise
+    display_name: mise
+    category: PkgMgr
+    tags: [version-manager, polyglot, fast, rust, asdf-compatible]
+    binary_names: [mise]
+    packages:
+      brew: "mise"
+      apt: "mise"
+
   # --- Editors ---
   - name: code
     display_name: VS Code
     category: Editor
-    enabled: true
+    tags: [ide, microsoft, extensions, electron, gui]
     binary_names: [code]
     packages:
       winget: "Microsoft.VisualStudioCode"
       choco: "vscode"
       brew: "visual-studio-code"
+      apt: "code"
+      snap: "code"
 
   - name: nvim
     display_name: Neovim
     category: Editor
-    enabled: true
+    tags: [vim, terminal, lua, extensible, modal]
     binary_names: [nvim]
     packages:
       winget: "Neovim.Neovim"
       choco: "neovim"
       brew: "neovim"
       apt: "neovim"
+      snap: "nvim"
 
   # --- CLI Utilities ---
   - name: jq
     display_name: jq
     category: CLI
-    enabled: true
+    tags: [json, parser, filter, transform, data]
     binary_names: [jq]
     packages:
       winget: "jqlang.jq"
@@ -462,17 +565,18 @@ tools:
   - name: yq
     display_name: yq
     category: CLI
-    enabled: true
+    tags: [yaml, json, xml, parser, transform]
     binary_names: [yq]
     packages:
       winget: "MikeFarah.yq"
       choco: "yq"
       brew: "yq"
+      snap: "yq"
 
   - name: fzf
     display_name: fzf
     category: CLI
-    enabled: true
+    tags: [fuzzy-finder, search, interactive, filter, selector]
     binary_names: [fzf]
     packages:
       winget: "junegunn.fzf"
@@ -483,7 +587,7 @@ tools:
   - name: ripgrep
     display_name: ripgrep
     category: CLI
-    enabled: true
+    tags: [search, grep, regex, fast, rust]
     binary_names: [rg]
     packages:
       winget: "BurntSushi.ripgrep.MSVC"
@@ -494,7 +598,7 @@ tools:
   - name: bat
     display_name: bat
     category: CLI
-    enabled: true
+    tags: [cat, syntax-highlighting, pager, rust, preview]
     binary_names: [bat]
     packages:
       winget: "sharkdp.bat"
@@ -505,7 +609,7 @@ tools:
   - name: fd
     display_name: fd
     category: CLI
-    enabled: true
+    tags: [find, search, files, fast, rust]
     binary_names: [fd]
     packages:
       winget: "sharkdp.fd"
@@ -516,7 +620,7 @@ tools:
   - name: eza
     display_name: eza
     category: CLI
-    enabled: true
+    tags: [ls, listing, files, colors, rust]
     binary_names: [eza]
     packages:
       winget: "eza-community.eza"
@@ -527,7 +631,7 @@ tools:
   - name: zoxide
     display_name: zoxide
     category: CLI
-    enabled: true
+    tags: [cd, navigation, directory, autojump, rust]
     binary_names: [zoxide]
     packages:
       winget: "ajeetdsouza.zoxide"
@@ -538,18 +642,17 @@ tools:
   - name: delta
     display_name: delta
     category: CLI
-    enabled: true
+    tags: [git, diff, syntax-highlighting, pager, rust]
     binary_names: [delta]
     packages:
       winget: "dandavison.delta"
       choco: "delta"
       brew: "git-delta"
-      apt: "git-delta"
 
   - name: dust
     display_name: dust
     category: CLI
-    enabled: true
+    tags: [disk-usage, du, visualization, rust, storage]
     binary_names: [dust]
     packages:
       winget: "bootandy.dust"
@@ -560,25 +663,38 @@ tools:
   - name: procs
     display_name: procs
     category: CLI
-    enabled: true
+    tags: [ps, processes, monitoring, rust, system]
     binary_names: [procs]
     packages:
       winget: "dalance.procs"
+      choco: "procs"
       brew: "procs"
+
+  - name: htop
+    display_name: htop
+    category: CLI
+    tags: [processes, monitoring, tui, system, top]
+    binary_names: [htop]
+    packages:
+      brew: "htop"
+      apt: "htop"
+      snap: "htop"
 
   - name: tldr
     display_name: tldr
     category: CLI
-    enabled: true
+    tags: [help, manpages, cheatsheet, examples, docs]
     binary_names: [tldr]
     packages:
+      choco: "tldr"
       brew: "tldr"
+      apt: "tldr"
       npm: "tldr"
 
   - name: httpie
     display_name: HTTPie
     category: CLI
-    enabled: true
+    tags: [http, api, rest, curl-alternative, requests]
     binary_names: [http, https]
     packages:
       winget: "HTTPie.HTTPie"
@@ -589,7 +705,7 @@ tools:
   - name: wget
     display_name: Wget
     category: CLI
-    enabled: true
+    tags: [download, http, ftp, recursive, transfer]
     binary_names: [wget]
     packages:
       winget: "JernejSimoncic.Wget"
@@ -600,7 +716,7 @@ tools:
   - name: tree
     display_name: tree
     category: CLI
-    enabled: true
+    tags: [directory, listing, visualization, filesystem]
     binary_names: [tree]
     packages:
       choco: "tree"
@@ -610,7 +726,7 @@ tools:
   - name: cmake
     display_name: CMake
     category: CLI
-    enabled: true
+    tags: [build-system, c, cpp, cross-platform, generator]
     binary_names: [cmake]
     packages:
       winget: "Kitware.CMake"
@@ -621,7 +737,7 @@ tools:
   - name: pandoc
     display_name: Pandoc
     category: CLI
-    enabled: true
+    tags: [document, converter, markdown, latex, pdf]
     binary_names: [pandoc]
     packages:
       winget: "JohnMacFarlane.Pandoc"
@@ -633,7 +749,7 @@ tools:
   - name: ffmpeg
     display_name: FFmpeg
     category: Media
-    enabled: true
+    tags: [video, audio, transcode, stream, encoding]
     binary_names: [ffmpeg]
     packages:
       winget: "Gyan.FFmpeg"
@@ -644,7 +760,7 @@ tools:
   - name: magick
     display_name: ImageMagick
     category: Media
-    enabled: true
+    tags: [image, convert, resize, graphics, batch]
     binary_names: [magick, convert]
     packages:
       winget: "ImageMagick.ImageMagick"
@@ -656,7 +772,7 @@ tools:
   - name: sqlite3
     display_name: SQLite
     category: Database
-    enabled: true
+    tags: [sql, embedded, serverless, lightweight, file-based]
     binary_names: [sqlite3]
     packages:
       winget: "SQLite.SQLite"
@@ -667,18 +783,28 @@ tools:
   - name: mongosh
     display_name: MongoDB Shell
     category: Database
-    enabled: true
+    tags: [mongodb, nosql, document, shell, repl]
     binary_names: [mongosh]
     packages:
       winget: "MongoDB.Shell"
       choco: "mongodb-shell"
       brew: "mongosh"
 
+  - name: redis-cli
+    display_name: Redis CLI
+    category: Database
+    tags: [redis, cache, key-value, in-memory, nosql]
+    binary_names: [redis-cli]
+    packages:
+      choco: "redis"
+      brew: "redis"
+      apt: "redis-tools"
+
   # --- Networking ---
   - name: nmap
     display_name: Nmap
     category: Network
-    enabled: true
+    tags: [scanner, security, ports, discovery, audit]
     binary_names: [nmap]
     packages:
       winget: "Insecure.Nmap"
@@ -686,14 +812,15 @@ tools:
       brew: "nmap"
       apt: "nmap"
 
-  # --- Shells ---
+  # --- Shells & Terminal ---
   - name: pwsh
     display_name: PowerShell
     category: Shell
-    enabled: true
+    tags: [scripting, microsoft, cross-platform, automation]
     binary_names: [pwsh]
     packages:
       winget: "Microsoft.PowerShell"
+      choco: "powershell-core"
       brew: "powershell"
       apt: "powershell"
       snap: "powershell"
@@ -701,18 +828,27 @@ tools:
   - name: starship
     display_name: Starship
     category: Shell
-    enabled: true
+    tags: [prompt, cross-shell, customizable, rust, fast]
     binary_names: [starship]
     packages:
       winget: "Starship.Starship"
       choco: "starship"
       brew: "starship"
 
+  - name: tmux
+    display_name: tmux
+    category: Shell
+    tags: [multiplexer, terminal, session, split-pane, remote]
+    binary_names: [tmux]
+    packages:
+      brew: "tmux"
+      apt: "tmux"
+
   # --- AI ---
   - name: claude
     display_name: Claude Code
     category: AI
-    enabled: true
+    tags: [llm, anthropic, coding-assistant, ai-agent]
     binary_names: [claude]
     packages:
       npm: "@anthropic-ai/claude-code"
@@ -720,7 +856,7 @@ tools:
   - name: copilot
     display_name: GitHub Copilot CLI
     category: AI
-    enabled: true
+    tags: [llm, github, coding-assistant, ai-agent]
     binary_names: [github-copilot-cli, copilot]
     packages:
       winget: "GitHub.Copilot"

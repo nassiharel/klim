@@ -1,6 +1,7 @@
 package finder
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -13,10 +14,26 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
+// ErrEmptyPATH is returned when the PATH environment variable is empty or not set.
+var ErrEmptyPATH = errors.New("PATH is empty or not set")
+
 // Cached PATHEXT extensions (Windows), computed once.
 var cachedPathExts struct {
 	once sync.Once
 	exts []string
+}
+
+// ToolFinder abstracts tool discovery on the filesystem.
+type ToolFinder interface {
+	FindAll(ctx context.Context, tools []registry.Tool) error
+}
+
+// PathFinder is the default ToolFinder that scans PATH directories.
+type PathFinder struct{}
+
+// NewFinder returns the default PATH-based tool finder.
+func NewFinder() ToolFinder {
+	return &PathFinder{}
 }
 
 // toolRef links a binary name to its tool index.
@@ -32,13 +49,18 @@ type match struct {
 	instance registry.Instance // Path is the resolved (EvalSymlinks) path
 }
 
-// FindAll locates all installations of each curated tool across PATH.
-// It populates the Instances field of each non-disabled tool in-place.
-// Returns an error if PATH is empty or not set.
-func FindAll(tools []registry.Tool) error {
+// FindAll is a convenience wrapper around the default PathFinder.
+func FindAll(ctx context.Context, tools []registry.Tool) error {
+	return defaultFinder.FindAll(ctx, tools)
+}
+
+var defaultFinder ToolFinder = &PathFinder{}
+
+// FindAll implements ToolFinder by scanning PATH directories.
+func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error {
 	pathDirs := pathDirectories()
 	if len(pathDirs) == 0 {
-		return errors.New("PATH is empty or not set")
+		return ErrEmptyPATH
 	}
 
 	// Phase 1: Build a map of all binary names we're looking for.
@@ -46,9 +68,6 @@ func FindAll(tools []registry.Tool) error {
 	// lowercase. On Unix/macOS they are case-sensitive and kept as-is.
 	wantedBins := make(map[string][]toolRef) // normalised binary name → tool refs
 	for i := range tools {
-		if tools[i].Disabled {
-			continue
-		}
 		for _, bin := range tools[i].BinaryNames {
 			key := normaliseName(bin)
 			wantedBins[key] = append(wantedBins[key], toolRef{toolIdx: i, binName: bin})
@@ -110,9 +129,6 @@ func FindAll(tools []registry.Tool) error {
 	}
 
 	for i := range tools {
-		if tools[i].Disabled {
-			continue
-		}
 		// Clear previous instances so rescans don't accumulate duplicates.
 		tools[i].Instances = nil
 
@@ -144,7 +160,7 @@ func FindAll(tools []registry.Tool) error {
 
 	// Phase 4: Fallback via exec.LookPath for tools with no instances.
 	for i := range tools {
-		if tools[i].Disabled || len(tools[i].Instances) > 0 {
+		if len(tools[i].Instances) > 0 {
 			continue
 		}
 		for _, binName := range tools[i].BinaryNames {
@@ -239,7 +255,13 @@ func binaryCandidateNames(name string) []string {
 }
 
 func pathDirectories() []string {
+	// Start with the process PATH, then merge any directories from the
+	// Windows registry that the current process hasn't picked up yet
+	// (e.g. winget portable installs that modify PATH after launch).
 	pathEnv := os.Getenv("PATH")
+	if extra := registryPATH(); extra != "" {
+		pathEnv = pathEnv + string(os.PathListSeparator) + extra
+	}
 	if pathEnv == "" {
 		return nil
 	}
@@ -248,8 +270,14 @@ func pathDirectories() []string {
 	dirs := make([]string, 0, len(raw))
 	for _, d := range raw {
 		if d = strings.TrimSpace(d); d != "" {
-			if _, exists := seen[d]; !exists {
-				seen[d] = struct{}{}
+			// Normalize for dedup: trim trailing slashes on all platforms,
+			// lowercase only on Windows (case-insensitive filesystem).
+			key := strings.TrimRight(d, `\/`)
+			if runtime.GOOS == "windows" {
+				key = strings.ToLower(key)
+			}
+			if _, exists := seen[key]; !exists {
+				seen[key] = struct{}{}
 				dirs = append(dirs, d)
 			}
 		}

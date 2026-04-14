@@ -1,15 +1,11 @@
 package registry
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
-	clim "github.com/nassiharel/clim"
 	"gopkg.in/yaml.v3"
 )
-
-var defaultToolsYAML = clim.MarketplaceYAML
 
 type toolsFile struct {
 	Tools []toolDef `yaml:"tools"`
@@ -19,7 +15,7 @@ type toolDef struct {
 	Name        string     `yaml:"name"`
 	DisplayName string     `yaml:"display_name"`
 	Category    string     `yaml:"category"`
-	Enabled     bool       `yaml:"enabled"`
+	Tags        []string   `yaml:"tags,omitempty"`
 	BinaryNames []string   `yaml:"binary_names"`
 	Packages    packageDef `yaml:"packages"`
 }
@@ -43,85 +39,43 @@ func ToolsPath() (string, error) {
 	return path, nil
 }
 
-// EnsureToolsFile creates the marketplace.yaml from embedded defaults if it
-// doesn't exist yet. Returns the file path. Safe to call multiple times.
-func EnsureToolsFile() (string, error) {
-	path, err := ToolsPath()
-	if err != nil {
-		return "", err
+// DefaultToolsFromBytes loads tools from raw catalog YAML bytes, merging with
+// the user's local customizations (custom tools, package ID overrides).
+// The catalogData is the authority for tool metadata; the user file preserves
+// user-added custom tools and non-empty package ID overrides.
+func DefaultToolsFromBytes(catalogData []byte) []Tool {
+	catalogDefs := parseToolDefs(catalogData)
+	if catalogDefs == nil {
+		return nil
 	}
-	if _, statErr := os.Stat(path); statErr == nil {
-		return path, nil // already exists
-	}
-	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
-		return path, mkErr
-	}
-	embeddedDefs := parseToolDefs(defaultToolsYAML)
-	return path, writeToolDefs(path, embeddedDefs)
-}
-
-// DefaultTools loads tools by merging the embedded catalog with the user's config.
-// New embedded tools are added, user customizations (enabled/disabled, package overrides)
-// are preserved, and user-added custom tools are kept. If anything changed, the
-// user's file is rewritten with the merged result.
-func DefaultTools() []Tool {
-	embeddedDefs := parseToolDefs(defaultToolsYAML)
 
 	path, err := ToolsPath()
 	if err != nil {
-		return defsToTools(embeddedDefs)
+		return defsToTools(catalogDefs)
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		// First run or unreadable file — write embedded defaults.
+		// No user file yet — write one from catalog defaults.
 		if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr == nil {
-			_ = writeToolDefs(path, embeddedDefs)
+			_ = writeToolDefs(path, catalogDefs)
 		}
-		return defsToTools(embeddedDefs)
+		return defsToTools(catalogDefs)
 	}
 
 	userDefs := parseToolDefs(data)
 	if userDefs == nil {
-		// Invalid YAML — rewrite from embedded defaults so the file is usable again.
-		_ = writeToolDefs(path, embeddedDefs)
-		return defsToTools(embeddedDefs)
+		// Invalid YAML — rewrite from catalog so the file is usable again.
+		_ = writeToolDefs(path, catalogDefs)
+		return defsToTools(catalogDefs)
 	}
 
-	merged, changed := mergeToolDefs(embeddedDefs, userDefs)
+	merged, changed := mergeToolDefs(catalogDefs, userDefs)
 	if changed {
 		_ = writeToolDefs(path, merged)
 	}
 
 	return defsToTools(merged)
-}
-
-// SetToolEnabled sets the enabled flag for a tool by name in the YAML file.
-func SetToolEnabled(name string, enabled bool) error {
-	path, err := ToolsPath()
-	if err != nil {
-		return err
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	defs := parseToolDefs(data)
-	found := false
-	for i := range defs {
-		if defs[i].Name == name {
-			defs[i].Enabled = enabled
-			found = true
-			break
-		}
-	}
-	if !found {
-		return fmt.Errorf("tool %q not found", name)
-	}
-
-	return writeToolDefs(path, defs)
 }
 
 func writeToolDefs(path string, defs []toolDef) error {
@@ -131,7 +85,7 @@ func writeToolDefs(path string, defs []toolDef) error {
 		return err
 	}
 
-	header := "# clim — Tool Marketplace\n# Edit this file to add, remove, or configure tools.\n# Set enabled: false to hide a tool from clim.\n\n"
+	header := "# clim — Tool Marketplace\n# Edit this file to add, remove, or configure tools.\n\n"
 	return os.WriteFile(path, []byte(header+string(data)), 0o644)
 }
 
@@ -150,8 +104,8 @@ func defsToTools(defs []toolDef) []Tool {
 			Name:        d.Name,
 			DisplayName: d.DisplayName,
 			Category:    d.Category,
+			Tags:        d.Tags,
 			BinaryNames: d.BinaryNames,
-			Disabled:    !d.Enabled,
 			Packages: PackageIDs{
 				Winget: d.Packages.Winget,
 				Choco:  d.Packages.Choco,
@@ -172,11 +126,11 @@ func defsToTools(defs []toolDef) []Tool {
 	return tools
 }
 
-// mergeToolDefs merges embedded defaults with user-customized definitions.
-// Embedded tools provide the base catalog; user file overrides enabled state
-// and non-empty package IDs. User-added custom tools (not in embedded) are preserved.
+// mergeToolDefs merges catalog defaults with user-customized definitions.
+// Catalog tools provide the base; user file overrides non-empty package IDs.
+// User-added custom tools (not in catalog) are preserved.
 // Returns the merged list and whether anything changed vs the user's original.
-func mergeToolDefs(embedded, user []toolDef) ([]toolDef, bool) {
+func mergeToolDefs(catalog, user []toolDef) ([]toolDef, bool) {
 	// Index user defs by name for O(1) lookup.
 	userMap := make(map[string]*toolDef, len(user))
 	for i := range user {
@@ -184,37 +138,37 @@ func mergeToolDefs(embedded, user []toolDef) ([]toolDef, bool) {
 	}
 
 	changed := false
-	merged := make([]toolDef, 0, len(embedded)+len(user))
+	merged := make([]toolDef, 0, len(catalog)+len(user))
 
-	// Walk embedded in order — this defines the canonical ordering.
-	seen := make(map[string]struct{}, len(embedded))
-	for _, e := range embedded {
+	// Walk catalog in order — this defines the canonical ordering.
+	seen := make(map[string]struct{}, len(catalog))
+	for _, e := range catalog {
 		seen[e.Name] = struct{}{}
 
 		u, exists := userMap[e.Name]
 		if !exists {
-			// New embedded tool — add it.
+			// New catalog tool — add it.
 			merged = append(merged, e)
 			changed = true
 			continue
 		}
 
 		// Tool exists in both — merge fields.
-		m := e // start from embedded (authority on display_name, category, binary_names)
-		m.Enabled = u.Enabled
+		m := e // start from catalog (authority on display_name, category, binary_names, tags)
 		m.Packages = mergePackages(e.Packages, u.Packages)
 
 		if m.Packages != u.Packages {
-			changed = true // embedded filled in a package ID gap
+			changed = true
 		}
-		if m.DisplayName != u.DisplayName || m.Category != u.Category || !slicesEqual(m.BinaryNames, u.BinaryNames) {
-			changed = true // embedded metadata updated
+		if m.DisplayName != u.DisplayName || m.Category != u.Category ||
+			!slicesEqual(m.BinaryNames, u.BinaryNames) || !slicesEqual(m.Tags, u.Tags) {
+			changed = true
 		}
 
 		merged = append(merged, m)
 	}
 
-	// Append user-only custom tools (not in embedded catalog).
+	// Append user-only custom tools (not in catalog).
 	for _, u := range user {
 		if _, exists := seen[u.Name]; !exists {
 			merged = append(merged, u)
@@ -224,19 +178,18 @@ func mergeToolDefs(embedded, user []toolDef) ([]toolDef, bool) {
 	return merged, changed
 }
 
-// mergePackages merges package IDs: user non-empty values win, embedded fills gaps.
-func mergePackages(embedded, user packageDef) packageDef {
+// mergePackages merges package IDs: user non-empty values win, catalog fills gaps.
+func mergePackages(catalog, user packageDef) packageDef {
 	return packageDef{
-		Winget: pickNonEmpty(user.Winget, embedded.Winget),
-		Choco:  pickNonEmpty(user.Choco, embedded.Choco),
-		Brew:   pickNonEmpty(user.Brew, embedded.Brew),
-		Apt:    pickNonEmpty(user.Apt, embedded.Apt),
-		Snap:   pickNonEmpty(user.Snap, embedded.Snap),
-		NPM:    pickNonEmpty(user.NPM, embedded.NPM),
+		Winget: pickNonEmpty(user.Winget, catalog.Winget),
+		Choco:  pickNonEmpty(user.Choco, catalog.Choco),
+		Brew:   pickNonEmpty(user.Brew, catalog.Brew),
+		Apt:    pickNonEmpty(user.Apt, catalog.Apt),
+		Snap:   pickNonEmpty(user.Snap, catalog.Snap),
+		NPM:    pickNonEmpty(user.NPM, catalog.NPM),
 	}
 }
 
-// pickNonEmpty returns the first non-empty string, or "".
 func pickNonEmpty(a, b string) string {
 	if a != "" {
 		return a
@@ -244,7 +197,6 @@ func pickNonEmpty(a, b string) string {
 	return b
 }
 
-// slicesEqual reports whether two string slices have identical contents.
 func slicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

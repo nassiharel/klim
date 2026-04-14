@@ -3,6 +3,7 @@ package build
 import (
 	"fmt"
 	"runtime/debug"
+	"strings"
 )
 
 // Version, Commit, and Date are populated at build time via ldflags:
@@ -29,4 +30,18 @@ func init() {
 // Info returns a formatted version string.
 func Info() string {
 	return fmt.Sprintf("clim %s (commit: %s, built: %s)", Version, Commit, Date)
+}
+
+// VersionOnly returns just the version string (e.g. "2.1.87"),
+// without commit or date metadata. Strips any leading "v" prefix.
+// Falls back to "dev" if no version is available.
+func VersionOnly() string {
+	v := strings.TrimPrefix(Version, "v")
+	if v != "" && v != "dev" {
+		return v
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return strings.TrimPrefix(info.Main.Version, "v")
+	}
+	return "dev"
 }

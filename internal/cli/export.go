@@ -4,17 +4,11 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sort"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/detector"
-	"github.com/nassiharel/clim/internal/finder"
 	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/pkgmgr"
-	"github.com/nassiharel/clim/internal/registry"
 )
 
 var exportCmd = &cobra.Command{
@@ -36,24 +30,15 @@ func init() {
 }
 
 func runExport(cmd *cobra.Command, args []string) error {
-	tools := registry.DefaultTools()
-
 	fmt.Fprintln(os.Stderr, "Scanning installed tools...")
-	if err := finder.FindAll(tools); err != nil {
+	tools, err := svc.LoadAndResolve(cmd.Context())
+	if err != nil {
 		return err
 	}
 
-	fmt.Fprintln(os.Stderr, "Resolving versions...")
-	pkgmgr.ResolveVersions(tools, runtime.NumCPU())
-	detector.EnrichFallback(tools)
-
-	sort.Slice(tools, func(i, j int) bool {
-		return strings.ToLower(tools[i].Name) < strings.ToLower(tools[j].Name)
-	})
-
 	var exported []manifest.Tool
 	for _, tool := range tools {
-		if !tool.IsInstalled() || tool.Disabled {
+		if !tool.IsInstalled() {
 			continue
 		}
 		primary := tool.PrimaryInstance()
