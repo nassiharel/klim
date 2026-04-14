@@ -827,10 +827,9 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 				barLen = 1
 			}
 			bar := upgradableStyle.Render(strings.Repeat("█", barLen) + strings.Repeat("░", 5-barLen))
-			fmt.Fprintf(&b, "    %s %s %s\n",
+			fmt.Fprintf(&b, "    %s %s\n",
 				nameStyle.Render(fixedWidth(rt.Name, 16)),
 				bar,
-				dim(r.reason),
 			)
 		}
 		b.WriteString("\n")
@@ -1580,7 +1579,6 @@ func toolLabel(tool registry.Tool) string {
 
 // itemLabel returns display if non-empty, otherwise name.
 // relatedTools returns up to 5 not-installed tools that share tags with the given tool.
-// Reasons reference installed tools that share those tags.
 func (m Model) relatedTools(tool registry.Tool) []recommendation {
 	if len(tool.Tags) == 0 {
 		return nil
@@ -1590,57 +1588,21 @@ func (m Model) relatedTools(tool registry.Tool) []recommendation {
 		tagSet[tag] = struct{}{}
 	}
 
-	// Build tag → installed tool names for "you have ..." reasons.
-	tagSources := make(map[string][]string)
-	for _, t := range m.tools {
-		if !t.IsInstalled() {
-			continue
-		}
-		for _, tag := range t.Tags {
-			if _, ok := tagSet[tag]; ok {
-				tagSources[tag] = append(tagSources[tag], t.Name)
-			}
-		}
-	}
-
 	var recs []recommendation
 	for i, t := range m.tools {
 		if t.Name == tool.Name || t.IsInstalled() {
 			continue
 		}
 		score := 0
-		matchedTools := make(map[string]struct{})
 		for _, tag := range t.Tags {
 			if _, ok := tagSet[tag]; ok {
 				score++
-				for _, src := range tagSources[tag] {
-					matchedTools[src] = struct{}{}
-				}
 			}
 		}
 		if score == 0 {
 			continue
 		}
-
-		var reasons []string
-		for name := range matchedTools {
-			reasons = append(reasons, name)
-			if len(reasons) >= 3 {
-				break
-			}
-		}
-		sort.Strings(reasons)
-
-		reason := ""
-		if len(reasons) > 0 {
-			reason = "you have " + strings.Join(reasons, ", ")
-		}
-
-		recs = append(recs, recommendation{
-			toolIdx: i,
-			score:   score,
-			reason:  reason,
-		})
+		recs = append(recs, recommendation{toolIdx: i, score: score})
 	}
 
 	sort.Slice(recs, func(i, j int) bool {

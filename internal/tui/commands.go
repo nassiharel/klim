@@ -89,7 +89,7 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 			}
 		}
 		sort.Strings(reasons)
-		reason := "you have " + strings.Join(reasons, ", ")
+		reason := strings.Join(reasons, ", ")
 
 		recs = append(recs, recommendation{
 			toolIdx: i,
