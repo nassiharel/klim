@@ -50,6 +50,7 @@ func (g *GitHubClient) FetchLatestRelease(ctx context.Context) (*Release, error)
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "clim/selfupdate")
 
 	resp, err := g.httpClient().Do(req)
 	if err != nil {

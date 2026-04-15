@@ -352,6 +352,10 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 		}
 
 		filename := fmt.Sprintf("clim-export-%s.yaml", time.Now().Format("2006-01-02"))
+		// Avoid silently overwriting an existing export from today.
+		if _, err := os.Stat(filename); err == nil {
+			filename = fmt.Sprintf("clim-export-%s.yaml", time.Now().Format("2006-01-02-150405"))
+		}
 		header := "# clim — Installed Tools Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   clim import " + filename + "\n#\n\n"
 
 		if err := os.WriteFile(filename, []byte(header+string(data)), 0o644); err != nil {

@@ -75,6 +75,9 @@ func TestIsPaddedMatch(t *testing.T) {
 		{"zero a", 0, 14, false},
 		{"zero b", 14, 0, false},
 		{"both zero", 0, 0, true},
+		{"trailing zero in smaller", 100, 10, false}, // 10 ends in 0, not a PE padding
+		{"trailing zero in smaller reverse", 10, 100, false},
+		{"200 vs 20", 200, 20, false}, // 20 ends in 0
 	}
 
 	for _, tt := range tests {
@@ -98,6 +101,7 @@ func TestParseSegments(t *testing.T) {
 		{"single", "7", []int{7}},
 		{"four segments", "1.2.3.4", []int{1, 2, 3, 4}},
 		{"stops at non-numeric", "2.53.0.windows.1", []int{2, 53, 0}},
+		{"v-prefix stripped", "v1.2.3", []int{1, 2, 3}},
 		{"empty string", "", nil},
 		{"all non-numeric", "abc", nil},
 	}
@@ -140,6 +144,8 @@ func TestCompareVersions(t *testing.T) {
 		{"both empty", "", "", 0},
 		{"empty vs non-empty", "", "1.0", -1},
 		{"non-empty vs empty", "1.0", "", 1},
+		{"v-prefix both", "v1.2.3", "v1.2.4", -1},
+		{"v-prefix mixed", "v1.2.3", "1.2.3", 0},
 		{"single segment", "7", "8", -1},
 	}
 

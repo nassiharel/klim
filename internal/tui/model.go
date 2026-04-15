@@ -241,6 +241,24 @@ func (m Model) Init() tea.Cmd {
 	)
 }
 
+// startScan prepares the model for a new scan, invalidating any in-flight
+// version resolution from a previous scan so stale toolVersionMsg messages
+// are discarded immediately. Every code path that fires findToolsCmd must
+// call this first.
+func (m *Model) startScan() tea.Cmd {
+	m.loading = true
+	m.phase = phaseScanning
+	m.tools = nil
+	m.filteredIndex = nil
+	m.cursor = 0
+	m.scanGen++
+	m.pending = 0
+	return tea.Batch(
+		m.spinner.Tick,
+		func() tea.Msg { return findToolsCmd(m.svc)() },
+	)
+}
+
 // Update handles all incoming messages and returns updated model and commands.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -353,6 +371,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("✗ %s failed: %s", msg.action, msg.err)
 			return m, nil
 		}
+		if msg.toolIdx >= len(m.tools) {
+			return m, nil
+		}
 		m.statusMsg = fmt.Sprintf("✓ %s succeeded — refreshing...", msg.action)
 		// Re-scan the affected tool to pick up changes.
 		tool := m.tools[msg.toolIdx]
@@ -387,14 +408,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastDiff = &diff
 		// Reload tools from the updated cache so new tools appear.
 		if msg.result.Updated {
-			m.loading = true
-			m.phase = phaseScanning
+			cmd := m.startScan()
 			m.statusMsg = fmt.Sprintf("✓ Marketplace updated: %d new, %d changed",
 				len(diff.NewTools), len(diff.ChangedTools))
-			return m, tea.Batch(
-				m.spinner.Tick,
-				func() tea.Msg { return findToolsCmd(m.svc)() },
-			)
+			return m, cmd
 		}
 		m.statusMsg = "✓ Marketplace is up to date"
 		return m, nil
@@ -477,17 +494,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		// All done — refresh tools to pick up newly installed ones.
+		cmd := m.startScan()
 		m.statusMsg = "✓ Import complete — refreshing..."
-		m.loading = true
-		m.phase = phaseScanning
-		m.tools = nil
-		m.filteredIndex = nil
-		return m, tea.Batch(
-			m.spinner.Tick,
-			func() tea.Msg { return findToolsCmd(m.svc)() },
-		)
+		return m, cmd
 
 	case batchUpgradeItemMsg:
+		if msg.toolIdx >= len(m.tools) {
+			return m.fireNextBatchUpgrade()
+		}
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("✗ %s upgrade failed: %s", m.tools[msg.toolIdx].DisplayName, msg.err)
 		} else {
@@ -531,15 +545,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// All done — refresh tools to pick up changes.
 		m.packInstalling = false
+		cmd := m.startScan()
 		m.statusMsg = "✓ Pack operation complete — refreshing..."
-		m.loading = true
-		m.phase = phaseScanning
-		m.tools = nil
-		m.filteredIndex = nil
-		return m, tea.Batch(
-			m.spinner.Tick,
-			func() tea.Msg { return findToolsCmd(m.svc)() },
-		)
+		return m, cmd
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -1187,23 +1195,9 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, refreshMarketplaceCmd(fetcher)
 		}
 		// On other tabs, do a full rescan.
-		m.loading = true
-		m.phase = phaseScanning
-		m.tools = nil
-		m.filteredIndex = nil
-		m.cursor = 0
 		m.updateSelected = make(map[int]bool)
 		m.batchUpdating = false
-		// Invalidate in-flight version resolution from the previous scan so
-		// stale toolVersionMsg messages are discarded immediately — without
-		// this, late arrivals could decrement pending and flip phase to done
-		// before scanResultMsg resets the counter.
-		m.scanGen++
-		m.pending = 0
-		return m, tea.Batch(
-			m.spinner.Tick,
-			func() tea.Msg { return findToolsCmd(m.svc)() },
-		)
+		return m, m.startScan()
 	}
 	return m, nil
 }
@@ -1677,16 +1671,10 @@ func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
 func (m Model) fireNextBatchUpgrade() (tea.Model, tea.Cmd) {
 	if len(m.batchQueue) == 0 {
 		m.batchUpdating = false
-		m.statusMsg = "✓ Batch upgrade complete — refreshing..."
-		m.loading = true
-		m.phase = phaseScanning
-		m.tools = nil
-		m.filteredIndex = nil
 		m.updateSelected = make(map[int]bool)
-		return m, tea.Batch(
-			m.spinner.Tick,
-			func() tea.Msg { return findToolsCmd(m.svc)() },
-		)
+		cmd := m.startScan()
+		m.statusMsg = "✓ Batch upgrade complete — refreshing..."
+		return m, cmd
 	}
 	idx := m.batchQueue[0]
 	m.batchQueue = m.batchQueue[1:]

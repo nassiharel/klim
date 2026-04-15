@@ -237,14 +237,13 @@ installFile() {
   info "Installed ${GREEN}${BINARY_NAME}${NC} to ${INSTALL_DIR}/${BINARY_NAME}"
 }
 
-# testVersion runs clim version to verify the installation.
+# testVersion verifies the installed binary works and warns if it's not on PATH.
 testVersion() {
+  info "$("${INSTALL_DIR}/${BINARY_NAME}" version 2>/dev/null || echo "${BINARY_NAME} installed successfully")"
   if ! command -v "$BINARY_NAME" >/dev/null 2>&1; then
-    warn "${BINARY_NAME} installed to ${INSTALL_DIR}, but it's not on your \$PATH."
+    warn "${BINARY_NAME} is not on your \$PATH."
     warn "Add it with:  export PATH=\"${INSTALL_DIR}:\$PATH\""
-    return
   fi
-  info "$(${BINARY_NAME} version 2>/dev/null || echo "${BINARY_NAME} installed successfully")"
 }
 
 # cleanup removes the temp directory.

@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -43,8 +45,15 @@ func runImport(cmd *cobra.Command, args []string) error {
 	}
 
 	var m manifest.Manifest
-	if err := yaml.Unmarshal(data, &m); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&m); err != nil {
 		return fmt.Errorf("parsing manifest: %w", err)
+	}
+
+	// Validate manifest has usable content.
+	if err := validateManifest(&m); err != nil {
+		return fmt.Errorf("invalid manifest: %w", err)
 	}
 
 	if len(m.Tools) == 0 {
@@ -83,6 +92,9 @@ func runImport(cmd *cobra.Command, args []string) error {
 	succeeded, failed := executeInstalls(ps.toInstall)
 	fmt.Fprintf(os.Stderr, "\n──── Done: %d installed, %d failed, %d already present ────\n",
 		succeeded, failed, len(ps.alreadyInstalled))
+	if failed > 0 {
+		return fmt.Errorf("%d tool(s) failed to install", failed)
+	}
 	return nil
 }
 
@@ -154,4 +166,16 @@ func buildImportPlan(manifestTools []manifest.Tool, regMap map[string]*registry.
 	}
 
 	return ps
+}
+
+// validateManifest checks that a parsed manifest has the minimum required
+// structure — tools must have a non-empty name. This catches cases where
+// a valid YAML file (e.g. a random config) is passed but isn't a clim manifest.
+func validateManifest(m *manifest.Manifest) error {
+	for i, t := range m.Tools {
+		if strings.TrimSpace(t.Name) == "" {
+			return fmt.Errorf("tool at index %d has no name", i)
+		}
+	}
+	return nil
 }

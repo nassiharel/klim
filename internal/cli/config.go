@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -50,7 +51,10 @@ var configEditCmd = &cobra.Command{
 			return fmt.Errorf("no $EDITOR set; edit %s manually", path)
 		}
 
-		c := exec.Command(editor, path)
+		// Support editors with args like "code --wait" or "vim -u NONE".
+		parts := strings.Fields(editor)
+		editorArgs := append(parts[1:], path)
+		c := exec.Command(parts[0], editorArgs...)
 		c.Stdin = os.Stdin
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr

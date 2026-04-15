@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/nassiharel/clim/internal/build"
 	"github.com/nassiharel/clim/internal/config"
@@ -334,6 +335,9 @@ func (m Model) renderForYouList() string {
 
 	for vi := start; vi < len(m.recommendations) && vi < start+visibleRows; vi++ {
 		rec := m.recommendations[vi]
+		if rec.toolIdx >= len(m.tools) {
+			continue
+		}
 		tool := m.tools[rec.toolIdx]
 		selected := vi == m.cursor
 
@@ -821,6 +825,9 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 			}
 		}
 		for _, r := range related {
+			if r.toolIdx >= len(m.tools) {
+				continue
+			}
 			rt := m.tools[r.toolIdx]
 			barLen := (r.score * 5) / maxScore
 			if barLen < 1 {
@@ -1625,21 +1632,22 @@ func itemLabel(name, display string) string {
 	return name
 }
 
-// fixedWidth pads or truncates a plain string to exactly `width` characters.
-// Must be called BEFORE applying lipgloss styles, not after.
+// fixedWidth pads or truncates a plain string to exactly `width` display columns.
+// Uses runewidth to correctly handle CJK characters and emoji (which occupy
+// two columns). Must be called BEFORE applying lipgloss styles, not after.
 func fixedWidth(s string, width int) string {
 	if width <= 0 {
 		return s
 	}
-	r := []rune(s)
-	if len(r) > width {
+	sw := runewidth.StringWidth(s)
+	if sw > width {
 		if width <= 1 {
 			return "…"
 		}
-		return string(r[:width-1]) + "…"
+		return runewidth.Truncate(s, width-1, "") + "…"
 	}
-	if len(r) < width {
-		return s + strings.Repeat(" ", width-len(r))
+	if sw < width {
+		return s + strings.Repeat(" ", width-sw)
 	}
 	return s
 }

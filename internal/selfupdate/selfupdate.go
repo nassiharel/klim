@@ -3,6 +3,8 @@ package selfupdate
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 
 	"github.com/nassiharel/clim/internal/registry"
 )
@@ -77,7 +81,7 @@ func (o *Options) httpClient() *http.Client {
 	if o != nil && o.HTTPClient != nil {
 		return o.HTTPClient
 	}
-	return http.DefaultClient
+	return &http.Client{Timeout: 60 * time.Second}
 }
 
 // Update checks for a newer version of clim and, if found, downloads and
@@ -120,13 +124,18 @@ func Update(ctx context.Context, currentVersion string, opts *Options) (*Result,
 	}
 
 	// 5. Download the archive.
-	archiveReader, assetName, err := downloadAsset(ctx, opts.httpClient(), assetURL)
+	archiveData, assetName, err := downloadAsset(ctx, opts.httpClient(), assetURL)
 	if err != nil {
 		return nil, fmt.Errorf("downloading update: %w", err)
 	}
 
+	// 5b. Verify archive checksum against checksums.txt from the release.
+	if err := verifyAssetChecksum(ctx, opts.httpClient(), rel, assetName, archiveData); err != nil {
+		return nil, fmt.Errorf("checksum verification: %w", err)
+	}
+
 	// 6. Extract the binary.
-	newBinary, err := ExtractBinary(archiveReader, assetName, goos)
+	newBinary, err := ExtractBinary(bytes.NewReader(archiveData), assetName, goos)
 	if err != nil {
 		return nil, fmt.Errorf("extracting update: %w", err)
 	}
@@ -149,14 +158,15 @@ func Update(ctx context.Context, currentVersion string, opts *Options) (*Result,
 // typically 10-20 MB; 200 MB is a generous upper bound.
 const maxDownloadSize = 200 << 20 // 200 MB
 
-// downloadAsset fetches an archive from the given URL and returns a reader
-// over its contents along with the filename (derived from the URL path).
+// downloadAsset fetches an archive from the given URL and returns its raw bytes
+// along with the filename (derived from the URL path).
 // The download is capped at maxDownloadSize to prevent unbounded memory usage.
-func downloadAsset(ctx context.Context, client *http.Client, url string) (io.Reader, string, error) {
+func downloadAsset(ctx context.Context, client *http.Client, url string) ([]byte, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, "", fmt.Errorf("creating download request: %w", err)
 	}
+	req.Header.Set("User-Agent", "clim/selfupdate")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -182,5 +192,52 @@ func downloadAsset(ctx context.Context, client *http.Client, url string) (io.Rea
 	}
 
 	name := filepath.Base(url)
-	return bytes.NewReader(body), name, nil
+	return body, name, nil
+}
+
+// verifyAssetChecksum downloads checksums.txt from the release and verifies
+// that the archive data matches the expected SHA256 hash. This guards against
+// corrupted downloads and basic supply-chain tampering.
+func verifyAssetChecksum(ctx context.Context, client *http.Client, rel *Release, assetName string, archiveData []byte) error {
+	// Find the checksums.txt asset in the release.
+	var checksumURL string
+	for _, a := range rel.Assets {
+		if a.Name == "checksums.txt" {
+			checksumURL = a.BrowserDownloadURL
+			break
+		}
+	}
+	if checksumURL == "" {
+		// No checksums.txt in this release — skip verification.
+		// This allows older releases that predate checksum generation to still work.
+		return nil
+	}
+
+	checksumData, _, err := downloadAsset(ctx, client, checksumURL)
+	if err != nil {
+		return fmt.Errorf("downloading checksums.txt: %w", err)
+	}
+
+	// Compute actual hash.
+	actualHash := sha256.Sum256(archiveData)
+	actualHex := hex.EncodeToString(actualHash[:])
+
+	// Find the expected hash for our asset in checksums.txt.
+	// Format: "<hex>  <filename>" (two spaces, matching goreleaser output).
+	for _, line := range strings.Split(string(checksumData), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) >= 2 && parts[1] == assetName {
+			expectedHex := strings.ToLower(parts[0])
+			if actualHex != expectedHex {
+				return fmt.Errorf("SHA256 mismatch for %s: expected %s, got %s", assetName, expectedHex, actualHex)
+			}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("no checksum entry found for %s in checksums.txt", assetName)
 }

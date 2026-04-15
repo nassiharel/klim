@@ -339,8 +339,13 @@ func loadNpmGlobals(ctx context.Context) map[string]string {
 }
 
 func npmInstalledVersion(ctx context.Context, pkg string) string {
+	// Use a dedicated timeout for cache population instead of the caller's
+	// context — sync.Once runs exactly once, so a cancelled/expired context
+	// from the first caller would permanently poison the cache.
 	npmOnce.Do(func() {
-		npmGlobalCache = loadNpmGlobals(ctx)
+		cacheCtx, cancel := context.WithTimeout(context.Background(), defaultCmdTimeout)
+		defer cancel()
+		npmGlobalCache = loadNpmGlobals(cacheCtx)
 	})
 	cache := npmGlobalCache
 
