@@ -1,0 +1,15 @@
+name: uv
+display_name: uv
+category: PkgMgr
+tags:
+    - python
+    - pip
+    - fast
+    - rust
+    - virtualenv
+binary_names:
+    - uv
+packages:
+    winget: astral-sh.uv
+    choco: uv
+    brew: uv

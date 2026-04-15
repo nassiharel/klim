@@ -1,0 +1,16 @@
+name: docker
+display_name: Docker
+category: Containers
+tags:
+    - container
+    - oci
+    - image
+    - runtime
+    - devops
+binary_names:
+    - docker
+packages:
+    winget: Docker.DockerDesktop
+    choco: docker-desktop
+    brew: docker
+    apt: docker.io

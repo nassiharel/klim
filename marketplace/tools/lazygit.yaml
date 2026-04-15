@@ -1,0 +1,15 @@
+name: lazygit
+display_name: lazygit
+category: VCS
+tags:
+    - git
+    - tui
+    - terminal-ui
+    - vcs
+binary_names:
+    - lazygit
+packages:
+    winget: JesseDuffield.lazygit
+    choco: lazygit
+    brew: lazygit
+    snap: lazygit

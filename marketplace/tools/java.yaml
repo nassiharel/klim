@@ -1,0 +1,16 @@
+name: java
+display_name: Java
+category: Language
+tags:
+    - jvm
+    - openjdk
+    - enterprise
+    - cross-platform
+binary_names:
+    - java
+packages:
+    winget: Microsoft.OpenJDK.21
+    choco: openjdk
+    brew: openjdk
+    apt: default-jdk
+    snap: openjdk

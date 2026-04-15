@@ -1,0 +1,14 @@
+name: istioctl
+display_name: Istio CLI
+category: Containers
+tags:
+    - kubernetes
+    - k8s
+    - service-mesh
+    - istio
+    - networking
+binary_names:
+    - istioctl
+packages:
+    choco: istioctl
+    brew: istioctl

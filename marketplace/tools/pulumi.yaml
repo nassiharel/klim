@@ -1,0 +1,15 @@
+name: pulumi
+display_name: Pulumi
+category: IaC
+tags:
+    - cloud
+    - provisioning
+    - infrastructure
+    - typescript
+    - python
+binary_names:
+    - pulumi
+packages:
+    winget: Pulumi.Pulumi
+    choco: pulumi
+    brew: pulumi

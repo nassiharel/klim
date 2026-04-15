@@ -12,7 +12,12 @@ Module: `github.com/nassiharel/clim`
 
 ```
 cmd/clim/main.go          Entry point → cli.Execute()
-marketplace.yaml           Curated tool catalog (source of truth)
+marketplace/                Modular tool catalog (source of truth)
+  tools/*.yaml              One file per tool definition
+  packs/*.yaml              One file per pack definition
+scripts/                    Marketplace assembly & validation
+  assemble-marketplace.go   Combines individual files → marketplace.yaml
+  validate-marketplace.go   Schema validation, uniqueness, cross-references
 install.sh                 Linux/macOS installer script
 install.ps1                Windows PowerShell installer script
 Makefile                   build / test / lint / cover / clean
@@ -48,7 +53,7 @@ ToolService
 
 **CLI flow:** `svc.LoadAndResolve()` — single call, internal worker pool.
 
-**Marketplace:** fetched from GitHub at runtime (not embedded), cached at `~/.config/clim/marketplace-cache.yaml`. User customizations in `~/.config/clim/marketplace.yaml` are preserved via `mergeToolDefs()`.
+**Marketplace:** individual tool/pack YAML files in `marketplace/` are assembled into a single `marketplace.yaml` by CI and published to the `marketplace` branch. The CLI fetches from `https://raw.githubusercontent.com/nassiharel/clim/marketplace/marketplace.yaml`, cached at `~/.config/clim/marketplace-cache.yaml`. User customizations in `~/.config/clim/marketplace.yaml` are preserved via `mergeToolDefs()`.
 
 ## TUI Tabs
 
@@ -80,19 +85,19 @@ ToolService
 
 ## Adding a Tool
 
-Add to `marketplace.yaml`:
+Create `marketplace/tools/mytool.yaml`:
 ```yaml
-- name: mytool
-  display_name: My Tool
-  category: DevOps
-  binary_names: [mytool]
-  tags: [devops, automation]
-  packages:
-    brew: "mytool"
-    winget: "Publisher.MyTool"
+name: mytool
+display_name: My Tool
+category: DevOps
+tags: [devops, automation]
+binary_names: [mytool]
+packages:
+  brew: "mytool"
+  winget: "Publisher.MyTool"
 ```
 
-That's it. Auto-detected on next run.
+Run `make marketplace-validate` to check. CI validates on every PR and publishes the assembled catalog on merge to `main`.
 
 ## Adding a Package Manager
 
@@ -111,6 +116,8 @@ make build        # bin/clim with version ldflags
 make test         # go test -race -count=1 ./...
 make lint         # golangci-lint run
 make cover        # HTML coverage report
+make marketplace-validate  # validate marketplace/tools/ and marketplace/packs/
+make marketplace-assemble  # assemble → marketplace.yaml
 ```
 
 **Test patterns:** table-driven, `httptest.NewServer`, in-memory archives, `t.TempDir()`, `atomic.Pointer` for `pmAvailableFunc` test hook.
@@ -120,12 +127,14 @@ make cover        # HTML coverage report
 | Workflow | Trigger | Does |
 |---|---|---|
 | `ci.yml` | push/PR | lint, test (Linux/macOS/Windows matrix), govulncheck |
+| `marketplace.yml` | push/PR (marketplace/**) | validate individual files, assemble, publish to marketplace branch |
 | `release.yml` | `v*` tag | GoReleaser → GitHub Release, Homebrew tap, deb/rpm, SBOM |
 | `codeql.yml` | push/weekly | Security analysis |
 
 ## Gotchas
 
-- **`marketplace.yaml` is the single source of truth.** No tool definitions in Go code.
+- **`marketplace/` is the single source of truth.** No tool definitions in Go code. Individual YAML files are assembled into `marketplace.yaml` by CI.
+- **Never edit root `marketplace.yaml` directly** — it's auto-generated. Edit files in `marketplace/tools/` and `marketplace/packs/` instead.
 - **Catalog is fetched at runtime**, not embedded. No network + no cache = catalog failure.
 - **`config.yaml` is optional.** `config.Load()` returns defaults if missing; writes defaults on first run.
 - **Version comparison stops at first non-numeric segment.** `"2.53.0.windows.1"` → `[2, 53, 0]`.

@@ -1,0 +1,16 @@
+name: ruby
+display_name: Ruby
+category: Language
+tags:
+    - scripting
+    - rails
+    - gems
+    - interpreted
+    - dynamic
+binary_names:
+    - ruby
+packages:
+    winget: RubyInstallerTeam.Ruby.3.4
+    choco: ruby
+    brew: ruby
+    apt: ruby

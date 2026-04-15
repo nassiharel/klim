@@ -1,0 +1,15 @@
+name: git
+display_name: Git
+category: VCS
+tags:
+    - vcs
+    - scm
+    - version-control
+    - dvcs
+binary_names:
+    - git
+packages:
+    winget: Git.Git
+    choco: git
+    brew: git
+    apt: git

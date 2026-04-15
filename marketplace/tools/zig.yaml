@@ -1,0 +1,16 @@
+name: zig
+display_name: Zig
+category: Language
+tags:
+    - systems
+    - compiler
+    - low-level
+    - c-interop
+    - performance
+binary_names:
+    - zig
+packages:
+    winget: zig.zig
+    choco: zig
+    brew: zig
+    snap: zig

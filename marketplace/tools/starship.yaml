@@ -1,0 +1,15 @@
+name: starship
+display_name: Starship
+category: Shell
+tags:
+    - prompt
+    - cross-shell
+    - customizable
+    - rust
+    - fast
+binary_names:
+    - starship
+packages:
+    winget: Starship.Starship
+    choco: starship
+    brew: starship

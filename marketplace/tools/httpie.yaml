@@ -1,0 +1,17 @@
+name: httpie
+display_name: HTTPie
+category: CLI
+tags:
+    - http
+    - api
+    - rest
+    - curl-alternative
+    - requests
+binary_names:
+    - http
+    - https
+packages:
+    winget: HTTPie.HTTPie
+    choco: httpie
+    brew: httpie
+    apt: httpie

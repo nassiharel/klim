@@ -1,0 +1,16 @@
+name: terraform
+display_name: Terraform
+category: IaC
+tags:
+    - hashicorp
+    - hcl
+    - cloud
+    - provisioning
+    - infrastructure
+binary_names:
+    - terraform
+packages:
+    winget: Hashicorp.Terraform
+    choco: terraform
+    brew: terraform
+    snap: terraform

@@ -1,0 +1,17 @@
+name: python
+display_name: Python
+category: Language
+tags:
+    - scripting
+    - ml
+    - data-science
+    - automation
+    - interpreted
+binary_names:
+    - python3
+    - python
+packages:
+    winget: Python.Python.3.12
+    choco: python3
+    brew: python@3
+    apt: python3

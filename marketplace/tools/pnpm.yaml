@@ -1,0 +1,16 @@
+name: pnpm
+display_name: pnpm
+category: PkgMgr
+tags:
+    - javascript
+    - node
+    - fast
+    - disk-efficient
+    - monorepo
+binary_names:
+    - pnpm
+packages:
+    winget: pnpm.pnpm
+    choco: pnpm
+    brew: pnpm
+    npm: pnpm

@@ -1,0 +1,16 @@
+name: yq
+display_name: yq
+category: CLI
+tags:
+    - yaml
+    - json
+    - xml
+    - parser
+    - transform
+binary_names:
+    - yq
+packages:
+    winget: MikeFarah.yq
+    choco: yq
+    brew: yq
+    snap: yq

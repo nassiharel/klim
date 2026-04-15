@@ -1,0 +1,16 @@
+name: fd
+display_name: fd
+category: CLI
+tags:
+    - find
+    - search
+    - files
+    - fast
+    - rust
+binary_names:
+    - fd
+packages:
+    winget: sharkdp.fd
+    choco: fd
+    brew: fd
+    apt: fd-find

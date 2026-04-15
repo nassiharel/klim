@@ -1,0 +1,15 @@
+name: stern
+display_name: Stern
+category: Containers
+tags:
+    - kubernetes
+    - k8s
+    - logs
+    - tail
+    - multi-pod
+binary_names:
+    - stern
+packages:
+    winget: stern.stern
+    choco: stern
+    brew: stern

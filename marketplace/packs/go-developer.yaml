@@ -1,0 +1,8 @@
+name: go-developer
+display_name: Go Developer
+description: Tools for Go development.
+tools:
+    - go
+    - gopls
+    - golangci-lint
+    - dlv

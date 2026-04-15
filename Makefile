@@ -9,7 +9,7 @@ LDFLAGS := -s -w \
   -X $(MODULE)/internal/build.Date=$(DATE)
 
 .DEFAULT_GOAL := all
-.PHONY: all build run test lint tidy vulncheck cover clean
+.PHONY: all build run test lint tidy vulncheck cover clean marketplace-validate marketplace-assemble
 
 all: lint test build
 
@@ -38,3 +38,9 @@ cover:
 
 clean:
 	rm -rf bin/ dist/ coverage.out coverage.html
+
+marketplace-validate:
+	go run ./scripts/validate-marketplace
+
+marketplace-assemble:
+	go run ./scripts/assemble-marketplace -o marketplace.yaml

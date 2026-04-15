@@ -1,0 +1,15 @@
+name: kubens
+display_name: kubens
+category: Containers
+tags:
+    - kubernetes
+    - k8s
+    - namespace
+    - cluster-switching
+binary_names:
+    - kubens
+packages:
+    winget: ahmetb.kubens
+    choco: kubens
+    brew: kubectx
+    apt: kubectx

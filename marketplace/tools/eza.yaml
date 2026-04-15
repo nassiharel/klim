@@ -1,0 +1,16 @@
+name: eza
+display_name: eza
+category: CLI
+tags:
+    - ls
+    - listing
+    - files
+    - colors
+    - rust
+binary_names:
+    - eza
+packages:
+    winget: eza-community.eza
+    choco: eza
+    brew: eza
+    apt: eza

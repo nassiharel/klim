@@ -1,0 +1,14 @@
+name: terragrunt
+display_name: Terragrunt
+category: IaC
+tags:
+    - terraform
+    - wrapper
+    - dry
+    - infrastructure
+binary_names:
+    - terragrunt
+packages:
+    winget: Gruntwork.Terragrunt
+    choco: terragrunt
+    brew: terragrunt

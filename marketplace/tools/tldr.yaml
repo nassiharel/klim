@@ -1,0 +1,16 @@
+name: tldr
+display_name: tldr
+category: CLI
+tags:
+    - help
+    - manpages
+    - cheatsheet
+    - examples
+    - docs
+binary_names:
+    - tldr
+packages:
+    choco: tldr
+    brew: tldr
+    apt: tldr
+    npm: tldr

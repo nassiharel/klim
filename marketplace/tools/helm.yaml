@@ -1,0 +1,15 @@
+name: helm
+display_name: Helm
+category: Containers
+tags:
+    - kubernetes
+    - k8s
+    - charts
+    - package-manager
+binary_names:
+    - helm
+packages:
+    winget: Helm.Helm
+    choco: kubernetes-helm
+    brew: helm
+    snap: helm

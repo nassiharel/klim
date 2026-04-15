@@ -1,0 +1,16 @@
+name: bat
+display_name: bat
+category: CLI
+tags:
+    - cat
+    - syntax-highlighting
+    - pager
+    - rust
+    - preview
+binary_names:
+    - bat
+packages:
+    winget: sharkdp.bat
+    choco: bat
+    brew: bat
+    apt: bat

@@ -1,0 +1,17 @@
+# Allowed tool categories in canonical display order.
+# The validator rejects tools with categories not listed here.
+# The assembler sorts tools by this order.
+categories:
+  - VCS
+  - Cloud
+  - Containers
+  - IaC
+  - Language
+  - PkgMgr
+  - Editor
+  - CLI
+  - Media
+  - Database
+  - Network
+  - Shell
+  - AI

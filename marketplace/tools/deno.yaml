@@ -1,0 +1,15 @@
+name: deno
+display_name: Deno
+category: Language
+tags:
+    - javascript
+    - typescript
+    - runtime
+    - v8
+    - secure
+binary_names:
+    - deno
+packages:
+    winget: DenoLand.Deno
+    choco: deno
+    brew: deno

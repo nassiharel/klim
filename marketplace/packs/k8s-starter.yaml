@@ -1,0 +1,10 @@
+name: k8s-starter
+display_name: Kubernetes Starter
+description: Essential Kubernetes tools for cluster management and debugging.
+tools:
+    - kubectl
+    - helm
+    - k9s
+    - kubectx
+    - kubens
+    - stern

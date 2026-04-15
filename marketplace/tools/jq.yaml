@@ -1,0 +1,16 @@
+name: jq
+display_name: jq
+category: CLI
+tags:
+    - json
+    - parser
+    - filter
+    - transform
+    - data
+binary_names:
+    - jq
+packages:
+    winget: jqlang.jq
+    choco: jq
+    brew: jq
+    apt: jq

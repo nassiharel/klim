@@ -1,0 +1,16 @@
+name: wget
+display_name: Wget
+category: CLI
+tags:
+    - download
+    - http
+    - ftp
+    - recursive
+    - transfer
+binary_names:
+    - wget
+packages:
+    winget: JernejSimoncic.Wget
+    choco: wget
+    brew: wget
+    apt: wget

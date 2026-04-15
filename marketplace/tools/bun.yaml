@@ -1,0 +1,15 @@
+name: bun
+display_name: Bun
+category: Language
+tags:
+    - javascript
+    - typescript
+    - runtime
+    - bundler
+    - fast
+binary_names:
+    - bun
+packages:
+    winget: Oven-sh.Bun
+    choco: bun
+    brew: oven-sh/bun/bun

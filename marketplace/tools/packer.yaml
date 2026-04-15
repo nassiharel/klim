@@ -1,0 +1,15 @@
+name: packer
+display_name: Packer
+category: IaC
+tags:
+    - hashicorp
+    - image-builder
+    - ami
+    - vm
+    - automation
+binary_names:
+    - packer
+packages:
+    winget: Hashicorp.Packer
+    choco: packer
+    brew: packer

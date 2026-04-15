@@ -1,0 +1,17 @@
+name: go
+display_name: Go
+category: Language
+tags:
+    - golang
+    - compiler
+    - static
+    - systems
+    - google
+binary_names:
+    - go
+packages:
+    winget: GoLang.Go
+    choco: golang
+    brew: go
+    apt: golang-go
+    snap: go

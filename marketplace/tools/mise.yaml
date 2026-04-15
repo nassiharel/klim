@@ -1,0 +1,16 @@
+name: mise
+display_name: mise
+category: PkgMgr
+tags:
+    - version-manager
+    - polyglot
+    - fast
+    - rust
+    - asdf-compatible
+binary_names:
+    - mise
+packages:
+    winget: jdx.mise
+    choco: mise
+    brew: mise
+    apt: mise

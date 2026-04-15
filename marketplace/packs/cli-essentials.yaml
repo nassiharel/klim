@@ -1,0 +1,13 @@
+name: cli-essentials
+display_name: CLI Essentials
+description: Modern command-line replacements for everyday tools.
+tools:
+    - ripgrep
+    - fzf
+    - bat
+    - fd
+    - eza
+    - zoxide
+    - delta
+    - jq
+    - yq

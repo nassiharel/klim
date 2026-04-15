@@ -1,0 +1,16 @@
+name: ripgrep
+display_name: ripgrep
+category: CLI
+tags:
+    - search
+    - grep
+    - regex
+    - fast
+    - rust
+binary_names:
+    - rg
+packages:
+    winget: BurntSushi.ripgrep.MSVC
+    choco: ripgrep
+    brew: ripgrep
+    apt: ripgrep

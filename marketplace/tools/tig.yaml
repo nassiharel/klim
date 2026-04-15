@@ -1,0 +1,14 @@
+name: tig
+display_name: tig
+category: VCS
+tags:
+    - git
+    - tui
+    - log-viewer
+    - ncurses
+binary_names:
+    - tig
+packages:
+    choco: tig
+    brew: tig
+    apt: tig

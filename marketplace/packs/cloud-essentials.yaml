@@ -1,0 +1,8 @@
+name: cloud-essentials
+display_name: Cloud Essentials
+description: CLI tools for the major cloud providers.
+tools:
+    - az
+    - aws
+    - gcloud
+    - terraform

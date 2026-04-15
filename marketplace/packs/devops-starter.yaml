@@ -1,0 +1,10 @@
+name: devops-starter
+display_name: DevOps Starter
+description: Core tools for infrastructure and deployment workflows.
+tools:
+    - terraform
+    - kubectl
+    - helm
+    - docker
+    - git
+    - gh
