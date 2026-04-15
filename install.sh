@@ -179,7 +179,7 @@ verifyChecksum() {
   info "Verifying checksum..."
 
   local expected
-  expected=$(grep "${DIST_FILE}" "$TMP_CHECKSUM" | awk '{print $1}')
+  expected=$(grep -F "${DIST_FILE}" "$TMP_CHECKSUM" | awk '{print $1}')
 
   if [ -z "$expected" ]; then
     warn "Checksum entry not found for ${DIST_FILE}. Skipping verification."

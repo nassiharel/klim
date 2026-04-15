@@ -27,13 +27,13 @@ function Get-LatestVersion {
     }
 
     try {
-        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$GithubRepo/releases/latest" -UseBasicParsing
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$GithubRepo/releases/latest"
         return $release.tag_name
     }
     catch {
         # Fallback: follow redirect
         try {
-            $response = Invoke-WebRequest -Uri "https://github.com/$GithubRepo/releases/latest" -MaximumRedirection 0 -ErrorAction SilentlyContinue -UseBasicParsing
+            $response = Invoke-WebRequest -Uri "https://github.com/$GithubRepo/releases/latest" -MaximumRedirection 0 -ErrorAction SilentlyContinue
         }
         catch {
             if ($_.Exception.Response.Headers.Location) {
@@ -108,17 +108,17 @@ function Install-Clim {
         # Download archive
         Write-Host "[info]  Downloading $downloadUrl" -ForegroundColor Green
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -UseBasicParsing
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath
 
         # Download checksums
-        Invoke-WebRequest -Uri $checksumUrl -OutFile $checksumPath -UseBasicParsing
+        Invoke-WebRequest -Uri $checksumUrl -OutFile $checksumPath
 
         # Verify checksum
         if ($VerifyChecksum) {
             Write-Host "[info]  Verifying checksum..." -ForegroundColor Green
             $actual = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLower()
             $checksumContent = Get-Content $checksumPath
-            $expectedLine = $checksumContent | Where-Object { $_ -match $zipName }
+            $expectedLine = $checksumContent | Where-Object { $_.Contains($zipName) }
 
             if ($expectedLine) {
                 $expected = ($expectedLine -split '\s+')[0].ToLower()
