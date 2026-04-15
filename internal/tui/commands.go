@@ -33,7 +33,7 @@ var resolveSem = make(chan struct{}, 4)
 type recommendation struct {
 	toolIdx int    // index into the tools slice
 	score   int    // tag overlap score (higher = more relevant)
-	reason  string // e.g. "you have kubectl, helm"
+	reason  string // sorted installed tool names, e.g. "helm, kubectl, stern"
 }
 
 // maxRecommendations caps the number of recommendations shown.
@@ -80,15 +80,15 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 			continue
 		}
 
-		// Build reason from matched tool names (top 3).
+		// Build reason from matched installed tool names (sorted, top 3).
 		var reasons []string
 		for name := range matchedTools {
 			reasons = append(reasons, name)
-			if len(reasons) >= 3 {
-				break
-			}
 		}
 		sort.Strings(reasons)
+		if len(reasons) > 3 {
+			reasons = reasons[:3]
+		}
 		reason := strings.Join(reasons, ", ")
 
 		recs = append(recs, recommendation{

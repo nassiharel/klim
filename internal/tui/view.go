@@ -1577,7 +1577,6 @@ func toolLabel(tool registry.Tool) string {
 	return tool.Name
 }
 
-// itemLabel returns display if non-empty, otherwise name.
 // relatedTools returns up to 5 not-installed tools that share tags with the given tool.
 func (m Model) relatedTools(tool registry.Tool) []recommendation {
 	if len(tool.Tags) == 0 {
@@ -1618,6 +1617,7 @@ func (m Model) relatedTools(tool registry.Tool) []recommendation {
 	return recs
 }
 
+// itemLabel returns display if non-empty, otherwise name.
 func itemLabel(name, display string) string {
 	if display != "" {
 		return display
