@@ -16,8 +16,8 @@ marketplace/                Modular tool catalog (source of truth)
   tools/*.yaml              One file per tool definition
   packs/*.yaml              One file per pack definition
 scripts/                    Marketplace assembly & validation
-  assemble-marketplace.go   Combines individual files → marketplace.yaml
-  validate-marketplace.go   Schema validation, uniqueness, cross-references
+  assemble-marketplace/     Combines individual files → marketplace.yaml
+  validate-marketplace/     Schema validation, uniqueness, cross-references
 install.sh                 Linux/macOS installer script
 install.ps1                Windows PowerShell installer script
 Makefile                   build / test / lint / cover / clean
@@ -89,8 +89,8 @@ Create `marketplace/tools/mytool.yaml`:
 ```yaml
 name: mytool
 display_name: My Tool
-category: DevOps
-tags: [devops, automation]
+category: IaC
+tags: [automation, infrastructure]
 binary_names: [mytool]
 packages:
   brew: "mytool"

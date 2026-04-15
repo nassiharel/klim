@@ -54,6 +54,6 @@ jobs:
           # Create a detached commit with only marketplace.yaml
           git checkout --orphan marketplace-staging
           git rm -rf .
-          git add marketplace.yaml
+          git add -f marketplace.yaml
           git commit -m "Update marketplace catalog"
           git push -f origin marketplace-staging:marketplace

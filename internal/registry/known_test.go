@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestMergeToolDefs_NewEmbeddedToolAdded(t *testing.T) {
@@ -528,73 +530,93 @@ func findRepoRoot(t *testing.T) string {
 	}
 }
 
-// TestMarketplaceYAML_Integrity validates the actual marketplace.yaml file
-// that ships with the repository. This test runs in CI to catch mistakes
-// like duplicate tool names, empty fields, pack references to undefined tools, etc.
+// TestMarketplaceYAML_Integrity validates the marketplace by assembling
+// individual tool and pack files from marketplace/tools/ and marketplace/packs/,
+// then checking for duplicate names, empty fields, and dangling pack references.
 func TestMarketplaceYAML_Integrity(t *testing.T) {
 	root := findRepoRoot(t)
-	data, err := os.ReadFile(filepath.Join(root, "marketplace.yaml"))
+
+	// Assemble tools from individual files.
+	toolFiles, err := filepath.Glob(filepath.Join(root, "marketplace", "tools", "*.yaml"))
 	if err != nil {
-		t.Fatalf("reading marketplace.yaml: %v", err)
+		t.Fatalf("globbing tool files: %v", err)
+	}
+	if len(toolFiles) == 0 {
+		t.Fatal("no tool files found in marketplace/tools/")
 	}
 
-	// --- Parse tools ---
-	tools := parseToolDefs(data)
-	if len(tools) == 0 {
-		t.Fatal("marketplace.yaml has no tools")
-	}
+	toolNames := make(map[string]struct{}, len(toolFiles))
+	for _, f := range toolFiles {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("reading %s: %v", f, err)
+		}
+		var td toolDef
+		if err := yaml.Unmarshal(data, &td); err != nil {
+			t.Fatalf("parsing %s: %v", f, err)
+		}
 
-	toolNames := make(map[string]struct{}, len(tools))
-	for _, td := range tools {
+		if td.Name == "" {
+			t.Errorf("%s: tool with empty name", filepath.Base(f))
+		}
 		if _, exists := toolNames[td.Name]; exists {
 			t.Errorf("duplicate tool name: %q", td.Name)
 		}
 		toolNames[td.Name] = struct{}{}
 
-		if td.Name == "" {
-			t.Error("tool with empty name")
-		}
 		if len(td.BinaryNames) == 0 {
 			t.Errorf("tool %q has no binary_names", td.Name)
 		}
 	}
 
-	// --- Parse packs ---
-	packs, err := ParsePacksFromBytes(data)
+	// Assemble packs from individual files.
+	packFiles, err := filepath.Glob(filepath.Join(root, "marketplace", "packs", "*.yaml"))
 	if err != nil {
-		t.Fatalf("parsing packs: %v", err)
+		t.Fatalf("globbing pack files: %v", err)
 	}
 
-	packNames := make(map[string]struct{}, len(packs))
-	for _, pack := range packs {
-		if _, exists := packNames[pack.Name]; exists {
-			t.Errorf("duplicate pack name: %q", pack.Name)
+	packNames := make(map[string]struct{}, len(packFiles))
+	for _, f := range packFiles {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("reading %s: %v", f, err)
 		}
-		packNames[pack.Name] = struct{}{}
+		var pd struct {
+			Name  string   `yaml:"name"`
+			Tools []string `yaml:"tools"`
+		}
+		if err := yaml.Unmarshal(data, &pd); err != nil {
+			t.Fatalf("parsing %s: %v", f, err)
+		}
 
-		if pack.Name == "" {
-			t.Error("pack with empty name")
+		if pd.Name == "" {
+			t.Errorf("%s: pack with empty name", filepath.Base(f))
 		}
-		if len(pack.ToolNames) == 0 {
-			t.Errorf("pack %q has no tools", pack.Name)
+		if _, exists := packNames[pd.Name]; exists {
+			t.Errorf("duplicate pack name: %q", pd.Name)
+		}
+		packNames[pd.Name] = struct{}{}
+
+		if len(pd.Tools) == 0 {
+			t.Errorf("pack %q has no tools", pd.Name)
 		}
 
-		// Every tool referenced by a pack must exist in the tools section.
-		for _, toolName := range pack.ToolNames {
+		// Every tool referenced by a pack must exist.
+		for _, toolName := range pd.Tools {
 			if _, ok := toolNames[toolName]; !ok {
-				t.Errorf("pack %q references undefined tool %q", pack.Name, toolName)
+				t.Errorf("pack %q references undefined tool %q", pd.Name, toolName)
 			}
 		}
 
 		// No duplicate tool references within a pack.
-		seen := make(map[string]struct{}, len(pack.ToolNames))
-		for _, toolName := range pack.ToolNames {
+		seen := make(map[string]struct{}, len(pd.Tools))
+		for _, toolName := range pd.Tools {
 			if _, exists := seen[toolName]; exists {
-				t.Errorf("pack %q has duplicate tool reference %q", pack.Name, toolName)
+				t.Errorf("pack %q has duplicate tool reference %q", pd.Name, toolName)
 			}
 			seen[toolName] = struct{}{}
 		}
 	}
 
-	t.Logf("marketplace.yaml: %d tools, %d packs — all valid", len(tools), len(packs))
+	t.Logf("marketplace: %d tools, %d packs — all valid", len(toolFiles), len(packFiles))
 }

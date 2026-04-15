@@ -9,6 +9,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -78,7 +79,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	var errors []string
+	var errs []string
 
 	// --- Validate tools ---
 	toolFiles, err := filepath.Glob(filepath.Join(*dir, "tools", "*.yaml"))
@@ -94,8 +95,7 @@ func main() {
 
 	toolNames := make(map[string]string) // name → file path (for duplicate detection)
 	for _, f := range toolFiles {
-		errs := validateToolFile(f, toolNames, allowedCategories, allowedTags)
-		errors = append(errors, errs...)
+		errs = append(errs, validateToolFile(f, toolNames, allowedCategories, allowedTags)...)
 	}
 
 	// --- Validate packs ---
@@ -107,14 +107,13 @@ func main() {
 
 	packNames := make(map[string]string) // name → file path
 	for _, f := range packFiles {
-		errs := validatePackFile(f, packNames, toolNames)
-		errors = append(errors, errs...)
+		errs = append(errs, validatePackFile(f, packNames, toolNames)...)
 	}
 
 	// --- Report ---
-	if len(errors) > 0 {
-		fmt.Fprintf(os.Stderr, "Marketplace validation failed with %d error(s):\n\n", len(errors))
-		for _, e := range errors {
+	if len(errs) > 0 {
+		fmt.Fprintf(os.Stderr, "Marketplace validation failed with %d error(s):\n\n", len(errs))
+		for _, e := range errs {
 			fmt.Fprintf(os.Stderr, "  - %s\n", e)
 		}
 		fmt.Fprintln(os.Stderr)
@@ -136,7 +135,7 @@ func loadCategories(path string) (map[string]bool, error) {
 		return nil, fmt.Errorf("parsing categories.yaml: %w", err)
 	}
 	if len(cf.Categories) == 0 {
-		return nil, fmt.Errorf("categories.yaml has no categories")
+		return nil, errors.New("categories.yaml has no categories")
 	}
 	m := make(map[string]bool, len(cf.Categories))
 	for _, c := range cf.Categories {
@@ -159,7 +158,7 @@ func loadTags(path string) (map[string]bool, error) {
 		return nil, fmt.Errorf("parsing tags.yaml: %w", err)
 	}
 	if len(tf.Tags) == 0 {
-		return nil, fmt.Errorf("tags.yaml has no tags")
+		return nil, errors.New("tags.yaml has no tags")
 	}
 	m := make(map[string]bool, len(tf.Tags))
 	for _, t := range tf.Tags {
@@ -172,17 +171,17 @@ func loadTags(path string) (map[string]bool, error) {
 }
 
 func validateToolFile(path string, seen map[string]string, allowedCategories, allowedTags map[string]bool) []string {
-	var errors []string
+	var errs []string
 	rel := filepath.Base(path)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return []string{fmt.Sprintf("%s: cannot read file: %v", rel, err)}
+		return []string{rel + ": cannot read file: " + err.Error()}
 	}
 
 	var tool toolDef
 	if err := yaml.Unmarshal(data, &tool); err != nil {
-		return []string{fmt.Sprintf("%s: invalid YAML: %v", rel, err)}
+		return []string{rel + ": invalid YAML: " + err.Error()}
 	}
 
 	// Check for unknown fields by re-parsing with strict mode.
@@ -190,81 +189,80 @@ func validateToolFile(path string, seen map[string]string, allowedCategories, al
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&strict); err != nil {
-		errors = append(errors, fmt.Sprintf("%s: unknown field(s): %v", rel, err))
+		errs = append(errs, rel+": unknown field(s): "+err.Error())
 	}
 
 	// Required fields.
 	if tool.Name == "" {
-		errors = append(errors, fmt.Sprintf("%s: missing required field 'name'", rel))
+		errs = append(errs, rel+": missing required field 'name'")
 	}
 	if tool.DisplayName == "" {
-		errors = append(errors, fmt.Sprintf("%s: missing required field 'display_name'", rel))
+		errs = append(errs, rel+": missing required field 'display_name'")
 	}
 	if tool.Category == "" {
-		errors = append(errors, fmt.Sprintf("%s: missing required field 'category'", rel))
+		errs = append(errs, rel+": missing required field 'category'")
 	}
 	if len(tool.BinaryNames) == 0 {
-		errors = append(errors, fmt.Sprintf("%s: missing required field 'binary_names' (must have at least one)", rel))
+		errs = append(errs, rel+": missing required field 'binary_names' (must have at least one)")
 	}
 
 	// Name format.
 	if tool.Name != "" && !validName.MatchString(tool.Name) {
-		errors = append(errors, fmt.Sprintf("%s: name %q is invalid (must be lowercase alphanumeric + hyphens)", rel, tool.Name))
+		errs = append(errs, fmt.Sprintf("%s: name %q is invalid (must be lowercase alphanumeric + hyphens)", rel, tool.Name))
 	}
 
 	// Filename must match name.
-	expectedFilename := tool.Name + ".yaml"
-	if tool.Name != "" && rel != expectedFilename {
-		errors = append(errors, fmt.Sprintf("%s: filename must match name field (expected %s)", rel, expectedFilename))
+	if tool.Name != "" && rel != tool.Name+".yaml" {
+		errs = append(errs, fmt.Sprintf("%s: filename must match name field (expected %s.yaml)", rel, tool.Name))
 	}
 
 	// Category must be from allowed set.
 	if tool.Category != "" && !allowedCategories[tool.Category] {
 		cats := sortedKeys(allowedCategories)
-		errors = append(errors, fmt.Sprintf("%s: invalid category %q (allowed: %s)", rel, tool.Category, strings.Join(cats, ", ")))
+		errs = append(errs, fmt.Sprintf("%s: invalid category %q (allowed: %s)", rel, tool.Category, strings.Join(cats, ", ")))
 	}
 
 	// Tags must be from allowed set, no duplicates within a tool.
 	seenTags := make(map[string]bool, len(tool.Tags))
 	for _, tag := range tool.Tags {
 		if !allowedTags[tag] {
-			errors = append(errors, fmt.Sprintf("%s: unknown tag %q (add it to tags.yaml first)", rel, tag))
+			errs = append(errs, fmt.Sprintf("%s: unknown tag %q (add it to tags.yaml first)", rel, tag))
 		}
 		if seenTags[tag] {
-			errors = append(errors, fmt.Sprintf("%s: duplicate tag %q", rel, tag))
+			errs = append(errs, fmt.Sprintf("%s: duplicate tag %q", rel, tag))
 		}
 		seenTags[tag] = true
 	}
 
 	// Must have at least one package manager.
 	if !hasAnyPackage(tool.Packages) {
-		errors = append(errors, fmt.Sprintf("%s: must define at least one package manager in 'packages'", rel))
+		errs = append(errs, rel+": must define at least one package manager in 'packages'")
 	}
 
 	// Duplicate detection.
 	if tool.Name != "" {
 		if prev, exists := seen[tool.Name]; exists {
-			errors = append(errors, fmt.Sprintf("%s: duplicate tool name %q (also in %s)", rel, tool.Name, filepath.Base(prev)))
+			errs = append(errs, fmt.Sprintf("%s: duplicate tool name %q (also in %s)", rel, tool.Name, filepath.Base(prev)))
 		} else {
 			seen[tool.Name] = path
 		}
 	}
 
-	return errors
+	return errs
 }
 
 func validatePackFile(path string, seenPacks, toolNames map[string]string) []string {
-	var errors []string
+	var errs []string
 	rel := filepath.Base(path)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return []string{fmt.Sprintf("%s: cannot read file: %v", rel, err)}
+		return []string{rel + ": cannot read file: " + err.Error()}
 	}
 
 	var pack packDef
 	if err := yaml.Unmarshal(data, &pack); err != nil {
-		return []string{fmt.Sprintf("%s: invalid YAML: %v", rel, err)}
+		return []string{rel + ": invalid YAML: " + err.Error()}
 	}
 
 	// Check for unknown fields.
@@ -272,48 +270,47 @@ func validatePackFile(path string, seenPacks, toolNames map[string]string) []str
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&strict); err != nil {
-		errors = append(errors, fmt.Sprintf("%s: unknown field(s): %v", rel, err))
+		errs = append(errs, rel+": unknown field(s): "+err.Error())
 	}
 
 	// Required fields.
 	if pack.Name == "" {
-		errors = append(errors, fmt.Sprintf("%s: missing required field 'name'", rel))
+		errs = append(errs, rel+": missing required field 'name'")
 	}
 	if pack.DisplayName == "" {
-		errors = append(errors, fmt.Sprintf("%s: missing required field 'display_name'", rel))
+		errs = append(errs, rel+": missing required field 'display_name'")
 	}
 	if len(pack.Tools) == 0 {
-		errors = append(errors, fmt.Sprintf("%s: missing required field 'tools' (must have at least one)", rel))
+		errs = append(errs, rel+": missing required field 'tools' (must have at least one)")
 	}
 
 	// Name format.
 	if pack.Name != "" && !validName.MatchString(pack.Name) {
-		errors = append(errors, fmt.Sprintf("%s: name %q is invalid (must be lowercase alphanumeric + hyphens)", rel, pack.Name))
+		errs = append(errs, fmt.Sprintf("%s: name %q is invalid (must be lowercase alphanumeric + hyphens)", rel, pack.Name))
 	}
 
 	// Filename must match name.
-	expectedFilename := pack.Name + ".yaml"
-	if pack.Name != "" && rel != expectedFilename {
-		errors = append(errors, fmt.Sprintf("%s: filename must match name field (expected %s)", rel, expectedFilename))
+	if pack.Name != "" && rel != pack.Name+".yaml" {
+		errs = append(errs, fmt.Sprintf("%s: filename must match name field (expected %s.yaml)", rel, pack.Name))
 	}
 
 	// All referenced tools must exist.
 	for _, toolName := range pack.Tools {
 		if _, exists := toolNames[toolName]; !exists {
-			errors = append(errors, fmt.Sprintf("%s: references unknown tool %q", rel, toolName))
+			errs = append(errs, fmt.Sprintf("%s: references unknown tool %q", rel, toolName))
 		}
 	}
 
 	// Duplicate detection.
 	if pack.Name != "" {
 		if prev, exists := seenPacks[pack.Name]; exists {
-			errors = append(errors, fmt.Sprintf("%s: duplicate pack name %q (also in %s)", rel, pack.Name, filepath.Base(prev)))
+			errs = append(errs, fmt.Sprintf("%s: duplicate pack name %q (also in %s)", rel, pack.Name, filepath.Base(prev)))
 		} else {
 			seenPacks[pack.Name] = path
 		}
 	}
 
-	return errors
+	return errs
 }
 
 func hasAnyPackage(p packageDef) bool {
