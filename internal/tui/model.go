@@ -1194,6 +1194,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		m.updateSelected = make(map[int]bool)
 		m.batchUpdating = false
+		// Invalidate in-flight version resolution from the previous scan so
+		// stale toolVersionMsg messages are discarded immediately — without
+		// this, late arrivals could decrement pending and flip phase to done
+		// before scanResultMsg resets the counter.
+		m.scanGen++
+		m.pending = 0
 		return m, tea.Batch(
 			m.spinner.Tick,
 			func() tea.Msg { return findToolsCmd(m.svc)() },

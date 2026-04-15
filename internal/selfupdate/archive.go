@@ -77,7 +77,7 @@ func extractFromTarGz(r io.Reader, goos string) ([]byte, error) {
 
 func extractFromZip(r io.Reader, goos string) ([]byte, error) {
 	// zip requires io.ReaderAt, so buffer into memory.
-	// This is acceptable — release archives are typically <20 MB.
+	// The reader is already bounded by maxDownloadSize (200 MB) upstream.
 	buf, err := io.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("buffering zip archive: %w", err)

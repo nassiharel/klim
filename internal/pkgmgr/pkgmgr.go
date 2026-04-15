@@ -315,8 +315,7 @@ func snapLatestVersion(ctx context.Context, pkg string) string {
 
 var (
 	npmGlobalCache map[string]string
-	npmCacheLoaded bool
-	npmMu          sync.Mutex
+	npmOnce        sync.Once
 )
 
 func loadNpmGlobals(ctx context.Context) map[string]string {
@@ -340,13 +339,10 @@ func loadNpmGlobals(ctx context.Context) map[string]string {
 }
 
 func npmInstalledVersion(ctx context.Context, pkg string) string {
-	npmMu.Lock()
-	if !npmCacheLoaded {
+	npmOnce.Do(func() {
 		npmGlobalCache = loadNpmGlobals(ctx)
-		npmCacheLoaded = true
-	}
+	})
 	cache := npmGlobalCache
-	npmMu.Unlock()
 
 	if cache == nil {
 		return ""
@@ -413,6 +409,9 @@ func parseDpkgStatus() map[string]string {
 	}
 	if pkg != "" && version != "" && installed {
 		versions[pkg] = cleanDebianVersion(version)
+	}
+	if err := scanner.Err(); err != nil {
+		slog.Warn("dpkg status scan incomplete", "error", err)
 	}
 	return versions
 }
