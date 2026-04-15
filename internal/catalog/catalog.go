@@ -16,6 +16,8 @@ import (
 	"sort"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/nassiharel/clim/internal/config"
 )
 
 // --- Fetcher ---
@@ -25,14 +27,11 @@ type MarketplaceFetcher interface {
 	Fetch(ctx context.Context) ([]byte, error)
 }
 
-// defaultMarketplaceURL is the canonical marketplace.yaml location on GitHub.
-const defaultMarketplaceURL = "https://raw.githubusercontent.com/nassiharel/clim/main/marketplace.yaml"
-
 // GitHubFetcher fetches marketplace.yaml from a configured URL,
 // defaulting to GitHub raw content if no URL is set.
 type GitHubFetcher struct {
 	HTTPClient *http.Client // defaults to http.DefaultClient
-	URL        string       // marketplace URL; empty = defaultMarketplaceURL
+	URL        string       // marketplace URL; empty = config.DefaultMarketplaceURL
 }
 
 // maxCatalogSize caps the downloaded catalog to prevent memory exhaustion.
@@ -42,7 +41,7 @@ const maxCatalogSize = 2 << 20 // 2 MB — marketplace.yaml is ~20 KB
 func (f *GitHubFetcher) Fetch(ctx context.Context) ([]byte, error) {
 	url := f.URL
 	if url == "" {
-		url = defaultMarketplaceURL
+		url = config.DefaultMarketplaceURL
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

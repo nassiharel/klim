@@ -11,6 +11,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DefaultMarketplaceURL is the canonical marketplace.yaml location on GitHub.
+const DefaultMarketplaceURL = "https://raw.githubusercontent.com/nassiharel/clim/main/marketplace.yaml"
+
 // Config holds all clim configuration.
 type Config struct {
 	Logging     LoggingConfig     `yaml:"logging"`
@@ -80,6 +83,7 @@ func Default() *Config {
 			Verbose: false,
 		},
 		Marketplace: MarketplaceConfig{
+			URL:             DefaultMarketplaceURL,
 			AutoRefresh:     false,
 			RefreshInterval: Duration{24 * time.Hour},
 		},
@@ -142,38 +146,15 @@ func MustLoad() *Config {
 	return cfg
 }
 
-// defaultConfigTemplate is the commented YAML written on first run.
-const defaultConfigTemplate = `# clim — Configuration
-# All values are optional. Defaults are shown below.
-# Restart clim after editing for changes to take effect.
+const configHeader = "# clim — Configuration\n# All values are optional. Defaults are shown below.\n# Restart clim after editing for changes to take effect.\n\n"
 
-# Logging settings.
-logging:
-  level: debug             # debug, info, warn, error
-  file: true               # write to ~/.config/clim/clim.log
-  verbose: false           # also log to stderr (same as --verbose flag)
-
-# Marketplace settings.
-marketplace:
-  # url: ""              # full URL override (e.g. http://localhost:5000/marketplace.yaml)
-  auto_refresh: false    # auto-fetch latest catalog on startup
-  refresh_interval: 24h  # minimum time between auto-refreshes
-
-# Performance tuning.
-performance:
-  concurrency: 0         # max parallel version checks (0 = auto)
-  command_timeout: 30s   # timeout for package manager subprocess calls
-
-# UI preferences.
-ui:
-  default_tab: installed # startup tab: installed, updates, marketplace, backup, config
-  show_path: true        # show PATH column in list output
-  sidebar_right: false   # true = filter sidebar on right side
-`
-
-func writeDefault(path string, _ *Config) error {
+func writeDefault(path string, cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(defaultConfigTemplate), 0o644)
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(configHeader+string(data)), 0o644)
 }

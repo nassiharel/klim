@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -78,6 +79,14 @@ func (m Model) renderView() string {
 	// Marketplace Packs sub-tab — separate rendering path.
 	if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
 		b.WriteString(m.renderPacksList())
+		b.WriteString("\n")
+		b.WriteString(m.renderHelp())
+		return b.String()
+	}
+
+	// Marketplace For You sub-tab — separate rendering path.
+	if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
+		b.WriteString(m.renderForYouList())
 		b.WriteString("\n")
 		b.WriteString(m.renderHelp())
 		return b.String()
@@ -188,18 +197,25 @@ func (m Model) renderSearchBar() string {
 
 // --- Marketplace sub-tabs & packs ---
 
-// renderDiscoverSubTabs renders the [Tools] [Packs] sub-tab bar.
+// renderDiscoverSubTabs renders the [Tools] [Packs] [For You] sub-tab bar.
 func (m Model) renderDiscoverSubTabs() string {
-	toolsLabel := "Tools"
-	packsLabel := "Packs"
-	if m.discoverSubTab == discoverTools {
-		toolsLabel = activeTabStyle.Render(toolsLabel)
-		packsLabel = dimVersion.Render(packsLabel)
-	} else {
-		toolsLabel = dimVersion.Render(toolsLabel)
-		packsLabel = activeTabStyle.Render(packsLabel)
+	labels := []struct {
+		name string
+		idx  int
+	}{
+		{"Tools", discoverTools},
+		{"Packs", discoverPacks},
+		{"For You", discoverForYou},
 	}
-	return "  " + toolsLabel + "  " + packsLabel
+	var parts []string
+	for _, l := range labels {
+		if l.idx == m.discoverSubTab {
+			parts = append(parts, activeTabStyle.Render(l.name))
+		} else {
+			parts = append(parts, dimVersion.Render(l.name))
+		}
+	}
+	return "  " + strings.Join(parts, "  ")
 }
 
 // renderPacksList renders the list of packs for the Packs sub-tab.
@@ -277,6 +293,79 @@ func (m Model) renderPacksList() string {
 
 	// Pad remaining rows.
 	rendered := max(min(len(m.packs)-start, visibleRows), 0)
+	for range max(visibleRows-rendered, 0) {
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// renderForYouList renders the smart recommendations for the For You sub-tab.
+func (m Model) renderForYouList() string {
+	var b strings.Builder
+
+	if len(m.recommendations) == 0 {
+		b.WriteString("\n  " + dimVersion.Render("No recommendations — install some tools first!") + "\n")
+		return b.String()
+	}
+
+	// Header.
+	b.WriteString("  " +
+		headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
+		headerStyle.Render(fixedWidth("MATCH", 6)) + "  " +
+		headerStyle.Render("BECAUSE YOU HAVE") + "\n")
+
+	visibleRows := m.height - 12
+	if visibleRows < 3 {
+		visibleRows = 3
+	}
+	start := 0
+	if m.cursor >= visibleRows {
+		start = m.cursor - visibleRows + 1
+	}
+
+	// Find max score for relative bar sizing.
+	maxScore := 1
+	for _, rec := range m.recommendations {
+		if rec.score > maxScore {
+			maxScore = rec.score
+		}
+	}
+
+	for vi := start; vi < len(m.recommendations) && vi < start+visibleRows; vi++ {
+		rec := m.recommendations[vi]
+		tool := m.tools[rec.toolIdx]
+		selected := vi == m.cursor
+
+		cursor := "  "
+		if selected {
+			cursor = "▸ "
+		}
+
+		nameCell := nameStyle.Render(fixedWidth(tool.Name, colName))
+
+		// Score bar: scale to 5 chars max.
+		barLen := (rec.score * 5) / maxScore
+		if barLen < 1 {
+			barLen = 1
+		}
+		bar := upgradableStyle.Render(strings.Repeat("█", barLen) + strings.Repeat("░", 5-barLen))
+
+		reasonCell := dimVersion.Render(rec.reason)
+
+		line := cursor + nameCell + "  " + bar + " " + reasonCell
+		if selected {
+			w := lipgloss.Width(line)
+			if w < m.width {
+				line += strings.Repeat(" ", m.width-w)
+			}
+			line = selectedRowStyle.Render(line)
+		}
+		b.WriteString(line + "\n")
+	}
+
+	// Pad remaining rows.
+	rendered := max(min(len(m.recommendations)-start, visibleRows), 0)
 	for range max(visibleRows-rendered, 0) {
 		b.WriteString("\n")
 	}
@@ -717,6 +806,30 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 			fmt.Fprintf(&b, "    %-8s  %s\n",
 				sourceStyle.Render(ic.source),
 				detailCmdStyle.Render(ic.cmd),
+			)
+		}
+		b.WriteString("\n")
+	}
+
+	// ── You might also like ────────────────────────────────────
+	if related := m.relatedTools(tool); len(related) > 0 {
+		b.WriteString("  " + label("You might also like:") + "\n")
+		maxScore := 1
+		for _, r := range related {
+			if r.score > maxScore {
+				maxScore = r.score
+			}
+		}
+		for _, r := range related {
+			rt := m.tools[r.toolIdx]
+			barLen := (r.score * 5) / maxScore
+			if barLen < 1 {
+				barLen = 1
+			}
+			bar := upgradableStyle.Render(strings.Repeat("█", barLen) + strings.Repeat("░", 5-barLen))
+			fmt.Fprintf(&b, "    %s %s\n",
+				nameStyle.Render(fixedWidth(rt.Name, 16)),
+				bar,
 			)
 		}
 		b.WriteString("\n")
@@ -1462,6 +1575,46 @@ func toolResolved(tool registry.Tool) bool {
 // toolLabel returns the tool's short name for list rows.
 func toolLabel(tool registry.Tool) string {
 	return tool.Name
+}
+
+// relatedTools returns up to 5 not-installed tools that share tags with the given tool.
+func (m Model) relatedTools(tool registry.Tool) []recommendation {
+	if len(tool.Tags) == 0 {
+		return nil
+	}
+	tagSet := make(map[string]struct{}, len(tool.Tags))
+	for _, tag := range tool.Tags {
+		tagSet[tag] = struct{}{}
+	}
+
+	var recs []recommendation
+	for i, t := range m.tools {
+		if t.Name == tool.Name || t.IsInstalled() {
+			continue
+		}
+		score := 0
+		for _, tag := range t.Tags {
+			if _, ok := tagSet[tag]; ok {
+				score++
+			}
+		}
+		if score == 0 {
+			continue
+		}
+		recs = append(recs, recommendation{toolIdx: i, score: score})
+	}
+
+	sort.Slice(recs, func(i, j int) bool {
+		if recs[i].score != recs[j].score {
+			return recs[i].score > recs[j].score
+		}
+		return m.tools[recs[i].toolIdx].Name < m.tools[recs[j].toolIdx].Name
+	})
+
+	if len(recs) > 5 {
+		recs = recs[:5]
+	}
+	return recs
 }
 
 // itemLabel returns display if non-empty, otherwise name.

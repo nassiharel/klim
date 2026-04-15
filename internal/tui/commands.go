@@ -27,6 +27,93 @@ import (
 // subprocess calls that overwhelm package managers and cause timeouts.
 var resolveSem = make(chan struct{}, 4)
 
+// --- Recommendation types ---
+
+// recommendation represents a tool suggested based on tag overlap with installed tools.
+type recommendation struct {
+	toolIdx int    // index into the tools slice
+	score   int    // tag overlap score (higher = more relevant)
+	reason  string // sorted installed tool names, e.g. "helm, kubectl, stern"
+}
+
+// maxRecommendations caps the number of recommendations shown.
+const maxRecommendations = 20
+
+// computeRecommendations ranks not-installed tools by tag overlap with installed tools.
+func computeRecommendations(tools []registry.Tool) []recommendation {
+	// Build tag frequency from installed tools.
+	tagFreq := make(map[string]int)
+	// Track which installed tools have each tag (for "why" reasons).
+	tagSources := make(map[string][]string) // tag → installed tool names
+	for _, t := range tools {
+		if !t.IsInstalled() {
+			continue
+		}
+		for _, tag := range t.Tags {
+			tagFreq[tag]++
+			tagSources[tag] = append(tagSources[tag], t.Name)
+		}
+	}
+
+	if len(tagFreq) == 0 {
+		return nil
+	}
+
+	// Score each not-installed tool.
+	var recs []recommendation
+	for i, t := range tools {
+		if t.IsInstalled() {
+			continue
+		}
+		score := 0
+		matchedTools := make(map[string]struct{})
+		for _, tag := range t.Tags {
+			if freq, ok := tagFreq[tag]; ok {
+				score += freq
+				// Collect up to 3 installed tool names that share this tag.
+				for _, src := range tagSources[tag] {
+					matchedTools[src] = struct{}{}
+				}
+			}
+		}
+		if score == 0 {
+			continue
+		}
+
+		// Build reason from matched installed tool names (sorted, top 3).
+		var reasons []string
+		for name := range matchedTools {
+			reasons = append(reasons, name)
+		}
+		sort.Strings(reasons)
+		if len(reasons) > 3 {
+			reasons = reasons[:3]
+		}
+		reason := strings.Join(reasons, ", ")
+
+		recs = append(recs, recommendation{
+			toolIdx: i,
+			score:   score,
+			reason:  reason,
+		})
+	}
+
+	// Sort by score descending, then name ascending.
+	sort.Slice(recs, func(i, j int) bool {
+		if recs[i].score != recs[j].score {
+			return recs[i].score > recs[j].score
+		}
+		return tools[recs[i].toolIdx].Name < tools[recs[j].toolIdx].Name
+	})
+
+	// Cap at maxRecommendations.
+	if len(recs) > maxRecommendations {
+		recs = recs[:maxRecommendations]
+	}
+
+	return recs
+}
+
 // --- Scan & version resolution messages ---
 
 type scanResultMsg struct {

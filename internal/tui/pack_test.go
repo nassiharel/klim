@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nassiharel/clim/internal/registry"
@@ -266,5 +267,103 @@ func TestBuildPackInstallItems_MixedCatalogAndMissing(t *testing.T) {
 	}
 	if items[1].errMsg != "not in catalog" {
 		t.Errorf("phantom-tool: errMsg = %q, want 'not in catalog'", items[1].errMsg)
+	}
+}
+
+// --- Recommendation tests ---
+
+func TestComputeRecommendations_Basic(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "kubectl", Tags: []string{"kubernetes", "k8s", "cluster"}, Instances: []registry.Instance{{Path: "/usr/bin/kubectl"}}},
+		{Name: "helm", Tags: []string{"kubernetes", "k8s", "charts"}, Instances: []registry.Instance{{Path: "/usr/bin/helm"}}},
+		{Name: "stern", Tags: []string{"kubernetes", "k8s", "logs", "tail"}},
+		{Name: "k9s", Tags: []string{"kubernetes", "k8s", "tui"}},
+		{Name: "ansible", Tags: []string{"automation", "ssh", "agentless"}},
+	}
+
+	recs := computeRecommendations(tools)
+
+	if len(recs) == 0 {
+		t.Fatal("expected recommendations, got none")
+	}
+
+	recNames := make(map[string]bool)
+	for _, r := range recs {
+		recNames[tools[r.toolIdx].Name] = true
+	}
+	if !recNames["stern"] {
+		t.Error("expected stern in recommendations")
+	}
+	if !recNames["k9s"] {
+		t.Error("expected k9s in recommendations")
+	}
+	if recNames["ansible"] {
+		t.Error("ansible should not be recommended (no tag overlap)")
+	}
+	if recs[0].score < recs[len(recs)-1].score {
+		t.Error("recommendations should be sorted by score descending")
+	}
+}
+
+func TestComputeRecommendations_ScoreOrdering(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "git", Tags: []string{"vcs", "scm"}, Instances: []registry.Instance{{Path: "/usr/bin/git"}}},
+		{Name: "kubectl", Tags: []string{"kubernetes", "k8s"}, Instances: []registry.Instance{{Path: "/usr/bin/kubectl"}}},
+		{Name: "helm", Tags: []string{"kubernetes", "k8s", "charts"}},
+		{Name: "gh", Tags: []string{"vcs", "github"}},
+	}
+
+	recs := computeRecommendations(tools)
+
+	if len(recs) < 2 {
+		t.Fatalf("expected at least 2 recs, got %d", len(recs))
+	}
+	if tools[recs[0].toolIdx].Name != "helm" {
+		t.Errorf("expected helm first, got %s", tools[recs[0].toolIdx].Name)
+	}
+}
+
+func TestComputeRecommendations_NoInstalledTools(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "git", Tags: []string{"vcs"}},
+		{Name: "kubectl", Tags: []string{"kubernetes"}},
+	}
+
+	recs := computeRecommendations(tools)
+
+	if len(recs) != 0 {
+		t.Errorf("expected 0 recommendations when nothing installed, got %d", len(recs))
+	}
+}
+
+func TestComputeRecommendations_AllInstalled(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "git", Tags: []string{"vcs"}, Instances: []registry.Instance{{Path: "/usr/bin/git"}}},
+		{Name: "gh", Tags: []string{"vcs"}, Instances: []registry.Instance{{Path: "/usr/bin/gh"}}},
+	}
+
+	recs := computeRecommendations(tools)
+
+	if len(recs) != 0 {
+		t.Errorf("expected 0 recommendations when all installed, got %d", len(recs))
+	}
+}
+
+func TestComputeRecommendations_ReasonContainsToolNames(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "kubectl", Tags: []string{"kubernetes"}, Instances: []registry.Instance{{Path: "/usr/bin/kubectl"}}},
+		{Name: "stern", Tags: []string{"kubernetes", "logs"}},
+	}
+
+	recs := computeRecommendations(tools)
+
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 rec, got %d", len(recs))
+	}
+	if recs[0].reason == "" {
+		t.Error("expected non-empty reason")
+	}
+	if !strings.Contains(recs[0].reason, "kubectl") {
+		t.Errorf("reason %q should mention kubectl", recs[0].reason)
 	}
 }
