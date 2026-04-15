@@ -253,6 +253,11 @@ func (m *Model) startScan() tea.Cmd {
 	m.cursor = 0
 	m.scanGen++
 	m.pending = 0
+	// Clear upgrade selection — indices are tied to the old tool ordering
+	// and would select the wrong tools after a rescan reorders the list.
+	m.updateSelected = make(map[int]bool)
+	m.batchUpdating = false
+	m.batchQueue = nil
 	return tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg { return findToolsCmd(m.svc)() },
@@ -1195,8 +1200,6 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, refreshMarketplaceCmd(fetcher)
 		}
 		// On other tabs, do a full rescan.
-		m.updateSelected = make(map[int]bool)
-		m.batchUpdating = false
 		cmd := m.startScan()
 		return m, cmd
 	}
@@ -1671,8 +1674,6 @@ func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
 // Returns (model, nil) when the queue is empty.
 func (m Model) fireNextBatchUpgrade() (tea.Model, tea.Cmd) {
 	if len(m.batchQueue) == 0 {
-		m.batchUpdating = false
-		m.updateSelected = make(map[int]bool)
 		cmd := m.startScan()
 		m.statusMsg = "✓ Batch upgrade complete — refreshing..."
 		return m, cmd

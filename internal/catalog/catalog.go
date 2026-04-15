@@ -127,7 +127,9 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error
 
 	// Write cache atomically: write to temp file, then rename.
 	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr == nil {
-		_ = atomicWriteFile(path, data, 0o644)
+		if writeErr := atomicWriteFile(path, data, 0o644); writeErr != nil {
+			slog.Warn("failed to write catalog cache", "path", path, "error", writeErr)
+		}
 	}
 
 	return data, nil
@@ -285,7 +287,9 @@ func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, e
 	// Update the remote cache (not the user file — the merge in registry
 	// will incorporate new tools on next load).
 	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr == nil {
-		_ = atomicWriteFile(cachePath, remote, 0o644)
+		if writeErr := atomicWriteFile(cachePath, remote, 0o644); writeErr != nil {
+			slog.Warn("failed to write catalog cache", "path", cachePath, "error", writeErr)
+		}
 	}
 
 	return &RefreshResult{
@@ -305,8 +309,7 @@ func userMarketplacePath() (string, error) {
 
 // atomicWriteFile writes data to a temp file in the same directory, then
 // renames it to the target path. This prevents partial/corrupt files if the
-// process is interrupted mid-write. Uses os.CreateTemp for safe temp names
-// and removes the destination on Windows where os.Rename fails if it exists.
+// process is interrupted mid-write. Uses os.CreateTemp for safe temp names.
 func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
@@ -330,12 +333,15 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 		return err
 	}
 
-	// On Windows os.Rename fails if the destination exists — remove it first.
-	// This creates a tiny window where the file is absent, but the cache is
-	// non-critical (re-fetched on next run if missing).
-	_ = os.Remove(path)
-
 	if err := os.Rename(tmpPath, path); err != nil {
+		// On Windows os.Rename fails if the destination exists.
+		// Remove the destination and retry once; on non-Windows this
+		// path is only reached for unexpected errors.
+		if removeErr := os.Remove(path); removeErr == nil {
+			if retryErr := os.Rename(tmpPath, path); retryErr == nil {
+				return nil
+			}
+		}
 		_ = os.Remove(tmpPath)
 		return err
 	}

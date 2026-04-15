@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -94,7 +95,7 @@ func (g *GitHubClient) httpClient() *http.Client {
 	if g.HTTPClient != nil {
 		return g.HTTPClient
 	}
-	return http.DefaultClient
+	return &http.Client{Timeout: 60 * time.Second}
 }
 
 func (g *GitHubClient) owner() string {
