@@ -101,6 +101,20 @@ All in a single command, with an interactive TUI or scriptable output.
 
 ## Install
 
+### Quick Install
+
+**macOS / Linux:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+```
+
 ### Homebrew (macOS/Linux)
 
 ```bash

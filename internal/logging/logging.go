@@ -9,24 +9,32 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-var logPath string
+var (
+	logPath   string
+	logPathMu sync.Mutex
+)
 
 // Init configures the default slog logger.
 // Call once at startup, before any other package uses slog.
 // The verbose parameter (from --verbose flag) is OR'd with the config setting.
 func Init(level string, fileEnabled bool, verbose bool) {
+	logPathMu.Lock()
 	logPath = "" // reset in case of repeated calls
+	var resolvedPath string
+
 	var writers []io.Writer
 
 	if fileEnabled {
-		logPath = resolveLogPath()
-		if logPath != "" {
+		resolvedPath = resolveLogPath()
+		if resolvedPath != "" {
+			logPath = resolvedPath
 			writers = append(writers, &lumberjack.Logger{
-				Filename:   logPath,
+				Filename:   resolvedPath,
 				MaxSize:    2, // MB
 				MaxBackups: 3,
 				MaxAge:     14, // days
@@ -34,6 +42,7 @@ func Init(level string, fileEnabled bool, verbose bool) {
 			})
 		}
 	}
+	logPathMu.Unlock()
 
 	if verbose {
 		writers = append(writers, os.Stderr)
@@ -48,11 +57,13 @@ func Init(level string, fileEnabled bool, verbose bool) {
 	handler := slog.NewTextHandler(w, &slog.HandlerOptions{Level: parseLevel(level)})
 	slog.SetDefault(slog.New(handler))
 
-	slog.Debug("logging initialized", "path", logPath, "level", level, "verbose", verbose)
+	slog.Debug("logging initialized", "path", resolvedPath, "level", level, "verbose", verbose)
 }
 
 // Path returns the resolved log file path, or "" if file logging is disabled.
 func Path() string {
+	logPathMu.Lock()
+	defer logPathMu.Unlock()
 	return logPath
 }
 

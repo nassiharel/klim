@@ -37,6 +37,10 @@ func ExtractBinary(r io.Reader, archiveName string, goos string) ([]byte, error)
 	}
 }
 
+// maxDecompressedSize caps total decompressed tar data to prevent gzip bombs.
+// Release archives contain the binary (~20 MB) plus README/LICENSE (~50 KB).
+const maxDecompressedSize = maxBinarySize + (1 << 20) // binary limit + 1 MB headroom
+
 func extractFromTarGz(r io.Reader, goos string) ([]byte, error) {
 	gz, err := gzip.NewReader(r)
 	if err != nil {
@@ -44,7 +48,8 @@ func extractFromTarGz(r io.Reader, goos string) ([]byte, error) {
 	}
 	defer func() { _ = gz.Close() }()
 
-	tr := tar.NewReader(gz)
+	// Limit decompressed data to prevent gzip bombs from exhausting memory.
+	tr := tar.NewReader(io.LimitReader(gz, maxDecompressedSize))
 	target := binaryName(goos)
 
 	for {
@@ -77,7 +82,7 @@ func extractFromTarGz(r io.Reader, goos string) ([]byte, error) {
 
 func extractFromZip(r io.Reader, goos string) ([]byte, error) {
 	// zip requires io.ReaderAt, so buffer into memory.
-	// This is acceptable — release archives are typically <20 MB.
+	// The reader is already bounded by maxDownloadSize (200 MB) upstream.
 	buf, err := io.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("buffering zip archive: %w", err)

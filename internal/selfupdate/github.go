@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -34,7 +35,7 @@ func (r Release) Version() string {
 // GitHubClient handles communication with the GitHub Releases API.
 // Fields are exported to allow test injection.
 type GitHubClient struct {
-	HTTPClient *http.Client // defaults to http.DefaultClient
+	HTTPClient *http.Client // nil = default client with 60s timeout (via Options.httpClient)
 	Owner      string       // defaults to "nassiharel"
 	Repo       string       // defaults to "clim"
 	BaseURL    string       // defaults to "https://api.github.com"
@@ -50,6 +51,7 @@ func (g *GitHubClient) FetchLatestRelease(ctx context.Context) (*Release, error)
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "clim/selfupdate")
 
 	resp, err := g.httpClient().Do(req)
 	if err != nil {
@@ -93,7 +95,7 @@ func (g *GitHubClient) httpClient() *http.Client {
 	if g.HTTPClient != nil {
 		return g.HTTPClient
 	}
-	return http.DefaultClient
+	return &http.Client{Timeout: 60 * time.Second}
 }
 
 func (g *GitHubClient) owner() string {

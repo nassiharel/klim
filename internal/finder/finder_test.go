@@ -1,6 +1,7 @@
 package finder
 
 import (
+	"os/exec"
 	"runtime"
 	"testing"
 
@@ -56,16 +57,17 @@ func TestDetectSource(t *testing.T) {
 			registry.SourceSnap,
 		},
 
-		// Apt / system packages.
+		// Apt / system packages — only detected as apt on Debian-based systems
+		// where dpkg is available; otherwise falls back to manual.
 		{
 			"usr bin",
 			"/usr/bin/git",
-			registry.SourceApt,
+			usrBinSource(),
 		},
 		{
 			"usr lib",
 			"/usr/lib/python3/dist-packages/bin/python3",
-			registry.SourceApt,
+			usrBinSource(),
 		},
 
 		// NPM.
@@ -79,11 +81,11 @@ func TestDetectSource(t *testing.T) {
 			"/opt/node/lib/node_modules/.bin/prettier",
 			registry.SourceNPM,
 		},
-		// Note: /usr/lib/node_modules matches SourceApt first (order-dependent).
+		// Note: /usr/lib/node_modules — node_modules check comes before /usr/lib.
 		{
-			"usr lib node_modules matches apt",
+			"usr lib node_modules matches npm",
 			"/usr/lib/node_modules/.bin/prettier",
-			registry.SourceApt,
+			registry.SourceNPM,
 		},
 
 		// Go.
@@ -279,4 +281,13 @@ func TestDetectSource_PipAndCargo(t *testing.T) {
 			}
 		})
 	}
+}
+
+// usrBinSource returns SourceApt on Debian-based systems (where dpkg exists)
+// and SourceManual everywhere else, matching detectSource's runtime behavior.
+func usrBinSource() registry.InstallSource {
+	if _, err := exec.LookPath("dpkg"); err == nil {
+		return registry.SourceApt
+	}
+	return registry.SourceManual
 }

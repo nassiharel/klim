@@ -72,6 +72,9 @@ func runOpen(cmd *cobra.Command, args []string) error {
 	succeeded, failed := executeInstalls(ps.toInstall)
 	fmt.Fprintf(os.Stderr, "\n──── Done: %d installed, %d failed, %d already present ────\n",
 		succeeded, failed, len(ps.alreadyInstalled))
+	if failed > 0 {
+		return fmt.Errorf("%d tool(s) failed to install", failed)
+	}
 	return nil
 }
 

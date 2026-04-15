@@ -48,9 +48,10 @@ func VersionsMatch(installed, latest string) bool {
 	return true
 }
 
-// parseSegments splits a version into integer segments.
-// "1.23.14" → [1, 23, 14], "2.53.0.2" → [2, 53, 0, 2]
+// parseSegments splits a version into integer segments, stripping a leading "v".
+// "v1.23.14" → [1, 23, 14], "2.53.0.2" → [2, 53, 0, 2]
 func parseSegments(v string) []int {
+	v = strings.TrimPrefix(v, "v")
 	parts := strings.Split(v, ".")
 	segments := make([]int, 0, len(parts))
 	for _, p := range parts {
@@ -63,21 +64,33 @@ func parseSegments(v string) []int {
 	return segments
 }
 
-// isPaddedMatch checks if one number is a zero-padded encoding of the other.
-// PE versions sometimes encode patch "14" as "1400" (×100).
+// isPaddedMatch checks if the larger number is a zero-padded encoding of the
+// smaller. PE versions sometimes encode patch "14" as "1400" (×100). The larger
+// value must literally be the smaller value with trailing zeros appended, so
+// isPaddedMatch(1400, 14) is true but isPaddedMatch(100, 10) is false because
+// 10 itself has a trailing zero.
 func isPaddedMatch(a, b int) bool {
 	if a == b {
 		return true
 	}
-	if a > b && b > 0 && a%b == 0 {
-		factor := a / b
-		return factor == 10 || factor == 100 || factor == 1000
+	// Ensure larger / smaller ordering.
+	larger, smaller := a, b
+	if b > a {
+		larger, smaller = b, a
 	}
-	if b > a && a > 0 && b%a == 0 {
-		factor := b / a
-		return factor == 10 || factor == 100 || factor == 1000
+	if smaller <= 0 {
+		return false
 	}
-	return false
+	if larger%smaller != 0 {
+		return false
+	}
+	factor := larger / smaller
+	if factor != 10 && factor != 100 && factor != 1000 {
+		return false
+	}
+	// The smaller value must not itself end in zero — otherwise "100 encodes 10"
+	// is a false positive (10 already has a trailing zero, it's not padding).
+	return smaller%10 != 0
 }
 
 // CompareVersions compares two version strings numerically, segment by segment.

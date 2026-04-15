@@ -24,6 +24,20 @@ var cachedPathExts struct {
 	exts []string
 }
 
+// Cached dpkg availability check, computed once.
+var cachedHasDpkg struct {
+	once      sync.Once
+	available bool
+}
+
+func hasDpkg() bool {
+	cachedHasDpkg.once.Do(func() {
+		_, err := exec.LookPath("dpkg")
+		cachedHasDpkg.available = err == nil
+	})
+	return cachedHasDpkg.available
+}
+
 // ToolFinder abstracts tool discovery on the filesystem.
 type ToolFinder interface {
 	FindAll(ctx context.Context, tools []registry.Tool) error
@@ -99,6 +113,9 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 		go func() {
 			defer wg.Done()
 			for dir := range dirCh {
+				if ctx.Err() != nil {
+					return
+				}
 				scanDir(dir, wantedBins, func(m match) {
 					mu.Lock()
 					matches = append(matches, m)
@@ -108,6 +125,10 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 		}()
 	}
 	wg.Wait()
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
 	// Phase 3: Assign matches to tools, preserving PATH order and deduplicating.
 	// Build per-tool seen sets and ordered instances.
@@ -333,12 +354,17 @@ func detectSource(path string) registry.InstallSource {
 		return registry.SourceBrew
 	case strings.HasPrefix(lower, "/snap/"):
 		return registry.SourceSnap
-	case strings.HasPrefix(lower, "/usr/bin/") || strings.HasPrefix(lower, "/usr/lib/"):
-		return registry.SourceApt
 	case strings.Contains(lower, "roaming/npm/") ||
 		strings.Contains(lower, "node_modules/") ||
 		strings.Contains(lower, "/lib/node_modules/"):
 		return registry.SourceNPM
+	case strings.HasPrefix(lower, "/usr/bin/") || strings.HasPrefix(lower, "/usr/lib/"):
+		// System package manager path — could be apt, dnf, pacman, etc.
+		// Only attribute to apt if dpkg is available (Debian/Ubuntu).
+		if hasDpkg() {
+			return registry.SourceApt
+		}
+		return registry.SourceManual
 	case strings.Contains(lower, "/go/bin/"):
 		return registry.SourceGo
 	case strings.Contains(lower, ".cargo/bin/"):

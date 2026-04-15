@@ -111,6 +111,16 @@ release:
   footer: |
     ## Install
 
+    **Quick install (macOS/Linux):**
+    ```
+    curl -fsSL https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash
+    ```
+
+    **Quick install (Windows PowerShell):**
+    ```
+    irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+    ```
+
     **Homebrew**: `brew install nassiharel/tap/clim`
     **Go**: `go install github.com/nassiharel/clim/cmd/clim@v{{ .Version }}`
     **Debian/Ubuntu**: `sudo dpkg -i clim_{{ .Version }}_linux_amd64.deb`

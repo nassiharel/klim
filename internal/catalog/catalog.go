@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -30,7 +31,7 @@ type MarketplaceFetcher interface {
 // GitHubFetcher fetches marketplace.yaml from a configured URL,
 // defaulting to GitHub raw content if no URL is set.
 type GitHubFetcher struct {
-	HTTPClient *http.Client // defaults to http.DefaultClient
+	HTTPClient *http.Client // nil = default client with 30s timeout
 	URL        string       // marketplace URL; empty = config.DefaultMarketplaceURL
 }
 
@@ -48,6 +49,7 @@ func (f *GitHubFetcher) Fetch(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
+	req.Header.Set("User-Agent", "clim/catalog")
 
 	resp, err := f.httpClient().Do(req)
 	if err != nil {
@@ -74,7 +76,7 @@ func (f *GitHubFetcher) httpClient() *http.Client {
 	if f.HTTPClient != nil {
 		return f.HTTPClient
 	}
-	return http.DefaultClient
+	return &http.Client{Timeout: 30 * time.Second}
 }
 
 // --- Cache ---
@@ -123,9 +125,11 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error
 
 	slog.Debug("catalog fetched and cached", "path", path, "bytes", len(data))
 
-	// Write cache.
+	// Write cache atomically: write to temp file, then rename.
 	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr == nil {
-		_ = os.WriteFile(path, data, 0o644)
+		if writeErr := atomicWriteFile(path, data, 0o644); writeErr != nil {
+			slog.Warn("failed to write catalog cache", "path", path, "error", writeErr)
+		}
 	}
 
 	return data, nil
@@ -283,7 +287,9 @@ func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, e
 	// Update the remote cache (not the user file — the merge in registry
 	// will incorporate new tools on next load).
 	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr == nil {
-		_ = os.WriteFile(cachePath, remote, 0o644)
+		if writeErr := atomicWriteFile(cachePath, remote, 0o644); writeErr != nil {
+			slog.Warn("failed to write catalog cache", "path", cachePath, "error", writeErr)
+		}
 	}
 
 	return &RefreshResult{
@@ -299,4 +305,45 @@ func userMarketplacePath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, "clim", "marketplace.yaml"), nil
+}
+
+// atomicWriteFile writes data to a temp file in the same directory, then
+// renames it to the target path. This prevents partial/corrupt files if the
+// process is interrupted mid-write. Uses os.CreateTemp for safe temp names.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		// On Windows os.Rename fails if the destination exists.
+		// Remove the destination and retry once; on non-Windows this
+		// path is only reached for unexpected errors.
+		if removeErr := os.Remove(path); removeErr == nil {
+			if retryErr := os.Rename(tmpPath, path); retryErr == nil {
+				return nil
+			}
+		}
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }
