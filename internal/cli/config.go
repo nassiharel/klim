@@ -43,9 +43,9 @@ var configEditCmd = &cobra.Command{
 			_, _ = config.Load() // creates the default file
 		}
 
-		editor := os.Getenv("EDITOR")
+		editor := strings.TrimSpace(os.Getenv("EDITOR"))
 		if editor == "" {
-			editor = os.Getenv("VISUAL")
+			editor = strings.TrimSpace(os.Getenv("VISUAL"))
 		}
 		if editor == "" {
 			return fmt.Errorf("no $EDITOR set; edit %s manually", path)
@@ -53,6 +53,9 @@ var configEditCmd = &cobra.Command{
 
 		// Support editors with args like "code --wait" or "vim -u NONE".
 		parts := strings.Fields(editor)
+		if len(parts) == 0 {
+			return fmt.Errorf("$EDITOR is empty; edit %s manually", path)
+		}
 		editorArgs := append(parts[1:], path)
 		c := exec.Command(parts[0], editorArgs...)
 		c.Stdin = os.Stdin

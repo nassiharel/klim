@@ -34,7 +34,7 @@ func (r Release) Version() string {
 // GitHubClient handles communication with the GitHub Releases API.
 // Fields are exported to allow test injection.
 type GitHubClient struct {
-	HTTPClient *http.Client // defaults to http.DefaultClient
+	HTTPClient *http.Client // nil = default client with 60s timeout (via Options.httpClient)
 	Owner      string       // defaults to "nassiharel"
 	Repo       string       // defaults to "clim"
 	BaseURL    string       // defaults to "https://api.github.com"

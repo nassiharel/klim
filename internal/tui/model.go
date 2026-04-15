@@ -1197,7 +1197,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// On other tabs, do a full rescan.
 		m.updateSelected = make(map[int]bool)
 		m.batchUpdating = false
-		return m, m.startScan()
+		cmd := m.startScan()
+		return m, cmd
 	}
 	return m, nil
 }

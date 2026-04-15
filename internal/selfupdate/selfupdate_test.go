@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -482,5 +484,86 @@ func TestReplaceBinary_CleansUpStaleFiles(t *testing.T) {
 	got, _ := os.ReadFile(binPath)
 	if string(got) != "updated" {
 		t.Errorf("binary content = %q, want %q", got, "updated")
+	}
+}
+
+// --- Checksum verification tests ---
+
+func TestVerifyAssetChecksum_Success(t *testing.T) {
+	archiveData := []byte("fake-archive-content")
+	hash := sha256.Sum256(archiveData)
+	checksumLine := fmt.Sprintf("%x  clim_1.0.0_linux_amd64.tar.gz\n", hash)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(checksumLine))
+	}))
+	defer srv.Close()
+
+	rel := &Release{
+		Assets: []Asset{{Name: "checksums.txt", BrowserDownloadURL: srv.URL + "/checksums.txt"}},
+	}
+
+	err := verifyAssetChecksum(context.Background(), srv.Client(), rel, "clim_1.0.0_linux_amd64.tar.gz", archiveData)
+	if err != nil {
+		t.Fatalf("verifyAssetChecksum() unexpected error: %v", err)
+	}
+}
+
+func TestVerifyAssetChecksum_Mismatch(t *testing.T) {
+	archiveData := []byte("real-archive-content")
+	// Provide a checksum for different data.
+	wrongHash := sha256.Sum256([]byte("tampered-archive"))
+	checksumLine := fmt.Sprintf("%x  clim_1.0.0_linux_amd64.tar.gz\n", wrongHash)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(checksumLine))
+	}))
+	defer srv.Close()
+
+	rel := &Release{
+		Assets: []Asset{{Name: "checksums.txt", BrowserDownloadURL: srv.URL + "/checksums.txt"}},
+	}
+
+	err := verifyAssetChecksum(context.Background(), srv.Client(), rel, "clim_1.0.0_linux_amd64.tar.gz", archiveData)
+	if err == nil {
+		t.Fatal("expected error for checksum mismatch")
+	}
+	if !strings.Contains(err.Error(), "SHA256 mismatch") {
+		t.Errorf("error should mention SHA256 mismatch, got: %v", err)
+	}
+}
+
+func TestVerifyAssetChecksum_MissingEntry(t *testing.T) {
+	archiveData := []byte("some-archive")
+	// checksums.txt exists but has no entry for our asset.
+	checksumLine := "abcdef1234567890  clim_1.0.0_darwin_arm64.tar.gz\n"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(checksumLine))
+	}))
+	defer srv.Close()
+
+	rel := &Release{
+		Assets: []Asset{{Name: "checksums.txt", BrowserDownloadURL: srv.URL + "/checksums.txt"}},
+	}
+
+	err := verifyAssetChecksum(context.Background(), srv.Client(), rel, "clim_1.0.0_linux_amd64.tar.gz", archiveData)
+	if err == nil {
+		t.Fatal("expected error for missing checksum entry")
+	}
+	if !strings.Contains(err.Error(), "no checksum entry found") {
+		t.Errorf("error should mention missing entry, got: %v", err)
+	}
+}
+
+func TestVerifyAssetChecksum_NoChecksumsAsset(t *testing.T) {
+	// Release has no checksums.txt asset — should skip verification silently.
+	rel := &Release{
+		Assets: []Asset{{Name: "clim_1.0.0_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.com/archive"}},
+	}
+
+	err := verifyAssetChecksum(context.Background(), http.DefaultClient, rel, "clim_1.0.0_linux_amd64.tar.gz", []byte("data"))
+	if err != nil {
+		t.Fatalf("expected nil error when checksums.txt is absent, got: %v", err)
 	}
 }

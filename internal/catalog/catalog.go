@@ -31,7 +31,7 @@ type MarketplaceFetcher interface {
 // GitHubFetcher fetches marketplace.yaml from a configured URL,
 // defaulting to GitHub raw content if no URL is set.
 type GitHubFetcher struct {
-	HTTPClient *http.Client // defaults to http.DefaultClient
+	HTTPClient *http.Client // nil = default client with 30s timeout
 	URL        string       // marketplace URL; empty = config.DefaultMarketplaceURL
 }
 
@@ -305,11 +305,39 @@ func userMarketplacePath() (string, error) {
 
 // atomicWriteFile writes data to a temp file in the same directory, then
 // renames it to the target path. This prevents partial/corrupt files if the
-// process is interrupted mid-write.
+// process is interrupted mid-write. Uses os.CreateTemp for safe temp names
+// and removes the destination on Windows where os.Rename fails if it exists.
 func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, perm); err != nil {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmpPath := tmp.Name()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+
+	// On Windows os.Rename fails if the destination exists — remove it first.
+	// This creates a tiny window where the file is absent, but the cache is
+	// non-critical (re-fetched on next run if missing).
+	_ = os.Remove(path)
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }

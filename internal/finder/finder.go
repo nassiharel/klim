@@ -24,6 +24,20 @@ var cachedPathExts struct {
 	exts []string
 }
 
+// Cached dpkg availability check, computed once.
+var cachedHasDpkg struct {
+	once      sync.Once
+	available bool
+}
+
+func hasDpkg() bool {
+	cachedHasDpkg.once.Do(func() {
+		_, err := exec.LookPath("dpkg")
+		cachedHasDpkg.available = err == nil
+	})
+	return cachedHasDpkg.available
+}
+
 // ToolFinder abstracts tool discovery on the filesystem.
 type ToolFinder interface {
 	FindAll(ctx context.Context, tools []registry.Tool) error
@@ -346,8 +360,8 @@ func detectSource(path string) registry.InstallSource {
 		return registry.SourceNPM
 	case strings.HasPrefix(lower, "/usr/bin/") || strings.HasPrefix(lower, "/usr/lib/"):
 		// System package manager path — could be apt, dnf, pacman, etc.
-		// Only attribute to apt if dpkg is actually available (Debian/Ubuntu).
-		if _, err := exec.LookPath("dpkg"); err == nil {
+		// Only attribute to apt if dpkg is available (Debian/Ubuntu).
+		if hasDpkg() {
 			return registry.SourceApt
 		}
 		return registry.SourceManual
