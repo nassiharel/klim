@@ -43,6 +43,20 @@ Git                  2.53.0    2.53.0    /usr/bin/git                           
 
 ---
 
+## Table of Contents
+
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
+- [Screenshots](#screenshots)
+- [Install](#install)
+- [Usage](#usage)
+- [Tool Catalog](#tool-catalog)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
+
+---
+
 ## The Problem
 
 Modern developer environments rely on dozens of CLI tools -- `az`, `kubectl`, `docker`, `node`, `terraform`, and many more. Keeping track of them is harder than it should be:
@@ -69,6 +83,21 @@ Modern developer environments rely on dozens of CLI tools -- `az`, `kubectl`, `d
 | **Self-update** | Updates clim itself to the latest version from GitHub Releases |
 
 All in a single command, with an interactive TUI or scriptable output.
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="assets/tui-installed.png" alt="Installed tab" width="720">
+</p>
+
+> The TUI shows all detected tools with version status, install source, and upgrade availability. Navigate between tabs to discover new tools, manage updates, and export your toolchain.
+
+<!-- Add more screenshots as they become available:
+  <img src="assets/tui-updates.png" alt="Updates tab" width="720">
+  <img src="assets/tui-discover.png" alt="Discover tab" width="720">
+-->
 
 ---
 
@@ -315,20 +344,18 @@ clim config edit   # open config.yaml in $EDITOR
 
 ---
 
-## Future Enhancements
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting a pull request.
+
+See [AGENTS.md](./AGENTS.md) for detailed architecture documentation.
+
+## Roadmap
 
 - SBOM export for installed CLI tools
 - CVE / vulnerability scanning integration
 - Background update-available notifications
 - Team policy enforcement (require minimum versions)
-
----
-
-## Contributing
-
-Contributions are welcome! Please open issues or submit pull requests on [GitHub](https://github.com/nassiharel/clim).
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development workflow and [AGENTS.md](./AGENTS.md) for detailed architecture documentation.
 
 ## License
 

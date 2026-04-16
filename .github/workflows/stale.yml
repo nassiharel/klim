@@ -25,4 +25,5 @@ jobs:
           days-before-stale: 90
           days-before-close: 30
           exempt-issue-labels: "keep open,in progress"
+          exempt-pr-labels: "keep open,in progress"
           operations-per-run: 100

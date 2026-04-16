@@ -2,6 +2,20 @@
 
 Thank you for your interest in contributing! This document covers the development workflow.
 
+## Code of Conduct
+
+Please be respectful and constructive in all interactions. We are committed to providing a welcoming and inclusive experience for everyone.
+
+## First-Time Contributors
+
+New to clim? Here's how to get started:
+
+1. Look for issues labeled [`good first issue`](https://github.com/nassiharel/clim/labels/good%20first%20issue) — these are scoped tasks that are great for newcomers.
+2. Read through this guide and [AGENTS.md](AGENTS.md) to understand the project structure.
+3. Fork the repo, create a branch, make your change, and open a PR.
+
+Not sure where to start? Open a [Discussion](https://github.com/nassiharel/clim/discussions) and we'll help you find something.
+
 ## Prerequisites
 
 - [Go](https://go.dev/dl/) 1.25+ (see `.go-version`)
@@ -39,6 +53,12 @@ make lint           # run golangci-lint
 - [ ] `make tidy` shows no diff
 - [ ] New code includes tests where appropriate
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, etc.)
+
+## Adding a Tool to the Marketplace
+
+1. Create `marketplace/tools/mytool.yaml` (see existing files for the schema).
+2. Run `make marketplace-validate` to check your definition.
+3. Open a PR — CI validates automatically and publishes on merge.
 
 ## Project Structure
 
