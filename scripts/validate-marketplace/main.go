@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -186,7 +187,7 @@ func validateToolFile(path string, seen map[string]string, allowedCategories, al
 
 	// Check for unknown fields by re-parsing with strict mode.
 	var strict toolDef
-	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&strict); err != nil {
 		errs = append(errs, rel+": unknown field(s): "+err.Error())
@@ -267,7 +268,7 @@ func validatePackFile(path string, seenPacks, toolNames map[string]string) []str
 
 	// Check for unknown fields.
 	var strict packDef
-	dec := yaml.NewDecoder(strings.NewReader(string(data)))
+	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&strict); err != nil {
 		errs = append(errs, rel+": unknown field(s): "+err.Error())
@@ -294,11 +295,16 @@ func validatePackFile(path string, seenPacks, toolNames map[string]string) []str
 		errs = append(errs, fmt.Sprintf("%s: filename must match name field (expected %s.yaml)", rel, pack.Name))
 	}
 
-	// All referenced tools must exist.
+	// All referenced tools must exist, no duplicates within a pack.
+	seenTools := make(map[string]bool, len(pack.Tools))
 	for _, toolName := range pack.Tools {
 		if _, exists := toolNames[toolName]; !exists {
 			errs = append(errs, fmt.Sprintf("%s: references unknown tool %q", rel, toolName))
 		}
+		if seenTools[toolName] {
+			errs = append(errs, fmt.Sprintf("%s: duplicate tool reference %q", rel, toolName))
+		}
+		seenTools[toolName] = true
 	}
 
 	// Duplicate detection.
