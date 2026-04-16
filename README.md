@@ -11,6 +11,10 @@
 <p align="center">
   <a href="https://github.com/nassiharel/clim/releases/latest"><img src="https://img.shields.io/github/v/release/nassiharel/clim?style=flat-square" alt="Release"></a>
   <a href="https://github.com/nassiharel/clim/actions"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/clim/ci.yml?style=flat-square" alt="CI"></a>
+  <a href="https://github.com/nassiharel/clim/actions/workflows/codeql.yml"><img src="https://github.com/nassiharel/clim/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
+  <a href="https://goreportcard.com/report/github.com/nassiharel/clim"><img src="https://goreportcard.com/badge/github.com/nassiharel/clim" alt="Go Report Card"></a>
+  <a href="https://pkg.go.dev/github.com/nassiharel/clim"><img src="https://pkg.go.dev/badge/github.com/nassiharel/clim.svg" alt="Go Reference"></a>
+  <a href="https://github.com/nassiharel/clim/releases"><img src="https://img.shields.io/github/downloads/nassiharel/clim/total?style=flat-square" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/nassiharel/clim?style=flat-square" alt="License"></a>
 </p>
 
