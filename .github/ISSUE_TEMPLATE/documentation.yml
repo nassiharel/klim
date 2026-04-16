@@ -1,0 +1,19 @@
+name: Documentation
+description: Report a docs issue or suggest a documentation improvement
+labels: [documentation]
+body:
+  - type: textarea
+    attributes:
+      label: What needs to be changed?
+      description: |
+        Link to the specific page, section, or file that needs updating.
+        Describe what is incorrect, missing, or could be improved.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Suggested change
+      description: What should the documentation say instead?
+    validations:
+      required: false

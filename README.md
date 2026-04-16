@@ -11,31 +11,26 @@
 <p align="center">
   <a href="https://github.com/nassiharel/clim/releases/latest"><img src="https://img.shields.io/github/v/release/nassiharel/clim?style=flat-square" alt="Release"></a>
   <a href="https://github.com/nassiharel/clim/actions"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/clim/ci.yml?style=flat-square" alt="CI"></a>
+  <a href="https://github.com/nassiharel/clim/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/clim/codeql.yml?style=flat-square&label=CodeQL" alt="CodeQL"></a>
+  <a href="https://goreportcard.com/report/github.com/nassiharel/clim"><img src="https://img.shields.io/badge/go%20report-A+-brightgreen?style=flat-square" alt="Go Report Card"></a>
+  <a href="https://pkg.go.dev/github.com/nassiharel/clim"><img src="https://img.shields.io/badge/godoc-reference-blue?style=flat-square" alt="Go Reference"></a>
+  <a href="https://github.com/nassiharel/clim/releases"><img src="https://img.shields.io/github/downloads/nassiharel/clim/total?style=flat-square" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/nassiharel/clim?style=flat-square" alt="License"></a>
 </p>
 
-```
-     ___  _     ___  __  __
-    / __|| |   |_ _||  \/  |
-   | (__ | |__  | | | |\/| |
-    \___||____||___||_|  |_|
+---
 
-    detect . check . upgrade
-```
+## Table of Contents
 
-```
-$ clim
-TOOL                 VERSION   LATEST    PATH                                       STATUS
-Azure CLI            2.83.0    2.84.0    /usr/local/bin/az                          upgrade available
-Azure Dev CLI        1.23.13   1.23.13   /usr/local/bin/azd                         up to date
-GitHub CLI           2.88.1    2.89.0    /usr/bin/gh                                upgrade available
-kubectl              1.33.3    1.35.3    /usr/local/bin/kubectl                     upgrade available
-Docker               29.3.1    29.3.1    /usr/bin/docker                            up to date
-Go                   1.23.4    1.26.1    /usr/local/go/bin/go                       upgrade available
-Node.js              24.13.1   25.9.0    /usr/local/bin/node                        upgrade available
-Python               3.13.12   3.14.3    /usr/bin/python3                           upgrade available
-Git                  2.53.0    2.53.0    /usr/bin/git                               up to date
-```
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
+- [Screenshots](#screenshots)
+- [Install](#install)
+- [Usage](#usage)
+- [Tool Catalog](#tool-catalog)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
 
 ---
 
@@ -65,6 +60,21 @@ Modern developer environments rely on dozens of CLI tools -- `az`, `kubectl`, `d
 | **Self-update** | Updates clim itself to the latest version from GitHub Releases |
 
 All in a single command, with an interactive TUI or scriptable output.
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="assets/tui-installed.png" alt="Installed tab" width="720">
+</p>
+
+> The TUI shows all detected tools with version status, install source, and upgrade availability. Navigate between tabs to discover new tools, manage updates, and export your toolchain.
+
+<!-- Add more screenshots as they become available:
+  <img src="assets/tui-updates.png" alt="Updates tab" width="720">
+  <img src="assets/tui-discover.png" alt="Discover tab" width="720">
+-->
 
 ---
 
@@ -311,20 +321,20 @@ clim config edit   # open config.yaml in $EDITOR
 
 ---
 
-## Future Enhancements
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting a pull request.
+
+See [AGENTS.md](./AGENTS.md) for detailed architecture documentation.
+
+## Roadmap
 
 - SBOM export for installed CLI tools
 - CVE / vulnerability scanning integration
 - Background update-available notifications
 - Team policy enforcement (require minimum versions)
-
----
-
-## Contributing
-
-Contributions are welcome! Please open issues or submit pull requests on [GitHub](https://github.com/nassiharel/clim).
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development workflow and [AGENTS.md](./AGENTS.md) for detailed architecture documentation.
+- Installation via scripts
+- Add more package managers (pip, gem, cargo, asdf, etc)
 
 ## License
 
