@@ -49,7 +49,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	sp := progress.New("Loading marketplace catalog...")
 	tools, info, err := svc.LoadAndResolve(cmd.Context())
 	if err != nil {
-		sp.Fail("Unable to load marketplace catalog")
+		sp.Fail(err.Error())
 		return err
 	}
 

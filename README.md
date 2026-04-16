@@ -355,7 +355,7 @@ clim config edit   # open config.yaml in $EDITOR
 
 | Problem | Solution |
 |---------|----------|
-| `clim: command not found` | Ensure install directory is in `$PATH`. Run `clim tools path` to check. |
+| `clim: command not found` | Ensure install directory is in `$PATH`. Run `which clim` (macOS/Linux) or `where clim` (Windows) to check. |
 | Tool not detected | Verify binary is in `$PATH` with `which <tool>` / `where <tool>`. Run `clim` then press `r` to refresh. |
 | Permission denied on upgrade | Package manager may need elevated privileges. Use `sudo` (Linux/macOS) or run as Administrator (Windows). |
 | Stale version info | Delete local cache (`clim tools path` shows location) and relaunch to re-fetch from GitHub. |

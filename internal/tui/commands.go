@@ -119,7 +119,7 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 type scanResultMsg struct {
 	tools       []registry.Tool
 	catalogInfo *service.CatalogInfo // how the catalog was loaded
-	err         error                // non-nil if PATH scanning failed
+	err         error                // non-nil if catalog load or PATH scan failed
 }
 
 type toolVersionMsg struct {

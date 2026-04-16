@@ -38,10 +38,9 @@ const (
 
 // Scan phases — the loading lifecycle.
 const (
-	phaseLoading   = 0 // loading marketplace catalog
-	phaseScanning  = 1 // PATH scan in progress
-	phaseResolving = 2 // version resolution in progress
-	phaseDone      = 3 // all tools resolved
+	phaseLoading   = 0 // loading catalog + scanning PATH
+	phaseResolving = 1 // version resolution in progress
+	phaseDone      = 2 // all tools resolved
 )
 
 // Backup tab menu indices.

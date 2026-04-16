@@ -18,6 +18,7 @@ var frames = [...]string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
 // Spinner displays an animated progress indicator on stderr.
 type Spinner struct {
 	mu      sync.Mutex
+	wg      sync.WaitGroup
 	msg     string
 	frame   int
 	done    chan struct{}
@@ -30,9 +31,10 @@ func New(msg string) *Spinner {
 	s := &Spinner{
 		msg:   msg,
 		done:  make(chan struct{}),
-		isTTY: term.IsTerminal(int(os.Stderr.Fd())),
+		isTTY: term.IsTerminal(int(os.Stderr.Fd())), //nolint:gosec // fd fits int on all supported platforms
 	}
 	if s.isTTY {
+		s.wg.Add(1)
 		go s.animate()
 	} else {
 		fmt.Fprintf(os.Stderr, "  %s\n", msg)
@@ -41,6 +43,7 @@ func New(msg string) *Spinner {
 }
 
 func (s *Spinner) animate() {
+	defer s.wg.Done()
 	ticker := time.NewTicker(80 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -101,9 +104,10 @@ func (s *Spinner) Fail(msg string) {
 
 func (s *Spinner) stop() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if !s.stopped {
 		s.stopped = true
 		close(s.done)
 	}
+	s.mu.Unlock()
+	s.wg.Wait() // wait for animate goroutine to exit before printing final line
 }

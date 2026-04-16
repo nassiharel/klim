@@ -22,7 +22,7 @@ import (
 // CatalogInfo describes how the catalog was loaded.
 type CatalogInfo struct {
 	Source catalog.LoadSource // "cache" or "remote"
-	Tools  int               // number of tool definitions
+	Tools  int                // number of tool definitions
 }
 
 // ToolCatalog abstracts loading the tool definitions.

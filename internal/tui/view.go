@@ -135,14 +135,7 @@ func (m Model) renderTitleBar() string {
 	title := titleStyle.Render("  clim")
 
 	if m.phase == phaseLoading {
-		return title + "  " + loadingStyle.Render(m.spinner.View()+" Loading marketplace catalog...")
-	}
-	if m.phase == phaseScanning {
-		msg := "Scanning PATH"
-		if len(m.tools) > 0 {
-			msg = fmt.Sprintf("Scanning PATH for %d tools", len(m.tools))
-		}
-		return title + "  " + loadingStyle.Render(m.spinner.View()+" "+msg+"...")
+		return title + "  " + loadingStyle.Render(m.spinner.View()+" Loading tools...")
 	}
 	if m.phase == phaseResolving && m.pending > 0 {
 		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s Checking versions (%d remaining)...", m.spinner.View(), m.pending))
