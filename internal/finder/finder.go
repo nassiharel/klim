@@ -208,7 +208,7 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 			found++
 		}
 	}
-	slog.Debug("PATH scan complete", "dirs", len(pathDirs), "tools_found", found, "tools_total", len(tools))
+	slog.Info("PATH scan complete", "dirs", len(pathDirs), "tools_found", found, "tools_total", len(tools))
 
 	return nil
 }

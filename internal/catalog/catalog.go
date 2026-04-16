@@ -82,9 +82,7 @@ func (f *GitHubFetcher) httpClient() *http.Client {
 
 // --- Cache ---
 
-// CachePath returns the path to the remote marketplace cache.
-// This is separate from the user's marketplace.yaml (which holds
-// customizations like user-added tools and package ID overrides).
+// CachePath returns the path to the marketplace cache file.
 func CachePath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
@@ -93,10 +91,26 @@ func CachePath() (string, error) {
 	return filepath.Join(dir, "clim", "marketplace-cache.yaml"), nil
 }
 
+// LoadSource indicates where the catalog was loaded from.
+type LoadSource string
+
+const (
+	// SourceCache means the catalog was loaded from the local cache.
+	SourceCache LoadSource = "cache"
+	// SourceRemote means the catalog was fetched from the remote URL.
+	SourceRemote LoadSource = "remote"
+)
+
+// LoadResult contains the loaded catalog data and metadata about the load.
+type LoadResult struct {
+	Data   []byte
+	Source LoadSource
+	Tools  int // number of tools parsed
+}
+
 // LoadOrFetch loads the cached marketplace YAML. If the cache doesn't exist
 // or contains invalid YAML, it fetches from GitHub and rewrites the cache.
-// Returns the raw YAML bytes.
-func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error) {
+func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) (*LoadResult, error) {
 	path, err := CachePath()
 	if err != nil {
 		return nil, fmt.Errorf("resolving cache path: %w", err)
@@ -104,27 +118,29 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error
 
 	// Try reading and validating the local cache.
 	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
-		if isValidCatalog(data) {
-			slog.Debug("catalog cache hit", "path", path, "bytes", len(data))
-			return data, nil
+		if n := countTools(data); n > 0 {
+			slog.Info("catalog loaded from cache", "path", path, "tools", n)
+			return &LoadResult{Data: data, Source: SourceCache, Tools: n}, nil
 		}
 		slog.Warn("catalog cache invalid, refetching", "path", path)
 	}
 
 	// No valid cache — fetch from remote.
-	slog.Debug("catalog cache miss, fetching from remote")
+	slog.Info("fetching catalog from remote")
 	data, err := fetcher.Fetch(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("fetching marketplace (no valid local cache): %w", err)
+		slog.Warn("catalog fetch failed", "error", err)
+		return nil, fmt.Errorf("unable to fetch remote marketplace (no local cache available): %w", err)
 	}
 
 	// Validate before caching — don't poison the cache with HTML/garbage.
-	if !isValidCatalog(data) {
+	n := countTools(data)
+	if n == 0 {
 		slog.Warn("fetched catalog is invalid", "bytes", len(data))
 		return nil, errors.New("fetched catalog is invalid (not parseable YAML with tools)")
 	}
 
-	slog.Debug("catalog fetched and cached", "path", path, "bytes", len(data))
+	slog.Info("catalog fetched and cached", "path", path, "tools", n, "bytes", len(data))
 
 	// Write cache atomically: write to temp file, then rename.
 	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr == nil {
@@ -133,18 +149,23 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error
 		}
 	}
 
-	return data, nil
+	return &LoadResult{Data: data, Source: SourceRemote, Tools: n}, nil
 }
 
-// isValidCatalog checks whether data is parseable YAML with at least one tool.
-func isValidCatalog(data []byte) bool {
+// countTools returns the number of tools in the YAML data, or 0 if invalid.
+func countTools(data []byte) int {
 	var f struct {
 		Tools []registry.ToolDef `yaml:"tools"`
 	}
 	if err := yaml.Unmarshal(data, &f); err != nil {
-		return false
+		return 0
 	}
-	return len(f.Tools) > 0
+	return len(f.Tools)
+}
+
+// isValidCatalog checks whether data is parseable YAML with at least one tool.
+func isValidCatalog(data []byte) bool {
+	return countTools(data) > 0
 }
 
 // --- Diff ---
@@ -241,19 +262,15 @@ type RefreshResult struct {
 }
 
 // Refresh fetches the latest catalog from the remote, diffs it against the
-// user's marketplace.yaml (not the cache), updates the cache, and returns
-// the result. The diff reflects what the user will see as new or changed
-// relative to their current tool list.
+// local cache, updates the cache, and returns the result.
 func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, error) {
 	cachePath, err := CachePath()
 	if err != nil {
 		return nil, fmt.Errorf("resolving cache path: %w", err)
 	}
 
-	// Read the user's current marketplace file for diffing.
-	// This is what they actually see — not the remote cache.
-	userPath, _ := userMarketplacePath()
-	local, _ := os.ReadFile(userPath) // may be empty/missing — that's fine
+	// Read the current cache for diffing.
+	local, _ := os.ReadFile(cachePath) // may be empty/missing — that's fine
 
 	// Fetch latest from remote.
 	remote, err := fetcher.Fetch(ctx)
@@ -266,11 +283,10 @@ func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, e
 		return nil, errors.New("fetched catalog is invalid (not parseable YAML with tools)")
 	}
 
-	// Diff against what the user currently has.
+	// Diff against what we had cached.
 	diff := Diff(local, remote)
 
-	// Update the remote cache (not the user file — the merge in registry
-	// will incorporate new tools on next load).
+	// Update the cache.
 	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr == nil {
 		if writeErr := atomicWriteFile(cachePath, remote, 0o644); writeErr != nil {
 			slog.Warn("failed to write catalog cache", "path", cachePath, "error", writeErr)
@@ -281,15 +297,6 @@ func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, e
 		Diff:    diff,
 		Updated: diff.HasChanges(),
 	}, nil
-}
-
-// userMarketplacePath returns the path to the user's marketplace.yaml.
-func userMarketplacePath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "clim", "marketplace.yaml"), nil
 }
 
 // atomicWriteFile writes data to a temp file in the same directory, then

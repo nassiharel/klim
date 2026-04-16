@@ -38,9 +38,10 @@ const (
 
 // Scan phases — the loading lifecycle.
 const (
-	phaseScanning  = 0 // PATH scan in progress
-	phaseResolving = 1 // version resolution in progress
-	phaseDone      = 2 // all tools resolved
+	phaseLoading   = 0 // loading marketplace catalog
+	phaseScanning  = 1 // PATH scan in progress
+	phaseResolving = 2 // version resolution in progress
+	phaseDone      = 3 // all tools resolved
 )
 
 // Backup tab menu indices.
@@ -197,7 +198,7 @@ func NewModel() Model {
 		backupBar:      progress.New(progress.WithWidth(40)),
 		updateSelected: make(map[int]bool),
 		loading:        true,
-		phase:          phaseScanning,
+		phase:          phaseLoading,
 		activeTab:      tabInstalled,
 		detailIdx:      noDetail,
 		toolMenu:       noMenu,
@@ -247,7 +248,7 @@ func (m Model) Init() tea.Cmd {
 // call this first.
 func (m *Model) startScan() tea.Cmd {
 	m.loading = true
-	m.phase = phaseScanning
+	m.phase = phaseLoading
 	m.tools = nil
 	m.filteredIndex = nil
 	m.cursor = 0
@@ -275,12 +276,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sort.Slice(m.tools, func(i, j int) bool {
 			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
 		})
-		m.phase = phaseResolving
-		m.pending = 0
 		m.scanGen++
+
+		// Set status based on how the catalog was loaded.
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
+		} else if info := msg.catalogInfo; info != nil {
+			switch info.Source {
+			case catalog.SourceCache:
+				m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache", info.Tools)
+			case catalog.SourceRemote:
+				m.statusMsg = fmt.Sprintf("✓ Fetched catalog (%d tools)", info.Tools)
+			}
 		}
+
+		// If no tools loaded (e.g. catalog fetch failed), skip to done.
+		if len(m.tools) == 0 {
+			m.phase = phaseDone
+			m.loading = false
+			m.pending = 0
+			m.applyFilter()
+			return m, nil
+		}
+
+		m.phase = phaseResolving
+		m.pending = 0
 
 		// Reset filters — applyFilter() will rebuild sidebar items contextually.
 		m.categoryFilter = ""
@@ -945,8 +965,11 @@ func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyDefault handles keys when no modal is active — tabs, navigation, actions.
 func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Clear transient status message on any keypress so stale errors don't linger.
-	m.statusMsg = ""
+	// Clear transient status on keypress — but preserve error messages
+	// when no tools are loaded (e.g. catalog fetch failure).
+	if len(m.tools) > 0 {
+		m.statusMsg = ""
+	}
 
 	switch msg.String() {
 	case "q", "ctrl+c":

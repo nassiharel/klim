@@ -12,6 +12,7 @@ import (
 	"github.com/mattn/go-runewidth"
 
 	"github.com/nassiharel/clim/internal/build"
+	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/logging"
 	"github.com/nassiharel/clim/internal/registry"
@@ -133,15 +134,26 @@ func (m Model) renderView() string {
 func (m Model) renderTitleBar() string {
 	title := titleStyle.Render("  clim")
 
+	if m.phase == phaseLoading {
+		return title + "  " + loadingStyle.Render(m.spinner.View()+" Loading marketplace catalog...")
+	}
 	if m.phase == phaseScanning {
-		return title + "  " + loadingStyle.Render(m.spinner.View()+" finding tools...")
+		msg := "Scanning PATH"
+		if len(m.tools) > 0 {
+			msg = fmt.Sprintf("Scanning PATH for %d tools", len(m.tools))
+		}
+		return title + "  " + loadingStyle.Render(m.spinner.View()+" "+msg+"...")
 	}
 	if m.phase == phaseResolving && m.pending > 0 {
-		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s checking versions (%d remaining)...", m.spinner.View(), m.pending))
+		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s Checking versions (%d remaining)...", m.spinner.View(), m.pending))
 	}
 
 	inst, upd, notInst := m.stats()
 	active := inst + notInst
+	if active == 0 && m.statusMsg != "" {
+		// No tools loaded (catalog failure) — show status message instead of 0/0.
+		return title + "  " + upgradableStyle.Render(m.statusMsg)
+	}
 	summary := fmt.Sprintf("%d/%d installed", inst, active)
 	if upd > 0 {
 		summary += " · " + upgradableStyle.Render(strconv.Itoa(upd)+" updates")
@@ -1268,7 +1280,7 @@ func (m Model) renderConfigView() string {
 	// File paths.
 	b.WriteString("\n")
 	marketplacePath := dim("(unknown)")
-	if p, err := registry.ToolsPath(); err == nil {
+	if p, err := catalog.CachePath(); err == nil {
 		marketplacePath = p
 	}
 	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Marketplace", 18)), marketplacePath)
@@ -1402,7 +1414,9 @@ func (m Model) renderHelp() string {
 	}
 
 	help := helpStyle.Render("  " + strings.Join(parts, "   "))
-	if m.statusMsg != "" {
+	// Show status in footer only when title bar isn't already displaying it
+	// (title bar shows statusMsg when no tools are loaded).
+	if m.statusMsg != "" && len(m.tools) > 0 {
 		help += "  " + upgradableStyle.Render(m.statusMsg)
 	}
 	return help

@@ -117,8 +117,9 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 // --- Scan & version resolution messages ---
 
 type scanResultMsg struct {
-	tools []registry.Tool
-	err   error // non-nil if PATH scanning failed
+	tools       []registry.Tool
+	catalogInfo *service.CatalogInfo // how the catalog was loaded
+	err         error                // non-nil if PATH scanning failed
 }
 
 type toolVersionMsg struct {
@@ -248,8 +249,8 @@ type marketplaceRefreshMsg struct {
 func findToolsCmd(svc *service.ToolService) func() scanResultMsg {
 	return func() scanResultMsg {
 		ctx := context.Background()
-		tools, err := svc.LoadAndScan(ctx)
-		return scanResultMsg{tools: tools, err: err}
+		tools, info, err := svc.LoadAndScan(ctx)
+		return scanResultMsg{tools: tools, catalogInfo: info, err: err}
 	}
 }
 
@@ -387,7 +388,7 @@ func buildImportPlanCmd(svc *service.ToolService, path string) tea.Cmd {
 
 		// Load registry and scan PATH.
 		ctx := context.Background()
-		regTools, err := svc.ScanOnly(ctx)
+		regTools, _, err := svc.ScanOnly(ctx)
 		if err != nil {
 			return backupPlanMsg{err: fmt.Errorf("scanning PATH: %w", err)}
 		}
@@ -655,7 +656,7 @@ func buildTokenImportPlanCmd(svc *service.ToolService, token string) tea.Cmd {
 
 		// Load registry and scan PATH.
 		ctx := context.Background()
-		regTools, err := svc.ScanOnly(ctx)
+		regTools, _, err := svc.ScanOnly(ctx)
 		if err != nil {
 			return backupPlanMsg{err: fmt.Errorf("scanning PATH: %w", err), fromToken: true}
 		}

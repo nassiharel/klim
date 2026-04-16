@@ -53,7 +53,7 @@ ToolService
 
 **CLI flow:** `svc.LoadAndResolve()` — single call, internal worker pool.
 
-**Marketplace:** individual tool/pack YAML files in `marketplace/` are assembled into a single `marketplace.yaml` by CI and published to the `marketplace` branch. The CLI fetches from `https://raw.githubusercontent.com/nassiharel/clim/marketplace/marketplace.yaml`, cached at `~/.config/clim/marketplace-cache.yaml`. User customizations in `~/.config/clim/marketplace.yaml` are preserved via `mergeToolDefs()`.
+**Marketplace:** individual tool/pack YAML files in `marketplace/` are assembled into a single `marketplace.yaml` by CI and published to the `marketplace` branch. The CLI fetches from `https://raw.githubusercontent.com/nassiharel/clim/marketplace/marketplace.yaml` and caches locally at `~/.config/clim/marketplace-cache.yaml`.
 
 ## TUI Tabs
 

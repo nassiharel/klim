@@ -44,7 +44,7 @@ func runOpen(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "Share token: %d tools\n", len(names))
 
 	// Load registry and scan PATH.
-	regTools, err := svc.ScanOnly(cmd.Context())
+	regTools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
 		return err
 	}

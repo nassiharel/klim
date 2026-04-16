@@ -2,25 +2,22 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/catalog"
 )
 
 var toolsCmd = &cobra.Command{
 	Use:   "tools",
-	Short: "Manage the tool definitions",
+	Short: "Manage the tool catalog",
 }
 
 var toolsPathCmd = &cobra.Command{
 	Use:   "path",
-	Short: "Print the path to marketplace.yaml",
+	Short: "Print the path to the local catalog cache",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := registry.ToolsPath()
+		path, err := catalog.CachePath()
 		if err != nil {
 			return err
 		}
@@ -29,46 +26,6 @@ var toolsPathCmd = &cobra.Command{
 	},
 }
 
-var toolsEditCmd = &cobra.Command{
-	Use:   "edit",
-	Short: "Open marketplace.yaml in your editor",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := registry.ToolsPath()
-		if err != nil {
-			return err
-		}
-
-		// Ensure the file exists by loading the catalog (which creates it on first run).
-		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
-			fmt.Fprintln(os.Stderr, "Fetching marketplace catalog...")
-			if _, loadErr := svc.Catalog.LoadTools(cmd.Context()); loadErr != nil {
-				return fmt.Errorf("could not create marketplace file: %w", loadErr)
-			}
-		}
-
-		editor := strings.TrimSpace(os.Getenv("EDITOR"))
-		if editor == "" {
-			editor = strings.TrimSpace(os.Getenv("VISUAL"))
-		}
-		if editor == "" {
-			return fmt.Errorf("no $EDITOR set; edit %s manually", path)
-		}
-
-		// Support editors with args like "code --wait" or "vim -u NONE".
-		parts := strings.Fields(editor)
-		if len(parts) == 0 {
-			return fmt.Errorf("$EDITOR is empty; edit %s manually", path)
-		}
-		editorArgs := append(parts[1:], path)
-		c := exec.Command(parts[0], editorArgs...)
-		c.Stdin = os.Stdin
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
-		return c.Run()
-	},
-}
-
 func init() {
 	toolsCmd.AddCommand(toolsPathCmd)
-	toolsCmd.AddCommand(toolsEditCmd)
 }
