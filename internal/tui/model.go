@@ -1753,10 +1753,14 @@ func (m Model) importSummary() string {
 		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
 	}
 	prefix := "✓"
-	if failed > 0 {
+	verb := "complete"
+	if m.backupCancelled {
+		prefix = "⚠"
+		verb = "cancelled"
+	} else if failed > 0 {
 		prefix = "⚠"
 	}
-	return fmt.Sprintf("%s Import complete — %s", prefix, strings.Join(parts, ", "))
+	return fmt.Sprintf("%s Import %s — %s", prefix, verb, strings.Join(parts, ", "))
 }
 
 // --- Batch upgrade (Updates tab) ---
