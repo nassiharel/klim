@@ -9,6 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nassiharel/clim/internal/catalog"
+	"github.com/nassiharel/clim/internal/progress"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -44,11 +46,39 @@ func init() {
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	fmt.Fprintln(os.Stderr, "Finding tools and checking versions...")
-	tools, err := svc.LoadAndResolve(cmd.Context())
+	sp := progress.New("Loading marketplace catalog...")
+	tools, info, err := svc.LoadAndResolve(cmd.Context())
 	if err != nil {
+		sp.Fail(err.Error())
 		return err
 	}
+
+	if info != nil {
+		switch info.Source {
+		case catalog.SourceCache:
+			sp.Done(fmt.Sprintf("Loaded %d tools from cache", info.Tools))
+		case catalog.SourceRemote:
+			sp.Done(fmt.Sprintf("Fetched marketplace catalog (%d tools)", info.Tools))
+		}
+	} else {
+		sp.Done("Catalog loaded")
+	}
+
+	installed := 0
+	updates := 0
+	for _, t := range tools {
+		if t.IsInstalled() {
+			installed++
+			if t.HasUpdate() {
+				updates++
+			}
+		}
+	}
+	fmt.Fprintf(os.Stderr, "  ✓ Found %d installed tools", installed)
+	if updates > 0 {
+		fmt.Fprintf(os.Stderr, ", %d updates available", updates)
+	}
+	fmt.Fprintln(os.Stderr)
 
 	// --categories: print available categories and exit.
 	if listCategoriesFlag {
@@ -60,13 +90,13 @@ func runList(cmd *cobra.Command, args []string) error {
 	_, _ = fmt.Fprintln(w, "TOOL\tCATEGORY\tVERSION\tLATEST\tSOURCE\tSTATUS\tPATH")
 	_, _ = fmt.Fprintln(w, "────\t────────\t───────\t──────\t──────\t──────\t────")
 
-	installed := 0
+	shownInstalled := 0
 	shown := 0
 	for _, tool := range tools {
 		if !tool.IsInstalled() {
 			continue
 		}
-		installed++
+		shownInstalled++
 
 		primary := tool.PrimaryInstance()
 
@@ -105,7 +135,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	_ = w.Flush()
 
 	if listCategoryFlag != "" || listSourceFlag != "" {
-		fmt.Fprintf(os.Stderr, "\n%d/%d installed tools shown", shown, installed)
+		fmt.Fprintf(os.Stderr, "\n%d/%d installed tools shown", shown, shownInstalled)
 		var filters []string
 		if listCategoryFlag != "" {
 			filters = append(filters, "category="+listCategoryFlag)
@@ -115,7 +145,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Fprintf(os.Stderr, " (filtered by %s).\n", strings.Join(filters, ", "))
 	} else {
-		fmt.Fprintf(os.Stderr, "\n%d/%d tools installed.\n", installed, len(tools))
+		fmt.Fprintf(os.Stderr, "\n%d/%d tools installed.\n", shownInstalled, len(tools))
 	}
 	return nil
 }

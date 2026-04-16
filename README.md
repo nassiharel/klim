@@ -52,7 +52,7 @@ Modern developer environments rely on dozens of CLI tools -- `az`, `kubectl`, `d
 
 | Capability | What clim does |
 |---|---|
-| **Discover** | Scans `$PATH` to detect 70+ popular developer CLI tools |
+| **Discover** | Scans `$PATH` to detect 80+ popular developer CLI tools |
 | **Inspect** | Shows installed version, binary location, and install source |
 | **Compare** | Checks latest available versions via native package managers |
 | **Upgrade** | Runs the right native package manager command (`brew`, `winget`, `apt`, `choco`, `snap`, `npm`) |
@@ -71,16 +71,11 @@ All in a single command, with an interactive TUI or scriptable output.
 
 > The TUI shows all detected tools with version status, install source, and upgrade availability. Navigate between tabs to discover new tools, manage updates, and export your toolchain.
 
-<!-- Add more screenshots as they become available:
-  <img src="assets/tui-updates.png" alt="Updates tab" width="720">
-  <img src="assets/tui-discover.png" alt="Discover tab" width="720">
--->
-
 ---
 
 ## Features
 
-- Detects **70+ developer CLI tools** from a curated, extensible catalog (`marketplace.yaml`)
+- Detects **80+ developer CLI tools** from a curated, extensible catalog (`marketplace/`)
 - Shows installed version, latest available version, install source, and binary path
 - Interactive full-screen TUI with 6 tabs: Installed, Updates, Discover, Disabled, Backup, Config
 - Detail view with rich metadata (description, publisher, license, homepage)
@@ -112,6 +107,10 @@ All in a single command, with an interactive TUI or scriptable output.
 ## Install
 
 ### Quick Install
+
+> **Note:** Always review scripts before piping to your shell. You can inspect
+> [install.sh](https://github.com/nassiharel/clim/blob/main/install.sh) and
+> [install.ps1](https://github.com/nassiharel/clim/blob/main/install.ps1) first.
 
 **macOS / Linux:**
 
@@ -199,6 +198,9 @@ Launches a full-screen interactive interface with 6 tabs. Tools are detected and
 ### Non-interactive commands
 
 ```bash
+# Show help
+clim --help
+
 # List all tools in a table
 clim list
 
@@ -208,14 +210,44 @@ clim export > my-tools.yaml
 # Import and install tools from a manifest
 clim import my-tools.yaml
 clim import my-tools.yaml --yes    # non-interactive
+```
 
+<details>
+<summary>Example export output</summary>
+
+```yaml
+generated_by: clim v0.x.x
+os: windows
+arch: amd64
+tools:
+  - name: git
+    display_name: Git
+    version: "2.44.0"
+    source: winget
+    category: version-control
+    packages:
+      winget: Git.Git
+      brew: git
+      apt: git
+  - name: kubectl
+    display_name: Kubectl
+    version: "1.29.3"
+    source: brew
+    category: cloud
+    packages:
+      brew: kubernetes-cli
+      winget: Kubernetes.kubectl
+```
+
+</details>
+
+```bash
 # Update clim itself to the latest version
 clim update
 clim update --check                # check only, don't install
 
 # Manage the tool catalog
-clim tools path                    # show marketplace.yaml location
-clim tools edit                    # open catalog in $EDITOR
+clim tools path                    # show local catalog cache location
 
 # Manage configuration
 clim config path                   # show config.yaml location
@@ -229,7 +261,7 @@ clim version
 
 ## Tool Catalog
 
-clim ships with a curated catalog of **70+ developer tools** defined in `marketplace.yaml`. The catalog is fetched from GitHub on first run and cached locally. On each startup, the cached catalog is merged with the user's local customizations. New tools from upstream appear automatically after a refresh.
+clim ships with a curated catalog of **80+ developer tools** defined in `marketplace/tools/`. The catalog is assembled by CI and published to the `marketplace` branch. The CLI fetches it on first run and caches locally. New tools from upstream appear automatically after a refresh.
 
 Tools include: `az`, `azd`, `gh`, `copilot`, `kubectl`, `docker`, `terraform`, `helm`, `go`, `node`, `python`, `git`, `jq`, `yq`, `ripgrep`, `fzf`, `bat`, `exa`, `fd`, `delta`, `zoxide`, `starship`, `tmux`, `neovim`, `curl`, `wget`, `make`, `cmake`, `rust/cargo`, `ruby`, `java`, `dotnet`, `aws`, `gcloud`, `pulumi`, `vault`, `consul`, `packer`, and many more.
 
@@ -246,15 +278,13 @@ clim tools edit
 clim is built for speed. The tool catalog is fetched from GitHub and cached locally, PATH is scanned concurrently, and version queries go through native package managers in parallel.
 
 ```
-marketplace.yaml (GitHub) ──► catalog.LoadOrFetch() ──► cache locally
+marketplace/ (GitHub) ──► catalog.LoadOrFetch() ──► cache locally
                                       │
-                         registry.DefaultToolsFromBytes()
+                         registry.ToolsFromBytes()
                                       │
-                                      ├── merge with user YAML (customizations)
+                                      ├──[parallel]──► finder.FindAll()           (exec.LookPath across PATH)
                                       │
-                                      ├──[parallel]──► finder.FindAll()     (exec.LookPath across PATH)
-                                      │
-                                      ├──[parallel]──► pkgmgr.ResolveVersions() (winget/brew/apt/choco/snap/npm)
+                                      ├──[parallel]──► pkgmgr.ResolveVersions()  (winget/brew/apt/choco/snap/npm)
                                       │
                                       └──[fallback]──► detector.EnrichFallback() (Go buildinfo / PE version)
 ```
@@ -302,11 +332,11 @@ The user's tool catalog (customizations, enabled/disabled state, custom tools) i
 
 | OS | Path |
 |----|------|
-| macOS | `~/Library/Application Support/clim/marketplace.yaml` |
-| Linux | `~/.config/clim/marketplace.yaml` |
-| Windows | `%AppData%\clim\marketplace.yaml` |
+| macOS | `~/Library/Application Support/clim/marketplace-cache.yaml` |
+| Linux | `~/.config/clim/marketplace-cache.yaml` |
+| Windows | `%AppData%\clim\marketplace-cache.yaml` |
 
-The remote catalog cache (fetched from GitHub) is stored alongside it as `marketplace-cache.yaml`.
+The catalog is fetched from GitHub and cached locally for offline use.
 
 Edit the user catalog with `clim tools edit` or directly. User customizations (enabled/disabled state, custom tools) are preserved across updates.
 
@@ -318,6 +348,18 @@ clim's configuration file (`config.yaml`) lives in the same directory as the too
 clim config path   # show config.yaml location
 clim config edit   # open config.yaml in $EDITOR
 ```
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `clim: command not found` | Ensure install directory is in `$PATH`. Run `which clim` (macOS/Linux) or `where clim` (Windows) to check. |
+| Tool not detected | Verify binary is in `$PATH` with `which <tool>` / `where <tool>`. Run `clim` then press `r` to refresh. |
+| Permission denied on upgrade | Package manager may need elevated privileges. Use `sudo` (Linux/macOS) or run as Administrator (Windows). |
+| Stale version info | Delete local cache (`clim tools path` shows location) and relaunch to re-fetch from GitHub. |
+| Self-update fails | Download manually from [Releases](https://github.com/nassiharel/clim/releases/latest) and replace binary. |
 
 ---
 
@@ -333,7 +375,6 @@ See [AGENTS.md](./AGENTS.md) for detailed architecture documentation.
 - CVE / vulnerability scanning integration
 - Background update-available notifications
 - Team policy enforcement (require minimum versions)
-- Installation via scripts
 - Add more package managers (pip, gem, cargo, asdf, etc)
 
 ## License

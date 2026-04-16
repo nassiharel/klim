@@ -64,7 +64,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "Manifest: %d tools (from %s/%s)\n", len(m.Tools), m.OS, m.Arch)
 
 	// Load registry and scan PATH to know what's already installed.
-	regTools, err := svc.ScanOnly(cmd.Context())
+	regTools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
 		return err
 	}

@@ -208,7 +208,7 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 			found++
 		}
 	}
-	slog.Debug("PATH scan complete", "dirs", len(pathDirs), "tools_found", found, "tools_total", len(tools))
+	slog.Info("PATH scan complete", "dirs", len(pathDirs), "tools_found", found, "tools_total", len(tools))
 
 	return nil
 }
@@ -373,6 +373,12 @@ func detectSource(path string) registry.InstallSource {
 		// ~/.local/bin is a general user-level directory (XDG standard) used by
 		// pip, pipx, cargo, go install, and manual copies. Attribute as manual
 		// since we can't reliably determine the actual installer.
+		return registry.SourceManual
+
+	// Windows: binaries bundled inside Git for Windows — not independently managed.
+	// Excludes /git/cmd/ where git.exe itself lives (managed by the installer).
+	case strings.Contains(lower, "/git/usr/bin/") ||
+		strings.Contains(lower, "/git/mingw64/bin/"):
 		return registry.SourceManual
 
 	// Windows: winget installs to many locations beyond Program Files.

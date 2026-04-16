@@ -38,7 +38,7 @@ const (
 
 // Scan phases — the loading lifecycle.
 const (
-	phaseScanning  = 0 // PATH scan in progress
+	phaseLoading   = 0 // loading catalog + scanning PATH
 	phaseResolving = 1 // version resolution in progress
 	phaseDone      = 2 // all tools resolved
 )
@@ -157,12 +157,13 @@ type Model struct {
 	tokenCopied   bool   // true after token copied to clipboard
 
 	// Backup tab state.
-	backupItems   []backupItem   // items being exported/imported
-	backupMode    string         // "" (idle), "export", "import"
-	backupDone    int            // count of completed items
-	backupBar     progress.Model // overall progress bar
-	backupResult  string         // deferred status message shown after progress animation
-	backupConfirm bool           // true = import plan shown, waiting for user confirmation
+	backupItems     []backupItem   // items being exported/imported
+	backupMode      string         // "" (idle), "export", "import"
+	backupDone      int            // count of completed items
+	backupBar       progress.Model // overall progress bar
+	backupResult    string         // deferred status message shown after progress animation
+	backupConfirm   bool           // true = import plan shown, waiting for user confirmation
+	backupCancelled bool           // true = user pressed Esc during install
 
 	// Batch update state (Updates tab).
 	updateSelected map[int]bool      // tool index → selected for batch upgrade
@@ -197,7 +198,7 @@ func NewModel() Model {
 		backupBar:      progress.New(progress.WithWidth(40)),
 		updateSelected: make(map[int]bool),
 		loading:        true,
-		phase:          phaseScanning,
+		phase:          phaseLoading,
 		activeTab:      tabInstalled,
 		detailIdx:      noDetail,
 		toolMenu:       noMenu,
@@ -247,7 +248,7 @@ func (m Model) Init() tea.Cmd {
 // call this first.
 func (m *Model) startScan() tea.Cmd {
 	m.loading = true
-	m.phase = phaseScanning
+	m.phase = phaseLoading
 	m.tools = nil
 	m.filteredIndex = nil
 	m.cursor = 0
@@ -275,12 +276,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sort.Slice(m.tools, func(i, j int) bool {
 			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
 		})
-		m.phase = phaseResolving
-		m.pending = 0
 		m.scanGen++
+
+		// Set status based on how the catalog was loaded.
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
+		} else if info := msg.catalogInfo; info != nil {
+			switch info.Source {
+			case catalog.SourceCache:
+				m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache", info.Tools)
+			case catalog.SourceRemote:
+				m.statusMsg = fmt.Sprintf("✓ Fetched catalog (%d tools)", info.Tools)
+			}
 		}
+
+		// If no tools loaded (e.g. catalog fetch failed), skip to done.
+		if len(m.tools) == 0 {
+			m.phase = phaseDone
+			m.loading = false
+			m.pending = 0
+			m.applyFilter()
+			return m, nil
+		}
+
+		m.phase = phaseResolving
+		m.pending = 0
 
 		// Reset filters — applyFilter() will rebuild sidebar items contextually.
 		m.categoryFilter = ""
@@ -374,11 +394,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case execFinishedMsg:
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("✗ %s failed: %s", msg.action, msg.err)
+			toolName := "unknown"
+			if msg.toolIdx < len(m.tools) {
+				toolName = m.tools[msg.toolIdx].Name
+			}
+			slog.Warn("tool action failed", "action", msg.action, "tool", toolName, "error", msg.err)
 			return m, nil
 		}
 		if msg.toolIdx >= len(m.tools) {
 			return m, nil
 		}
+		slog.Info("tool action succeeded", "action", msg.action, "tool", m.tools[msg.toolIdx].Name)
 		m.statusMsg = fmt.Sprintf("✓ %s succeeded — refreshing...", msg.action)
 		// Re-scan the affected tool to pick up changes.
 		tool := m.tools[msg.toolIdx]
@@ -494,13 +520,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.backupDone++
 		}
-		// Fire the next install, or finish.
+		// If cancelled or no more items, finish up.
+		if m.backupCancelled {
+			m.statusMsg = m.importSummary()
+			cmd := m.startScan()
+			return m, cmd
+		}
 		if cmd := m.nextBackupInstall(); cmd != nil {
 			return m, cmd
 		}
 		// All done — refresh tools to pick up newly installed ones.
+		m.statusMsg = m.importSummary()
 		cmd := m.startScan()
-		m.statusMsg = "✓ Import complete — refreshing..."
 		return m, cmd
 
 	case batchUpgradeItemMsg:
@@ -640,6 +671,7 @@ func (m Model) handleKeyConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "y", "Y":
 		action := *m.pendingAction
 		m.pendingAction = nil
+		slog.Info("executing tool action", "action", action.action, "cmd", strings.Join(action.cmdArgs, " "))
 		m.statusMsg = fmt.Sprintf("Running %s...", action.action)
 		return m, execToolActionCmd(action)
 	case "n", "N", "esc":
@@ -945,8 +977,11 @@ func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyDefault handles keys when no modal is active — tabs, navigation, actions.
 func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Clear transient status message on any keypress so stale errors don't linger.
-	m.statusMsg = ""
+	// Clear transient status on keypress — but preserve error messages
+	// when no tools are loaded (e.g. catalog fetch failure).
+	if len(m.tools) > 0 {
+		m.statusMsg = ""
+	}
 
 	switch msg.String() {
 	case "q", "ctrl+c":
@@ -964,6 +999,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case "esc":
+		// Cancel running import — mark remaining as cancelled, let current finish.
+		if m.activeTab == tabBackup && m.backupMode != backupModeIdle && m.isImportRunning() {
+			m.cancelImport()
+			return m, nil
+		}
 		// Reset completed backup back to idle.
 		if m.activeTab == tabBackup && m.backupMode != backupModeIdle {
 			m.backupMode = ""
@@ -1554,13 +1594,30 @@ func (m Model) resolveInstallAction() *sourcePicker {
 }
 
 // resolveUpgradeAction builds a source picker for upgrading the current tool.
+// Only offers upgrade when the detected source is a known package manager.
+// Manual installs cannot be upgraded through clim.
 func (m Model) resolveUpgradeAction() *sourcePicker {
 	tool := m.currentTool()
 	if tool == nil || !tool.IsInstalled() {
 		return nil
 	}
+
+	detected := tool.PrimaryInstance().Source
+	if detected == registry.SourceManual {
+		return nil
+	}
+
+	// Prefer detected source first.
 	var choices []sourceChoice
+	if args := tool.Packages.UpgradeArgs(detected); args != nil {
+		choices = append(choices, sourceChoice{source: detected, cmdArgs: args})
+	}
+
+	// Then other available sources.
 	for _, src := range registry.SourcesForOS() {
+		if src == detected {
+			continue
+		}
 		if args := tool.Packages.UpgradeArgs(src); args != nil {
 			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
 		}
@@ -1576,13 +1633,30 @@ func (m Model) resolveUpgradeAction() *sourcePicker {
 }
 
 // resolveRemoveAction builds a source picker for removing the current tool.
+// Only offers remove when the detected source is a known package manager.
+// Manual installs cannot be removed through clim.
 func (m Model) resolveRemoveAction() *sourcePicker {
 	tool := m.currentTool()
 	if tool == nil || !tool.IsInstalled() {
 		return nil
 	}
+
+	detected := tool.PrimaryInstance().Source
+	if detected == registry.SourceManual {
+		return nil
+	}
+
+	// Prefer detected source first.
 	var choices []sourceChoice
+	if args := tool.Packages.RemoveArgs(detected); args != nil {
+		choices = append(choices, sourceChoice{source: detected, cmdArgs: args})
+	}
+
+	// Then other available sources.
 	for _, src := range registry.SourcesForOS() {
+		if src == detected {
+			continue
+		}
 		if args := tool.Packages.RemoveArgs(src); args != nil {
 			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
 		}
@@ -1628,11 +1702,65 @@ func (m *Model) nextBackupInstall() tea.Cmd {
 	for i := range m.backupItems {
 		if m.backupItems[i].status == backupPending {
 			m.backupItems[i].status = backupRunning
+			m.cursor = i // auto-scroll to installing item
 			m.statusMsg = fmt.Sprintf("Installing %s...", itemLabel(m.backupItems[i].name, m.backupItems[i].display))
 			return execBackupInstallCmd(i, m.backupItems[i].cmdArgs)
 		}
 	}
 	return nil
+}
+
+// isImportRunning returns true if an import install is in progress.
+func (m Model) isImportRunning() bool {
+	for _, item := range m.backupItems {
+		if item.status == backupRunning {
+			return true
+		}
+	}
+	return false
+}
+
+// cancelImport marks all remaining pending items as skipped/cancelled.
+func (m *Model) cancelImport() {
+	m.backupCancelled = true
+	for i := range m.backupItems {
+		if m.backupItems[i].status == backupPending {
+			m.backupItems[i].status = backupSkipped
+			m.backupItems[i].errMsg = "cancelled"
+		}
+	}
+	m.statusMsg = "⚠ Import cancelled — waiting for current install to finish..."
+}
+
+// importSummary builds a status string with installed/failed/skipped counts.
+func (m Model) importSummary() string {
+	installed, failed, skipped := 0, 0, 0
+	for _, item := range m.backupItems {
+		switch item.status {
+		case backupDone:
+			installed++
+		case backupFailed:
+			failed++
+		case backupSkipped:
+			skipped++
+		}
+	}
+	parts := []string{fmt.Sprintf("%d installed", installed)}
+	if failed > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed", failed))
+	}
+	if skipped > 0 {
+		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
+	}
+	prefix := "✓"
+	verb := "complete"
+	if m.backupCancelled {
+		prefix = "⚠"
+		verb = "cancelled"
+	} else if failed > 0 {
+		prefix = "⚠"
+	}
+	return fmt.Sprintf("%s Import %s — %s", prefix, verb, strings.Join(parts, ", "))
 }
 
 // --- Batch upgrade (Updates tab) ---

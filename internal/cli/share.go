@@ -32,7 +32,7 @@ func init() {
 
 func runShare(cmd *cobra.Command, args []string) error {
 	fmt.Fprintln(os.Stderr, "Scanning installed tools...")
-	tools, err := svc.ScanOnly(cmd.Context())
+	tools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
 		return err
 	}

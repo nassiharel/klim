@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/manifest"
+	"github.com/nassiharel/clim/internal/progress"
 )
 
 var exportCmd = &cobra.Command{
@@ -30,11 +31,13 @@ func init() {
 }
 
 func runExport(cmd *cobra.Command, args []string) error {
-	fmt.Fprintln(os.Stderr, "Scanning installed tools...")
-	tools, err := svc.LoadAndResolve(cmd.Context())
+	sp := progress.New("Scanning installed tools...")
+	tools, _, err := svc.LoadAndResolve(cmd.Context())
 	if err != nil {
+		sp.Fail(err.Error())
 		return err
 	}
+	sp.Done("Tools scanned")
 
 	var exported []manifest.Tool
 	for _, tool := range tools {

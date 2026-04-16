@@ -12,6 +12,7 @@ import (
 	"github.com/mattn/go-runewidth"
 
 	"github.com/nassiharel/clim/internal/build"
+	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/logging"
 	"github.com/nassiharel/clim/internal/registry"
@@ -133,15 +134,19 @@ func (m Model) renderView() string {
 func (m Model) renderTitleBar() string {
 	title := titleStyle.Render("  clim")
 
-	if m.phase == phaseScanning {
-		return title + "  " + loadingStyle.Render(m.spinner.View()+" finding tools...")
+	if m.phase == phaseLoading {
+		return title + "  " + loadingStyle.Render(m.spinner.View()+" Loading tools...")
 	}
 	if m.phase == phaseResolving && m.pending > 0 {
-		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s checking versions (%d remaining)...", m.spinner.View(), m.pending))
+		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s Checking versions (%d remaining)...", m.spinner.View(), m.pending))
 	}
 
 	inst, upd, notInst := m.stats()
 	active := inst + notInst
+	if active == 0 && m.statusMsg != "" {
+		// No tools loaded (catalog failure) — show status message instead of 0/0.
+		return title + "  " + upgradableStyle.Render(m.statusMsg)
+	}
 	summary := fmt.Sprintf("%d/%d installed", inst, active)
 	if upd > 0 {
 		summary += " · " + upgradableStyle.Render(strconv.Itoa(upd)+" updates")
@@ -1139,9 +1144,21 @@ func (m Model) renderBackupView() string {
 		b.WriteString(confirmStyle.Render("  Review import plan") + "  " +
 			dimVersion.Render(fmt.Sprintf("%d selected of %d to install, %d skipped", selected, pending, skipped)) + "\n\n")
 	} else {
-		// Progress bar.
+		// Show currently installing tool + progress bar.
 		total := len(m.backupItems)
 		if total > 0 {
+			// Find running item.
+			for _, item := range m.backupItems {
+				if item.status == backupRunning {
+					fmt.Fprintf(&b, "  %s %s (%d/%d)\n",
+						upgradableStyle.Render("Installing:"),
+						itemLabel(item.name, item.display),
+						m.backupDone+1, total,
+					)
+					break
+				}
+			}
+
 			frac := float64(m.backupDone) / float64(total)
 			barWidth := m.width - 30
 			if barWidth < 20 {
@@ -1249,6 +1266,11 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 		line = selectedRowStyle.Render(line)
 	}
 
+	// Show attempted command for failed items when selected.
+	if selected && item.status == backupFailed && len(item.cmdArgs) > 0 {
+		line += "\n    " + dimVersion.Render("→ "+strings.Join(item.cmdArgs, " "))
+	}
+
 	return line
 }
 
@@ -1268,7 +1290,7 @@ func (m Model) renderConfigView() string {
 	// File paths.
 	b.WriteString("\n")
 	marketplacePath := dim("(unknown)")
-	if p, err := registry.ToolsPath(); err == nil {
+	if p, err := catalog.CachePath(); err == nil {
 		marketplacePath = p
 	}
 	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Marketplace", 18)), marketplacePath)
@@ -1367,10 +1389,17 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("q") + " quit",
 			}
 		default:
-			parts = []string{
-				dimVersion.Render("←→") + " tab",
-				dimVersion.Render("Esc") + " back",
-				dimVersion.Render("q") + " quit",
+			if m.isImportRunning() {
+				parts = []string{
+					dimVersion.Render("Esc") + " cancel",
+				}
+			} else {
+				parts = []string{
+					dimVersion.Render("↑↓") + " navigate",
+					dimVersion.Render("←→") + " tab",
+					dimVersion.Render("Esc") + " back",
+					dimVersion.Render("q") + " quit",
+				}
 			}
 		}
 	case tabConfig:
@@ -1402,7 +1431,9 @@ func (m Model) renderHelp() string {
 	}
 
 	help := helpStyle.Render("  " + strings.Join(parts, "   "))
-	if m.statusMsg != "" {
+	// Show status in footer only when title bar isn't already displaying it
+	// (title bar shows statusMsg when no tools are loaded).
+	if m.statusMsg != "" && len(m.tools) > 0 {
 		help += "  " + upgradableStyle.Render(m.statusMsg)
 	}
 	return help
