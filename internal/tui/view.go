@@ -1144,9 +1144,21 @@ func (m Model) renderBackupView() string {
 		b.WriteString(confirmStyle.Render("  Review import plan") + "  " +
 			dimVersion.Render(fmt.Sprintf("%d selected of %d to install, %d skipped", selected, pending, skipped)) + "\n\n")
 	} else {
-		// Progress bar.
+		// Show currently installing tool + progress bar.
 		total := len(m.backupItems)
 		if total > 0 {
+			// Find running item.
+			for _, item := range m.backupItems {
+				if item.status == backupRunning {
+					fmt.Fprintf(&b, "  %s %s (%d/%d)\n",
+						upgradableStyle.Render("Installing:"),
+						itemLabel(item.name, item.display),
+						m.backupDone+1, total,
+					)
+					break
+				}
+			}
+
 			frac := float64(m.backupDone) / float64(total)
 			barWidth := m.width - 30
 			if barWidth < 20 {
@@ -1252,6 +1264,11 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 			line += strings.Repeat(" ", m.width-w)
 		}
 		line = selectedRowStyle.Render(line)
+	}
+
+	// Show attempted command for failed items when selected.
+	if selected && item.status == backupFailed && len(item.cmdArgs) > 0 {
+		line += "\n    " + dimVersion.Render("→ "+strings.Join(item.cmdArgs, " "))
 	}
 
 	return line
@@ -1372,10 +1389,17 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("q") + " quit",
 			}
 		default:
-			parts = []string{
-				dimVersion.Render("←→") + " tab",
-				dimVersion.Render("Esc") + " back",
-				dimVersion.Render("q") + " quit",
+			if m.isImportRunning() {
+				parts = []string{
+					dimVersion.Render("Esc") + " cancel",
+				}
+			} else {
+				parts = []string{
+					dimVersion.Render("↑↓") + " navigate",
+					dimVersion.Render("←→") + " tab",
+					dimVersion.Render("Esc") + " back",
+					dimVersion.Render("q") + " quit",
+				}
 			}
 		}
 	case tabConfig:
