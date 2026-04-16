@@ -40,7 +40,7 @@ clean:
 	rm -rf bin/ dist/ coverage.out coverage.html
 
 marketplace-validate:
-	go run ./scripts/validate-marketplace
+	go run ./internal/marketplace/validate
 
 marketplace-assemble:
-	go run ./scripts/assemble-marketplace -o marketplace.yaml
+	go run ./internal/marketplace/assemble -o marketplace.yaml

@@ -9,12 +9,12 @@ import (
 )
 
 func TestMergeToolDefs_NewEmbeddedToolAdded(t *testing.T) {
-	embedded := []toolDef{
-		{Name: "git", DisplayName: "Git", Packages: packageDef{Brew: "git"}},
-		{Name: "rg", DisplayName: "ripgrep", Packages: packageDef{Brew: "ripgrep"}},
+	embedded := []ToolDef{
+		{Name: "git", DisplayName: "Git", Packages: PackageDef{Brew: "git"}},
+		{Name: "rg", DisplayName: "ripgrep", Packages: PackageDef{Brew: "ripgrep"}},
 	}
-	user := []toolDef{
-		{Name: "git", DisplayName: "Git", Packages: packageDef{Brew: "git"}},
+	user := []ToolDef{
+		{Name: "git", DisplayName: "Git", Packages: PackageDef{Brew: "git"}},
 	}
 
 	merged, changed := mergeToolDefs(embedded, user)
@@ -31,12 +31,12 @@ func TestMergeToolDefs_NewEmbeddedToolAdded(t *testing.T) {
 }
 
 func TestMergeToolDefs_UserCustomToolPreserved(t *testing.T) {
-	embedded := []toolDef{
+	embedded := []ToolDef{
 		{Name: "git", DisplayName: "Git"},
 	}
-	user := []toolDef{
+	user := []ToolDef{
 		{Name: "git", DisplayName: "Git"},
-		{Name: "my-tool", DisplayName: "My Tool", Packages: packageDef{Brew: "my-tool"}},
+		{Name: "my-tool", DisplayName: "My Tool", Packages: PackageDef{Brew: "my-tool"}},
 	}
 
 	merged, _ := mergeToolDefs(embedded, user)
@@ -53,16 +53,16 @@ func TestMergeToolDefs_UserCustomToolPreserved(t *testing.T) {
 }
 
 func TestMergeToolDefs_EmbeddedFillsPackageGaps(t *testing.T) {
-	embedded := []toolDef{
-		{Name: "bat", Packages: packageDef{
+	embedded := []ToolDef{
+		{Name: "bat", Packages: PackageDef{
 			Winget: "sharkdp.bat",
 			Choco:  "bat",
 			Brew:   "bat",
 			Apt:    "bat",
 		}},
 	}
-	user := []toolDef{
-		{Name: "bat", Packages: packageDef{
+	user := []ToolDef{
+		{Name: "bat", Packages: PackageDef{
 			Winget: "sharkdp.bat",
 			// choco, brew, apt missing — should be filled from embedded
 		}},
@@ -85,11 +85,11 @@ func TestMergeToolDefs_EmbeddedFillsPackageGaps(t *testing.T) {
 }
 
 func TestMergeToolDefs_UserPackageOverridesEmbedded(t *testing.T) {
-	embedded := []toolDef{
-		{Name: "git", Packages: packageDef{Brew: "git"}},
+	embedded := []ToolDef{
+		{Name: "git", Packages: PackageDef{Brew: "git"}},
 	}
-	user := []toolDef{
-		{Name: "git", Packages: packageDef{Brew: "git-custom"}},
+	user := []ToolDef{
+		{Name: "git", Packages: PackageDef{Brew: "git-custom"}},
 	}
 
 	merged, _ := mergeToolDefs(embedded, user)
@@ -100,8 +100,8 @@ func TestMergeToolDefs_UserPackageOverridesEmbedded(t *testing.T) {
 }
 
 func TestMergeToolDefs_NoChangesReturnsFalse(t *testing.T) {
-	defs := []toolDef{
-		{Name: "git", DisplayName: "Git", Packages: packageDef{Brew: "git"}},
+	defs := []ToolDef{
+		{Name: "git", DisplayName: "Git", Packages: PackageDef{Brew: "git"}},
 	}
 
 	_, changed := mergeToolDefs(defs, defs)
@@ -112,10 +112,10 @@ func TestMergeToolDefs_NoChangesReturnsFalse(t *testing.T) {
 }
 
 func TestMergeToolDefs_EmbeddedMetadataWins(t *testing.T) {
-	embedded := []toolDef{
+	embedded := []ToolDef{
 		{Name: "git", DisplayName: "Git (Updated)", Category: "VCS", BinaryNames: []string{"git"}},
 	}
-	user := []toolDef{
+	user := []ToolDef{
 		{Name: "git", DisplayName: "Git (Old)", Category: "Old Category", BinaryNames: []string{"old-git"}},
 	}
 
@@ -136,11 +136,11 @@ func TestMergeToolDefs_EmbeddedMetadataWins(t *testing.T) {
 }
 
 func TestMergeToolDefs_OrderEmbeddedFirstThenUserCustom(t *testing.T) {
-	embedded := []toolDef{
+	embedded := []ToolDef{
 		{Name: "b-tool"},
 		{Name: "a-tool"},
 	}
-	user := []toolDef{
+	user := []ToolDef{
 		{Name: "a-tool"},
 		{Name: "z-custom"},
 		{Name: "b-tool"},
@@ -164,7 +164,7 @@ func TestMergeToolDefs_OrderEmbeddedFirstThenUserCustom(t *testing.T) {
 }
 
 func TestMergePackages(t *testing.T) {
-	embedded := packageDef{
+	embedded := PackageDef{
 		Winget: "X.Y",
 		Choco:  "x",
 		Brew:   "x",
@@ -172,7 +172,7 @@ func TestMergePackages(t *testing.T) {
 		Snap:   "x",
 		NPM:    "x",
 	}
-	user := packageDef{
+	user := PackageDef{
 		Winget: "Custom.ID", // user override — keep
 		Choco:  "",          // gap — fill from embedded
 		Brew:   "x-custom",  // user override — keep
@@ -240,14 +240,14 @@ func TestSlicesEqual(t *testing.T) {
 }
 
 func TestDefsToTools(t *testing.T) {
-	defs := []toolDef{
+	defs := []ToolDef{
 		{
 			Name:        "git",
 			DisplayName: "Git",
 			Category:    "VCS",
 			Tags:        []string{"vcs"},
 			BinaryNames: []string{"git"},
-			Packages:    packageDef{Brew: "git", Winget: "Git.Git"},
+			Packages:    PackageDef{Brew: "git", Winget: "Git.Git"},
 		},
 		{
 			Name: "mytool", // no display name or binary names — should use defaults
@@ -321,7 +321,7 @@ func TestMergeToolDefs_EmptyInputs(t *testing.T) {
 	})
 
 	t.Run("empty catalog non-empty user", func(t *testing.T) {
-		user := []toolDef{{Name: "custom"}}
+		user := []ToolDef{{Name: "custom"}}
 		merged, _ := mergeToolDefs(nil, user)
 		if len(merged) != 1 || merged[0].Name != "custom" {
 			t.Errorf("expected user tool preserved, got %v", merged)
@@ -329,7 +329,7 @@ func TestMergeToolDefs_EmptyInputs(t *testing.T) {
 	})
 
 	t.Run("non-empty catalog empty user", func(t *testing.T) {
-		catalog := []toolDef{{Name: "git"}}
+		catalog := []ToolDef{{Name: "git"}}
 		merged, changed := mergeToolDefs(catalog, nil)
 		if len(merged) != 1 || merged[0].Name != "git" {
 			t.Errorf("expected catalog tool, got %v", merged)
@@ -467,7 +467,7 @@ packs:
 }
 
 func TestValidatePackToolReferences(t *testing.T) {
-	validate := func(tools []toolDef, packs []Pack) map[string][]string {
+	validate := func(tools []ToolDef, packs []Pack) map[string][]string {
 		toolSet := make(map[string]struct{}, len(tools))
 		for _, td := range tools {
 			toolSet[td.Name] = struct{}{}
@@ -484,7 +484,7 @@ func TestValidatePackToolReferences(t *testing.T) {
 	}
 
 	t.Run("all references valid", func(t *testing.T) {
-		tools := []toolDef{{Name: "git"}, {Name: "fzf"}}
+		tools := []ToolDef{{Name: "git"}, {Name: "fzf"}}
 		packs := []Pack{{Name: "my-pack", ToolNames: []string{"git", "fzf"}}}
 		missing := validate(tools, packs)
 		if len(missing) != 0 {
@@ -493,7 +493,7 @@ func TestValidatePackToolReferences(t *testing.T) {
 	})
 
 	t.Run("some references invalid", func(t *testing.T) {
-		tools := []toolDef{{Name: "git"}}
+		tools := []ToolDef{{Name: "git"}}
 		packs := []Pack{{Name: "my-pack", ToolNames: []string{"git", "phantom"}}}
 		missing := validate(tools, packs)
 		if len(missing["my-pack"]) != 1 || missing["my-pack"][0] != "phantom" {
@@ -502,7 +502,7 @@ func TestValidatePackToolReferences(t *testing.T) {
 	})
 
 	t.Run("empty pack", func(t *testing.T) {
-		tools := []toolDef{{Name: "git"}}
+		tools := []ToolDef{{Name: "git"}}
 		packs := []Pack{{Name: "empty", ToolNames: nil}}
 		missing := validate(tools, packs)
 		if len(missing) != 0 {
@@ -551,7 +551,7 @@ func TestMarketplaceYAML_Integrity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("reading %s: %v", f, err)
 		}
-		var td toolDef
+		var td ToolDef
 		if err := yaml.Unmarshal(data, &td); err != nil {
 			t.Fatalf("parsing %s: %v", f, err)
 		}

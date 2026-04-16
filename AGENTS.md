@@ -15,9 +15,9 @@ cmd/clim/main.go          Entry point → cli.Execute()
 marketplace/                Modular tool catalog (source of truth)
   tools/*.yaml              One file per tool definition
   packs/*.yaml              One file per pack definition
-scripts/                    Marketplace assembly & validation
-  assemble-marketplace/     Combines individual files → marketplace.yaml
-  validate-marketplace/     Schema validation, uniqueness, cross-references
+  marketplace/   Marketplace assembly & validation scripts
+    assemble/    Combines individual files → marketplace.yaml
+    validate/    Schema validation, uniqueness, cross-references
 install.sh                 Linux/macOS installer script
 install.ps1                Windows PowerShell installer script
 Makefile                   build / test / lint / cover / clean
@@ -116,7 +116,7 @@ make build        # bin/clim with version ldflags
 make test         # go test -race -count=1 ./...
 make lint         # golangci-lint run
 make cover        # HTML coverage report
-make marketplace-validate  # validate marketplace/tools/ and marketplace/packs/
+make marketplace-validate  # validate marketplace/ tool and pack files
 make marketplace-assemble  # assemble → marketplace.yaml
 ```
 

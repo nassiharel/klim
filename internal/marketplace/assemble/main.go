@@ -4,9 +4,9 @@
 //
 // Usage:
 //
-//	go run ./scripts/assemble-marketplace              # writes to stdout
-//	go run ./scripts/assemble-marketplace -o marketplace.yaml  # writes to file
-//	go run ./scripts/assemble-marketplace -dir ./marketplace   # custom source dir
+//	go run ./internal/marketplace/assemble
+//	go run ./internal/marketplace/assemble -o marketplace.yaml
+//	go run ./internal/marketplace/assemble -dir ./marketplace
 package main
 
 import (
@@ -19,28 +19,15 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/nassiharel/clim/internal/registry"
 )
 
-// toolDef mirrors the YAML structure for a single tool file.
-type toolDef struct {
-	Name        string     `yaml:"name"`
-	DisplayName string     `yaml:"display_name"`
-	Category    string     `yaml:"category"`
-	Tags        []string   `yaml:"tags,omitempty"`
-	BinaryNames []string   `yaml:"binary_names"`
-	Packages    packageDef `yaml:"packages"`
+type assembledFile struct {
+	Tools []registry.ToolDef `yaml:"tools"`
+	Packs []packDef          `yaml:"packs"`
 }
 
-type packageDef struct {
-	Winget string `yaml:"winget,omitempty"`
-	Choco  string `yaml:"choco,omitempty"`
-	Brew   string `yaml:"brew,omitempty"`
-	Apt    string `yaml:"apt,omitempty"`
-	Snap   string `yaml:"snap,omitempty"`
-	NPM    string `yaml:"npm,omitempty"`
-}
-
-// packDef mirrors the YAML structure for a single pack file.
 type packDef struct {
 	Name        string   `yaml:"name"`
 	DisplayName string   `yaml:"display_name"`
@@ -48,13 +35,6 @@ type packDef struct {
 	Tools       []string `yaml:"tools"`
 }
 
-// assembledFile is the top-level YAML structure for the combined marketplace.
-type assembledFile struct {
-	Tools []toolDef `yaml:"tools"`
-	Packs []packDef `yaml:"packs"`
-}
-
-// categoriesFile mirrors marketplace/categories.yaml.
 type categoriesFile struct {
 	Categories []string `yaml:"categories"`
 }
@@ -64,7 +44,6 @@ func main() {
 	output := flag.String("o", "", "output file (default: stdout)")
 	flag.Parse()
 
-	// Load category ordering from categories.yaml.
 	categoryOrder, err := loadCategoryOrder(filepath.Join(*dir, "categories.yaml"))
 	if err != nil {
 		fatal("%v", err)
@@ -79,20 +58,19 @@ func main() {
 		fatal("no tool files found in %s/tools/", *dir)
 	}
 
-	var tools []toolDef
+	var tools []registry.ToolDef
 	for _, f := range toolFiles {
 		data, err := os.ReadFile(f)
 		if err != nil {
 			fatal("reading %s: %v", f, err)
 		}
-		var t toolDef
+		var t registry.ToolDef
 		if err := yaml.Unmarshal(data, &t); err != nil {
 			fatal("parsing %s: %v", f, err)
 		}
 		tools = append(tools, t)
 	}
 
-	// Sort by category order, then by name within category.
 	sort.SliceStable(tools, func(i, j int) bool {
 		ci := categoryRank(categoryOrder, tools[i].Category)
 		cj := categoryRank(categoryOrder, tools[j].Category)
@@ -126,10 +104,7 @@ func main() {
 	})
 
 	// --- Assemble ---
-	assembled := assembledFile{
-		Tools: tools,
-		Packs: packs,
-	}
+	assembled := assembledFile{Tools: tools, Packs: packs}
 
 	data, err := yaml.Marshal(&assembled)
 	if err != nil {
@@ -151,7 +126,6 @@ func main() {
 	}
 }
 
-// loadCategoryOrder reads categories.yaml and returns a map from category → sort rank.
 func loadCategoryOrder(path string) (map[string]int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -175,7 +149,7 @@ func categoryRank(order map[string]int, cat string) int {
 	if rank, ok := order[cat]; ok {
 		return rank
 	}
-	return 999 // unknown categories sort last
+	return 999
 }
 
 func fatal(format string, args ...any) {
