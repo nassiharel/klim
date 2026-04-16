@@ -375,9 +375,9 @@ func detectSource(path string) registry.InstallSource {
 		// since we can't reliably determine the actual installer.
 		return registry.SourceManual
 
-	// Windows: binaries bundled inside other tools — not independently managed.
+	// Windows: binaries bundled inside Git for Windows — not independently managed.
+	// Excludes /git/cmd/ where git.exe itself lives (managed by the installer).
 	case strings.Contains(lower, "/git/usr/bin/") ||
-		strings.Contains(lower, "/git/cmd/") ||
 		strings.Contains(lower, "/git/mingw64/bin/"):
 		return registry.SourceManual
 
