@@ -14,7 +14,7 @@ tui:
 docs:
   - changed-files:
       - any-glob-to-any-file:
-          - '*.md'
+          - '**/*.md'
 
 ci:
   - changed-files:

@@ -11,35 +11,12 @@
 <p align="center">
   <a href="https://github.com/nassiharel/clim/releases/latest"><img src="https://img.shields.io/github/v/release/nassiharel/clim?style=flat-square" alt="Release"></a>
   <a href="https://github.com/nassiharel/clim/actions"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/clim/ci.yml?style=flat-square" alt="CI"></a>
-  <a href="https://github.com/nassiharel/clim/actions/workflows/codeql.yml"><img src="https://github.com/nassiharel/clim/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
-  <a href="https://goreportcard.com/report/github.com/nassiharel/clim"><img src="https://goreportcard.com/badge/github.com/nassiharel/clim" alt="Go Report Card"></a>
-  <a href="https://pkg.go.dev/github.com/nassiharel/clim"><img src="https://pkg.go.dev/badge/github.com/nassiharel/clim.svg" alt="Go Reference"></a>
+  <a href="https://github.com/nassiharel/clim/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/clim/codeql.yml?style=flat-square&label=CodeQL" alt="CodeQL"></a>
+  <a href="https://goreportcard.com/report/github.com/nassiharel/clim"><img src="https://img.shields.io/badge/go%20report-A+-brightgreen?style=flat-square" alt="Go Report Card"></a>
+  <a href="https://pkg.go.dev/github.com/nassiharel/clim"><img src="https://img.shields.io/badge/godoc-reference-blue?style=flat-square" alt="Go Reference"></a>
   <a href="https://github.com/nassiharel/clim/releases"><img src="https://img.shields.io/github/downloads/nassiharel/clim/total?style=flat-square" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/nassiharel/clim?style=flat-square" alt="License"></a>
 </p>
-
-```
-     ___  _     ___  __  __
-    / __|| |   |_ _||  \/  |
-   | (__ | |__  | | | |\/| |
-    \___||____||___||_|  |_|
-
-    detect . check . upgrade
-```
-
-```
-$ clim
-TOOL                 VERSION   LATEST    PATH                                       STATUS
-Azure CLI            2.83.0    2.84.0    /usr/local/bin/az                          upgrade available
-Azure Dev CLI        1.23.13   1.23.13   /usr/local/bin/azd                         up to date
-GitHub CLI           2.88.1    2.89.0    /usr/bin/gh                                upgrade available
-kubectl              1.33.3    1.35.3    /usr/local/bin/kubectl                     upgrade available
-Docker               29.3.1    29.3.1    /usr/bin/docker                            up to date
-Go                   1.23.4    1.26.1    /usr/local/go/bin/go                       upgrade available
-Node.js              24.13.1   25.9.0    /usr/local/bin/node                        upgrade available
-Python               3.13.12   3.14.3    /usr/bin/python3                           upgrade available
-Git                  2.53.0    2.53.0    /usr/bin/git                               up to date
-```
 
 ---
 
