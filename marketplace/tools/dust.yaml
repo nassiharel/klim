@@ -1,0 +1,16 @@
+name: dust
+display_name: dust
+category: CLI
+tags:
+    - disk-usage
+    - du
+    - visualization
+    - rust
+    - storage
+binary_names:
+    - dust
+packages:
+    winget: bootandy.dust
+    choco: dust
+    brew: dust
+    apt: du-dust

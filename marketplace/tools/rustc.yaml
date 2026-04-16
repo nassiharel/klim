@@ -1,0 +1,14 @@
+name: rustc
+display_name: Rust
+category: Language
+tags:
+    - systems
+    - compiler
+    - memory-safe
+    - performance
+    - wasm
+binary_names:
+    - rustc
+packages:
+    brew: rust
+    apt: rustc

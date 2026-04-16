@@ -19,6 +19,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/clim/internal/registry"
 )
 
 // --- Fetcher ---
@@ -137,8 +138,13 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) ([]byte, error
 
 // isValidCatalog checks whether data is parseable YAML with at least one tool.
 func isValidCatalog(data []byte) bool {
-	defs := parseToolDefs(data)
-	return len(defs) > 0
+	var f struct {
+		Tools []registry.ToolDef `yaml:"tools"`
+	}
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return false
+	}
+	return len(f.Tools) > 0
 }
 
 // --- Diff ---
@@ -154,31 +160,10 @@ func (d DiffResult) HasChanges() bool {
 	return len(d.NewTools) > 0 || len(d.ChangedTools) > 0
 }
 
-// toolDef mirrors the YAML structure for diffing purposes.
-type toolDef struct {
-	Name        string     `yaml:"name"`
-	DisplayName string     `yaml:"display_name"`
-	Category    string     `yaml:"category"`
-	Tags        []string   `yaml:"tags,omitempty"`
-	BinaryNames []string   `yaml:"binary_names"`
-	Packages    packageDef `yaml:"packages"`
-}
-
-type packageDef struct {
-	Winget string `yaml:"winget,omitempty"`
-	Choco  string `yaml:"choco,omitempty"`
-	Brew   string `yaml:"brew,omitempty"`
-	Apt    string `yaml:"apt,omitempty"`
-	Snap   string `yaml:"snap,omitempty"`
-	NPM    string `yaml:"npm,omitempty"`
-}
-
-type toolsFile struct {
-	Tools []toolDef `yaml:"tools"`
-}
-
-func parseToolDefs(data []byte) []toolDef {
-	var f toolsFile
+func parseToolDefs(data []byte) []registry.ToolDef {
+	var f struct {
+		Tools []registry.ToolDef `yaml:"tools"`
+	}
 	if err := yaml.Unmarshal(data, &f); err != nil {
 		return nil
 	}
@@ -192,7 +177,7 @@ func Diff(local, remote []byte) DiffResult {
 	localDefs := parseToolDefs(local)
 	remoteDefs := parseToolDefs(remote)
 
-	localMap := make(map[string]*toolDef, len(localDefs))
+	localMap := make(map[string]*registry.ToolDef, len(localDefs))
 	for i := range localDefs {
 		localMap[localDefs[i].Name] = &localDefs[i]
 	}

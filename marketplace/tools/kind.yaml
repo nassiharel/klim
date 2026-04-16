@@ -1,0 +1,15 @@
+name: kind
+display_name: kind
+category: Containers
+tags:
+    - kubernetes
+    - k8s
+    - local-cluster
+    - docker
+    - testing
+binary_names:
+    - kind
+packages:
+    winget: Kubernetes.kind
+    choco: kind
+    brew: kind

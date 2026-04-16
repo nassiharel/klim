@@ -10,17 +10,19 @@ import (
 )
 
 type toolsFile struct {
-	Tools []toolDef `yaml:"tools"`
+	Tools []ToolDef `yaml:"tools"`
 	Packs []packDef `yaml:"packs,omitempty"`
 }
 
-type toolDef struct {
+// ToolDef is the YAML structure for a single tool definition.
+// Exported so the catalog package can reuse it for diffing.
+type ToolDef struct {
 	Name        string     `yaml:"name"`
 	DisplayName string     `yaml:"display_name"`
 	Category    string     `yaml:"category"`
 	Tags        []string   `yaml:"tags,omitempty"`
 	BinaryNames []string   `yaml:"binary_names"`
-	Packages    packageDef `yaml:"packages"`
+	Packages    PackageDef `yaml:"packages"`
 }
 
 type packDef struct {
@@ -30,7 +32,9 @@ type packDef struct {
 	Tools       []string `yaml:"tools"`
 }
 
-type packageDef struct {
+// PackageDef is the YAML structure for package manager identifiers.
+// Exported so the catalog package can reuse it for diffing.
+type PackageDef struct {
 	Winget string `yaml:"winget,omitempty"`
 	Choco  string `yaml:"choco,omitempty"`
 	Brew   string `yaml:"brew,omitempty"`
@@ -89,7 +93,7 @@ func DefaultToolsFromBytes(catalogData []byte) []Tool {
 	return defsToTools(merged)
 }
 
-func writeToolDefs(path string, defs []toolDef) error {
+func writeToolDefs(path string, defs []ToolDef) error {
 	f := toolsFile{Tools: defs}
 	data, err := yaml.Marshal(&f)
 	if err != nil {
@@ -100,7 +104,7 @@ func writeToolDefs(path string, defs []toolDef) error {
 	return os.WriteFile(path, []byte(header+string(data)), 0o644)
 }
 
-func parseToolDefs(data []byte) []toolDef {
+func parseToolDefs(data []byte) []ToolDef {
 	var f toolsFile
 	if err := yaml.Unmarshal(data, &f); err != nil {
 		return nil
@@ -132,7 +136,7 @@ func ParsePacksFromBytes(data []byte) ([]Pack, error) {
 	return packs, nil
 }
 
-func defsToTools(defs []toolDef) []Tool {
+func defsToTools(defs []ToolDef) []Tool {
 	tools := make([]Tool, 0, len(defs))
 	for _, d := range defs {
 		t := Tool{
@@ -165,15 +169,15 @@ func defsToTools(defs []toolDef) []Tool {
 // Catalog tools provide the base; user file overrides non-empty package IDs.
 // User-added custom tools (not in catalog) are preserved.
 // Returns the merged list and whether anything changed vs the user's original.
-func mergeToolDefs(catalog, user []toolDef) ([]toolDef, bool) {
+func mergeToolDefs(catalog, user []ToolDef) ([]ToolDef, bool) {
 	// Index user defs by name for O(1) lookup.
-	userMap := make(map[string]*toolDef, len(user))
+	userMap := make(map[string]*ToolDef, len(user))
 	for i := range user {
 		userMap[user[i].Name] = &user[i]
 	}
 
 	changed := false
-	merged := make([]toolDef, 0, len(catalog)+len(user))
+	merged := make([]ToolDef, 0, len(catalog)+len(user))
 
 	// Walk catalog in order — this defines the canonical ordering.
 	seen := make(map[string]struct{}, len(catalog))
@@ -214,8 +218,8 @@ func mergeToolDefs(catalog, user []toolDef) ([]toolDef, bool) {
 }
 
 // mergePackages merges package IDs: user non-empty values win, catalog fills gaps.
-func mergePackages(catalog, user packageDef) packageDef {
-	return packageDef{
+func mergePackages(catalog, user PackageDef) PackageDef {
+	return PackageDef{
 		Winget: pickNonEmpty(user.Winget, catalog.Winget),
 		Choco:  pickNonEmpty(user.Choco, catalog.Choco),
 		Brew:   pickNonEmpty(user.Brew, catalog.Brew),

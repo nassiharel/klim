@@ -1,0 +1,15 @@
+name: gcloud
+display_name: Google Cloud CLI
+category: Cloud
+tags:
+    - gcp
+    - google
+    - cloud
+    - gke
+binary_names:
+    - gcloud
+packages:
+    winget: Google.CloudSDK
+    choco: gcloudsdk
+    brew: google-cloud-sdk
+    snap: google-cloud-cli

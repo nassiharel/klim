@@ -1,0 +1,13 @@
+name: docker-compose
+display_name: Docker Compose
+category: Containers
+tags:
+    - docker
+    - compose
+    - multi-container
+    - orchestration
+binary_names:
+    - docker-compose
+packages:
+    choco: docker-compose
+    brew: docker-compose

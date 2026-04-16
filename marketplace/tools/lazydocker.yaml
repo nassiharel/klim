@@ -1,0 +1,15 @@
+name: lazydocker
+display_name: lazydocker
+category: Containers
+tags:
+    - docker
+    - tui
+    - terminal-ui
+    - containers
+binary_names:
+    - lazydocker
+packages:
+    winget: JesseDuffield.Lazydocker
+    choco: lazydocker
+    brew: lazydocker
+    snap: lazydocker

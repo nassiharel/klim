@@ -1,0 +1,16 @@
+name: pwsh
+display_name: PowerShell
+category: Shell
+tags:
+    - scripting
+    - microsoft
+    - cross-platform
+    - automation
+binary_names:
+    - pwsh
+packages:
+    winget: Microsoft.PowerShell
+    choco: powershell-core
+    brew: powershell
+    apt: powershell
+    snap: powershell

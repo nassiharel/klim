@@ -1,0 +1,17 @@
+name: node
+display_name: Node.js
+category: Language
+tags:
+    - javascript
+    - js
+    - v8
+    - runtime
+    - server
+binary_names:
+    - node
+packages:
+    winget: OpenJS.NodeJS.LTS
+    choco: nodejs
+    brew: node
+    apt: nodejs
+    snap: node

@@ -1,0 +1,12 @@
+name: npm
+display_name: npm
+category: PkgMgr
+tags:
+    - javascript
+    - node
+    - registry
+    - packages
+binary_names:
+    - npm
+packages:
+    npm: npm

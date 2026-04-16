@@ -1,0 +1,15 @@
+name: kubelogin
+display_name: Kubelogin
+category: Containers
+tags:
+    - kubernetes
+    - k8s
+    - azure
+    - auth
+    - login
+binary_names:
+    - kubelogin
+packages:
+    winget: Microsoft.Azure.Kubelogin
+    choco: kubelogin
+    brew: Azure/kubelogin/kubelogin

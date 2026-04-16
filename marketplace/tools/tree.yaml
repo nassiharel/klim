@@ -1,0 +1,14 @@
+name: tree
+display_name: tree
+category: CLI
+tags:
+    - directory
+    - listing
+    - visualization
+    - filesystem
+binary_names:
+    - tree
+packages:
+    choco: tree
+    brew: tree
+    apt: tree

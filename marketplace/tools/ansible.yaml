@@ -1,0 +1,13 @@
+name: ansible
+display_name: Ansible
+category: IaC
+tags:
+    - automation
+    - configuration-management
+    - ssh
+    - agentless
+binary_names:
+    - ansible
+packages:
+    brew: ansible
+    apt: ansible

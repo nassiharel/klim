@@ -1,0 +1,12 @@
+name: gopls
+display_name: gopls
+category: Language
+tags:
+    - golang
+    - lsp
+    - language-server
+    - editor-tooling
+binary_names:
+    - gopls
+packages:
+    brew: gopls

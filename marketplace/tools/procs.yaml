@@ -1,0 +1,15 @@
+name: procs
+display_name: procs
+category: CLI
+tags:
+    - ps
+    - processes
+    - monitoring
+    - rust
+    - system
+binary_names:
+    - procs
+packages:
+    winget: dalance.procs
+    choco: procs
+    brew: procs

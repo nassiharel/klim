@@ -1,0 +1,15 @@
+name: kustomize
+display_name: Kustomize
+category: IaC
+tags:
+    - kubernetes
+    - k8s
+    - yaml
+    - overlay
+    - configuration
+binary_names:
+    - kustomize
+packages:
+    winget: Kubernetes.kustomize
+    choco: kustomize
+    brew: kustomize

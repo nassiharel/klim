@@ -12,7 +12,9 @@ import (
 )
 
 // DefaultMarketplaceURL is the canonical marketplace.yaml location on GitHub.
-const DefaultMarketplaceURL = "https://raw.githubusercontent.com/nassiharel/clim/main/marketplace.yaml"
+// The marketplace branch is auto-published by CI from individual files in
+// marketplace/tools/ and marketplace/packs/ on the main branch.
+const DefaultMarketplaceURL = "https://raw.githubusercontent.com/nassiharel/clim/marketplace/marketplace.yaml"
 
 // Config holds all clim configuration.
 type Config struct {

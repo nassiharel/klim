@@ -1,0 +1,14 @@
+name: tmux
+display_name: tmux
+category: Shell
+tags:
+    - multiplexer
+    - terminal
+    - session
+    - split-pane
+    - remote
+binary_names:
+    - tmux
+packages:
+    brew: tmux
+    apt: tmux

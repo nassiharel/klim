@@ -1,0 +1,15 @@
+name: mongosh
+display_name: MongoDB Shell
+category: Database
+tags:
+    - mongodb
+    - nosql
+    - document
+    - shell
+    - repl
+binary_names:
+    - mongosh
+packages:
+    winget: MongoDB.Shell
+    choco: mongodb-shell
+    brew: mongosh

@@ -1,0 +1,15 @@
+name: kubectx
+display_name: kubectx
+category: Containers
+tags:
+    - kubernetes
+    - k8s
+    - context
+    - cluster-switching
+binary_names:
+    - kubectx
+packages:
+    winget: ahmetb.kubectx
+    choco: kubectx
+    brew: kubectx
+    apt: kubectx

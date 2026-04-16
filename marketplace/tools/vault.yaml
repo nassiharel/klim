@@ -1,0 +1,15 @@
+name: vault
+display_name: Vault
+category: IaC
+tags:
+    - hashicorp
+    - secrets
+    - encryption
+    - security
+    - auth
+binary_names:
+    - vault
+packages:
+    winget: Hashicorp.Vault
+    choco: vault
+    brew: vault

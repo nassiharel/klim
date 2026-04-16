@@ -1,0 +1,16 @@
+name: ffmpeg
+display_name: FFmpeg
+category: Media
+tags:
+    - video
+    - audio
+    - transcode
+    - stream
+    - encoding
+binary_names:
+    - ffmpeg
+packages:
+    winget: Gyan.FFmpeg
+    choco: ffmpeg
+    brew: ffmpeg
+    apt: ffmpeg

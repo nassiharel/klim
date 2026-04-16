@@ -1,0 +1,13 @@
+name: asdf
+display_name: asdf
+category: PkgMgr
+tags:
+    - version-manager
+    - polyglot
+    - plugins
+    - runtime
+binary_names:
+    - asdf
+packages:
+    brew: asdf
+    apt: asdf

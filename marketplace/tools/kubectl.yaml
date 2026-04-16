@@ -1,0 +1,15 @@
+name: kubectl
+display_name: kubectl
+category: Containers
+tags:
+    - kubernetes
+    - k8s
+    - cluster
+    - orchestration
+binary_names:
+    - kubectl
+packages:
+    winget: Kubernetes.kubectl
+    choco: kubernetes-cli
+    brew: kubernetes-cli
+    snap: kubectl

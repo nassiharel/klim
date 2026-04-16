@@ -1,0 +1,15 @@
+name: argocd
+display_name: Argo CD CLI
+category: Containers
+tags:
+    - kubernetes
+    - k8s
+    - gitops
+    - cd
+    - continuous-delivery
+binary_names:
+    - argocd
+packages:
+    winget: argoproj.argocd
+    choco: argocd-cli
+    brew: argocd

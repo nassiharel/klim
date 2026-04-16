@@ -1,0 +1,14 @@
+name: consul
+display_name: Consul
+category: IaC
+tags:
+    - hashicorp
+    - service-mesh
+    - service-discovery
+    - networking
+binary_names:
+    - consul
+packages:
+    winget: Hashicorp.Consul
+    choco: consul
+    brew: consul

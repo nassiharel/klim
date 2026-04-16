@@ -1,0 +1,16 @@
+name: sqlite3
+display_name: SQLite
+category: Database
+tags:
+    - sql
+    - embedded
+    - serverless
+    - lightweight
+    - file-based
+binary_names:
+    - sqlite3
+packages:
+    winget: SQLite.SQLite
+    choco: sqlite
+    brew: sqlite
+    apt: sqlite3

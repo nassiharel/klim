@@ -1,0 +1,11 @@
+name: dlv
+display_name: Delve
+category: Language
+tags:
+    - golang
+    - debugger
+    - debugging
+binary_names:
+    - dlv
+packages:
+    brew: delve

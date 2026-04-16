@@ -1,0 +1,16 @@
+name: zoxide
+display_name: zoxide
+category: CLI
+tags:
+    - cd
+    - navigation
+    - directory
+    - autojump
+    - rust
+binary_names:
+    - zoxide
+packages:
+    winget: ajeetdsouza.zoxide
+    choco: zoxide
+    brew: zoxide
+    apt: zoxide

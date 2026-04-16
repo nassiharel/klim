@@ -4,15 +4,17 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestMergeToolDefs_NewEmbeddedToolAdded(t *testing.T) {
-	embedded := []toolDef{
-		{Name: "git", DisplayName: "Git", Packages: packageDef{Brew: "git"}},
-		{Name: "rg", DisplayName: "ripgrep", Packages: packageDef{Brew: "ripgrep"}},
+	embedded := []ToolDef{
+		{Name: "git", DisplayName: "Git", Packages: PackageDef{Brew: "git"}},
+		{Name: "rg", DisplayName: "ripgrep", Packages: PackageDef{Brew: "ripgrep"}},
 	}
-	user := []toolDef{
-		{Name: "git", DisplayName: "Git", Packages: packageDef{Brew: "git"}},
+	user := []ToolDef{
+		{Name: "git", DisplayName: "Git", Packages: PackageDef{Brew: "git"}},
 	}
 
 	merged, changed := mergeToolDefs(embedded, user)
@@ -29,12 +31,12 @@ func TestMergeToolDefs_NewEmbeddedToolAdded(t *testing.T) {
 }
 
 func TestMergeToolDefs_UserCustomToolPreserved(t *testing.T) {
-	embedded := []toolDef{
+	embedded := []ToolDef{
 		{Name: "git", DisplayName: "Git"},
 	}
-	user := []toolDef{
+	user := []ToolDef{
 		{Name: "git", DisplayName: "Git"},
-		{Name: "my-tool", DisplayName: "My Tool", Packages: packageDef{Brew: "my-tool"}},
+		{Name: "my-tool", DisplayName: "My Tool", Packages: PackageDef{Brew: "my-tool"}},
 	}
 
 	merged, _ := mergeToolDefs(embedded, user)
@@ -51,16 +53,16 @@ func TestMergeToolDefs_UserCustomToolPreserved(t *testing.T) {
 }
 
 func TestMergeToolDefs_EmbeddedFillsPackageGaps(t *testing.T) {
-	embedded := []toolDef{
-		{Name: "bat", Packages: packageDef{
+	embedded := []ToolDef{
+		{Name: "bat", Packages: PackageDef{
 			Winget: "sharkdp.bat",
 			Choco:  "bat",
 			Brew:   "bat",
 			Apt:    "bat",
 		}},
 	}
-	user := []toolDef{
-		{Name: "bat", Packages: packageDef{
+	user := []ToolDef{
+		{Name: "bat", Packages: PackageDef{
 			Winget: "sharkdp.bat",
 			// choco, brew, apt missing — should be filled from embedded
 		}},
@@ -83,11 +85,11 @@ func TestMergeToolDefs_EmbeddedFillsPackageGaps(t *testing.T) {
 }
 
 func TestMergeToolDefs_UserPackageOverridesEmbedded(t *testing.T) {
-	embedded := []toolDef{
-		{Name: "git", Packages: packageDef{Brew: "git"}},
+	embedded := []ToolDef{
+		{Name: "git", Packages: PackageDef{Brew: "git"}},
 	}
-	user := []toolDef{
-		{Name: "git", Packages: packageDef{Brew: "git-custom"}},
+	user := []ToolDef{
+		{Name: "git", Packages: PackageDef{Brew: "git-custom"}},
 	}
 
 	merged, _ := mergeToolDefs(embedded, user)
@@ -98,8 +100,8 @@ func TestMergeToolDefs_UserPackageOverridesEmbedded(t *testing.T) {
 }
 
 func TestMergeToolDefs_NoChangesReturnsFalse(t *testing.T) {
-	defs := []toolDef{
-		{Name: "git", DisplayName: "Git", Packages: packageDef{Brew: "git"}},
+	defs := []ToolDef{
+		{Name: "git", DisplayName: "Git", Packages: PackageDef{Brew: "git"}},
 	}
 
 	_, changed := mergeToolDefs(defs, defs)
@@ -110,10 +112,10 @@ func TestMergeToolDefs_NoChangesReturnsFalse(t *testing.T) {
 }
 
 func TestMergeToolDefs_EmbeddedMetadataWins(t *testing.T) {
-	embedded := []toolDef{
+	embedded := []ToolDef{
 		{Name: "git", DisplayName: "Git (Updated)", Category: "VCS", BinaryNames: []string{"git"}},
 	}
-	user := []toolDef{
+	user := []ToolDef{
 		{Name: "git", DisplayName: "Git (Old)", Category: "Old Category", BinaryNames: []string{"old-git"}},
 	}
 
@@ -134,11 +136,11 @@ func TestMergeToolDefs_EmbeddedMetadataWins(t *testing.T) {
 }
 
 func TestMergeToolDefs_OrderEmbeddedFirstThenUserCustom(t *testing.T) {
-	embedded := []toolDef{
+	embedded := []ToolDef{
 		{Name: "b-tool"},
 		{Name: "a-tool"},
 	}
-	user := []toolDef{
+	user := []ToolDef{
 		{Name: "a-tool"},
 		{Name: "z-custom"},
 		{Name: "b-tool"},
@@ -162,7 +164,7 @@ func TestMergeToolDefs_OrderEmbeddedFirstThenUserCustom(t *testing.T) {
 }
 
 func TestMergePackages(t *testing.T) {
-	embedded := packageDef{
+	embedded := PackageDef{
 		Winget: "X.Y",
 		Choco:  "x",
 		Brew:   "x",
@@ -170,7 +172,7 @@ func TestMergePackages(t *testing.T) {
 		Snap:   "x",
 		NPM:    "x",
 	}
-	user := packageDef{
+	user := PackageDef{
 		Winget: "Custom.ID", // user override — keep
 		Choco:  "",          // gap — fill from embedded
 		Brew:   "x-custom",  // user override — keep
@@ -238,14 +240,14 @@ func TestSlicesEqual(t *testing.T) {
 }
 
 func TestDefsToTools(t *testing.T) {
-	defs := []toolDef{
+	defs := []ToolDef{
 		{
 			Name:        "git",
 			DisplayName: "Git",
 			Category:    "VCS",
 			Tags:        []string{"vcs"},
 			BinaryNames: []string{"git"},
-			Packages:    packageDef{Brew: "git", Winget: "Git.Git"},
+			Packages:    PackageDef{Brew: "git", Winget: "Git.Git"},
 		},
 		{
 			Name: "mytool", // no display name or binary names — should use defaults
@@ -319,7 +321,7 @@ func TestMergeToolDefs_EmptyInputs(t *testing.T) {
 	})
 
 	t.Run("empty catalog non-empty user", func(t *testing.T) {
-		user := []toolDef{{Name: "custom"}}
+		user := []ToolDef{{Name: "custom"}}
 		merged, _ := mergeToolDefs(nil, user)
 		if len(merged) != 1 || merged[0].Name != "custom" {
 			t.Errorf("expected user tool preserved, got %v", merged)
@@ -327,7 +329,7 @@ func TestMergeToolDefs_EmptyInputs(t *testing.T) {
 	})
 
 	t.Run("non-empty catalog empty user", func(t *testing.T) {
-		catalog := []toolDef{{Name: "git"}}
+		catalog := []ToolDef{{Name: "git"}}
 		merged, changed := mergeToolDefs(catalog, nil)
 		if len(merged) != 1 || merged[0].Name != "git" {
 			t.Errorf("expected catalog tool, got %v", merged)
@@ -465,7 +467,7 @@ packs:
 }
 
 func TestValidatePackToolReferences(t *testing.T) {
-	validate := func(tools []toolDef, packs []Pack) map[string][]string {
+	validate := func(tools []ToolDef, packs []Pack) map[string][]string {
 		toolSet := make(map[string]struct{}, len(tools))
 		for _, td := range tools {
 			toolSet[td.Name] = struct{}{}
@@ -482,7 +484,7 @@ func TestValidatePackToolReferences(t *testing.T) {
 	}
 
 	t.Run("all references valid", func(t *testing.T) {
-		tools := []toolDef{{Name: "git"}, {Name: "fzf"}}
+		tools := []ToolDef{{Name: "git"}, {Name: "fzf"}}
 		packs := []Pack{{Name: "my-pack", ToolNames: []string{"git", "fzf"}}}
 		missing := validate(tools, packs)
 		if len(missing) != 0 {
@@ -491,7 +493,7 @@ func TestValidatePackToolReferences(t *testing.T) {
 	})
 
 	t.Run("some references invalid", func(t *testing.T) {
-		tools := []toolDef{{Name: "git"}}
+		tools := []ToolDef{{Name: "git"}}
 		packs := []Pack{{Name: "my-pack", ToolNames: []string{"git", "phantom"}}}
 		missing := validate(tools, packs)
 		if len(missing["my-pack"]) != 1 || missing["my-pack"][0] != "phantom" {
@@ -500,7 +502,7 @@ func TestValidatePackToolReferences(t *testing.T) {
 	})
 
 	t.Run("empty pack", func(t *testing.T) {
-		tools := []toolDef{{Name: "git"}}
+		tools := []ToolDef{{Name: "git"}}
 		packs := []Pack{{Name: "empty", ToolNames: nil}}
 		missing := validate(tools, packs)
 		if len(missing) != 0 {
@@ -528,73 +530,93 @@ func findRepoRoot(t *testing.T) string {
 	}
 }
 
-// TestMarketplaceYAML_Integrity validates the actual marketplace.yaml file
-// that ships with the repository. This test runs in CI to catch mistakes
-// like duplicate tool names, empty fields, pack references to undefined tools, etc.
+// TestMarketplaceYAML_Integrity validates the marketplace by assembling
+// individual tool and pack files from marketplace/tools/ and marketplace/packs/,
+// then checking for duplicate names, empty fields, and dangling pack references.
 func TestMarketplaceYAML_Integrity(t *testing.T) {
 	root := findRepoRoot(t)
-	data, err := os.ReadFile(filepath.Join(root, "marketplace.yaml"))
+
+	// Assemble tools from individual files.
+	toolFiles, err := filepath.Glob(filepath.Join(root, "marketplace", "tools", "*.yaml"))
 	if err != nil {
-		t.Fatalf("reading marketplace.yaml: %v", err)
+		t.Fatalf("globbing tool files: %v", err)
+	}
+	if len(toolFiles) == 0 {
+		t.Fatal("no tool files found in marketplace/tools/")
 	}
 
-	// --- Parse tools ---
-	tools := parseToolDefs(data)
-	if len(tools) == 0 {
-		t.Fatal("marketplace.yaml has no tools")
-	}
+	toolNames := make(map[string]struct{}, len(toolFiles))
+	for _, f := range toolFiles {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("reading %s: %v", f, err)
+		}
+		var td ToolDef
+		if err := yaml.Unmarshal(data, &td); err != nil {
+			t.Fatalf("parsing %s: %v", f, err)
+		}
 
-	toolNames := make(map[string]struct{}, len(tools))
-	for _, td := range tools {
+		if td.Name == "" {
+			t.Errorf("%s: tool with empty name", filepath.Base(f))
+		}
 		if _, exists := toolNames[td.Name]; exists {
 			t.Errorf("duplicate tool name: %q", td.Name)
 		}
 		toolNames[td.Name] = struct{}{}
 
-		if td.Name == "" {
-			t.Error("tool with empty name")
-		}
 		if len(td.BinaryNames) == 0 {
 			t.Errorf("tool %q has no binary_names", td.Name)
 		}
 	}
 
-	// --- Parse packs ---
-	packs, err := ParsePacksFromBytes(data)
+	// Assemble packs from individual files.
+	packFiles, err := filepath.Glob(filepath.Join(root, "marketplace", "packs", "*.yaml"))
 	if err != nil {
-		t.Fatalf("parsing packs: %v", err)
+		t.Fatalf("globbing pack files: %v", err)
 	}
 
-	packNames := make(map[string]struct{}, len(packs))
-	for _, pack := range packs {
-		if _, exists := packNames[pack.Name]; exists {
-			t.Errorf("duplicate pack name: %q", pack.Name)
+	packNames := make(map[string]struct{}, len(packFiles))
+	for _, f := range packFiles {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("reading %s: %v", f, err)
 		}
-		packNames[pack.Name] = struct{}{}
+		var pd struct {
+			Name  string   `yaml:"name"`
+			Tools []string `yaml:"tools"`
+		}
+		if err := yaml.Unmarshal(data, &pd); err != nil {
+			t.Fatalf("parsing %s: %v", f, err)
+		}
 
-		if pack.Name == "" {
-			t.Error("pack with empty name")
+		if pd.Name == "" {
+			t.Errorf("%s: pack with empty name", filepath.Base(f))
 		}
-		if len(pack.ToolNames) == 0 {
-			t.Errorf("pack %q has no tools", pack.Name)
+		if _, exists := packNames[pd.Name]; exists {
+			t.Errorf("duplicate pack name: %q", pd.Name)
+		}
+		packNames[pd.Name] = struct{}{}
+
+		if len(pd.Tools) == 0 {
+			t.Errorf("pack %q has no tools", pd.Name)
 		}
 
-		// Every tool referenced by a pack must exist in the tools section.
-		for _, toolName := range pack.ToolNames {
+		// Every tool referenced by a pack must exist.
+		for _, toolName := range pd.Tools {
 			if _, ok := toolNames[toolName]; !ok {
-				t.Errorf("pack %q references undefined tool %q", pack.Name, toolName)
+				t.Errorf("pack %q references undefined tool %q", pd.Name, toolName)
 			}
 		}
 
 		// No duplicate tool references within a pack.
-		seen := make(map[string]struct{}, len(pack.ToolNames))
-		for _, toolName := range pack.ToolNames {
+		seen := make(map[string]struct{}, len(pd.Tools))
+		for _, toolName := range pd.Tools {
 			if _, exists := seen[toolName]; exists {
-				t.Errorf("pack %q has duplicate tool reference %q", pack.Name, toolName)
+				t.Errorf("pack %q has duplicate tool reference %q", pd.Name, toolName)
 			}
 			seen[toolName] = struct{}{}
 		}
 	}
 
-	t.Logf("marketplace.yaml: %d tools, %d packs — all valid", len(tools), len(packs))
+	t.Logf("marketplace: %d tools, %d packs — all valid", len(toolFiles), len(packFiles))
 }

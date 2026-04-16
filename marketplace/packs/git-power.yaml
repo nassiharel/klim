@@ -1,0 +1,9 @@
+name: git-power
+display_name: Git Power User
+description: Git workflow tools for power users.
+tools:
+    - git
+    - gh
+    - lazygit
+    - delta
+    - tig

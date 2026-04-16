@@ -1,0 +1,17 @@
+name: code
+display_name: VS Code
+category: Editor
+tags:
+    - ide
+    - microsoft
+    - extensions
+    - electron
+    - gui
+binary_names:
+    - code
+packages:
+    winget: Microsoft.VisualStudioCode
+    choco: vscode
+    brew: visual-studio-code
+    apt: code
+    snap: code

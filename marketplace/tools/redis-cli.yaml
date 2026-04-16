@@ -1,0 +1,15 @@
+name: redis-cli
+display_name: Redis CLI
+category: Database
+tags:
+    - redis
+    - cache
+    - key-value
+    - in-memory
+    - nosql
+binary_names:
+    - redis-cli
+packages:
+    choco: redis
+    brew: redis
+    apt: redis-tools

@@ -1,0 +1,12 @@
+name: claude
+display_name: Claude Code
+category: AI
+tags:
+    - llm
+    - anthropic
+    - coding-assistant
+    - ai-agent
+binary_names:
+    - claude
+packages:
+    npm: '@anthropic-ai/claude-code'

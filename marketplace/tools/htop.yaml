@@ -1,0 +1,15 @@
+name: htop
+display_name: htop
+category: CLI
+tags:
+    - processes
+    - monitoring
+    - tui
+    - system
+    - top
+binary_names:
+    - htop
+packages:
+    brew: htop
+    apt: htop
+    snap: htop
