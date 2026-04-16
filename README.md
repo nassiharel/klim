@@ -333,6 +333,8 @@ See [AGENTS.md](./AGENTS.md) for detailed architecture documentation.
 - CVE / vulnerability scanning integration
 - Background update-available notifications
 - Team policy enforcement (require minimum versions)
+- Installation via scripts
+- Add more package managers (pip, gem, cargo, asdf, etc)
 
 ## License
 
