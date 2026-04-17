@@ -126,16 +126,18 @@ func (m Model) renderView() string {
 }
 
 // layoutWithFooter pads `body` with blank lines so that `footer` sticks to the
-// bottom of the terminal viewport. If the body + footer already exceed the
-// available height (or height is unknown), a single blank separator line is
-// inserted and the content is returned as-is.
+// bottom of the terminal viewport. If the combined body + footer would exceed
+// the available height, the body is truncated from the bottom so the footer
+// remains visible. When the height is unknown, a single blank separator line
+// is inserted and the content is returned as-is.
+//
+// Row counts are computed visually: a line that is wider than the terminal
+// wraps onto multiple physical rows, so each logical line contributes
+// `ceil(width/m.width)` rows.
 func (m Model) layoutWithFooter(body, footer string) string {
 	// Normalize: ensure body ends with exactly one newline so subsequent line
 	// counting and padding are predictable.
 	body = strings.TrimRight(body, "\n") + "\n"
-
-	bodyLines := strings.Count(body, "\n")
-	footerLines := strings.Count(footer, "\n") + 1
 
 	// Always reserve at least one blank separator line between body and footer.
 	const minGap = 1
@@ -144,11 +146,68 @@ func (m Model) layoutWithFooter(body, footer string) string {
 		return body + strings.Repeat("\n", minGap) + footer
 	}
 
-	gap := m.height - bodyLines - footerLines
+	footerRows := visualRows(footer, m.width)
+	bodyRows := visualRows(body, m.width)
+
+	available := m.height - footerRows - minGap
+	if available < 0 {
+		available = 0
+	}
+	if bodyRows > available {
+		// Body is too tall to fit alongside the footer. Drop lines from the
+		// bottom until the remaining body fits, so the footer (action menu,
+		// help hints, etc.) is never clipped by the terminal.
+		lines := strings.SplitAfter(body, "\n")
+		rows := 0
+		kept := 0
+		for _, ln := range lines {
+			r := visualRows(ln, m.width)
+			if rows+r > available {
+				break
+			}
+			rows += r
+			kept++
+		}
+		body = strings.Join(lines[:kept], "")
+		bodyRows = rows
+	}
+
+	gap := m.height - bodyRows - footerRows
 	if gap < minGap {
 		gap = minGap
 	}
 	return body + strings.Repeat("\n", gap) + footer
+}
+
+// visualRows returns the number of terminal rows occupied by s when rendered
+// at the given width, accounting for both explicit newlines and line wrapping
+// when a line exceeds `width` cells. A single trailing newline is treated as
+// a line terminator (not an additional empty row). A width of 0 falls back to
+// counting explicit newlines only.
+func visualRows(s string, width int) int {
+	if s == "" {
+		return 0
+	}
+	// A single trailing newline terminates the last line rather than starting
+	// a new one; strip it before counting.
+	trimmed := strings.TrimSuffix(s, "\n")
+	if trimmed == "" {
+		return 1
+	}
+	rows := 0
+	for _, line := range strings.Split(trimmed, "\n") {
+		if width <= 0 {
+			rows++
+			continue
+		}
+		w := lipgloss.Width(line)
+		if w == 0 {
+			rows++
+			continue
+		}
+		rows += (w + width - 1) / width
+	}
+	return rows
 }
 
 // --- Title & Tabs ---
@@ -820,6 +879,32 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	if len(tool.BinaryNames) > 0 {
 		b.WriteString("  " + label("Binaries:   ") + dim(strings.Join(tool.BinaryNames, ", ")) + "\n")
 	}
+
+	// ── Display name ────────────────────────────────────────────
+	if tool.DisplayName != "" {
+		b.WriteString("  " + label("Display:    ") + dim(tool.DisplayName) + "\n")
+	}
+
+	// ── Category ────────────────────────────────────────────────
+	if tool.Category != "" {
+		b.WriteString("  " + label("Category:   ") + dim(tool.Category) + "\n")
+	}
+
+	// ── Tags ────────────────────────────────────────────────────
+	if len(tool.Tags) > 0 {
+		b.WriteString("  " + label("Tags:       ") + dim(strings.Join(tool.Tags, ", ")) + "\n")
+	}
+
+	// ── Packages (package manager IDs) ──────────────────────────
+	if pkgs := collectPackageEntries(tool.Packages); len(pkgs) > 0 {
+		b.WriteString("  " + label("Packages:") + "\n")
+		for _, p := range pkgs {
+			fmt.Fprintf(&b, "    %-8s  %s\n",
+				sourceStyle.Render(p.source),
+				dim(p.id),
+			)
+		}
+	}
 	b.WriteString("\n")
 
 	// ── GitHub repository metadata ─────────────────────────────
@@ -879,8 +964,9 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	}
 
 	// ── Action menu ─────────────────────────────────────────────
+	var footer strings.Builder
 	if len(m.toolMenuItems) > 0 {
-		b.WriteString("  " + label("Actions:") + "\n")
+		footer.WriteString("  " + label("Actions:") + "\n")
 		for i, item := range m.toolMenuItems {
 			cursor := "  "
 			if i == m.toolMenu {
@@ -894,9 +980,9 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 				}
 				line = selectedRowStyle.Render(line)
 			}
-			b.WriteString(line + "\n")
+			footer.WriteString(line + "\n")
 		}
-		b.WriteString("\n")
+		footer.WriteString("\n")
 	}
 
 	// ── Help bar ────────────────────────────────────────────────
@@ -904,17 +990,17 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	case m.pendingAction != nil:
 		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
 		keys := dim("y") + " confirm   " + dim("Esc") + " cancel"
-		b.WriteString(prompt + "  " + keys)
+		footer.WriteString(prompt + "  " + keys)
 	default:
 		hints := []string{
 			dim("↑↓") + " navigate",
 			dim("Enter") + " select",
 			dim("Esc") + " back",
 		}
-		b.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
+		footer.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
 	}
 
-	return b.String()
+	return m.layoutWithFooter(b.String(), footer.String())
 }
 
 // installCmdEntry pairs a source label with the formatted command string.
@@ -995,6 +1081,32 @@ func (m Model) collectInstallCmds(tool registry.Tool) []installCmdEntry {
 				source: string(src),
 				cmd:    cmd,
 			})
+		}
+	}
+	return entries
+}
+
+// packageEntry is one package-manager → package-id pairing for the detail view.
+type packageEntry struct {
+	source string
+	id     string
+}
+
+// collectPackageEntries returns the declared package IDs for each package manager
+// in a stable display order. Empty IDs are omitted.
+func collectPackageEntries(pkgs registry.PackageIDs) []packageEntry {
+	all := []packageEntry{
+		{source: string(registry.SourceWinget), id: pkgs.Winget},
+		{source: string(registry.SourceChoco), id: pkgs.Choco},
+		{source: string(registry.SourceBrew), id: pkgs.Brew},
+		{source: string(registry.SourceApt), id: pkgs.Apt},
+		{source: string(registry.SourceSnap), id: pkgs.Snap},
+		{source: string(registry.SourceNPM), id: pkgs.NPM},
+	}
+	entries := make([]packageEntry, 0, len(all))
+	for _, e := range all {
+		if e.id != "" {
+			entries = append(entries, e)
 		}
 	}
 	return entries
@@ -1109,10 +1221,14 @@ func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 		}
 	}
 	if len(sources) > 1 {
-		var srcNames []string
+		srcNames := make([]string, 0, len(sources))
 		for src := range sources {
 			srcNames = append(srcNames, string(src))
 		}
+		// Sort for stable ordering across renders (map iteration is
+		// non-deterministic and would otherwise cause visible flicker as
+		// the detail view re-renders during background version resolution).
+		sort.Strings(srcNames)
 		tips = append(tips, dimVersion.Render("💡")+fmt.Sprintf(
 			"  Multiple package managers (%s) — consider standardizing on one to avoid conflicts",
 			strings.Join(srcNames, ", "),

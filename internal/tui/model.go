@@ -1586,8 +1586,9 @@ func (m Model) resolveInstallAction() *sourcePicker {
 }
 
 // resolveUpgradeAction builds a source picker for upgrading the current tool.
-// Only offers upgrade when the detected source is a known package manager.
-// Manual installs cannot be upgraded through clim.
+// Only offers upgrade via package managers that actually installed the tool
+// (i.e. sources present in tool.Instances). Manual installs cannot be upgraded
+// through clim.
 func (m Model) resolveUpgradeAction() *sourcePicker {
 	tool := m.currentTool()
 	if tool == nil || !tool.IsInstalled() {
@@ -1599,19 +1600,22 @@ func (m Model) resolveUpgradeAction() *sourcePicker {
 		return nil
 	}
 
-	// Prefer detected source first.
+	// Prefer detected source first, then other sources that actually installed
+	// this tool. Never offer an upgrade via a package manager the user did not
+	// use to install the tool — that would create a second, conflicting copy.
 	var choices []sourceChoice
 	if args := tool.Packages.UpgradeArgs(detected); args != nil {
 		choices = append(choices, sourceChoice{source: detected, cmdArgs: args})
 	}
 
-	// Then other available sources.
-	for _, src := range registry.SourcesForOS() {
-		if src == detected {
+	seen := map[registry.InstallSource]bool{detected: true}
+	for _, inst := range tool.Instances {
+		if seen[inst.Source] || inst.Source == registry.SourceManual {
 			continue
 		}
-		if args := tool.Packages.UpgradeArgs(src); args != nil {
-			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
+		seen[inst.Source] = true
+		if args := tool.Packages.UpgradeArgs(inst.Source); args != nil {
+			choices = append(choices, sourceChoice{source: inst.Source, cmdArgs: args})
 		}
 	}
 	if len(choices) == 0 {
@@ -1625,8 +1629,9 @@ func (m Model) resolveUpgradeAction() *sourcePicker {
 }
 
 // resolveRemoveAction builds a source picker for removing the current tool.
-// Only offers remove when the detected source is a known package manager.
-// Manual installs cannot be removed through clim.
+// Only offers remove via package managers that actually installed the tool
+// (i.e. sources present in tool.Instances). Manual installs cannot be removed
+// through clim.
 func (m Model) resolveRemoveAction() *sourcePicker {
 	tool := m.currentTool()
 	if tool == nil || !tool.IsInstalled() {
@@ -1638,19 +1643,23 @@ func (m Model) resolveRemoveAction() *sourcePicker {
 		return nil
 	}
 
-	// Prefer detected source first.
+	// Prefer detected source first, then other sources that actually installed
+	// this tool. Never offer a remove via a package manager the user did not
+	// use to install the tool — it would fail or, worse, remove an unrelated
+	// package with the same name.
 	var choices []sourceChoice
 	if args := tool.Packages.RemoveArgs(detected); args != nil {
 		choices = append(choices, sourceChoice{source: detected, cmdArgs: args})
 	}
 
-	// Then other available sources.
-	for _, src := range registry.SourcesForOS() {
-		if src == detected {
+	seen := map[registry.InstallSource]bool{detected: true}
+	for _, inst := range tool.Instances {
+		if seen[inst.Source] || inst.Source == registry.SourceManual {
 			continue
 		}
-		if args := tool.Packages.RemoveArgs(src); args != nil {
-			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
+		seen[inst.Source] = true
+		if args := tool.Packages.RemoveArgs(inst.Source); args != nil {
+			choices = append(choices, sourceChoice{source: inst.Source, cmdArgs: args})
 		}
 	}
 	if len(choices) == 0 {
