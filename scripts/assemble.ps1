@@ -11,7 +11,10 @@ Assert-RepoRoot
 
 Write-Step "Assembling marketplace.yaml"
 
-if (-not $FallbackFile) { $FallbackFile = Get-MarketplaceFallback }
+if (-not $FallbackFile) {
+    Assert-Command git
+    $FallbackFile = Get-MarketplaceFallback
+}
 
 $goArgs = @("run", "./internal/marketplace/assemble", "-fallback", $FallbackFile, "-o", $OutputFile)
 if ($FetchGitHub) { $goArgs += "-fetch-github" }
