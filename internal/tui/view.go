@@ -19,12 +19,17 @@ import (
 )
 
 const (
-	colName     = 28 // width for name column
-	colVersion  = 24 // width for version info column
-	colSource   = 8  // width for source column
-	colCategory = 12 // width for category column
-	colStatus   = 18 // width for backup status column
-	colSidebar  = 18 // width for filter sidebar panel
+	colName      = 28 // width for name column
+	colVersion   = 24 // width for version info column
+	colSource    = 8  // width for source column
+	colCategory  = 12 // width for category column
+	colStatus    = 18 // width for backup status column
+	colSidebar   = 18 // width for filter sidebar panel
+	colStars     = 8  // width reserved for ★ NNNk badge column
+	colPackTools = 8  // width for "N tools" column in packs list
+	colPackName  = 20 // width for pack tool name column in pack detail
+	colPackStat  = 16 // width for pack tool install-status column in pack detail
+	colReason    = 32 // width for "BECAUSE YOU HAVE" reason column in For You
 )
 
 func (m Model) renderView() string {
@@ -42,56 +47,50 @@ func (m Model) renderView() string {
 		return m.renderPackDetailView(m.packs[m.packDetailIdx])
 	}
 
-	var b strings.Builder
+	var body strings.Builder
 
-	b.WriteString(m.renderTitleBar() + "\n")
-	b.WriteString(m.renderTabBar() + "\n\n")
+	body.WriteString(m.renderTitleBar() + "\n")
+	body.WriteString(m.renderTabBar() + "\n\n")
 
 	// Backup tab has its own rendering path.
 	if m.activeTab == tabBackup {
-		b.WriteString(m.renderBackupView())
-		b.WriteString("\n")
+		body.WriteString(m.renderBackupView())
+		var footer string
 		switch {
 		case m.importingPath:
-			b.WriteString("  " + confirmStyle.Render("Import:") + " " + m.importInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
+			footer = "  " + confirmStyle.Render("Import:") + " " + m.importInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel"
 		case m.enteringToken:
-			b.WriteString("  " + confirmStyle.Render("Token:") + " " + m.tokenInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel")
+			footer = "  " + confirmStyle.Render("Token:") + " " + m.tokenInput.View() + "  " + dimVersion.Render("Enter") + " go   " + dimVersion.Render("Esc") + " cancel"
 		default:
-			b.WriteString(m.renderHelp())
+			footer = m.renderHelp()
 		}
-		return b.String()
+		return m.layoutWithFooter(body.String(), footer)
 	}
 
 	// Config tab has its own rendering path.
 	if m.activeTab == tabConfig {
-		b.WriteString(m.renderConfigView())
-		b.WriteString("\n")
-		b.WriteString(m.renderHelp())
-		return b.String()
+		body.WriteString(m.renderConfigView())
+		return m.layoutWithFooter(body.String(), m.renderHelp())
 	}
 
 	// Search bar.
-	b.WriteString(m.renderSearchBar() + "\n")
+	body.WriteString(m.renderSearchBar() + "\n")
 
 	// Marketplace sub-tab bar.
 	if m.activeTab == tabDiscover {
-		b.WriteString(m.renderDiscoverSubTabs() + "\n")
+		body.WriteString(m.renderDiscoverSubTabs() + "\n")
 	}
 
 	// Marketplace Packs sub-tab — separate rendering path.
 	if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
-		b.WriteString(m.renderPacksList())
-		b.WriteString("\n")
-		b.WriteString(m.renderHelp())
-		return b.String()
+		body.WriteString(m.renderPacksList())
+		return m.layoutWithFooter(body.String(), m.renderHelp())
 	}
 
 	// Marketplace For You sub-tab — separate rendering path.
 	if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
-		b.WriteString(m.renderForYouList())
-		b.WriteString("\n")
-		b.WriteString(m.renderHelp())
-		return b.String()
+		body.WriteString(m.renderForYouList())
+		return m.layoutWithFooter(body.String(), m.renderHelp())
 	}
 
 	// Two-column layout: sidebar | tool list.
@@ -117,16 +116,39 @@ func (m Model) renderView() string {
 		}
 
 		if sidebarOnRight {
-			b.WriteString(right + " │ " + left + "\n")
+			body.WriteString(right + " │ " + left + "\n")
 		} else {
-			b.WriteString(fixedWidthANSI(left, colSidebar) + " │ " + right + "\n")
+			body.WriteString(fixedWidthANSI(left, colSidebar) + " │ " + right + "\n")
 		}
 	}
 
-	b.WriteString("\n")
-	b.WriteString(m.renderHelp())
+	return m.layoutWithFooter(body.String(), m.renderHelp())
+}
 
-	return b.String()
+// layoutWithFooter pads `body` with blank lines so that `footer` sticks to the
+// bottom of the terminal viewport. If the body + footer already exceed the
+// available height (or height is unknown), a single blank separator line is
+// inserted and the content is returned as-is.
+func (m Model) layoutWithFooter(body, footer string) string {
+	// Normalize: ensure body ends with exactly one newline so subsequent line
+	// counting and padding are predictable.
+	body = strings.TrimRight(body, "\n") + "\n"
+
+	bodyLines := strings.Count(body, "\n")
+	footerLines := strings.Count(footer, "\n") + 1
+
+	// Always reserve at least one blank separator line between body and footer.
+	const minGap = 1
+
+	if m.height <= 0 {
+		return body + strings.Repeat("\n", minGap) + footer
+	}
+
+	gap := m.height - bodyLines - footerLines
+	if gap < minGap {
+		gap = minGap
+	}
+	return body + strings.Repeat("\n", gap) + footer
 }
 
 // --- Title & Tabs ---
@@ -232,7 +254,7 @@ func (m Model) renderPacksList() string {
 	// Header.
 	b.WriteString("  " +
 		headerStyle.Render(fixedWidth("PACK", colName)) + "  " +
-		headerStyle.Render(fixedWidth("TOOLS", 8)) + "  " +
+		headerStyle.Render(fixedWidth("TOOLS", colPackTools)) + "  " +
 		headerStyle.Render("STATUS") + "\n")
 
 	toolMap := make(map[string]bool, len(m.tools))
@@ -261,7 +283,7 @@ func (m Model) renderPacksList() string {
 		}
 
 		nameCell := nameStyle.Render(fixedWidth(pack.DisplayName, colName))
-		toolCount := fixedWidth(fmt.Sprintf("%d tools", len(pack.ToolNames)), 8)
+		toolCount := fixedWidth(fmt.Sprintf("%d tools", len(pack.ToolNames)), colPackTools)
 
 		// Compute install status.
 		installed := 0
@@ -314,8 +336,9 @@ func (m Model) renderForYouList() string {
 	// Header.
 	b.WriteString("  " +
 		headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
-		headerStyle.Render(fixedWidth("MATCH", 6)) + "  " +
-		headerStyle.Render("BECAUSE YOU HAVE") + "\n")
+		headerStyle.Render(fixedWidth("MATCH", 5)) + "  " +
+		headerStyle.Render(fixedWidth("BECAUSE YOU HAVE", colReason)) + "  " +
+		headerStyle.Render("STATUS") + "\n")
 
 	visibleRows := m.height - 12
 	if visibleRows < 3 {
@@ -356,11 +379,11 @@ func (m Model) renderForYouList() string {
 		}
 		bar := upgradableStyle.Render(strings.Repeat("█", barLen) + strings.Repeat("░", 5-barLen))
 
-		reasonCell := dimVersion.Render(rec.reason)
+		reasonCell := dimVersion.Render(fixedWidth(rec.reason, colReason))
 
-		line := cursor + nameCell + "  " + bar + " " + reasonCell
+		line := cursor + nameCell + "  " + bar + "  " + reasonCell
 		if badge := githubStarsBadge(tool); badge != "" {
-			line += "  " + dimVersion.Render(badge)
+			line += "  " + fixedWidthANSI(dimVersion.Render(badge), colStars)
 		}
 		if selected {
 			w := lipgloss.Width(line)
@@ -437,7 +460,7 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 					status = dim("skipped")
 				}
 			}
-			fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, itemLabel(item.name, item.display), status)
+			fmt.Fprintf(&b, "    %s  %s  %s\n", icon, fixedWidth(itemLabel(item.name, item.display), colPackName), fixedWidthANSI(status, colPackStat))
 		}
 
 		pending := 0
@@ -479,10 +502,12 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 			icon = upToDateStyle.Render("✓")
 			status = upToDateStyle.Render("installed")
 		}
-		line := fmt.Sprintf("    %s  %-20s %s", icon, name, status)
+		nameCell := fixedWidth(name, colPackName)
+		statusCell := fixedWidthANSI(status, colPackStat)
+		line := "    " + icon + "  " + nameCell + "  " + statusCell
 		if t, ok := toolByName[name]; ok {
 			if badge := githubStarsBadge(t); badge != "" {
-				line += "  " + dim(badge)
+				line += "  " + fixedWidthANSI(dim(badge), colStars)
 			}
 		}
 		b.WriteString(line + "\n")
@@ -535,7 +560,7 @@ func (m Model) renderHeader() string {
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory)) + "  " +
-			headerStyle.Render("STATUS")
+			headerStyle.Render(fixedWidth("STATUS", colStars))
 	case tabBackup:
 		return "    " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
@@ -594,7 +619,7 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 	line := cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 
 	if badge := githubStarsBadge(tool); badge != "" {
-		line += "  " + dimVersion.Render(badge)
+		line += "  " + fixedWidthANSI(dimVersion.Render(badge), colStars)
 	}
 
 	if len(tool.Instances) > 1 {
@@ -634,7 +659,7 @@ func (m Model) renderUpdateRow(tool registry.Tool, toolIdx int, selected bool) s
 
 	line := cursor + check + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 	if badge := githubStarsBadge(tool); badge != "" {
-		line += "  " + dimVersion.Render(badge)
+		line += "  " + fixedWidthANSI(dimVersion.Render(badge), colStars)
 	}
 	return line
 }
@@ -649,10 +674,12 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
-	line := cursor + nameCell + "  " + catCell
-	if badge := githubStarsBadge(tool); badge != "" {
-		line += "  " + dimVersion.Render(badge)
-	}
+	// Stars column: pad to a fixed width (empty string pads to colStars too) so
+	// the trailing marketplace-status badge lines up across rows.
+	starsText := githubStarsBadge(tool)
+	starsCell := fixedWidthANSI(dimVersion.Render(starsText), colStars)
+
+	line := cursor + nameCell + "  " + catCell + "  " + starsCell
 
 	var badge string
 	switch tool.MarketplaceStatus {
