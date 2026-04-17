@@ -3,9 +3,7 @@ display_name: kubectx
 category: Containers
 tags:
     - kubernetes
-    - k8s
-    - context
-    - cluster-switching
+    - cli
 binary_names:
     - kubectx
 packages:

@@ -3,9 +3,7 @@ display_name: asdf
 category: PkgMgr
 tags:
     - version-manager
-    - polyglot
-    - plugins
-    - runtime
+    - cross-platform
 binary_names:
     - asdf
 packages:

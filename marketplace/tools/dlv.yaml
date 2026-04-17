@@ -4,7 +4,6 @@ category: Language
 tags:
     - golang
     - debugger
-    - debugging
 binary_names:
     - dlv
 packages:

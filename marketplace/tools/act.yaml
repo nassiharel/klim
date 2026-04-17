@@ -1,0 +1,14 @@
+name: act
+display_name: act
+category: VCS
+tags:
+    - github
+    - continuous-delivery
+    - automation
+binary_names:
+    - act
+packages:
+    winget: nektos.act
+    choco: act-cli
+    brew: act
+github: nektos/act

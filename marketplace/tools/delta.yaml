@@ -3,10 +3,8 @@ display_name: delta
 category: CLI
 tags:
     - git
-    - diff
     - syntax-highlighting
     - pager
-    - rust
 binary_names:
     - delta
 packages:

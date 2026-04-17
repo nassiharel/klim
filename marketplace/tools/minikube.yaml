@@ -3,10 +3,7 @@ display_name: Minikube
 category: Containers
 tags:
     - kubernetes
-    - k8s
     - local-cluster
-    - vm
-    - testing
 binary_names:
     - minikube
 packages:

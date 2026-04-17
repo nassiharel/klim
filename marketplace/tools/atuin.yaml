@@ -1,0 +1,12 @@
+name: atuin
+display_name: Atuin
+category: Shell
+tags:
+    - search
+    - cross-shell
+    - cli
+binary_names:
+    - atuin
+packages:
+    brew: atuin
+github: atuinsh/atuin

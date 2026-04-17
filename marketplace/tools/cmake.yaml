@@ -3,10 +3,7 @@ display_name: CMake
 category: CLI
 tags:
     - build-system
-    - c
-    - cpp
     - cross-platform
-    - generator
 binary_names:
     - cmake
 packages:

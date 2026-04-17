@@ -2,11 +2,8 @@ name: ffmpeg
 display_name: FFmpeg
 category: Media
 tags:
-    - video
-    - audio
-    - transcode
-    - stream
-    - encoding
+    - media
+    - cli
 binary_names:
     - ffmpeg
 packages:

@@ -4,8 +4,7 @@ category: Containers
 tags:
     - docker
     - tui
-    - terminal-ui
-    - containers
+    - container
 binary_names:
     - lazydocker
 packages:

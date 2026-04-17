@@ -2,11 +2,8 @@ name: magick
 display_name: ImageMagick
 category: Media
 tags:
-    - image
-    - convert
-    - resize
-    - graphics
-    - batch
+    - image-processing
+    - cli
 binary_names:
     - magick
     - convert

@@ -2,11 +2,8 @@ name: procs
 display_name: procs
 category: CLI
 tags:
-    - ps
-    - processes
-    - monitoring
-    - rust
-    - system
+    - process-monitoring
+    - cli
 binary_names:
     - procs
 packages:

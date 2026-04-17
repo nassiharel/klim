@@ -3,9 +3,7 @@ display_name: kubens
 category: Containers
 tags:
     - kubernetes
-    - k8s
-    - namespace
-    - cluster-switching
+    - cli
 binary_names:
     - kubens
 packages:

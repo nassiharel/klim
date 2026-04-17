@@ -3,10 +3,8 @@ display_name: Kubelogin
 category: Containers
 tags:
     - kubernetes
-    - k8s
-    - azure
+    - microsoft
     - auth
-    - login
 binary_names:
     - kubelogin
 packages:

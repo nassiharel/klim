@@ -2,11 +2,9 @@ name: bat
 display_name: bat
 category: CLI
 tags:
-    - cat
     - syntax-highlighting
     - pager
-    - rust
-    - preview
+    - cli
 binary_names:
     - bat
 packages:

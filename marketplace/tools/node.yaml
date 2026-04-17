@@ -3,10 +3,7 @@ display_name: Node.js
 category: Language
 tags:
     - javascript
-    - js
-    - v8
-    - runtime
-    - server
+    - typescript
 binary_names:
     - node
 packages:

@@ -3,10 +3,8 @@ display_name: mise
 category: PkgMgr
 tags:
     - version-manager
-    - polyglot
-    - fast
-    - rust
-    - asdf-compatible
+    - task-runner
+    - dev-workflow
 binary_names:
     - mise
 packages:

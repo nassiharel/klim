@@ -3,10 +3,8 @@ display_name: Terraform
 category: IaC
 tags:
     - hashicorp
-    - hcl
     - cloud
     - provisioning
-    - infrastructure
 binary_names:
     - terraform
 packages:

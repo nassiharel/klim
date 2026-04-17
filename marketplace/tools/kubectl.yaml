@@ -3,9 +3,7 @@ display_name: kubectl
 category: Containers
 tags:
     - kubernetes
-    - k8s
-    - cluster
-    - orchestration
+    - cli
 binary_names:
     - kubectl
 packages:

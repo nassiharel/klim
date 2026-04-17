@@ -3,8 +3,6 @@ display_name: k3d
 category: Containers
 tags:
     - kubernetes
-    - k8s
-    - k3s
     - local-cluster
     - docker
 binary_names:

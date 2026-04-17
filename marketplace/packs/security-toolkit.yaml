@@ -1,0 +1,10 @@
+name: security-toolkit
+display_name: Security Toolkit
+description: Security scanning, secrets management, and encryption tools.
+tools:
+    - trivy
+    - cosign
+    - sops
+    - vault
+    - age
+    - nmap

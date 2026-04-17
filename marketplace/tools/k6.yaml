@@ -1,0 +1,15 @@
+name: k6
+display_name: k6
+category: Testing
+tags:
+    - load-testing
+    - api
+    - javascript
+binary_names:
+    - k6
+packages:
+    winget: k6.k6
+    choco: k6
+    brew: k6
+    apt: k6
+github: grafana/k6

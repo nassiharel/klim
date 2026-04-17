@@ -1,0 +1,12 @@
+name: cilium
+display_name: Cilium CLI
+category: Containers
+tags:
+    - kubernetes
+    - networking
+    - security
+binary_names:
+    - cilium
+packages:
+    brew: cilium-cli
+github: cilium/cilium-cli

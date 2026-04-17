@@ -3,9 +3,7 @@ display_name: Vagrant
 category: IaC
 tags:
     - hashicorp
-    - vm
-    - virtual-machine
-    - dev-environment
+    - dev-workflow
 binary_names:
     - vagrant
 packages:

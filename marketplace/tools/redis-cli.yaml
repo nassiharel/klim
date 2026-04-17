@@ -2,11 +2,8 @@ name: redis-cli
 display_name: Redis CLI
 category: Database
 tags:
-    - redis
-    - cache
-    - key-value
-    - in-memory
-    - nosql
+    - database
+    - cli
 binary_names:
     - redis-cli
 packages:

@@ -2,10 +2,9 @@ name: azd
 display_name: Azure Dev CLI
 category: Cloud
 tags:
-    - azure
     - microsoft
     - cloud
-    - developer
+    - dev-workflow
 binary_names:
     - azd
 packages:

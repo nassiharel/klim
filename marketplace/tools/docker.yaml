@@ -3,10 +3,7 @@ display_name: Docker
 category: Containers
 tags:
     - container
-    - oci
-    - image
-    - runtime
-    - devops
+    - docker
 binary_names:
     - docker
 packages:

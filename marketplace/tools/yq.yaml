@@ -2,11 +2,8 @@ name: yq
 display_name: yq
 category: CLI
 tags:
-    - yaml
-    - json
-    - xml
-    - parser
-    - transform
+    - data-processing
+    - cli
 binary_names:
     - yq
 packages:

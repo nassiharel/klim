@@ -2,10 +2,9 @@ name: pwsh
 display_name: PowerShell
 category: Shell
 tags:
-    - scripting
+    - automation
     - microsoft
     - cross-platform
-    - automation
 binary_names:
     - pwsh
 packages:

@@ -1,0 +1,12 @@
+name: pgcli
+display_name: pgcli
+category: Database
+tags:
+    - database
+    - cli
+binary_names:
+    - pgcli
+packages:
+    brew: pgcli
+    apt: pgcli
+github: dbcli/pgcli

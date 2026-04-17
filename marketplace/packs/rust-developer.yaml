@@ -1,0 +1,6 @@
+name: rust-developer
+display_name: Rust Developer
+description: Tools for Rust development.
+tools:
+    - rustc
+    - cargo

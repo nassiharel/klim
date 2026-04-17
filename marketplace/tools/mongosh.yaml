@@ -2,11 +2,8 @@ name: mongosh
 display_name: MongoDB Shell
 category: Database
 tags:
-    - mongodb
-    - nosql
-    - document
-    - shell
-    - repl
+    - database
+    - cli
 binary_names:
     - mongosh
 packages:

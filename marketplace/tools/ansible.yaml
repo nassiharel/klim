@@ -4,8 +4,6 @@ category: IaC
 tags:
     - automation
     - configuration-management
-    - ssh
-    - agentless
 binary_names:
     - ansible
 packages:

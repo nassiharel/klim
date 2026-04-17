@@ -1,0 +1,9 @@
+name: hashicorp-stack
+display_name: HashiCorp Stack
+description: The complete HashiCorp toolchain.
+tools:
+    - terraform
+    - vault
+    - consul
+    - packer
+    - vagrant

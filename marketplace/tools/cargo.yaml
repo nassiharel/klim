@@ -4,8 +4,7 @@ category: Language
 tags:
     - rust
     - package-manager
-    - build-tool
-    - crates
+    - build-system
 binary_names:
     - cargo
 packages:

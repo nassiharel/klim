@@ -1,11 +1,10 @@
 name: vault
 display_name: Vault
-category: IaC
+category: Security
 tags:
     - hashicorp
     - secrets
     - encryption
-    - security
     - auth
 binary_names:
     - vault

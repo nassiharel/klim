@@ -2,11 +2,8 @@ name: zoxide
 display_name: zoxide
 category: CLI
 tags:
-    - cd
-    - navigation
-    - directory
-    - autojump
-    - rust
+    - cli
+    - cross-shell
 binary_names:
     - zoxide
 packages:

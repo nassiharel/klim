@@ -2,11 +2,8 @@ name: pandoc
 display_name: Pandoc
 category: CLI
 tags:
-    - document
-    - converter
-    - markdown
-    - latex
-    - pdf
+    - data-processing
+    - cli
 binary_names:
     - pandoc
 packages:

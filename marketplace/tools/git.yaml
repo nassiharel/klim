@@ -3,9 +3,7 @@ display_name: Git
 category: VCS
 tags:
     - vcs
-    - scm
-    - version-control
-    - dvcs
+    - git
 binary_names:
     - git
 packages:

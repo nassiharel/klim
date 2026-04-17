@@ -4,9 +4,6 @@ category: Language
 tags:
     - javascript
     - typescript
-    - runtime
-    - v8
-    - secure
 binary_names:
     - deno
 packages:

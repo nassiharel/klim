@@ -3,10 +3,7 @@ display_name: K9s
 category: Containers
 tags:
     - kubernetes
-    - k8s
     - tui
-    - terminal-ui
-    - cluster
 binary_names:
     - k9s
 packages:
