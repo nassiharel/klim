@@ -14,3 +14,4 @@ packages:
     brew: tldr
     apt: tldr
     npm: tldr
+github: tldr-pages/tldr

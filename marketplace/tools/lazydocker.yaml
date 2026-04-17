@@ -13,3 +13,4 @@ packages:
     choco: lazydocker
     brew: lazydocker
     snap: lazydocker
+github: jesseduffield/lazydocker

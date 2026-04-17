@@ -15,3 +15,4 @@ packages:
     brew: neovim
     apt: neovim
     snap: nvim
+github: neovim/neovim

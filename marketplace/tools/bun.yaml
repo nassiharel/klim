@@ -13,3 +13,4 @@ packages:
     winget: Oven-sh.Bun
     choco: bun
     brew: oven-sh/bun/bun
+github: oven-sh/bun

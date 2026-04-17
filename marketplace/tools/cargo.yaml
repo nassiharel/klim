@@ -11,3 +11,4 @@ binary_names:
 packages:
     brew: rust
     apt: cargo
+github: rust-lang/cargo

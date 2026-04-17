@@ -13,3 +13,4 @@ packages:
     winget: DenoLand.Deno
     choco: deno
     brew: deno
+github: denoland/deno

@@ -13,3 +13,4 @@ packages:
     choco: git
     brew: git
     apt: git
+github: git/git

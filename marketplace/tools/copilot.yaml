@@ -11,3 +11,4 @@ binary_names:
     - copilot
 packages:
     winget: GitHub.Copilot
+github: github/copilot-cli

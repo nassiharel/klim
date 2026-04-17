@@ -12,3 +12,4 @@ binary_names:
 packages:
     choco: flux
     brew: fluxcd/tap/flux
+github: fluxcd/flux2

@@ -14,3 +14,4 @@ packages:
     brew: awscli
     apt: awscli
     snap: aws-cli
+github: aws/aws-cli

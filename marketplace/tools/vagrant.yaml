@@ -12,3 +12,4 @@ packages:
     winget: Hashicorp.Vagrant
     choco: vagrant
     brew: vagrant
+github: hashicorp/vagrant

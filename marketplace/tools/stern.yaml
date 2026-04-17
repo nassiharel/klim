@@ -13,3 +13,4 @@ packages:
     winget: stern.stern
     choco: stern
     brew: stern
+github: stern/stern

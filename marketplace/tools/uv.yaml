@@ -13,3 +13,4 @@ packages:
     winget: astral-sh.uv
     choco: uv
     brew: uv
+github: astral-sh/uv

@@ -12,3 +12,4 @@ binary_names:
 packages:
     choco: istioctl
     brew: istioctl
+github: istio/istio

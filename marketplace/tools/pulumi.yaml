@@ -13,3 +13,4 @@ packages:
     winget: Pulumi.Pulumi
     choco: pulumi
     brew: pulumi
+github: pulumi/pulumi

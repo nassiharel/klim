@@ -12,3 +12,4 @@ packages:
     winget: Hashicorp.Consul
     choco: consul
     brew: consul
+github: hashicorp/consul

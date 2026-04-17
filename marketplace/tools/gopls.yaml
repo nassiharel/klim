@@ -10,3 +10,4 @@ binary_names:
     - gopls
 packages:
     brew: gopls
+github: golang/tools

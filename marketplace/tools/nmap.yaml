@@ -14,3 +14,4 @@ packages:
     choco: nmap
     brew: nmap
     apt: nmap
+github: nmap/nmap

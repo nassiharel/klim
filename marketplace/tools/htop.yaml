@@ -13,3 +13,4 @@ packages:
     brew: htop
     apt: htop
     snap: htop
+github: htop-dev/htop

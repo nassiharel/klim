@@ -13,3 +13,4 @@ packages:
     choco: redis
     brew: redis
     apt: redis-tools
+github: redis/redis

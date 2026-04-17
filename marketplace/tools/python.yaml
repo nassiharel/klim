@@ -15,3 +15,4 @@ packages:
     choco: python3
     brew: python@3
     apt: python3
+github: python/cpython

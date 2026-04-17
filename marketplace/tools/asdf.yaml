@@ -11,3 +11,4 @@ binary_names:
 packages:
     brew: asdf
     apt: asdf
+github: asdf-vm/asdf

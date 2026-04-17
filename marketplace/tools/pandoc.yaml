@@ -14,3 +14,4 @@ packages:
     choco: pandoc
     brew: pandoc
     apt: pandoc
+github: jgm/pandoc

@@ -13,3 +13,4 @@ packages:
     winget: Kubernetes.kind
     choco: kind
     brew: kind
+github: kubernetes-sigs/kind

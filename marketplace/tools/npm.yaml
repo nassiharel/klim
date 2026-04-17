@@ -10,3 +10,4 @@ binary_names:
     - npm
 packages:
     npm: npm
+github: npm/cli

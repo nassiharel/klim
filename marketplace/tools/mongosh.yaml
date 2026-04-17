@@ -13,3 +13,4 @@ packages:
     winget: MongoDB.Shell
     choco: mongodb-shell
     brew: mongosh
+github: mongodb-js/mongosh

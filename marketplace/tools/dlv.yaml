@@ -9,3 +9,4 @@ binary_names:
     - dlv
 packages:
     brew: delve
+github: go-delve/delve

@@ -11,3 +11,4 @@ binary_names:
 packages:
     brew: ansible
     apt: ansible
+github: ansible/ansible

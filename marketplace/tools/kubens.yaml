@@ -13,3 +13,4 @@ packages:
     choco: kubens
     brew: kubectx
     apt: kubectx
+github: ahmetb/kubectx

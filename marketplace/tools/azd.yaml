@@ -12,3 +12,4 @@ packages:
     winget: Microsoft.Azd
     choco: azd
     brew: azure/azd/azd
+github: Azure/azure-dev

@@ -12,3 +12,4 @@ binary_names:
 packages:
     brew: tmux
     apt: tmux
+github: tmux/tmux

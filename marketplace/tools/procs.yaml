@@ -13,3 +13,4 @@ packages:
     winget: dalance.procs
     choco: procs
     brew: procs
+github: dalance/procs

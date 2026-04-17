@@ -14,3 +14,4 @@ packages:
     choco: yq
     brew: yq
     snap: yq
+github: mikefarah/yq

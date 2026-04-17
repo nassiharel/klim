@@ -13,3 +13,4 @@ packages:
     winget: Hashicorp.Packer
     choco: packer
     brew: packer
+github: hashicorp/packer
