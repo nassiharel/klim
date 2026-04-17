@@ -359,6 +359,9 @@ func (m Model) renderForYouList() string {
 		reasonCell := dimVersion.Render(rec.reason)
 
 		line := cursor + nameCell + "  " + bar + " " + reasonCell
+		if badge := githubStarsBadge(tool); badge != "" {
+			line += "  " + dimVersion.Render(badge)
+		}
 		if selected {
 			w := lipgloss.Width(line)
 			if w < m.width {
@@ -456,7 +459,9 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 	b.WriteString("  " + label("Tools:") + "\n\n")
 
 	toolMap := make(map[string]bool, len(m.tools))
+	toolByName := make(map[string]registry.Tool, len(m.tools))
 	for _, t := range m.tools {
+		toolByName[t.Name] = t
 		if t.IsInstalled() {
 			toolMap[t.Name] = true
 		}
@@ -474,7 +479,13 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 			icon = upToDateStyle.Render("✓")
 			status = upToDateStyle.Render("installed")
 		}
-		fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, name, status)
+		line := fmt.Sprintf("    %s  %-20s %s", icon, name, status)
+		if t, ok := toolByName[name]; ok {
+			if badge := githubStarsBadge(t); badge != "" {
+				line += "  " + dim(badge)
+			}
+		}
+		b.WriteString(line + "\n")
 	}
 
 	// Actions.
