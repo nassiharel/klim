@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 func formatStars(n int) string {
 	switch {
 	case n < 1000:
-		return fmt.Sprintf("%d", n)
+		return strconv.Itoa(n)
 	case n < 10_000:
 		return fmt.Sprintf("%.1fk", float64(n)/1000)
 	case n < 1_000_000:
