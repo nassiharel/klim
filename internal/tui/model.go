@@ -288,6 +288,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case catalog.SourceRemote:
 				m.statusMsg = fmt.Sprintf("✓ Fetched catalog (%d tools)", info.Tools)
 			}
+			// Adopt any diff produced by an auto-refresh so badges + status
+			// reflect what changed in the remote catalog.
+			if info.Diff != nil && info.Diff.HasChanges() {
+				d := *info.Diff
+				m.lastDiff = &d
+				m.statusMsg = fmt.Sprintf("✓ Marketplace updated: %d new, %d changed, %d removed",
+					len(d.NewTools), len(d.ChangedTools), len(d.RemovedTools))
+			}
 		}
 
 		// If no tools loaded (e.g. catalog fetch failed), skip to done.
@@ -440,8 +448,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload tools from the updated cache so new tools appear.
 		if msg.result.Updated {
 			cmd := m.startScan()
-			m.statusMsg = fmt.Sprintf("✓ Marketplace updated: %d new, %d changed",
-				len(diff.NewTools), len(diff.ChangedTools))
+			m.statusMsg = fmt.Sprintf("✓ Marketplace updated: %d new, %d changed, %d removed",
+				len(diff.NewTools), len(diff.ChangedTools), len(diff.RemovedTools))
 			return m, cmd
 		}
 		m.statusMsg = "✓ Marketplace is up to date"

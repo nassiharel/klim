@@ -106,11 +106,35 @@ type LoadResult struct {
 	Data   []byte
 	Source LoadSource
 	Tools  int // number of tools parsed
+	// Diff describes what changed relative to the previous cache when the
+	// catalog was refreshed from remote as part of this load (e.g. the cache
+	// was stale and auto-refresh was enabled). Nil when no refresh happened
+	// or the cache was empty before the fetch.
+	Diff *DiffResult
+}
+
+// LoadOptions controls LoadOrFetch behaviour.
+type LoadOptions struct {
+	// MaxAge enables cache freshness checks. When > 0 and the cache mtime is
+	// older than MaxAge, LoadOrFetch will attempt to refetch from the remote
+	// so new/updated/deleted tools make it into the local cache. On fetch
+	// failure the existing (stale) cache is still returned.
+	MaxAge time.Duration
 }
 
 // LoadOrFetch loads the cached marketplace YAML. If the cache doesn't exist
 // or contains invalid YAML, it fetches from GitHub and rewrites the cache.
+// With a zero LoadOptions this preserves the historical behaviour.
 func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) (*LoadResult, error) {
+	return LoadOrFetchWithOptions(ctx, fetcher, LoadOptions{})
+}
+
+// LoadOrFetchWithOptions is LoadOrFetch with control over cache freshness.
+// When opts.MaxAge > 0 and the cached file is older than MaxAge, the remote
+// is refetched so tool additions, updates, and removals propagate into the
+// local cache. If the refetch fails the stale cache is still returned and
+// LoadResult.Diff is left nil.
+func LoadOrFetchWithOptions(ctx context.Context, fetcher MarketplaceFetcher, opts LoadOptions) (*LoadResult, error) {
 	path, err := CachePath()
 	if err != nil {
 		return nil, fmt.Errorf("resolving cache path: %w", err)
@@ -119,6 +143,20 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) (*LoadResult, 
 	// Try reading and validating the local cache.
 	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
 		if n := countTools(data); n > 0 {
+			if opts.MaxAge > 0 && cacheIsStale(path, opts.MaxAge) {
+				if refreshed, diff, ok := tryRefreshCache(ctx, fetcher, path, data); ok {
+					rn := countTools(refreshed)
+					slog.Info("catalog auto-refreshed",
+						"path", path,
+						"tools", rn,
+						"new", len(diff.NewTools),
+						"changed", len(diff.ChangedTools),
+						"removed", len(diff.RemovedTools),
+					)
+					return &LoadResult{Data: refreshed, Source: SourceRemote, Tools: rn, Diff: &diff}, nil
+				}
+				slog.Warn("catalog auto-refresh failed, serving stale cache", "path", path)
+			}
 			slog.Info("catalog loaded from cache", "path", path, "tools", n)
 			return &LoadResult{Data: data, Source: SourceCache, Tools: n}, nil
 		}
@@ -152,6 +190,43 @@ func LoadOrFetch(ctx context.Context, fetcher MarketplaceFetcher) (*LoadResult, 
 	return &LoadResult{Data: data, Source: SourceRemote, Tools: n}, nil
 }
 
+// cacheIsStale reports whether the cache file's mtime is older than maxAge.
+// Missing/unreadable mtime is treated as stale so the caller retries remote.
+func cacheIsStale(path string, maxAge time.Duration) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return true
+	}
+	return time.Since(info.ModTime()) > maxAge
+}
+
+// tryRefreshCache fetches the remote catalog, validates it, writes it to the
+// cache, and returns the new bytes plus a diff against the previous cache.
+// Returns ok=false on any failure so callers can fall back to the stale cache.
+func tryRefreshCache(ctx context.Context, fetcher MarketplaceFetcher, path string, prev []byte) ([]byte, DiffResult, bool) {
+	remote, err := fetcher.Fetch(ctx)
+	if err != nil {
+		slog.Warn("catalog refetch failed", "error", err)
+		return nil, DiffResult{}, false
+	}
+	if !isValidCatalog(remote) {
+		slog.Warn("refetched catalog is invalid", "bytes", len(remote))
+		return nil, DiffResult{}, false
+	}
+	diff := Diff(prev, remote)
+	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr == nil {
+		if writeErr := atomicWriteFile(path, remote, 0o644); writeErr != nil {
+			slog.Warn("failed to write catalog cache", "path", path, "error", writeErr)
+		}
+	} else {
+		slog.Warn("failed to create cache dir", "path", path, "error", mkErr)
+	}
+	// Refresh mtime even if contents were identical so we don't retry the
+	// remote on every call until something actually changes.
+	_ = os.Chtimes(path, time.Now(), time.Now())
+	return remote, diff, true
+}
+
 // countTools returns the number of tools in the YAML data, or 0 if invalid.
 func countTools(data []byte) int {
 	var f struct {
@@ -174,11 +249,12 @@ func isValidCatalog(data []byte) bool {
 type DiffResult struct {
 	NewTools     []string            // tool names present in remote but absent locally
 	ChangedTools map[string][]string // tool name → list of changed field descriptions
+	RemovedTools []string            // tool names present locally but absent in remote
 }
 
-// HasChanges reports whether any tools were added or modified.
+// HasChanges reports whether any tools were added, modified, or removed.
 func (d DiffResult) HasChanges() bool {
-	return len(d.NewTools) > 0 || len(d.ChangedTools) > 0
+	return len(d.NewTools) > 0 || len(d.ChangedTools) > 0 || len(d.RemovedTools) > 0
 }
 
 func parseToolDefs(data []byte) []registry.ToolDef {
@@ -192,8 +268,9 @@ func parseToolDefs(data []byte) []registry.ToolDef {
 }
 
 // Diff compares local and remote catalog YAML and returns the differences.
-// Only detects additions and modifications — removals are ignored (user-added
-// custom tools in the local file are preserved).
+// Detects additions, modifications, and removals. The local cache is a
+// mirror of the last-fetched remote (see LoadOrFetch), so removals mean a
+// tool that used to exist upstream is no longer published.
 func Diff(local, remote []byte) DiffResult {
 	localDefs := parseToolDefs(local)
 	remoteDefs := parseToolDefs(remote)
@@ -201,6 +278,10 @@ func Diff(local, remote []byte) DiffResult {
 	localMap := make(map[string]*registry.ToolDef, len(localDefs))
 	for i := range localDefs {
 		localMap[localDefs[i].Name] = &localDefs[i]
+	}
+	remoteMap := make(map[string]struct{}, len(remoteDefs))
+	for i := range remoteDefs {
+		remoteMap[remoteDefs[i].Name] = struct{}{}
 	}
 
 	result := DiffResult{
@@ -237,7 +318,19 @@ func Diff(local, remote []byte) DiffResult {
 		}
 	}
 
+	// Anything in local but not in remote has been removed upstream. Only
+	// report removals when remote is a non-empty, valid catalog — an empty
+	// or unparseable remote would otherwise look like everything was deleted.
+	if len(remoteDefs) > 0 {
+		for _, ld := range localDefs {
+			if _, ok := remoteMap[ld.Name]; !ok {
+				result.RemovedTools = append(result.RemovedTools, ld.Name)
+			}
+		}
+	}
+
 	sort.Strings(result.NewTools)
+	sort.Strings(result.RemovedTools)
 	return result
 }
 
