@@ -126,9 +126,10 @@ func (m Model) renderView() string {
 }
 
 // layoutWithFooter pads `body` with blank lines so that `footer` sticks to the
-// bottom of the terminal viewport. If the body + footer already exceed the
-// available height (or height is unknown), a single blank separator line is
-// inserted and the content is returned as-is.
+// bottom of the terminal viewport. If the combined body + footer would exceed
+// the available height, the body is truncated from the bottom so the footer
+// remains visible. When the height is unknown, a single blank separator line
+// is inserted and the content is returned as-is.
 func (m Model) layoutWithFooter(body, footer string) string {
 	// Normalize: ensure body ends with exactly one newline so subsequent line
 	// counting and padding are predictable.
@@ -142,6 +143,22 @@ func (m Model) layoutWithFooter(body, footer string) string {
 
 	if m.height <= 0 {
 		return body + strings.Repeat("\n", minGap) + footer
+	}
+
+	available := m.height - footerLines - minGap
+	if available < 0 {
+		available = 0
+	}
+	if bodyLines > available {
+		// Body is too tall to fit alongside the footer. Truncate from the
+		// bottom so the footer (action menu, help hints, etc.) is never
+		// clipped by the terminal.
+		lines := strings.SplitAfter(body, "\n")
+		if available < len(lines) {
+			lines = lines[:available]
+		}
+		body = strings.Join(lines, "")
+		bodyLines = strings.Count(body, "\n")
 	}
 
 	gap := m.height - bodyLines - footerLines
@@ -879,8 +896,9 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	}
 
 	// ── Action menu ─────────────────────────────────────────────
+	var footer strings.Builder
 	if len(m.toolMenuItems) > 0 {
-		b.WriteString("  " + label("Actions:") + "\n")
+		footer.WriteString("  " + label("Actions:") + "\n")
 		for i, item := range m.toolMenuItems {
 			cursor := "  "
 			if i == m.toolMenu {
@@ -894,9 +912,9 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 				}
 				line = selectedRowStyle.Render(line)
 			}
-			b.WriteString(line + "\n")
+			footer.WriteString(line + "\n")
 		}
-		b.WriteString("\n")
+		footer.WriteString("\n")
 	}
 
 	// ── Help bar ────────────────────────────────────────────────
@@ -904,17 +922,17 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	case m.pendingAction != nil:
 		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
 		keys := dim("y") + " confirm   " + dim("Esc") + " cancel"
-		b.WriteString(prompt + "  " + keys)
+		footer.WriteString(prompt + "  " + keys)
 	default:
 		hints := []string{
 			dim("↑↓") + " navigate",
 			dim("Enter") + " select",
 			dim("Esc") + " back",
 		}
-		b.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
+		footer.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
 	}
 
-	return b.String()
+	return m.layoutWithFooter(b.String(), footer.String())
 }
 
 // installCmdEntry pairs a source label with the formatted command string.
@@ -1109,10 +1127,14 @@ func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 		}
 	}
 	if len(sources) > 1 {
-		var srcNames []string
+		srcNames := make([]string, 0, len(sources))
 		for src := range sources {
 			srcNames = append(srcNames, string(src))
 		}
+		// Sort for stable ordering across renders (map iteration is
+		// non-deterministic and would otherwise cause visible flicker as
+		// the detail view re-renders during background version resolution).
+		sort.Strings(srcNames)
 		tips = append(tips, dimVersion.Render("💡")+fmt.Sprintf(
 			"  Multiple package managers (%s) — consider standardizing on one to avoid conflicts",
 			strings.Join(srcNames, ", "),
