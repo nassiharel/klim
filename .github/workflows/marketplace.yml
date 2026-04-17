@@ -29,6 +29,10 @@ jobs:
           go-version-file: go.mod
       - name: Validate marketplace files
         run: go run ./internal/marketplace/validate
+      - name: Create empty fallback for assemble smoke test
+        run: : > /tmp/fallback.yaml
+      - name: Assemble smoke test
+        run: go run ./internal/marketplace/assemble -fallback /tmp/fallback.yaml -o /tmp/marketplace.yaml
 
   publish:
     name: Publish
