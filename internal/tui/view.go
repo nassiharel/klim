@@ -879,6 +879,32 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	if len(tool.BinaryNames) > 0 {
 		b.WriteString("  " + label("Binaries:   ") + dim(strings.Join(tool.BinaryNames, ", ")) + "\n")
 	}
+
+	// ── Display name ────────────────────────────────────────────
+	if tool.DisplayName != "" {
+		b.WriteString("  " + label("Display:    ") + dim(tool.DisplayName) + "\n")
+	}
+
+	// ── Category ────────────────────────────────────────────────
+	if tool.Category != "" {
+		b.WriteString("  " + label("Category:   ") + dim(tool.Category) + "\n")
+	}
+
+	// ── Tags ────────────────────────────────────────────────────
+	if len(tool.Tags) > 0 {
+		b.WriteString("  " + label("Tags:       ") + dim(strings.Join(tool.Tags, ", ")) + "\n")
+	}
+
+	// ── Packages (package manager IDs) ──────────────────────────
+	if pkgs := collectPackageEntries(tool.Packages); len(pkgs) > 0 {
+		b.WriteString("  " + label("Packages:") + "\n")
+		for _, p := range pkgs {
+			fmt.Fprintf(&b, "    %-8s  %s\n",
+				sourceStyle.Render(p.source),
+				dim(p.id),
+			)
+		}
+	}
 	b.WriteString("\n")
 
 	// ── GitHub repository metadata ─────────────────────────────
@@ -1055,6 +1081,32 @@ func (m Model) collectInstallCmds(tool registry.Tool) []installCmdEntry {
 				source: string(src),
 				cmd:    cmd,
 			})
+		}
+	}
+	return entries
+}
+
+// packageEntry is one package-manager → package-id pairing for the detail view.
+type packageEntry struct {
+	source string
+	id     string
+}
+
+// collectPackageEntries returns the declared package IDs for each package manager
+// in a stable display order. Empty IDs are omitted.
+func collectPackageEntries(pkgs registry.PackageIDs) []packageEntry {
+	all := []packageEntry{
+		{source: string(registry.SourceWinget), id: pkgs.Winget},
+		{source: string(registry.SourceChoco), id: pkgs.Choco},
+		{source: string(registry.SourceBrew), id: pkgs.Brew},
+		{source: string(registry.SourceApt), id: pkgs.Apt},
+		{source: string(registry.SourceSnap), id: pkgs.Snap},
+		{source: string(registry.SourceNPM), id: pkgs.NPM},
+	}
+	entries := make([]packageEntry, 0, len(all))
+	for _, e := range all {
+		if e.id != "" {
+			entries = append(entries, e)
 		}
 	}
 	return entries
