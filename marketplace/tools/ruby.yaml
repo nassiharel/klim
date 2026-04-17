@@ -2,11 +2,7 @@ name: ruby
 display_name: Ruby
 category: Language
 tags:
-    - scripting
-    - rails
-    - gems
-    - interpreted
-    - dynamic
+    - ruby
 binary_names:
     - ruby
 packages:

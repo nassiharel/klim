@@ -4,9 +4,6 @@ category: IaC
 tags:
     - cloud
     - provisioning
-    - infrastructure
-    - typescript
-    - python
 binary_names:
     - pulumi
 packages:

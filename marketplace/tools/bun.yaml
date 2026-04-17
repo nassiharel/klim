@@ -4,9 +4,6 @@ category: Language
 tags:
     - javascript
     - typescript
-    - runtime
-    - bundler
-    - fast
 binary_names:
     - bun
 packages:

@@ -3,9 +3,7 @@ display_name: npm
 category: PkgMgr
 tags:
     - javascript
-    - node
-    - registry
-    - packages
+    - package-manager
 binary_names:
     - npm
 packages:

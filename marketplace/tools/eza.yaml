@@ -2,11 +2,7 @@ name: eza
 display_name: eza
 category: CLI
 tags:
-    - ls
-    - listing
-    - files
-    - colors
-    - rust
+    - cli
 binary_names:
     - eza
 packages:

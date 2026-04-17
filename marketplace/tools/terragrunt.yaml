@@ -2,10 +2,9 @@ name: terragrunt
 display_name: Terragrunt
 category: IaC
 tags:
-    - terraform
-    - wrapper
-    - dry
-    - infrastructure
+    - hashicorp
+    - provisioning
+    - automation
 binary_names:
     - terragrunt
 packages:

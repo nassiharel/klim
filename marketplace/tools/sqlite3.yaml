@@ -2,11 +2,8 @@ name: sqlite3
 display_name: SQLite
 category: Database
 tags:
-    - sql
-    - embedded
-    - serverless
-    - lightweight
-    - file-based
+    - database
+    - cli
 binary_names:
     - sqlite3
 packages:

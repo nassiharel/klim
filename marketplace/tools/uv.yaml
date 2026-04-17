@@ -3,10 +3,7 @@ display_name: uv
 category: PkgMgr
 tags:
     - python
-    - pip
-    - fast
-    - rust
-    - virtualenv
+    - package-manager
 binary_names:
     - uv
 packages:

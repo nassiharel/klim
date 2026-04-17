@@ -2,11 +2,8 @@ name: fd
 display_name: fd
 category: CLI
 tags:
-    - find
     - search
-    - files
-    - fast
-    - rust
+    - cli
 binary_names:
     - fd
 packages:

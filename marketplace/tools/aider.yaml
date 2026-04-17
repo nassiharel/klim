@@ -1,0 +1,11 @@
+name: aider
+display_name: Aider
+category: AI
+tags:
+    - coding-assistant
+    - cli
+binary_names:
+    - aider
+packages:
+    brew: aider
+github: paul-gauthier/aider

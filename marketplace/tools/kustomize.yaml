@@ -3,10 +3,7 @@ display_name: Kustomize
 category: IaC
 tags:
     - kubernetes
-    - k8s
-    - yaml
-    - overlay
-    - configuration
+    - configuration-management
 binary_names:
     - kustomize
 packages:

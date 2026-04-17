@@ -2,11 +2,7 @@ name: rustc
 display_name: Rust
 category: Language
 tags:
-    - systems
-    - compiler
-    - memory-safe
-    - performance
-    - wasm
+    - rust
 binary_names:
     - rustc
 packages:

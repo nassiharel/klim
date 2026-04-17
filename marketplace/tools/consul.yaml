@@ -4,7 +4,6 @@ category: IaC
 tags:
     - hashicorp
     - service-mesh
-    - service-discovery
     - networking
 binary_names:
     - consul

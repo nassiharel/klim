@@ -4,9 +4,6 @@ category: Shell
 tags:
     - prompt
     - cross-shell
-    - customizable
-    - rust
-    - fast
 binary_names:
     - starship
 packages:

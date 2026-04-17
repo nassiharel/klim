@@ -4,8 +4,6 @@ category: IaC
 tags:
     - hashicorp
     - image-builder
-    - ami
-    - vm
     - automation
 binary_names:
     - packer

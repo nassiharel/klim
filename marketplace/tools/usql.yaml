@@ -1,0 +1,11 @@
+name: usql
+display_name: usql
+category: Database
+tags:
+    - database
+    - cli
+binary_names:
+    - usql
+packages:
+    brew: usql
+github: xo/usql

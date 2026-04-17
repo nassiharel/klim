@@ -2,10 +2,8 @@ name: az
 display_name: Azure CLI
 category: Cloud
 tags:
-    - azure
     - microsoft
     - cloud
-    - iac
 binary_names:
     - az
 packages:

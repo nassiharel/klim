@@ -2,11 +2,7 @@ name: tldr
 display_name: tldr
 category: CLI
 tags:
-    - help
-    - manpages
-    - cheatsheet
-    - examples
-    - docs
+    - cli
 binary_names:
     - tldr
 packages:

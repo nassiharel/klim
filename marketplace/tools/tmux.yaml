@@ -2,11 +2,8 @@ name: tmux
 display_name: tmux
 category: Shell
 tags:
-    - multiplexer
-    - terminal
-    - session
-    - split-pane
-    - remote
+    - tui
+    - cli
 binary_names:
     - tmux
 packages:

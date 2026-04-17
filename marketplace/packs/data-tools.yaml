@@ -1,0 +1,8 @@
+name: data-tools
+display_name: Data Tools
+description: CLI tools for data processing and querying.
+tools:
+    - jq
+    - yq
+    - sqlite3
+    - duckdb

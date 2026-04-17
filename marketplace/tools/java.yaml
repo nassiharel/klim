@@ -2,9 +2,8 @@ name: java
 display_name: Java
 category: Language
 tags:
+    - java
     - jvm
-    - openjdk
-    - enterprise
     - cross-platform
 binary_names:
     - java

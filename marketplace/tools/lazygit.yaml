@@ -4,7 +4,6 @@ category: VCS
 tags:
     - git
     - tui
-    - terminal-ui
     - vcs
 binary_names:
     - lazygit

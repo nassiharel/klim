@@ -3,9 +3,7 @@ display_name: gopls
 category: Language
 tags:
     - golang
-    - lsp
-    - language-server
-    - editor-tooling
+    - ide
 binary_names:
     - gopls
 packages:

@@ -4,9 +4,7 @@ category: CLI
 tags:
     - fuzzy-finder
     - search
-    - interactive
-    - filter
-    - selector
+    - cli
 binary_names:
     - fzf
 packages:

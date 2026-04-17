@@ -1,0 +1,12 @@
+name: curlie
+display_name: curlie
+category: CLI
+tags:
+    - http-client
+    - api
+    - cli
+binary_names:
+    - curlie
+packages:
+    brew: curlie
+github: rs/curlie

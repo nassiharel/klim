@@ -3,10 +3,7 @@ display_name: pnpm
 category: PkgMgr
 tags:
     - javascript
-    - node
-    - fast
-    - disk-efficient
-    - monorepo
+    - package-manager
 binary_names:
     - pnpm
 packages:

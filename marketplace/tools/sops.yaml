@@ -1,0 +1,15 @@
+name: sops
+display_name: SOPS
+category: Security
+tags:
+    - secrets
+    - encryption
+    - security
+    - git
+binary_names:
+    - sops
+packages:
+    winget: Mozilla.sops
+    choco: sops
+    brew: sops
+github: getsops/sops

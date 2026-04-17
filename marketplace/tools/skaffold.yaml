@@ -3,9 +3,7 @@ display_name: Skaffold
 category: Containers
 tags:
     - kubernetes
-    - k8s
     - dev-workflow
-    - hot-reload
     - google
 binary_names:
     - skaffold

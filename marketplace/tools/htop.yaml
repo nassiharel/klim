@@ -2,11 +2,8 @@ name: htop
 display_name: htop
 category: CLI
 tags:
-    - processes
-    - monitoring
+    - process-monitoring
     - tui
-    - system
-    - top
 binary_names:
     - htop
 packages:

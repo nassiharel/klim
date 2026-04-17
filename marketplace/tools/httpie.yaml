@@ -2,11 +2,8 @@ name: httpie
 display_name: HTTPie
 category: CLI
 tags:
-    - http
+    - http-client
     - api
-    - rest
-    - curl-alternative
-    - requests
 binary_names:
     - http
     - https

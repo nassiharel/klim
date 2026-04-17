@@ -5,8 +5,6 @@ tags:
     - csharp
     - fsharp
     - microsoft
-    - sdk
-    - framework
 binary_names:
     - dotnet
 packages:

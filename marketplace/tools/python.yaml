@@ -2,11 +2,8 @@ name: python
 display_name: Python
 category: Language
 tags:
-    - scripting
-    - ml
-    - data-science
+    - python
     - automation
-    - interpreted
 binary_names:
     - python3
     - python

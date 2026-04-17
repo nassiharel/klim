@@ -2,10 +2,9 @@ name: gcloud
 display_name: Google Cloud CLI
 category: Cloud
 tags:
-    - gcp
     - google
     - cloud
-    - gke
+    - kubernetes
 binary_names:
     - gcloud
 packages:

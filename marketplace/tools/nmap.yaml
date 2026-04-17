@@ -1,12 +1,10 @@
 name: nmap
 display_name: Nmap
-category: Network
+category: Security
 tags:
     - scanner
     - security
-    - ports
-    - discovery
-    - audit
+    - networking
 binary_names:
     - nmap
 packages:

@@ -1,12 +1,10 @@
 name: stern
 display_name: Stern
-category: Containers
+category: Observability
 tags:
     - kubernetes
-    - k8s
-    - logs
-    - tail
-    - multi-pod
+    - log-viewer
+    - observability
 binary_names:
     - stern
 packages:

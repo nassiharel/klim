@@ -3,10 +3,7 @@ display_name: ripgrep
 category: CLI
 tags:
     - search
-    - grep
-    - regex
-    - fast
-    - rust
+    - cli
 binary_names:
     - rg
 packages:

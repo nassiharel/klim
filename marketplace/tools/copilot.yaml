@@ -2,10 +2,8 @@ name: copilot
 display_name: GitHub Copilot CLI
 category: AI
 tags:
-    - llm
-    - github
     - coding-assistant
-    - ai-agent
+    - github
 binary_names:
     - github-copilot-cli
     - copilot

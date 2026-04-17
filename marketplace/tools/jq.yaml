@@ -2,11 +2,8 @@ name: jq
 display_name: jq
 category: CLI
 tags:
-    - json
-    - parser
-    - filter
-    - transform
-    - data
+    - data-processing
+    - cli
 binary_names:
     - jq
 packages:
