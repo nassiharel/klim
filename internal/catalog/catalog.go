@@ -323,7 +323,7 @@ func Diff(local, remote []byte) DiffResult {
 
 	// Anything in local but not in remote has been removed upstream. Only
 	// report removals when remote is a non-empty, valid catalog — an empty
-	// or unparseable remote would otherwise look like everything was deleted.
+	// or unparsable remote would otherwise look like everything was deleted.
 	if len(remoteDefs) > 0 {
 		for _, ld := range localDefs {
 			if _, ok := remoteMap[ld.Name]; !ok {
