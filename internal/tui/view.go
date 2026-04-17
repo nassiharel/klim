@@ -130,13 +130,14 @@ func (m Model) renderView() string {
 // the available height, the body is truncated from the bottom so the footer
 // remains visible. When the height is unknown, a single blank separator line
 // is inserted and the content is returned as-is.
+//
+// Row counts are computed visually: a line that is wider than the terminal
+// wraps onto multiple physical rows, so each logical line contributes
+// `ceil(width/m.width)` rows.
 func (m Model) layoutWithFooter(body, footer string) string {
 	// Normalize: ensure body ends with exactly one newline so subsequent line
 	// counting and padding are predictable.
 	body = strings.TrimRight(body, "\n") + "\n"
-
-	bodyLines := strings.Count(body, "\n")
-	footerLines := strings.Count(footer, "\n") + 1
 
 	// Always reserve at least one blank separator line between body and footer.
 	const minGap = 1
@@ -145,27 +146,68 @@ func (m Model) layoutWithFooter(body, footer string) string {
 		return body + strings.Repeat("\n", minGap) + footer
 	}
 
-	available := m.height - footerLines - minGap
+	footerRows := visualRows(footer, m.width)
+	bodyRows := visualRows(body, m.width)
+
+	available := m.height - footerRows - minGap
 	if available < 0 {
 		available = 0
 	}
-	if bodyLines > available {
-		// Body is too tall to fit alongside the footer. Truncate from the
-		// bottom so the footer (action menu, help hints, etc.) is never
-		// clipped by the terminal.
+	if bodyRows > available {
+		// Body is too tall to fit alongside the footer. Drop lines from the
+		// bottom until the remaining body fits, so the footer (action menu,
+		// help hints, etc.) is never clipped by the terminal.
 		lines := strings.SplitAfter(body, "\n")
-		if available < len(lines) {
-			lines = lines[:available]
+		rows := 0
+		kept := 0
+		for _, ln := range lines {
+			r := visualRows(ln, m.width)
+			if rows+r > available {
+				break
+			}
+			rows += r
+			kept++
 		}
-		body = strings.Join(lines, "")
-		bodyLines = strings.Count(body, "\n")
+		body = strings.Join(lines[:kept], "")
+		bodyRows = rows
 	}
 
-	gap := m.height - bodyLines - footerLines
+	gap := m.height - bodyRows - footerRows
 	if gap < minGap {
 		gap = minGap
 	}
 	return body + strings.Repeat("\n", gap) + footer
+}
+
+// visualRows returns the number of terminal rows occupied by s when rendered
+// at the given width, accounting for both explicit newlines and line wrapping
+// when a line exceeds `width` cells. A single trailing newline is treated as
+// a line terminator (not an additional empty row). A width of 0 falls back to
+// counting explicit newlines only.
+func visualRows(s string, width int) int {
+	if s == "" {
+		return 0
+	}
+	// A single trailing newline terminates the last line rather than starting
+	// a new one; strip it before counting.
+	trimmed := strings.TrimSuffix(s, "\n")
+	if trimmed == "" {
+		return 1
+	}
+	rows := 0
+	for _, line := range strings.Split(trimmed, "\n") {
+		if width <= 0 {
+			rows++
+			continue
+		}
+		w := lipgloss.Width(line)
+		if w == 0 {
+			rows++
+			continue
+		}
+		rows += (w + width - 1) / width
+	}
+	return rows
 }
 
 // --- Title & Tabs ---
