@@ -51,6 +51,15 @@ type Tool struct {
 	Info              *ToolInfo         // rich metadata, fetched lazily
 	InfoFetched       bool              // true once info fetch completed (Info may still be nil)
 	MarketplaceStatus MarketplaceStatus // set after a marketplace refresh
+
+	// GitHubSlug is the "owner/repo" slug of the project's GitHub repository,
+	// as declared in the source marketplace tool file.
+	GitHubSlug string
+	// GitHubInfo holds GitHub repository metadata captured at marketplace
+	// assemble time (stars, forks, description, homepage, license, topics,
+	// recent activity timestamps). Nil when the tool has no `github:` slug
+	// or the fetch failed.
+	GitHubInfo *GitHubInfo
 }
 
 // Pack represents a curated bundle of tools that can be installed together.
