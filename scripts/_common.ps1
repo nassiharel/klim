@@ -30,7 +30,8 @@ function Invoke-Step([string]$Label, [scriptblock]$Action) {
 # Fetch github_info fallback from origin/marketplace into a temp file.
 # Returns the temp path. Returns an empty file if the branch doesn't exist.
 function Get-MarketplaceFallback {
-    $fb = Join-Path ([System.IO.Path]::GetTempPath()) "clim-fallback.yaml"
+    $fbName = "clim-fallback-$PID-$([System.Guid]::NewGuid().ToString('N')).yaml"
+    $fb = Join-Path ([System.IO.Path]::GetTempPath()) $fbName
     git fetch origin marketplace --depth=1 2>&1 | Out-Null
     $content = git show origin/marketplace:marketplace.yaml 2>&1
     if ($LASTEXITCODE -eq 0 -and $content) {
