@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -15,15 +14,9 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
-// ghSlugPattern validates the "owner/repo" form used by the source `github`
-// field. GitHub logins allow ASCII letters, digits and hyphens; repo names
-// additionally allow ._-.
-var ghSlugPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
-
-// validGitHubSlug reports whether s is a well-formed "owner/repo" slug.
-func validGitHubSlug(s string) bool {
-	return ghSlugPattern.MatchString(s)
-}
+// validGitHubSlug is a thin wrapper around registry.ValidGitHubSlug kept
+// here to preserve the existing call sites in this package.
+func validGitHubSlug(s string) bool { return registry.ValidGitHubSlug(s) }
 
 // githubRepo mirrors the subset of fields from the GitHub REST API response
 // at https://api.github.com/repos/{owner}/{repo} that we care about.

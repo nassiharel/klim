@@ -2,9 +2,20 @@ package registry
 
 import (
 	"fmt"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
+
+// gitHubSlugRE matches the "owner/repo" form of a GitHub repository slug.
+// GitHub logins allow ASCII letters, digits and hyphens; repository names
+// additionally allow `.` and `_`.
+var gitHubSlugRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
+
+// ValidGitHubSlug reports whether s is a well-formed "owner/repo" slug.
+// Shared by marketplace validate/assemble so both enforce the same shape.
+func ValidGitHubSlug(s string) bool { return gitHubSlugRE.MatchString(s) }
+
 
 type toolsFile struct {
 	Tools []ToolDef `yaml:"tools"`

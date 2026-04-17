@@ -40,9 +40,6 @@ type tagsFile struct {
 }
 
 var validName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-var validGitHubSlugRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
-
-func validGitHubSlug(s string) bool { return validGitHubSlugRE.MatchString(s) }
 
 func main() {
 	dir := flag.String("dir", "marketplace", "path to the marketplace directory")
@@ -211,7 +208,7 @@ func validateToolFile(path string, seen map[string]string, allowedCategories, al
 		errs = append(errs, rel+": must define at least one package manager in 'packages'")
 	}
 
-	if tool.GitHub != "" && !validGitHubSlug(tool.GitHub) {
+	if tool.GitHub != "" && !registry.ValidGitHubSlug(tool.GitHub) {
 		errs = append(errs, fmt.Sprintf("%s: invalid github slug %q (expected owner/repo)", rel, tool.GitHub))
 	}
 
