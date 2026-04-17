@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,12 @@ func newGitHubFetcher() *githubFetcher {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
 		token = os.Getenv("GH_TOKEN")
+	}
+	// Fall back to gh CLI auth token if no env var is set.
+	if token == "" {
+		if out, err := exec.Command("gh", "auth", "token").Output(); err == nil {
+			token = strings.TrimSpace(string(out))
+		}
 	}
 	return &githubFetcher{
 		baseURL: base,

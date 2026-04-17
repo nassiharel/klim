@@ -1,26 +1,17 @@
 [CmdletBinding()]
-param(
-    [switch]$NewOnly
-)
+param([switch]$NewOnly)
 
 . "$PSScriptRoot/_common.ps1"
-
 Assert-RepoRoot
 
-Write-Step "Linting (golangci-lint)"
-
+Write-Step "Linting"
 if (-not (Get-Command golangci-lint -ErrorAction SilentlyContinue)) {
-    Write-Warn "golangci-lint not found — skipping"
-    exit 0
+    Write-Warn "golangci-lint not found — skipping"; exit 0
 }
 
 $lintArgs = @("run")
-if ($NewOnly) {
-    $lintArgs += "--new-from-rev=HEAD~1"
-}
+if ($NewOnly) { $lintArgs += "--new-from-rev=HEAD~1" }
 
 & golangci-lint @lintArgs
-if ($LASTEXITCODE -ne 0) {
-    Write-Err "Lint failed"; exit 1
-}
+if ($LASTEXITCODE -ne 0) { Write-Err "Lint failed"; exit 1 }
 Write-OK "Lint passed"
