@@ -1,9 +1,4 @@
-<#
-.SYNOPSIS
-    Run the Go test suite.
-.DESCRIPTION
-    Uses -race when CGO/gcc is available, skips it otherwise.
-#>
+
 
 [CmdletBinding()]
 param()

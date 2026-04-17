@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -120,6 +122,32 @@ func (f *githubFetcher) fetchRepo(ctx context.Context, slug string) (*registry.G
 		}
 	}
 	return info, nil
+}
+
+// loadFallbackGitHubInfo reads a previously assembled marketplace.yaml and
+// returns a map from tool name to its GitHubInfo. Tools without GitHubInfo
+// are silently skipped.
+func loadFallbackGitHubInfo(path string) (map[string]*registry.GitHubInfo, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+	var f struct {
+		Tools []struct {
+			Name       string               `yaml:"name"`
+			GitHubInfo *registry.GitHubInfo `yaml:"github_info,omitempty"`
+		} `yaml:"tools"`
+	}
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	m := make(map[string]*registry.GitHubInfo, len(f.Tools))
+	for _, t := range f.Tools {
+		if t.GitHubInfo != nil {
+			m[t.Name] = t.GitHubInfo
+		}
+	}
+	return m, nil
 }
 
 // enrichWithGitHub populates the GitHubInfo field of each tool that declares

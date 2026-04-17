@@ -1,9 +1,3 @@
-<#
-.SYNOPSIS
-    Shared helpers for clim development scripts.
-.DESCRIPTION
-    Dot-source this from other scripts: . "$PSScriptRoot/_common.ps1"
-#>
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'

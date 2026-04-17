@@ -43,4 +43,4 @@ marketplace-validate:
 	go run ./internal/marketplace/validate
 
 marketplace-assemble:
-	go run ./internal/marketplace/assemble -o marketplace.yaml
+	go run ./internal/marketplace/assemble -fallback marketplace.yaml -o marketplace.yaml

@@ -1,7 +1,3 @@
-<#
-.SYNOPSIS
-    Run go mod tidy and verify modules are clean.
-#>
 
 [CmdletBinding()]
 param()

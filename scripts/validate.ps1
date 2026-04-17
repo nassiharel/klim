@@ -1,10 +1,3 @@
-<#
-.SYNOPSIS
-    Validate marketplace YAML files.
-.EXAMPLE
-    .\scripts\validate.ps1
-    .\scripts\validate.ps1 -MarketplaceDir path/to/marketplace
-#>
 
 [CmdletBinding()]
 param(

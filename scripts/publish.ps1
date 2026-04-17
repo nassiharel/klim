@@ -1,17 +1,3 @@
-<#
-.SYNOPSIS
-    Publish assembled marketplace.yaml to the 'marketplace' branch on origin.
-.DESCRIPTION
-    Runs full verification (validate + lint + tidy + test + assemble), then
-    pushes the assembled catalog to the orphan 'marketplace' branch.
-    Assembles to a temp file outside the repo so git clean can't nuke it.
-.PARAMETER FetchGitHub
-    Fetch GitHub repository metadata during assembly.
-.PARAMETER MarketplaceDir
-    Source directory. Default: marketplace
-.PARAMETER SkipVerify
-    Skip lint/tidy/test — only validate and assemble before publishing.
-#>
 
 [CmdletBinding()]
 param(
@@ -26,13 +12,26 @@ Assert-Command go
 Assert-Command git
 Assert-RepoRoot
 
+# --- Fetch fallback from origin/marketplace ---
+$fallbackPath = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "clim-fallback.yaml")
+Write-Step "Fetching fallback from origin/marketplace"
+git fetch origin marketplace --depth=1 2>&1 | Out-Null
+$fbContent = git show origin/marketplace:marketplace.yaml 2>&1
+if ($LASTEXITCODE -eq 0 -and $fbContent) {
+    $fbContent | Out-File -FilePath $fallbackPath -Encoding utf8
+    Write-OK "Loaded fallback from origin/marketplace"
+} else {
+    # Create empty file so -fallback flag doesn't fail on missing file
+    "" | Out-File -FilePath $fallbackPath -Encoding utf8
+    Write-Warn "No fallback available — using empty fallback"
+}
+
 # --- Verify ---
 if ($SkipVerify) {
     & "$PSScriptRoot/validate.ps1" -MarketplaceDir $MarketplaceDir
     if ($LASTEXITCODE -ne 0) { exit 1 }
 } else {
-    $verifyArgs = @{ MarketplaceDir = $MarketplaceDir }
-    # Don't pass FetchGitHub to verify — we assemble separately to temp below
+    $verifyArgs = @{ MarketplaceDir = $MarketplaceDir; FallbackFile = $fallbackPath }
     & "$PSScriptRoot/verify.ps1" @verifyArgs
     if ($LASTEXITCODE -ne 0) { exit 1 }
 }
@@ -45,7 +44,7 @@ $tempOutput = [System.IO.Path]::Combine(
     "clim-marketplace-$([System.Guid]::NewGuid().ToString('N').Substring(0,8)).yaml"
 )
 
-$assembleArgs = @("run", "./internal/marketplace/assemble", "-o", $tempOutput)
+$assembleArgs = @("run", "./internal/marketplace/assemble", "-fallback", $fallbackPath, "-o", $tempOutput)
 if ($MarketplaceDir -ne "marketplace") {
     $assembleArgs += @("-dir", $MarketplaceDir)
 }
@@ -108,6 +107,7 @@ finally {
     }
 
     Remove-Item $tempOutput -ErrorAction SilentlyContinue
+    Remove-Item $fallbackPath -ErrorAction SilentlyContinue
 }
 
 Write-Host "`nDone. Marketplace published to origin/marketplace." -ForegroundColor Green

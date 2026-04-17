@@ -1,17 +1,7 @@
-<#
-.SYNOPSIS
-    Assemble marketplace.yaml from individual tool/pack YAML files.
-.PARAMETER FetchGitHub
-    Fetch GitHub repository metadata (stars, description, license, etc.).
-.PARAMETER OutputFile
-    Output path. Default: marketplace.yaml
-.PARAMETER MarketplaceDir
-    Source directory. Default: marketplace
-#>
-
 [CmdletBinding()]
 param(
     [switch]$FetchGitHub,
+    [Parameter(Mandatory)][string]$FallbackFile,
     [string]$OutputFile = "marketplace.yaml",
     [string]$MarketplaceDir = "marketplace"
 )
@@ -23,7 +13,7 @@ Assert-RepoRoot
 
 Write-Step "Assembling marketplace.yaml"
 
-$assembleArgs = @("run", "./internal/marketplace/assemble", "-o", $OutputFile)
+$assembleArgs = @("run", "./internal/marketplace/assemble", "-fallback", $FallbackFile, "-o", $OutputFile)
 if ($MarketplaceDir -ne "marketplace") {
     $assembleArgs += @("-dir", $MarketplaceDir)
 }

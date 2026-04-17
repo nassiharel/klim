@@ -1,10 +1,3 @@
-<#
-.SYNOPSIS
-    Run golangci-lint on the codebase.
-.PARAMETER NewOnly
-    Only report issues introduced since HEAD~1.
-#>
-
 [CmdletBinding()]
 param(
     [switch]$NewOnly

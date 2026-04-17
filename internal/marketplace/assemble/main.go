@@ -48,7 +48,12 @@ func main() {
 	ghConcurrency := flag.Int("github-concurrency", 4, "maximum concurrent GitHub API requests when -fetch-github is set")
 	ghTimeout := flag.Duration("github-timeout", 5*time.Minute, "overall timeout for GitHub enrichment when -fetch-github is set")
 	ghStrict := flag.Bool("github-strict", false, "fail the build if any GitHub API lookup fails (default: warn and continue)")
+	fallbackFile := flag.String("fallback", "", "path to a previously assembled marketplace.yaml; github_info from it is used for tools where a fresh fetch fails or -fetch-github is not set (required)")
 	flag.Parse()
+
+	if *fallbackFile == "" {
+		fatal("-fallback is required; pass the path to the previous marketplace.yaml (use /dev/null or NUL if none exists)")
+	}
 
 	categoryOrder, err := loadCategoryOrder(filepath.Join(*dir, "categories.yaml"))
 	if err != nil {
@@ -110,6 +115,16 @@ func main() {
 	})
 
 	// --- Optionally enrich with GitHub metadata ---
+	// Load fallback github_info from a previously assembled file (e.g. from
+	// the marketplace branch). This is used for tools where a fresh fetch
+	// fails or -fetch-github is not set.
+	fallbackInfo, err := loadFallbackGitHubInfo(*fallbackFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: loading fallback file: %v\n", err)
+	} else if len(fallbackInfo) > 0 {
+		fmt.Fprintf(os.Stderr, "Loaded fallback github_info for %d tools from %s\n", len(fallbackInfo), *fallbackFile)
+	}
+
 	if *fetchGitHub {
 		fetcher := newGitHubFetcher()
 		if fetcher.token == "" {
@@ -119,6 +134,24 @@ func main() {
 		defer cancel()
 		if err := enrichWithGitHub(ctx, tools, fetcher, *ghConcurrency, *ghStrict); err != nil {
 			fatal("github enrichment: %v", err)
+		}
+	}
+
+	// Apply fallback: for any tool that still has no GitHubInfo, use the
+	// previously cached data so we never regress from "has metadata" to
+	// "no metadata" just because a fetch failed or was skipped.
+	if len(fallbackInfo) > 0 {
+		applied := 0
+		for i := range tools {
+			if tools[i].GitHubInfo == nil {
+				if fb, ok := fallbackInfo[tools[i].Name]; ok {
+					tools[i].GitHubInfo = fb
+					applied++
+				}
+			}
+		}
+		if applied > 0 {
+			fmt.Fprintf(os.Stderr, "Applied fallback github_info to %d tools\n", applied)
 		}
 	}
 
