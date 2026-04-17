@@ -150,7 +150,7 @@ func loadFallbackGitHubInfo(path string) (map[string]*registry.GitHubInfo, error
 	}
 	m := make(map[string]*registry.GitHubInfo, len(f.Tools))
 	for _, t := range f.Tools {
-		if t.GitHubInfo != nil {
+		if t.GitHubInfo != nil && t.GitHubInfo.IsUseful() {
 			m[t.Name] = t.GitHubInfo
 		}
 	}
