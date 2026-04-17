@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
@@ -23,6 +24,10 @@ import (
 type CatalogInfo struct {
 	Source catalog.LoadSource // "cache" or "remote"
 	Tools  int                // number of tool definitions
+	// Diff is non-nil when the catalog was auto-refreshed from the remote as
+	// part of this load (i.e. the cache was stale). Callers can use it to
+	// surface tool additions, modifications, and removals.
+	Diff *catalog.DiffResult
 }
 
 // ToolCatalog abstracts loading the tool definitions.
@@ -50,8 +55,13 @@ func NewWithConfig(cfg *config.Config) *ToolService {
 		URL: cfg.Marketplace.URL,
 	}
 
+	var maxAge time.Duration
+	if cfg.Marketplace.AutoRefresh {
+		maxAge = cfg.Marketplace.RefreshInterval.Duration
+	}
+
 	return &ToolService{
-		Catalog:     &DefaultCatalog{Fetcher: fetcher},
+		Catalog:     &DefaultCatalog{Fetcher: fetcher, MaxAge: maxAge},
 		Finder:      finder.NewFinder(),
 		Resolver:    pkgmgr.NewResolverWithTimeout(cfg.Performance.CommandTimeout.Duration),
 		Concurrency: cfg.Performance.Concurrency,
@@ -147,11 +157,15 @@ func sortToolsByName(tools []registry.Tool) {
 // DefaultCatalog loads tools by fetching/caching the marketplace from GitHub.
 type DefaultCatalog struct {
 	Fetcher catalog.MarketplaceFetcher
+	// MaxAge, if > 0, enables cache freshness checks: when the cache mtime
+	// exceeds MaxAge the catalog is refetched so new/updated/deleted tools
+	// land in the local cache. Zero disables auto-refresh.
+	MaxAge time.Duration
 }
 
 // LoadTools implements ToolCatalog.
 func (c *DefaultCatalog) LoadTools(ctx context.Context) ([]registry.Tool, *CatalogInfo, error) {
-	result, err := catalog.LoadOrFetch(ctx, c.Fetcher)
+	result, err := catalog.LoadOrFetchWithOptions(ctx, c.Fetcher, catalog.LoadOptions{MaxAge: c.MaxAge})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -162,13 +176,14 @@ func (c *DefaultCatalog) LoadTools(ctx context.Context) ([]registry.Tool, *Catal
 	info := &CatalogInfo{
 		Source: result.Source,
 		Tools:  result.Tools,
+		Diff:   result.Diff,
 	}
 	return tools, info, nil
 }
 
 // LoadPacks returns the curated packs from the catalog.
 func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error) {
-	result, err := catalog.LoadOrFetch(ctx, c.Fetcher)
+	result, err := catalog.LoadOrFetchWithOptions(ctx, c.Fetcher, catalog.LoadOptions{MaxAge: c.MaxAge})
 	if err != nil {
 		return nil, err
 	}
