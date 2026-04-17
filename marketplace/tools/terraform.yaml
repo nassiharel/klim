@@ -14,3 +14,4 @@ packages:
     choco: terraform
     brew: terraform
     snap: terraform
+github: hashicorp/terraform

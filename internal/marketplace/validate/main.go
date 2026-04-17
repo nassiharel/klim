@@ -40,6 +40,9 @@ type tagsFile struct {
 }
 
 var validName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+var validGitHubSlugRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
+
+func validGitHubSlug(s string) bool { return validGitHubSlugRE.MatchString(s) }
 
 func main() {
 	dir := flag.String("dir", "marketplace", "path to the marketplace directory")
@@ -206,6 +209,16 @@ func validateToolFile(path string, seen map[string]string, allowedCategories, al
 	if tool.Packages.Winget == "" && tool.Packages.Choco == "" && tool.Packages.Brew == "" &&
 		tool.Packages.Apt == "" && tool.Packages.Snap == "" && tool.Packages.NPM == "" {
 		errs = append(errs, rel+": must define at least one package manager in 'packages'")
+	}
+
+	if tool.GitHub != "" && !validGitHubSlug(tool.GitHub) {
+		errs = append(errs, fmt.Sprintf("%s: invalid github slug %q (expected owner/repo)", rel, tool.GitHub))
+	}
+
+	// `github_info` is populated by the assemble tool from the GitHub API
+	// and must not appear in hand-authored source files.
+	if tool.GitHubInfo != nil {
+		errs = append(errs, rel+": 'github_info' must not be set in source files (it is populated at assemble time)")
 	}
 
 	if tool.Name != "" {

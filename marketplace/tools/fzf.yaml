@@ -14,3 +14,4 @@ packages:
     choco: fzf
     brew: fzf
     apt: fzf
+github: junegunn/fzf

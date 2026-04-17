@@ -13,3 +13,4 @@ packages:
     choco: lazygit
     brew: lazygit
     snap: lazygit
+github: jesseduffield/lazygit

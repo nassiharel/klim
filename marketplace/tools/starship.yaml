@@ -13,3 +13,4 @@ packages:
     winget: Starship.Starship
     choco: starship
     brew: starship
+github: starship/starship

@@ -14,3 +14,4 @@ packages:
     choco: fd
     brew: fd
     apt: fd-find
+github: sharkdp/fd

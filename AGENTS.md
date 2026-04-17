@@ -95,9 +95,14 @@ binary_names: [mytool]
 packages:
   brew: "mytool"
   winget: "Publisher.MyTool"
+# Optional: when set, the marketplace assemble workflow fetches repository
+# metadata (stars, description, homepage, license, topics, last push) from
+# the GitHub REST API and emits it as `github_info:` in the published
+# marketplace.yaml. Never set `github_info` by hand — it is build-time only.
+github: owner/repo
 ```
 
-Run `make marketplace-validate` to check. CI validates on every PR and publishes the assembled catalog on merge to `main`.
+Run `make marketplace-validate` to check. CI validates on every PR and publishes the assembled catalog on merge to `main`. GitHub enrichment is enabled automatically in the `marketplace.yml` workflow (`-fetch-github`), authenticated with the workflow's `GITHUB_TOKEN`. To preview enrichment locally, export a token and run `go run ./internal/marketplace/assemble -fetch-github -o marketplace.yaml`.
 
 ## Adding a Package Manager
 

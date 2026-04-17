@@ -13,3 +13,4 @@ packages:
     choco: kubernetes-helm
     brew: helm
     snap: helm
+github: helm/helm

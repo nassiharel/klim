@@ -14,3 +14,4 @@ packages:
     choco: bat
     brew: bat
     apt: bat
+github: sharkdp/bat
