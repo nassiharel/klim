@@ -8,6 +8,42 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestDefsToToolsPropagatesGitHubInfo(t *testing.T) {
+	defs := []ToolDef{
+		{
+			Name:        "gh",
+			BinaryNames: []string{"gh"},
+			GitHub:      "cli/cli",
+			GitHubInfo: &GitHubInfo{
+				Stars:       1234,
+				Description: "GitHub CLI",
+				License:     "MIT",
+			},
+		},
+		{
+			// Tool without a github slug: fields should be zero values.
+			Name: "local",
+		},
+	}
+
+	tools := defsToTools(defs)
+	if tools[0].GitHubSlug != "cli/cli" {
+		t.Errorf("GitHubSlug = %q, want cli/cli", tools[0].GitHubSlug)
+	}
+	if tools[0].GitHubInfo == nil || tools[0].GitHubInfo.Stars != 1234 {
+		t.Errorf("GitHubInfo not propagated: %+v", tools[0].GitHubInfo)
+	}
+	if tools[0].GitHubInfo.Description != "GitHub CLI" {
+		t.Errorf("GitHubInfo.Description = %q, want GitHub CLI", tools[0].GitHubInfo.Description)
+	}
+	if tools[1].GitHubSlug != "" {
+		t.Errorf("GitHubSlug = %q, want empty", tools[1].GitHubSlug)
+	}
+	if tools[1].GitHubInfo != nil {
+		t.Errorf("GitHubInfo = %+v, want nil", tools[1].GitHubInfo)
+	}
+}
+
 func TestDefsToTools(t *testing.T) {
 	defs := []ToolDef{
 		{

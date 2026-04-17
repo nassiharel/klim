@@ -586,6 +586,10 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 
 	line := cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 
+	if badge := githubStarsBadge(tool); badge != "" {
+		line += "  " + dimVersion.Render(badge)
+	}
+
 	if len(tool.Instances) > 1 {
 		line += "  " + dimVersion.Render(fmt.Sprintf("(%d instances)", len(tool.Instances)))
 	}
@@ -621,7 +625,11 @@ func (m Model) renderUpdateRow(tool registry.Tool, toolIdx int, selected bool) s
 	srcCell := sourceStyle.Render(fixedWidth(src, colSource))
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
-	return cursor + check + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
+	line := cursor + check + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
+	if badge := githubStarsBadge(tool); badge != "" {
+		line += "  " + dimVersion.Render(badge)
+	}
+	return line
 }
 
 func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
@@ -634,6 +642,11 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
+	line := cursor + nameCell + "  " + catCell
+	if badge := githubStarsBadge(tool); badge != "" {
+		line += "  " + dimVersion.Render(badge)
+	}
+
 	var badge string
 	switch tool.MarketplaceStatus {
 	case registry.StatusNew:
@@ -642,7 +655,7 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 		badge = "  " + detailTitleStyle.Render("UPDATED")
 	}
 
-	return cursor + nameCell + "  " + catCell + badge
+	return line + badge
 }
 
 // --- Version info (plain text, no ANSI) ---
@@ -705,6 +718,17 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 				b.WriteString("  " + dim(line) + "\n")
 			}
 			b.WriteString("\n")
+		} else if tool.GitHubInfo != nil && tool.GitHubInfo.Description != "" {
+			// Fall back to the GitHub description when no package-manager
+			// description is available.
+			maxW := m.width - 6
+			if maxW < 20 {
+				maxW = 20
+			}
+			for _, line := range wordWrap(tool.GitHubInfo.Description, maxW) {
+				b.WriteString("  " + dim(line) + "\n")
+			}
+			b.WriteString("\n")
 		}
 		// Metadata table.
 		if tool.Info.Publisher != "" {
@@ -721,7 +745,20 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		}
 		b.WriteString("\n")
 	case tool.InfoFetched:
-		b.WriteString("  " + dim("No metadata available.") + "\n\n")
+		// No package-manager info available — still render the GitHub
+		// description (if any) so the page isn't empty.
+		if tool.GitHubInfo != nil && tool.GitHubInfo.Description != "" {
+			maxW := m.width - 6
+			if maxW < 20 {
+				maxW = 20
+			}
+			for _, line := range wordWrap(tool.GitHubInfo.Description, maxW) {
+				b.WriteString("  " + dim(line) + "\n")
+			}
+			b.WriteString("\n")
+		} else {
+			b.WriteString("  " + dim("No metadata available.") + "\n\n")
+		}
 	default:
 		b.WriteString("  " + loadingStyle.Render("Loading info...") + "\n\n")
 	}
@@ -793,6 +830,9 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		b.WriteString("  " + label("Binaries:   ") + dim(strings.Join(tool.BinaryNames, ", ")) + "\n")
 	}
 	b.WriteString("\n")
+
+	// ── GitHub repository metadata ─────────────────────────────
+	b.WriteString(m.renderGitHubSection(tool))
 
 	// ── Install / Upgrade / Remove commands ─────────────────────
 	if tool.IsInstalled() {
@@ -890,6 +930,69 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 type installCmdEntry struct {
 	source string
 	cmd    string
+}
+
+// renderGitHubSection renders a multi-line block with GitHub repository
+// metadata for the detail view. Returns "" when the tool has no GitHub slug
+// and no fetched info.
+func (m Model) renderGitHubSection(tool registry.Tool) string {
+	if tool.GitHubSlug == "" && tool.GitHubInfo == nil {
+		return ""
+	}
+
+	var b strings.Builder
+	label := detailLabelStyle.Render
+	dim := dimVersion.Render
+
+	b.WriteString("  " + detailTitleStyle.Render("GitHub") + "\n")
+
+	slug := tool.GitHubSlug
+	if url := githubRepoURL(slug); url != "" {
+		b.WriteString("  " + label("Repo:       ") + dim(url) + "\n")
+	}
+
+	info := tool.GitHubInfo
+	if info == nil {
+		// Slug present but no enriched info (e.g. catalog predates assembly,
+		// or fetch failed) — nothing else to show.
+		b.WriteString("\n")
+		return b.String()
+	}
+
+	if info.Archived {
+		b.WriteString("  " + upgradableStyle.Render("⚠ Repository is archived (no longer maintained)") + "\n")
+	}
+
+	// Stars / forks on a single line for compactness.
+	var stats []string
+	if info.Stars > 0 {
+		stats = append(stats, "★ "+formatStars(info.Stars)+" stars")
+	}
+	if info.Forks > 0 {
+		stats = append(stats, "⑂ "+formatStars(info.Forks)+" forks")
+	}
+	if len(stats) > 0 {
+		b.WriteString("  " + label("Stats:      ") + strings.Join(stats, "   ") + "\n")
+	}
+
+	if info.License != "" {
+		b.WriteString("  " + label("License:    ") + info.License + "\n")
+	}
+
+	if info.Homepage != "" {
+		b.WriteString("  " + label("Homepage:   ") + dim(info.Homepage) + "\n")
+	}
+
+	if len(info.Topics) > 0 {
+		b.WriteString("  " + label("Topics:     ") + dim(strings.Join(info.Topics, ", ")) + "\n")
+	}
+
+	if d := formatGitHubDate(info.PushedAt); d != "" {
+		b.WriteString("  " + label("Last push:  ") + dim(d) + "\n")
+	}
+
+	b.WriteString("\n")
+	return b.String()
 }
 
 // collectInstallCmds returns install commands for all available sources on this OS.

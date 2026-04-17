@@ -134,6 +134,8 @@ func defsToTools(defs []ToolDef) []Tool {
 				Snap:   d.Packages.Snap,
 				NPM:    d.Packages.NPM,
 			},
+			GitHubSlug: d.GitHub,
+			GitHubInfo: d.GitHubInfo,
 		}
 		if t.DisplayName == "" {
 			t.DisplayName = t.Name
