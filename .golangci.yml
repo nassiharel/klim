@@ -70,6 +70,9 @@ linters:
         text: "dot-imports"
       - linters: [errcheck]
         path: _test\.go
+      - linters: [staticcheck]
+        path: _test\.go
+        text: "SA5011"
 
 formatters:
   enable:
