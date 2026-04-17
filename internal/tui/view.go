@@ -143,10 +143,6 @@ func (m Model) renderTitleBar() string {
 
 	inst, upd, notInst := m.stats()
 	active := inst + notInst
-	if active == 0 && m.statusMsg != "" {
-		// No tools loaded (catalog failure) — show status message instead of 0/0.
-		return title + "  " + upgradableStyle.Render(m.statusMsg)
-	}
 	summary := fmt.Sprintf("%d/%d installed", inst, active)
 	if upd > 0 {
 		summary += " · " + upgradableStyle.Render(strconv.Itoa(upd)+" updates")
@@ -1534,9 +1530,7 @@ func (m Model) renderHelp() string {
 	}
 
 	help := helpStyle.Render("  " + strings.Join(parts, "   "))
-	// Show status in footer only when title bar isn't already displaying it
-	// (title bar shows statusMsg when no tools are loaded).
-	if m.statusMsg != "" && len(m.tools) > 0 {
+	if m.statusMsg != "" {
 		help += "  " + upgradableStyle.Render(m.statusMsg)
 	}
 	return help
