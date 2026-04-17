@@ -1,8 +1,7 @@
 # Verify, assemble with GitHub metadata, and push to origin/marketplace.
 [CmdletBinding()]
 param(
-    [switch]$FetchGitHub,
-    [switch]$SkipVerify
+    [switch]$FetchGitHub
 )
 
 . "$PSScriptRoot/_common.ps1"
@@ -12,13 +11,7 @@ Assert-RepoRoot
 
 $fallback = Get-MarketplaceFallback
 
-# --- Verify (or just validate) ---
-if ($SkipVerify) {
-    & "$PSScriptRoot/validate.ps1";  if ($LASTEXITCODE -ne 0) { exit 1 }
-} else {
-    & "$PSScriptRoot/verify.ps1" -FallbackFile $fallback
-    if ($LASTEXITCODE -ne 0) { exit 1 }
-}
+& "$PSScriptRoot/validate.ps1";  if ($LASTEXITCODE -ne 0) { exit 1 }
 
 # --- Assemble to temp (outside repo — survives git clean) ---
 Write-Step "Assembling to temp"
