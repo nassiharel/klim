@@ -137,13 +137,13 @@ func main() {
 		}
 	}
 
-	// Apply fallback: for any tool that still has no GitHubInfo, use the
-	// previously cached data so we never regress from "has metadata" to
+	// Apply fallback: for any tool that still has no useful GitHubInfo, use
+	// the previously cached data so we never regress from "has metadata" to
 	// "no metadata" just because a fetch failed or was skipped.
 	if len(fallbackInfo) > 0 {
 		applied := 0
 		for i := range tools {
-			if tools[i].GitHubInfo == nil {
+			if !tools[i].GitHubInfo.IsUseful() {
 				if fb, ok := fallbackInfo[tools[i].Name]; ok {
 					tools[i].GitHubInfo = fb
 					applied++

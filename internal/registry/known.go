@@ -58,6 +58,12 @@ type GitHubInfo struct {
 	FetchedAt   string   `yaml:"fetched_at,omitempty"`
 }
 
+// IsUseful reports whether the GitHubInfo contains meaningful data.
+// A zeroed or near-empty struct (e.g. from a partial API response) is not useful.
+func (g *GitHubInfo) IsUseful() bool {
+	return g != nil && (g.Stars > 0 || g.Description != "")
+}
+
 type packDef struct {
 	Name        string   `yaml:"name"`
 	DisplayName string   `yaml:"display_name"`

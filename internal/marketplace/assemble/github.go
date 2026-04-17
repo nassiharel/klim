@@ -195,6 +195,10 @@ func enrichWithGitHub(ctx context.Context, tools []registry.ToolDef, fetcher *gi
 					fmt.Fprintf(os.Stderr, "warning: github repo %s for tool %s not found\n", j.slug, tools[j.idx].Name)
 					continue
 				}
+				if !info.IsUseful() {
+					fmt.Fprintf(os.Stderr, "warning: github returned empty data for %s (%s) — skipping\n", tools[j.idx].Name, j.slug)
+					continue
+				}
 				tools[j.idx].GitHubInfo = info
 			}
 		}()
