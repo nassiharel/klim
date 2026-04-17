@@ -223,7 +223,10 @@ func tryRefreshCache(ctx context.Context, fetcher MarketplaceFetcher, path strin
 	}
 	// Refresh mtime even if contents were identical so we don't retry the
 	// remote on every call until something actually changes.
-	_ = os.Chtimes(path, time.Now(), time.Now())
+	now := time.Now()
+	if err := os.Chtimes(path, now, now); err != nil {
+		slog.Debug("failed to refresh cache mtime", "path", path, "error", err)
+	}
 	return remote, diff, true
 }
 

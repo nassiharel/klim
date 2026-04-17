@@ -335,7 +335,7 @@ func setConfigDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir) // linux
-	t.Setenv("HOME", dir)            // macos fallback ($HOME/Library/Application Support)
+	t.Setenv("HOME", dir)            // macOS fallback ($HOME/Library/Application Support)
 	t.Setenv("AppData", dir)         // windows
 	return dir
 }
