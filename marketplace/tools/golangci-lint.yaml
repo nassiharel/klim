@@ -12,3 +12,4 @@ packages:
     winget: GolangCI.golangci-lint
     brew: golangci-lint
     snap: golangci-lint
+github: golangci/golangci-lint

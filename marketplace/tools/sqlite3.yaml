@@ -14,3 +14,4 @@ packages:
     choco: sqlite
     brew: sqlite
     apt: sqlite3
+github: sqlite/sqlite

@@ -208,6 +208,16 @@ func validateToolFile(path string, seen map[string]string, allowedCategories, al
 		errs = append(errs, rel+": must define at least one package manager in 'packages'")
 	}
 
+	if tool.GitHub != "" && !registry.ValidGitHubSlug(tool.GitHub) {
+		errs = append(errs, fmt.Sprintf("%s: invalid github slug %q (expected owner/repo)", rel, tool.GitHub))
+	}
+
+	// `github_info` is populated by the assemble tool from the GitHub API
+	// and must not appear in hand-authored source files.
+	if tool.GitHubInfo != nil {
+		errs = append(errs, rel+": 'github_info' must not be set in source files (it is populated at assemble time)")
+	}
+
 	if tool.Name != "" {
 		if prev, exists := seen[tool.Name]; exists {
 			errs = append(errs, fmt.Sprintf("%s: duplicate tool name %q (also in %s)", rel, tool.Name, filepath.Base(prev)))

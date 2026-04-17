@@ -13,3 +13,4 @@ packages:
     winget: dandavison.delta
     choco: delta
     brew: git-delta
+github: dandavison/delta

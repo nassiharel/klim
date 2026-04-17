@@ -14,3 +14,4 @@ packages:
     brew: powershell
     apt: powershell
     snap: powershell
+github: PowerShell/PowerShell

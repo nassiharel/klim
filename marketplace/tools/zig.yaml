@@ -14,3 +14,4 @@ packages:
     choco: zig
     brew: zig
     snap: zig
+github: ziglang/zig

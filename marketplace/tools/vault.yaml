@@ -13,3 +13,4 @@ packages:
     winget: Hashicorp.Vault
     choco: vault
     brew: vault
+github: hashicorp/vault

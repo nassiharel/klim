@@ -2,9 +2,19 @@ package registry
 
 import (
 	"fmt"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
+
+// gitHubSlugRE matches the "owner/repo" form of a GitHub repository slug.
+// GitHub logins allow ASCII letters, digits and hyphens; repository names
+// additionally allow `.` and `_`.
+var gitHubSlugRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
+
+// ValidGitHubSlug reports whether s is a well-formed "owner/repo" slug.
+// Shared by marketplace validate/assemble so both enforce the same shape.
+func ValidGitHubSlug(s string) bool { return gitHubSlugRE.MatchString(s) }
 
 type toolsFile struct {
 	Tools []ToolDef `yaml:"tools"`
@@ -20,6 +30,32 @@ type ToolDef struct {
 	Tags        []string   `yaml:"tags,omitempty"`
 	BinaryNames []string   `yaml:"binary_names"`
 	Packages    PackageDef `yaml:"packages"`
+	// GitHub, if set, is the "owner/repo" slug of the project's GitHub
+	// repository. It is hand-authored in marketplace/tools/*.yaml and drives
+	// enrichment at assemble time (see GitHubInfo).
+	GitHub string `yaml:"github,omitempty"`
+	// GitHubInfo holds metadata fetched from the GitHub API at assemble
+	// time. It is *not* meant to be hand-edited in source tool files — it
+	// is populated by the marketplace assemble tool and appears in the
+	// published marketplace.yaml so clients can use it without talking to
+	// the GitHub API themselves.
+	GitHubInfo *GitHubInfo `yaml:"github_info,omitempty"`
+}
+
+// GitHubInfo captures the subset of GitHub repository metadata that is
+// interesting for display in clim (star count, description, homepage,
+// license, topics, and recent activity timestamps).
+type GitHubInfo struct {
+	Stars       int      `yaml:"stars"`
+	Forks       int      `yaml:"forks,omitempty"`
+	Description string   `yaml:"description,omitempty"`
+	Homepage    string   `yaml:"homepage,omitempty"`
+	License     string   `yaml:"license,omitempty"`
+	Topics      []string `yaml:"topics,omitempty"`
+	Archived    bool     `yaml:"archived,omitempty"`
+	PushedAt    string   `yaml:"pushed_at,omitempty"`
+	UpdatedAt   string   `yaml:"updated_at,omitempty"`
+	FetchedAt   string   `yaml:"fetched_at,omitempty"`
 }
 
 type packDef struct {

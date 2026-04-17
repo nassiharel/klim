@@ -12,3 +12,4 @@ packages:
     winget: Gruntwork.Terragrunt
     choco: terragrunt
     brew: terragrunt
+github: gruntwork-io/terragrunt

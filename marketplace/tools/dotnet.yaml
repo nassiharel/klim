@@ -15,3 +15,4 @@ packages:
     brew: dotnet
     apt: dotnet-sdk-8.0
     snap: dotnet-sdk
+github: dotnet/sdk

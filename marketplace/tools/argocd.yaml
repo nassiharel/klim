@@ -13,3 +13,4 @@ packages:
     winget: argoproj.argocd
     choco: argocd-cli
     brew: argocd
+github: argoproj/argo-cd

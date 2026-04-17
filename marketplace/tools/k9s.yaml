@@ -13,3 +13,4 @@ packages:
     winget: Derailed.k9s
     choco: k9s
     brew: derailed/k9s/k9s
+github: derailed/k9s

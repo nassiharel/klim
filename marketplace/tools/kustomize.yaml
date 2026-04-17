@@ -13,3 +13,4 @@ packages:
     winget: Kubernetes.kustomize
     choco: kustomize
     brew: kustomize
+github: kubernetes-sigs/kustomize

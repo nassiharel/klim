@@ -12,3 +12,4 @@ packages:
     choco: tig
     brew: tig
     apt: tig
+github: jonas/tig

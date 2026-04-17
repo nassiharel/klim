@@ -12,3 +12,4 @@ binary_names:
 packages:
     brew: rust
     apt: rustc
+github: rust-lang/rust

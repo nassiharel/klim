@@ -11,3 +11,4 @@ binary_names:
 packages:
     choco: docker-compose
     brew: docker-compose
+github: docker/compose

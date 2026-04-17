@@ -13,3 +13,4 @@ packages:
     winget: Microsoft.Azure.Kubelogin
     choco: kubelogin
     brew: Azure/kubelogin/kubelogin
+github: Azure/kubelogin

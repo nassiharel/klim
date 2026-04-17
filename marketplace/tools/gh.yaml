@@ -14,3 +14,4 @@ packages:
     choco: gh
     brew: gh
     apt: gh
+github: cli/cli

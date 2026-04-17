@@ -13,3 +13,4 @@ packages:
     winget: Google.ContainerTools.Skaffold
     choco: skaffold
     brew: skaffold
+github: GoogleContainerTools/skaffold

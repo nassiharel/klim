@@ -13,3 +13,4 @@ packages:
     choco: kubernetes-cli
     brew: kubernetes-cli
     snap: kubectl
+github: kubernetes/kubectl

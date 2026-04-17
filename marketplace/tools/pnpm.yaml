@@ -14,3 +14,4 @@ packages:
     choco: pnpm
     brew: pnpm
     npm: pnpm
+github: pnpm/pnpm

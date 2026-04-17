@@ -14,3 +14,4 @@ packages:
     choco: ripgrep
     brew: ripgrep
     apt: ripgrep
+github: BurntSushi/ripgrep

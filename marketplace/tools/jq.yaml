@@ -14,3 +14,4 @@ packages:
     choco: jq
     brew: jq
     apt: jq
+github: jqlang/jq

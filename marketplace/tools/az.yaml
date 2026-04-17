@@ -13,3 +13,4 @@ packages:
     choco: azure-cli
     brew: azure-cli
     apt: azure-cli
+github: Azure/azure-cli

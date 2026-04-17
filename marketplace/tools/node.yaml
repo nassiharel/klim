@@ -15,3 +15,4 @@ packages:
     brew: node
     apt: nodejs
     snap: node
+github: nodejs/node

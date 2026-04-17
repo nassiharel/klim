@@ -26,8 +26,10 @@ jobs:
       - name: Validate marketplace files
         run: go run ./internal/marketplace/validate
       - name: Assemble and verify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          go run ./internal/marketplace/assemble -o /tmp/assembled.yaml
+          go run ./internal/marketplace/assemble -fetch-github -o /tmp/assembled.yaml
           echo "Assembled marketplace.yaml successfully"
 
   publish:
@@ -43,7 +45,9 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Assemble to temp
-        run: go run ./internal/marketplace/assemble -o /tmp/marketplace.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: go run ./internal/marketplace/assemble -fetch-github -o /tmp/marketplace.yaml
       - name: Publish to marketplace branch
         run: |
           git config user.name "github-actions[bot]"

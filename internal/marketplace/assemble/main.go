@@ -10,6 +10,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -42,6 +44,10 @@ type categoriesFile struct {
 func main() {
 	dir := flag.String("dir", "marketplace", "path to the marketplace directory")
 	output := flag.String("o", "", "output file (default: stdout)")
+	fetchGitHub := flag.Bool("fetch-github", false, "fetch repository metadata (stars, description, etc.) from the GitHub API for tools with a `github` field")
+	ghConcurrency := flag.Int("github-concurrency", 4, "maximum concurrent GitHub API requests when -fetch-github is set")
+	ghTimeout := flag.Duration("github-timeout", 5*time.Minute, "overall timeout for GitHub enrichment when -fetch-github is set")
+	ghStrict := flag.Bool("github-strict", false, "fail the build if any GitHub API lookup fails (default: warn and continue)")
 	flag.Parse()
 
 	categoryOrder, err := loadCategoryOrder(filepath.Join(*dir, "categories.yaml"))
@@ -102,6 +108,19 @@ func main() {
 	sort.SliceStable(packs, func(i, j int) bool {
 		return strings.ToLower(packs[i].Name) < strings.ToLower(packs[j].Name)
 	})
+
+	// --- Optionally enrich with GitHub metadata ---
+	if *fetchGitHub {
+		fetcher := newGitHubFetcher()
+		if fetcher.token == "" {
+			fmt.Fprintln(os.Stderr, "note: GITHUB_TOKEN is not set; GitHub API requests will use the 60/hour unauthenticated limit")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), *ghTimeout)
+		defer cancel()
+		if err := enrichWithGitHub(ctx, tools, fetcher, *ghConcurrency, *ghStrict); err != nil {
+			fatal("github enrichment: %v", err)
+		}
+	}
 
 	// --- Assemble ---
 	assembled := assembledFile{Tools: tools, Packs: packs}

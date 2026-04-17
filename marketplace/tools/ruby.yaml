@@ -14,3 +14,4 @@ packages:
     choco: ruby
     brew: ruby
     apt: ruby
+github: ruby/ruby

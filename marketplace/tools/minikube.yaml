@@ -13,3 +13,4 @@ packages:
     winget: Kubernetes.minikube
     choco: minikube
     brew: minikube
+github: kubernetes/minikube

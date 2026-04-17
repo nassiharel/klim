@@ -14,3 +14,4 @@ packages:
     choco: dust
     brew: dust
     apt: du-dust
+github: bootandy/dust
