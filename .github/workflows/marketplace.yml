@@ -10,6 +10,10 @@ on:
     paths:
       - 'marketplace/**'
       - 'internal/marketplace/**'
+  schedule:
+    # Run every night at 03:00 UTC to refresh GitHub metadata (stars, last push, etc.).
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,7 +39,7 @@ jobs:
   publish:
     name: Publish
     needs: validate
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: write
