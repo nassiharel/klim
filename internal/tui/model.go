@@ -422,13 +422,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case toolInfoMsg:
-		if msg.toolIdx < len(m.tools) {
-			m.tools[msg.toolIdx].Info = msg.info
-			m.tools[msg.toolIdx].InfoFetched = true
-		}
-		return m, nil
-
 	case marketplaceRefreshMsg:
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("⚠ Refresh failed: %s", msg.err)
@@ -1209,10 +1202,6 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.detailIdx = m.recommendations[m.cursor].toolIdx
 				m.showDetail = true
 				m.buildToolMenu()
-				tool := m.tools[m.detailIdx]
-				if !tool.InfoFetched {
-					return m, fetchToolInfoCmd(m.svc, m.detailIdx, tool)
-				}
 			}
 			return m, nil
 		}
@@ -1221,11 +1210,6 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.detailIdx = m.filteredIndex[m.cursor]
 			m.showDetail = true
 			m.buildToolMenu()
-			// Fetch tool info lazily if not already fetched.
-			tool := m.tools[m.detailIdx]
-			if !tool.InfoFetched {
-				return m, fetchToolInfoCmd(m.svc, m.detailIdx, tool)
-			}
 		}
 		return m, nil
 	case "r":

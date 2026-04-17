@@ -141,12 +141,6 @@ type refreshToolMsg struct {
 	tool    registry.Tool
 }
 
-// toolInfoMsg is sent when tool metadata has been fetched.
-type toolInfoMsg struct {
-	toolIdx int
-	info    *registry.ToolInfo
-}
-
 // --- Action types ---
 
 type pendingAction struct {
@@ -285,15 +279,6 @@ func refreshSingleToolCmd(svc *service.ToolService, idx int, tool registry.Tool)
 		ctx := context.Background()
 		refreshed := svc.RefreshTool(ctx, tool)
 		return refreshToolMsg{toolIdx: idx, tool: refreshed}
-	}
-}
-
-// fetchToolInfoCmd fetches rich metadata for a tool in the background.
-func fetchToolInfoCmd(svc *service.ToolService, idx int, tool registry.Tool) tea.Cmd {
-	return func() tea.Msg {
-		ctx := context.Background()
-		svc.FetchToolInfo(ctx, &tool)
-		return toolInfoMsg{toolIdx: idx, info: tool.Info}
 	}
 }
 

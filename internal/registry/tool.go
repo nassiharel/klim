@@ -48,8 +48,6 @@ type Tool struct {
 	Instances         []Instance
 	Latest            string
 	LatestFrom        string
-	Info              *ToolInfo         // rich metadata, fetched lazily
-	InfoFetched       bool              // true once info fetch completed (Info may still be nil)
 	MarketplaceStatus MarketplaceStatus // set after a marketplace refresh
 
 	// GitHubSlug is the "owner/repo" slug of the project's GitHub repository,
@@ -68,15 +66,6 @@ type Pack struct {
 	DisplayName string
 	Description string
 	ToolNames   []string // references to tool names in the catalog
-}
-
-// ToolInfo holds rich metadata about a tool, fetched from package managers.
-type ToolInfo struct {
-	Description string
-	Publisher   string
-	Homepage    string
-	License     string
-	ReleaseDate string
 }
 
 // Instance represents a single installation of a tool found on PATH.

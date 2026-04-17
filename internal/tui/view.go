@@ -359,6 +359,9 @@ func (m Model) renderForYouList() string {
 		reasonCell := dimVersion.Render(rec.reason)
 
 		line := cursor + nameCell + "  " + bar + " " + reasonCell
+		if badge := githubStarsBadge(tool); badge != "" {
+			line += "  " + dimVersion.Render(badge)
+		}
 		if selected {
 			w := lipgloss.Width(line)
 			if w < m.width {
@@ -456,7 +459,9 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 	b.WriteString("  " + label("Tools:") + "\n\n")
 
 	toolMap := make(map[string]bool, len(m.tools))
+	toolByName := make(map[string]registry.Tool, len(m.tools))
 	for _, t := range m.tools {
+		toolByName[t.Name] = t
 		if t.IsInstalled() {
 			toolMap[t.Name] = true
 		}
@@ -474,7 +479,13 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 			icon = upToDateStyle.Render("✓")
 			status = upToDateStyle.Render("installed")
 		}
-		fmt.Fprintf(&b, "    %s  %-20s %s\n", icon, name, status)
+		line := fmt.Sprintf("    %s  %-20s %s", icon, name, status)
+		if t, ok := toolByName[name]; ok {
+			if badge := githubStarsBadge(t); badge != "" {
+				line += "  " + dim(badge)
+			}
+		}
+		b.WriteString(line + "\n")
 	}
 
 	// Actions.
@@ -703,60 +714,17 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	b.WriteString("\n\n")
 
 	// ── Description (word-wrapped) ──────────────────────────────
-	switch {
-	case tool.Info != nil:
-		if tool.Info.Description != "" {
-			maxW := m.width - 6
-			if maxW < 20 {
-				maxW = 20
-			}
-			for _, line := range wordWrap(tool.Info.Description, maxW) {
-				b.WriteString("  " + dim(line) + "\n")
-			}
-			b.WriteString("\n")
-		} else if tool.GitHubInfo != nil && tool.GitHubInfo.Description != "" {
-			// Fall back to the GitHub description when no package-manager
-			// description is available.
-			maxW := m.width - 6
-			if maxW < 20 {
-				maxW = 20
-			}
-			for _, line := range wordWrap(tool.GitHubInfo.Description, maxW) {
-				b.WriteString("  " + dim(line) + "\n")
-			}
-			b.WriteString("\n")
+	if tool.GitHubInfo != nil && tool.GitHubInfo.Description != "" {
+		maxW := m.width - 6
+		if maxW < 20 {
+			maxW = 20
 		}
-		// Metadata table.
-		if tool.Info.Publisher != "" {
-			b.WriteString("  " + label("Publisher:  ") + tool.Info.Publisher + "\n")
-		}
-		if tool.Info.Homepage != "" {
-			b.WriteString("  " + label("Homepage:   ") + dim(tool.Info.Homepage) + "\n")
-		}
-		if tool.Info.License != "" {
-			b.WriteString("  " + label("License:    ") + tool.Info.License + "\n")
-		}
-		if tool.Info.ReleaseDate != "" {
-			b.WriteString("  " + label("Released:   ") + tool.Info.ReleaseDate + "\n")
+		for _, line := range wordWrap(tool.GitHubInfo.Description, maxW) {
+			b.WriteString("  " + dim(line) + "\n")
 		}
 		b.WriteString("\n")
-	case tool.InfoFetched:
-		// No package-manager info available — still render the GitHub
-		// description (if any) so the page isn't empty.
-		if tool.GitHubInfo != nil && tool.GitHubInfo.Description != "" {
-			maxW := m.width - 6
-			if maxW < 20 {
-				maxW = 20
-			}
-			for _, line := range wordWrap(tool.GitHubInfo.Description, maxW) {
-				b.WriteString("  " + dim(line) + "\n")
-			}
-			b.WriteString("\n")
-		} else {
-			b.WriteString("  " + dim("No metadata available.") + "\n\n")
-		}
-	default:
-		b.WriteString("  " + loadingStyle.Render("Loading info...") + "\n\n")
+	} else {
+		b.WriteString("  " + dim("No description available.") + "\n\n")
 	}
 
 	// ── Version & Status ────────────────────────────────────────
