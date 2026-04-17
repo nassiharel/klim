@@ -113,11 +113,6 @@ func (s *ToolService) ResolveOne(ctx context.Context, tool *registry.Tool) {
 	s.Resolver.ResolveOne(ctx, tool)
 }
 
-// FetchToolInfo retrieves rich metadata for a tool from its package manager.
-func (s *ToolService) FetchToolInfo(ctx context.Context, tool *registry.Tool) {
-	s.Resolver.FetchToolInfo(ctx, tool)
-}
-
 // PackLoader is an optional interface that catalogs can implement to provide packs.
 type PackLoader interface {
 	LoadPacks(ctx context.Context) ([]registry.Pack, error)
