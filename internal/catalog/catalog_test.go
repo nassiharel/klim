@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -433,7 +434,7 @@ func TestLoadOrFetch_StaleCacheTriggersRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(onDisk) != string(remote) {
+	if !bytes.Equal(onDisk, remote) {
 		t.Errorf("cache not updated after auto-refresh")
 	}
 }
@@ -465,7 +466,7 @@ func TestLoadOrFetch_StaleCacheFallsBackOnFetchFailure(t *testing.T) {
 	if res.Source != SourceCache {
 		t.Errorf("Source = %q, want cache (stale fallback)", res.Source)
 	}
-	if string(res.Data) != string(cached) {
+	if !bytes.Equal(res.Data, cached) {
 		t.Errorf("expected stale cache bytes to be returned on fetch failure")
 	}
 }
