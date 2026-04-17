@@ -59,9 +59,22 @@ type GitHubInfo struct {
 }
 
 // IsUseful reports whether the GitHubInfo contains meaningful data.
-// A zeroed or near-empty struct (e.g. from a partial API response) is not useful.
+// A fully zero-valued struct is not useful; any populated metadata field is.
 func (g *GitHubInfo) IsUseful() bool {
-	return g != nil && (g.Stars > 0 || g.Description != "")
+	if g == nil {
+		return false
+	}
+
+	return g.Stars > 0 ||
+		g.Forks > 0 ||
+		g.Description != "" ||
+		g.Homepage != "" ||
+		g.License != "" ||
+		len(g.Topics) > 0 ||
+		g.Archived ||
+		g.PushedAt != "" ||
+		g.UpdatedAt != "" ||
+		g.FetchedAt != ""
 }
 
 type packDef struct {
