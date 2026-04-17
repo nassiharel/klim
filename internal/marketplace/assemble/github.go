@@ -78,7 +78,7 @@ func (f *githubFetcher) fetchRepo(ctx context.Context, slug string) (*registry.G
 	if err != nil {
 		return nil, fmt.Errorf("calling GitHub API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	switch resp.StatusCode {
 	case http.StatusOK:

@@ -16,7 +16,6 @@ var gitHubSlugRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+
 // Shared by marketplace validate/assemble so both enforce the same shape.
 func ValidGitHubSlug(s string) bool { return gitHubSlugRE.MatchString(s) }
 
-
 type toolsFile struct {
 	Tools []ToolDef `yaml:"tools"`
 	Packs []packDef `yaml:"packs,omitempty"`
