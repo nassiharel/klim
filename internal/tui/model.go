@@ -129,10 +129,11 @@ type Model struct {
 	showDetail bool
 
 	// Loading state.
-	phase   int // 0=scanning, 1=resolving, 2=done
-	loading bool
-	pending int // count of tools still resolving versions
-	scanGen int // incremented on each scan; used to discard stale toolVersionMsg
+	phase    int // 0=scanning, 1=resolving, 2=done
+	loading  bool
+	pending  int  // count of tools still resolving versions
+	scanGen  int  // incremented on each scan; used to discard stale toolVersionMsg
+	scanOK   bool // true when the current scan completed without errors; gates cache writes
 
 	// Layout.
 	width  int
@@ -321,6 +322,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.cursor = 0
 	m.scanGen++
 	m.pending = 0
+	m.scanOK = false
 	// Clear upgrade selection — indices are tied to the old tool ordering
 	// and would select the wrong tools after a rescan reorders the list.
 	m.updateSelected = make(map[int]bool)
@@ -344,6 +346,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
 		})
 		m.scanGen++
+		// Only writes from a clean scan are safe to persist — a partial
+		// scan (PATH walk failed mid-flight) can't be distinguished from a
+		// full one on load, and caching it would poison future runs.
+		m.scanOK = msg.err == nil
 
 		// Set status based on how the catalog was loaded.
 		if msg.err != nil {
@@ -474,8 +480,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = false
 			m.statusMsg = ""
 			// Persist cache even when nothing was installed so repeat runs
-			// skip the PATH scan too.
-			_ = m.svc.SaveScanCache(m.tools)
+			// skip the PATH scan too — but only when the scan succeeded.
+			if m.scanOK {
+				_ = m.svc.SaveScanCache(m.tools)
+			}
 		}
 		return m, tea.Batch(cmds...)
 
@@ -500,7 +508,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = false
 			m.statusMsg = ""
 			// Persist fully-resolved scan so the next launch is instant.
-			_ = m.svc.SaveScanCache(m.tools)
+			// Gated on scanOK: a partial PATH scan (msg.err on the initial
+			// scanResultMsg) must not be cached, since an incomplete cache
+			// would make future runs falsely treat the app as "up to date".
+			if m.scanOK {
+				_ = m.svc.SaveScanCache(m.tools)
+			}
 		}
 		return m, nil
 
@@ -529,8 +542,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.statusMsg = fmt.Sprintf("✓ %s refreshed", msg.tool.DisplayName)
 		m.applyFilter()
-		// Persist the updated state so future runs see the refreshed tool.
-		_ = m.svc.SaveScanCache(m.tools)
+		// Persist the updated state so future runs see the refreshed tool
+		// — but only when the original scan produced a complete tools list.
+		if m.scanOK {
+			_ = m.svc.SaveScanCache(m.tools)
+		}
 		// Rebuild the tool menu if the detail view is still showing.
 		if m.showDetail {
 			m.buildToolMenu()
