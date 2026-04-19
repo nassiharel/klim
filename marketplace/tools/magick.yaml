@@ -9,6 +9,7 @@ binary_names:
     - convert
 packages:
     winget: ImageMagick.ImageMagick
+    scoop: magick
     choco: imagemagick
     brew: imagemagick
     apt: imagemagick

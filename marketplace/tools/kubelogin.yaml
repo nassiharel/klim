@@ -9,6 +9,7 @@ binary_names:
     - kubelogin
 packages:
     winget: Microsoft.Azure.Kubelogin
+    scoop: kubelogin
     choco: kubelogin
     brew: Azure/kubelogin/kubelogin
 github: Azure/kubelogin

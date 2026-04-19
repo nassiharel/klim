@@ -8,6 +8,7 @@ binary_names:
     - deno
 packages:
     winget: DenoLand.Deno
+    scoop: deno
     choco: deno
     brew: deno
 github: denoland/deno

@@ -9,6 +9,7 @@ binary_names:
     - terragrunt
 packages:
     winget: Gruntwork.Terragrunt
+    scoop: terragrunt
     choco: terragrunt
     brew: terragrunt
 github: gruntwork-io/terragrunt

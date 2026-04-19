@@ -8,6 +8,7 @@ binary_names:
     - vagrant
 packages:
     winget: Hashicorp.Vagrant
+    scoop: vagrant
     choco: vagrant
     brew: vagrant
 github: hashicorp/vagrant

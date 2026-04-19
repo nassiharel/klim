@@ -8,6 +8,7 @@ binary_names:
     - dust
 packages:
     winget: bootandy.dust
+    scoop: dust
     choco: dust
     brew: dust
     apt: du-dust

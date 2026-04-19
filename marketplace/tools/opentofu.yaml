@@ -8,7 +8,8 @@ tags:
 binary_names:
     - tofu
 packages:
-    winget: OpenTofu.OpenTofu
+    winget: OpenTofu.Tofu
+    scoop: opentofu
     brew: opentofu
     snap: opentofu
 github: opentofu/opentofu

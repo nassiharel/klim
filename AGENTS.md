@@ -4,7 +4,7 @@
 
 ## What is clim
 
-Cross-platform developer-tool manager. Discovers, inspects, upgrades 70+ CLI tools via native package managers (winget, brew, apt, choco, snap, npm). Written in Go 1.25, Bubbletea v2 TUI, Cobra CLI.
+Cross-platform developer-tool manager. Discovers, inspects, upgrades 70+ CLI tools via native package managers (winget, scoop, brew, apt, choco, snap, npm). Written in Go 1.25, Bubbletea v2 TUI, Cobra CLI.
 
 Module: `github.com/nassiharel/clim`
 
@@ -29,7 +29,7 @@ internal/
   cli/         Cobra commands: list, export, import, open, share, update, tools, config
   config/      config.yaml: logging, marketplace URL, performance, UI prefs
   detector/    Fallback version detection (Go buildinfo, Windows PE resources)
-  finder/      PATH scanning, install source detection (brew/winget/apt/manual)
+  finder/      PATH scanning, install source detection (brew/winget/scoop/apt/manual)
   logging/     slog structured logging + lumberjack file rotation
   manifest/    YAML schema for export/import manifests
   pkgmgr/      Package manager queries (installed + latest versions)
@@ -96,6 +96,7 @@ binary_names: [mytool]
 packages:
   brew: "mytool"
   winget: "Publisher.MyTool"
+  scoop: "mytool"
 # Optional: when set, the marketplace assemble workflow fetches repository
 # metadata (stars, description, homepage, license, topics, last push) from
 # the GitHub REST API and emits it as `github_info:` in the published
@@ -124,6 +125,12 @@ make lint         # golangci-lint run
 make cover        # HTML coverage report
 make marketplace-validate  # validate marketplace/ tool and pack files
 make marketplace-assemble  # assemble → marketplace.yaml
+
+# Opt-in live check — probes every package ID against the real PM
+# (winget/choco/scoop/brew/apt/snap/npm). Skips PMs whose binary isn't on
+# PATH, so it's safe to run locally; on CI it runs via the
+# marketplace-livecheck workflow across Win/macOS/Linux runners.
+go test -tags=integration -timeout=40m ./internal/marketplace/livecheck/...
 ```
 
 **Test patterns:** table-driven, `httptest.NewServer`, in-memory archives, `t.TempDir()`, `atomic.Pointer` for `pmAvailableFunc` test hook.
@@ -134,6 +141,7 @@ make marketplace-assemble  # assemble → marketplace.yaml
 |---|---|---|
 | `ci.yml` | push/PR | lint, test (Linux/macOS/Windows matrix), govulncheck |
 | `marketplace.yml` | push/PR (marketplace/**) | validate individual files, assemble, publish to marketplace branch |
+| `marketplace-livecheck.yml` | weekly / manual | probes every package ID against live winget/choco/scoop/brew/apt/snap/npm (Linux/macOS/Windows matrix) — external-network dependent, not PR-gating |
 | `release.yml` | `v*` tag | GoReleaser → GitHub Release, Homebrew tap, deb/rpm, SBOM |
 | `codeql.yml` | push/weekly | Security analysis |
 

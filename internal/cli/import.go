@@ -115,6 +115,7 @@ func buildImportPlan(manifestTools []manifest.Tool, regMap map[string]*registry.
 			pkgs := registry.PackageIDs{
 				Winget: mt.Packages.Winget,
 				Choco:  mt.Packages.Choco,
+				Scoop:  mt.Packages.Scoop,
 				Brew:   mt.Packages.Brew,
 				Apt:    mt.Packages.Apt,
 				Snap:   mt.Packages.Snap,

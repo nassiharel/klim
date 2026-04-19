@@ -9,6 +9,7 @@ binary_names:
     - python
 packages:
     winget: Python.Python.3.12
+    scoop: python
     choco: python3
     brew: python@3
     apt: python3

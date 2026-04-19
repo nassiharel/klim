@@ -8,7 +8,8 @@ tags:
 binary_names:
     - k6
 packages:
-    winget: k6.k6
+    winget: GrafanaLabs.k6
+    scoop: k6
     choco: k6
     brew: k6
     apt: k6

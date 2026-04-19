@@ -8,6 +8,7 @@ binary_names:
     - pnpm
 packages:
     winget: pnpm.pnpm
+    scoop: pnpm
     choco: pnpm
     brew: pnpm
     npm: pnpm

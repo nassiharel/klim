@@ -8,6 +8,7 @@ binary_names:
     - yq
 packages:
     winget: MikeFarah.yq
+    scoop: yq
     choco: yq
     brew: yq
     snap: yq

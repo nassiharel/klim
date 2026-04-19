@@ -9,6 +9,7 @@ binary_names:
     - kind
 packages:
     winget: Kubernetes.kind
+    scoop: kind
     choco: kind
     brew: kind
 github: kubernetes-sigs/kind

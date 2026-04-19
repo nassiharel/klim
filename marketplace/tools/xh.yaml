@@ -9,6 +9,7 @@ binary_names:
     - xh
 packages:
     winget: ducaale.xh
+    scoop: xh
     choco: xh
     brew: xh
 github: ducaale/xh

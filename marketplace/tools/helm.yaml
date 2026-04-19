@@ -8,6 +8,7 @@ binary_names:
     - helm
 packages:
     winget: Helm.Helm
+    scoop: helm
     choco: kubernetes-helm
     brew: helm
     snap: helm

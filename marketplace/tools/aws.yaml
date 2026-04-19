@@ -8,6 +8,7 @@ binary_names:
     - aws
 packages:
     winget: Amazon.AWSCLI
+    scoop: aws
     choco: awscli
     brew: awscli
     apt: awscli

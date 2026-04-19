@@ -7,6 +7,7 @@ binary_names:
     - ruby
 packages:
     winget: RubyInstallerTeam.Ruby.3.4
+    scoop: ruby
     choco: ruby
     brew: ruby
     apt: ruby

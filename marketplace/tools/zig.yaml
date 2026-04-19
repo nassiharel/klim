@@ -7,6 +7,7 @@ binary_names:
     - zig
 packages:
     winget: zig.zig
+    scoop: zig
     choco: zig
     brew: zig
     snap: zig

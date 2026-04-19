@@ -9,6 +9,7 @@ binary_names:
     - lazygit
 packages:
     winget: JesseDuffield.lazygit
+    scoop: lazygit
     choco: lazygit
     brew: lazygit
     snap: lazygit

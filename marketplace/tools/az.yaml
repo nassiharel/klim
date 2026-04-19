@@ -8,6 +8,7 @@ binary_names:
     - az
 packages:
     winget: Microsoft.AzureCLI
+    scoop: az
     choco: azure-cli
     brew: azure-cli
     apt: azure-cli

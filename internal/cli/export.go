@@ -64,6 +64,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 			Packages: manifest.Packages{
 				Winget: tool.Packages.Winget,
 				Choco:  tool.Packages.Choco,
+				Scoop:  tool.Packages.Scoop,
 				Brew:   tool.Packages.Brew,
 				Apt:    tool.Packages.Apt,
 				Snap:   tool.Packages.Snap,

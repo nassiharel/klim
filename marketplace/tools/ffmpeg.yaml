@@ -8,6 +8,7 @@ binary_names:
     - ffmpeg
 packages:
     winget: Gyan.FFmpeg
+    scoop: ffmpeg
     choco: ffmpeg
     brew: ffmpeg
     apt: ffmpeg

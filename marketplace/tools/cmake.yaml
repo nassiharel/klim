@@ -8,6 +8,7 @@ binary_names:
     - cmake
 packages:
     winget: Kitware.CMake
+    scoop: cmake
     choco: cmake
     brew: cmake
     apt: cmake

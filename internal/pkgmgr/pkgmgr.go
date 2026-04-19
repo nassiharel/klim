@@ -121,6 +121,10 @@ func installedVersion(ctx context.Context, source registry.InstallSource, pkgs r
 		if pkgs.Choco != "" {
 			return chocoInstalledVersion(ctx, pkgs.Choco)
 		}
+	case registry.SourceScoop:
+		if pkgs.Scoop != "" {
+			return scoopInstalledVersion(ctx, pkgs.Scoop)
+		}
 	case registry.SourceBrew:
 		if pkgs.Brew != "" {
 			return brewInstalledVersion(ctx, pkgs.Brew)
@@ -154,6 +158,12 @@ func latestVersion(ctx context.Context, source registry.InstallSource, pkgs regi
 		if pkgs.Choco != "" {
 			if v := chocoLatestVersion(ctx, pkgs.Choco); v != "" {
 				return v, "choco"
+			}
+		}
+	case registry.SourceScoop:
+		if pkgs.Scoop != "" {
+			if v := scoopLatestVersion(ctx, pkgs.Scoop); v != "" {
+				return v, "scoop"
 			}
 		}
 	case registry.SourceBrew:
@@ -228,6 +238,39 @@ func chocoInstalledVersion(ctx context.Context, pkg string) string {
 func chocoLatestVersion(ctx context.Context, pkg string) string {
 	out := runCmd(ctx, "choco", "search", "--exact", "--limit-output", pkg)
 	return parsePipeSeparated(out, pkg)
+}
+
+// --- scoop ---
+
+// scoopInstalledVersion queries `scoop list <pkg>` and parses the version
+// column. Scoop emits a table like:
+//
+//	Name   Version Source Updated           Info
+//	----   ------- ------ -------           ----
+//	bat    0.24.0  main   2024-01-15 ...
+//
+// so we find the line whose first field matches the package (case-insensitive)
+// and return the second field.
+func scoopInstalledVersion(ctx context.Context, pkg string) string {
+	out := runCmd(ctx, "scoop", "list", pkg)
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) >= 2 && strings.EqualFold(fields[0], pkg) {
+			return fields[1]
+		}
+	}
+	return ""
+}
+
+// scoopLatestVersion queries `scoop info <pkg>` and extracts the Version:
+// line. `scoop info` prints key/value pairs, e.g.:
+//
+//	Name: bat
+//	Version: 0.24.0
+//	...
+func scoopLatestVersion(ctx context.Context, pkg string) string {
+	out := runCmd(ctx, "scoop", "info", pkg)
+	return parseKeyValue(out, "Version")
 }
 
 // --- brew ---

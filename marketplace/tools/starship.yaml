@@ -8,6 +8,7 @@ binary_names:
     - starship
 packages:
     winget: Starship.Starship
+    scoop: starship
     choco: starship
     brew: starship
 github: starship/starship

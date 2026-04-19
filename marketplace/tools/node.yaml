@@ -8,6 +8,7 @@ binary_names:
     - node
 packages:
     winget: OpenJS.NodeJS.LTS
+    scoop: node
     choco: nodejs
     brew: node
     apt: nodejs

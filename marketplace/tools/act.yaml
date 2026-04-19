@@ -9,6 +9,7 @@ binary_names:
     - act
 packages:
     winget: nektos.act
+    scoop: act
     choco: act-cli
     brew: act
 github: nektos/act

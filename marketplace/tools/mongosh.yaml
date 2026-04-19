@@ -8,6 +8,7 @@ binary_names:
     - mongosh
 packages:
     winget: MongoDB.Shell
+    scoop: mongosh
     choco: mongodb-shell
     brew: mongosh
 github: mongodb-js/mongosh

@@ -10,6 +10,7 @@ binary_names:
     - vault
 packages:
     winget: Hashicorp.Vault
+    scoop: vault
     choco: vault
     brew: vault
 github: hashicorp/vault

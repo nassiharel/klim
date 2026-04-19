@@ -79,6 +79,7 @@ type Instance struct {
 type PackageIDs struct {
 	Winget string
 	Choco  string
+	Scoop  string
 	Brew   string
 	Apt    string
 	Snap   string
@@ -142,6 +143,11 @@ var commandTemplates = map[InstallSource]sourceCommands{
 		upgrade:   []string{"choco", "upgrade"},
 		uninstall: []string{"choco", "uninstall"},
 	},
+	SourceScoop: {
+		install:   []string{"scoop", "install"},
+		upgrade:   []string{"scoop", "update"},
+		uninstall: []string{"scoop", "uninstall"},
+	},
 	SourceBrew: {
 		install:   []string{"brew", "install"},
 		upgrade:   []string{"brew", "upgrade"},
@@ -171,6 +177,8 @@ func (p PackageIDs) pkgID(source InstallSource) string {
 		return p.Winget
 	case SourceChoco:
 		return p.Choco
+	case SourceScoop:
+		return p.Scoop
 	case SourceBrew:
 		return p.Brew
 	case SourceApt:
@@ -303,7 +311,7 @@ func (p PackageIDs) HasAnyPackageForOS() bool {
 func sourcePriority() []InstallSource {
 	switch runtime.GOOS {
 	case "windows":
-		return []InstallSource{SourceWinget, SourceChoco, SourceNPM}
+		return []InstallSource{SourceWinget, SourceChoco, SourceScoop, SourceNPM}
 	case "darwin":
 		return []InstallSource{SourceBrew, SourceNPM}
 	default: // linux

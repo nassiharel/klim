@@ -8,6 +8,7 @@ binary_names:
     - kubectx
 packages:
     winget: ahmetb.kubectx
+    scoop: kubectx
     choco: kubectx
     brew: kubectx
     apt: kubectx

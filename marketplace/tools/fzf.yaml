@@ -9,6 +9,7 @@ binary_names:
     - fzf
 packages:
     winget: junegunn.fzf
+    scoop: fzf
     choco: fzf
     brew: fzf
     apt: fzf

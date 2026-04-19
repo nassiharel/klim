@@ -9,6 +9,7 @@ binary_names:
     - gh
 packages:
     winget: GitHub.cli
+    scoop: gh
     choco: gh
     brew: gh
     apt: gh

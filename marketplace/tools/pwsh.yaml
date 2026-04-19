@@ -9,6 +9,7 @@ binary_names:
     - pwsh
 packages:
     winget: Microsoft.PowerShell
+    scoop: pwsh
     choco: powershell-core
     brew: powershell
     apt: powershell

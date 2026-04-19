@@ -9,6 +9,7 @@ binary_names:
     - https
 packages:
     winget: HTTPie.HTTPie
+    scoop: httpie
     choco: httpie
     brew: httpie
     apt: httpie

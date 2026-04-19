@@ -9,6 +9,7 @@ binary_names:
     - delta
 packages:
     winget: dandavison.delta
+    scoop: delta
     choco: delta
     brew: git-delta
 github: dandavison/delta
