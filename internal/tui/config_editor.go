@@ -131,7 +131,42 @@ func (s configSetting) currentValue(cfg *config.Config) string {
 	return ""
 }
 
-// --- Key handling ---
+// rawValue returns the underlying value for editing (not the display string).
+
+// settingLineOffset estimates the rendered line offset for a setting at index idx,
+// accounting for section headers (2 lines each: blank + header) and 1 line per setting.
+// This keeps configScroll in sync with the actual rendered line count.
+func settingLineOffset(settings []configSetting, idx int) int {
+	line := 0
+	currentSection := ""
+	for i := 0; i <= idx && i < len(settings); i++ {
+		if settings[i].section != "" && settings[i].section != currentSection {
+			currentSection = settings[i].section
+			line += 2 // blank line + section header
+		}
+		if i < idx {
+			line++ // setting line
+		}
+	}
+	return line
+}
+
+func (s configSetting) rawValue(cfg *config.Config) string {
+	switch s.typ {
+	case settingString:
+		return s.getString(cfg)
+	case settingInt:
+		v := s.getInt(cfg)
+		if v == 0 {
+			return ""
+		}
+		return strconv.Itoa(v)
+	case settingDuration:
+		return s.getDuration(cfg).String()
+	default:
+		return ""
+	}
+}
 
 func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	settings := allConfigSettings()
@@ -150,9 +185,11 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				s := settings[m.configCursor]
 				switch s.typ {
 				case settingString:
-					s.setString(m.cfg, val)
+					s.setString(m.cfg, val) // empty = default
 				case settingInt:
-					if v, err := strconv.Atoi(val); err == nil {
+					if val == "" {
+						s.setInt(m.cfg, 0) // 0 = auto
+					} else if v, err := strconv.Atoi(val); err == nil {
 						s.setInt(m.cfg, v)
 					} else {
 						m.statusMsg = fmt.Sprintf("✗ Invalid number: %s", val)
@@ -236,21 +273,23 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.configCursor--
 			}
 		}
-		// Auto-scroll: keep cursor visible.
-		if m.configCursor < m.configScroll {
-			m.configScroll = m.configCursor
+		// Auto-scroll: estimate line offset (system info ~12 lines + 1 line per setting + 2 per section header).
+		cursorLine := settingLineOffset(settings, m.configCursor)
+		if cursorLine < m.configScroll {
+			m.configScroll = cursorLine
 		}
 	case "down", "j":
 		if m.configCursor < len(settings)-1 {
 			m.configCursor++
 		}
-		// Auto-scroll: keep cursor visible (estimate ~15 visible setting rows).
-		visibleSettings := m.height/2 - 4
-		if visibleSettings < 5 {
-			visibleSettings = 5
+		// Auto-scroll: keep cursor visible.
+		visibleLines := m.height - 8
+		if visibleLines < 5 {
+			visibleLines = 5
 		}
-		if m.configCursor >= m.configScroll+visibleSettings {
-			m.configScroll = m.configCursor - visibleSettings + 1
+		cursorLine := settingLineOffset(settings, m.configCursor)
+		if cursorLine >= m.configScroll+visibleLines {
+			m.configScroll = cursorLine - visibleLines + 1
 		}
 	case "enter", "space":
 		if m.configCursor < len(settings) && m.cfg != nil {
@@ -261,20 +300,24 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				s.setBool(m.cfg, !s.getBool(m.cfg))
 				m.statusMsg = "Modified (press S to save)"
 			case settingChoice:
-				// Cycle through choices.
+				// Cycle through choices. Fall back to first if current unknown.
 				current := s.getString(m.cfg)
+				found := false
 				for i, c := range s.choices {
 					if c == current {
-						next := s.choices[(i+1)%len(s.choices)]
-						s.setString(m.cfg, next)
+						s.setString(m.cfg, s.choices[(i+1)%len(s.choices)])
+						found = true
 						break
 					}
 				}
+				if !found && len(s.choices) > 0 {
+					s.setString(m.cfg, s.choices[0])
+				}
 				m.statusMsg = "Modified (press S to save)"
 			case settingString, settingInt, settingDuration:
-				// Enter edit mode.
+				// Enter edit mode with raw value.
 				m.configEditing = true
-				m.configEditInput.SetValue(s.currentValue(m.cfg))
+				m.configEditInput.SetValue(s.rawValue(m.cfg))
 				m.configEditInput.SetWidth(40)
 				return m, m.configEditInput.Focus()
 			}

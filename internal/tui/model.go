@@ -741,6 +741,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Clamp scroll offsets on resize.
+		if m.dashboardScroll > 0 {
+			m.dashboardScroll = max(0, min(m.dashboardScroll, m.height))
+		}
+		if m.configScroll > 0 {
+			m.configScroll = max(0, min(m.configScroll, m.height))
+		}
 		return m, nil
 
 	default:

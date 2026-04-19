@@ -131,6 +131,11 @@ func TestDisplayNameDefault(t *testing.T) {
 }
 
 func TestStoragePath(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("AppData", tmp)
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+	t.Setenv("HOME", tmp)
+
 	path, err := StoragePath()
 	if err != nil {
 		t.Fatal(err)
