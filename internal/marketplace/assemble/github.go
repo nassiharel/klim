@@ -7,9 +7,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/registry"
 )
@@ -50,6 +53,12 @@ func newGitHubFetcher() *githubFetcher {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
 		token = os.Getenv("GH_TOKEN")
+	}
+	// Fall back to gh CLI auth token if no env var is set.
+	if token == "" {
+		if out, err := exec.Command("gh", "auth", "token").Output(); err == nil {
+			token = strings.TrimSpace(string(out))
+		}
 	}
 	return &githubFetcher{
 		baseURL: base,
@@ -122,6 +131,32 @@ func (f *githubFetcher) fetchRepo(ctx context.Context, slug string) (*registry.G
 	return info, nil
 }
 
+// loadFallbackGitHubInfo reads a previously assembled marketplace.yaml and
+// returns a map from tool name to its GitHubInfo. Tools without GitHubInfo
+// are silently skipped.
+func loadFallbackGitHubInfo(path string) (map[string]*registry.GitHubInfo, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+	var f struct {
+		Tools []struct {
+			Name       string               `yaml:"name"`
+			GitHubInfo *registry.GitHubInfo `yaml:"github_info,omitempty"`
+		} `yaml:"tools"`
+	}
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	m := make(map[string]*registry.GitHubInfo, len(f.Tools))
+	for _, t := range f.Tools {
+		if t.GitHubInfo != nil && t.GitHubInfo.IsUseful() {
+			m[t.Name] = t.GitHubInfo
+		}
+	}
+	return m, nil
+}
+
 // enrichWithGitHub populates the GitHubInfo field of each tool that declares
 // a `github:` slug. Fetches are performed concurrently with a bounded worker
 // pool. Per-tool failures are logged and do not abort assembly unless
@@ -158,6 +193,10 @@ func enrichWithGitHub(ctx context.Context, tools []registry.ToolDef, fetcher *gi
 				}
 				if info == nil {
 					fmt.Fprintf(os.Stderr, "warning: github repo %s for tool %s not found\n", j.slug, tools[j.idx].Name)
+					continue
+				}
+				if !info.IsUseful() {
+					fmt.Fprintf(os.Stderr, "warning: github returned empty data for %s (%s) — skipping\n", tools[j.idx].Name, j.slug)
 					continue
 				}
 				tools[j.idx].GitHubInfo = info

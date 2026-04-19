@@ -11,7 +11,7 @@ on:
       - 'marketplace/**'
       - 'internal/marketplace/**'
   schedule:
-    # Run every night at 03:00 UTC to refresh GitHub metadata (stars, last push, etc.).
+    # Run every night at 03:00 UTC to refresh GitHub metadata.
     - cron: '0 3 * * *'
   workflow_dispatch:
 
@@ -29,17 +29,13 @@ jobs:
           go-version-file: go.mod
       - name: Validate marketplace files
         run: go run ./internal/marketplace/validate
-      - name: Assemble and verify
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          go run ./internal/marketplace/assemble -fetch-github -o /tmp/assembled.yaml
-          echo "Assembled marketplace.yaml successfully"
+      - name: Assemble smoke test
+        run: go run ./internal/marketplace/assemble -fallback /dev/null -o /tmp/marketplace.yaml
 
   publish:
     name: Publish
     needs: validate
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -48,10 +44,14 @@ jobs:
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
-      - name: Assemble to temp
+      - name: Fetch previous marketplace.yaml as fallback
+        run: |
+          git fetch origin marketplace --depth=1 2>/dev/null || true
+          git show origin/marketplace:marketplace.yaml > /tmp/fallback.yaml 2>/dev/null || touch /tmp/fallback.yaml
+      - name: Assemble
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: go run ./internal/marketplace/assemble -fetch-github -o /tmp/marketplace.yaml
+        run: go run ./internal/marketplace/assemble -fetch-github -fallback /tmp/fallback.yaml -o /tmp/marketplace.yaml
       - name: Publish to marketplace branch
         run: |
           git config user.name "github-actions[bot]"

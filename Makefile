@@ -43,4 +43,4 @@ marketplace-validate:
 	go run ./internal/marketplace/validate
 
 marketplace-assemble:
-	go run ./internal/marketplace/assemble -o marketplace.yaml
+	go run ./internal/marketplace/assemble -fallback "$$(test -f marketplace.yaml && printf '%s' marketplace.yaml || printf '%s' /dev/null)" -o marketplace.yaml
