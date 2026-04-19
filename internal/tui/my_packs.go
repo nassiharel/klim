@@ -38,6 +38,23 @@ type myPackDeletedMsg struct {
 	err  error
 }
 
+// sanitizeFilename strips path separators and unsafe chars from a name
+// so it's safe to use as a filename in the current directory.
+func sanitizeFilename(name string) string {
+	name = filepath.Base(name) // strip directory components
+	// Remove characters unsafe for filenames.
+	replacer := strings.NewReplacer(
+		"/", "-", "\\", "-", ":", "-", "*", "-",
+		"?", "-", "\"", "-", "<", "-", ">", "-", "|", "-",
+	)
+	name = replacer.Replace(name)
+	name = strings.TrimSpace(name)
+	if name == "." || name == ".." {
+		return ""
+	}
+	return name
+}
+
 // --- Key handling ---
 
 func (m Model) handleKeyMyPacks(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -145,9 +162,14 @@ func exportMyPackFileCmd(pack registry.Pack) tea.Cmd {
 		if err != nil {
 			return myPackActionMsg{action: "export", err: err}
 		}
-		filename := pack.Name + ".yaml"
+		// Sanitize pack name for safe filename.
+		safeName := sanitizeFilename(pack.Name)
+		if safeName == "" {
+			safeName = "custom-pack"
+		}
+		filename := safeName + ".yaml"
 		if _, err := os.Stat(filename); err == nil {
-			filename = fmt.Sprintf("%s-%d.yaml", pack.Name, len(pack.ToolNames))
+			filename = fmt.Sprintf("%s-%d.yaml", safeName, len(pack.ToolNames))
 		}
 		header := fmt.Sprintf("# clim — Custom Pack: %s\n# %s\n\n", pack.DisplayName, pack.Description)
 		if err := os.WriteFile(filename, []byte(header+string(data)), 0o644); err != nil {

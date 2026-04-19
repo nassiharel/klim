@@ -1171,12 +1171,14 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "right", "tab":
 			m.activeTab = (m.activeTab + 1) % tabCount
 			m.cursor = 0
+			m.dashboardScroll = 0
 			m.discoverSubTab = discoverTools
 			m.applyFilter()
 			return m, nil
 		case "left", "shift+tab":
 			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
 			m.cursor = 0
+			m.dashboardScroll = 0
 			m.discoverSubTab = discoverTools
 			m.applyFilter()
 			return m, nil
@@ -1202,6 +1204,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "5":
 			m.activeTab = tabDashboard
 			m.cursor = 0
+			m.dashboardScroll = 0
+			m.myBackupFiles = scanBackupsDir()
 			return m, nil
 		case "6":
 			m.activeTab = tabConfig
@@ -1302,6 +1306,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.activeTab = tabDashboard
 		m.cursor = 0
 		m.dashboardScroll = 0
+		m.myBackupFiles = scanBackupsDir()
 		return m, nil
 	case "6":
 		m.activeTab = tabConfig

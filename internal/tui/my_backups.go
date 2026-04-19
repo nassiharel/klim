@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -33,11 +34,15 @@ type backupDeletedMsg struct {
 func scanBackupsDir() []backupFileInfo {
 	bdir, err := backupsDir()
 	if err != nil {
+		slog.Warn("failed to resolve backups dir", "error", err)
 		return nil
 	}
 
 	entries, err := os.ReadDir(bdir)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			slog.Warn("failed to read backups dir", "path", bdir, "error", err)
+		}
 		return nil
 	}
 
