@@ -129,10 +129,11 @@ type Model struct {
 	showDetail bool
 
 	// Loading state.
-	phase   int // 0=scanning, 1=resolving, 2=done
-	loading bool
-	pending int // count of tools still resolving versions
-	scanGen int // incremented on each scan; used to discard stale toolVersionMsg
+	phase    int // 0=scanning, 1=resolving, 2=done
+	loading  bool
+	pending  int  // count of tools still resolving versions
+	scanGen  int  // incremented on each scan; used to discard stale toolVersionMsg
+	scanOK   bool // true when the current scan completed without errors; gates cache writes
 
 	// Layout.
 	width  int
@@ -302,24 +303,31 @@ func tabFromName(name string) int {
 
 // Init starts the initial tool discovery process.
 func (m Model) Init() tea.Cmd {
+	gen := m.scanGen
 	return tea.Batch(
 		m.spinner.Tick,
-		func() tea.Msg { return findToolsCmd(m.svc)() },
+		func() tea.Msg { return findToolsCmd(m.svc, false, gen)() },
 	)
 }
 
 // startScan prepares the model for a new scan, invalidating any in-flight
 // version resolution from a previous scan so stale toolVersionMsg messages
 // are discarded immediately. Every code path that fires findToolsCmd must
-// call this first.
+// call this first. startScan always performs a fresh scan (no cache) since
+// it's called after mutating actions and user-triggered rescans.
 func (m *Model) startScan() tea.Cmd {
+	// Bump the generation up front so any in-flight results from a prior
+	// scan (scanResultMsg or toolVersionMsg) are discarded on arrival.
+	m.scanGen++
+	gen := m.scanGen
+
 	m.loading = true
 	m.phase = phaseLoading
 	m.tools = nil
 	m.filteredIndex = nil
 	m.cursor = 0
-	m.scanGen++
 	m.pending = 0
+	m.scanOK = false
 	// Clear upgrade selection — indices are tied to the old tool ordering
 	// and would select the wrong tools after a rescan reorders the list.
 	m.updateSelected = make(map[int]bool)
@@ -327,7 +335,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.batchQueue = nil
 	return tea.Batch(
 		m.spinner.Tick,
-		func() tea.Msg { return findToolsCmd(m.svc)() },
+		func() tea.Msg { return findToolsCmd(m.svc, true, gen)() },
 	)
 }
 
@@ -338,29 +346,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 
 	case scanResultMsg:
+		// Discard stale scan results from an earlier scan generation. Without
+		// this, pressing "r" rapidly (or receiving an import-triggered rescan
+		// while an earlier one is still in flight) could overwrite the
+		// model with stale tools from the first scan.
+		if msg.gen != m.scanGen {
+			return m, nil
+		}
 		m.tools = msg.tools
 		sort.Slice(m.tools, func(i, j int) bool {
 			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
 		})
-		m.scanGen++
+		// Only writes from a clean scan are safe to persist — a partial
+		// scan (PATH walk failed mid-flight) can't be distinguished from a
+		// full one on load, and caching it would poison future runs.
+		m.scanOK = msg.err == nil
 
 		// Set status based on how the catalog was loaded.
-		if msg.err != nil {
+		switch {
+		case msg.err != nil:
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
-		} else if info := msg.catalogInfo; info != nil {
-			switch info.Source {
-			case catalog.SourceCache:
-				m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache", info.Tools)
-			case catalog.SourceRemote:
-				m.statusMsg = fmt.Sprintf("✓ Fetched catalog (%d tools)", info.Tools)
+		case msg.cacheWarning != "":
+			// Non-fatal: cache was invalidated but the fresh scan succeeded.
+			m.statusMsg = fmt.Sprintf("⚠ %s", msg.cacheWarning)
+		case msg.scanInfo != nil && msg.scanInfo.Source == service.ScanSourceCache:
+			// Cache hit: scan results came from disk, no subprocess calls ran.
+			ageStr := humaniseCacheAge(msg.scanInfo.CacheAt)
+			if ageStr != "" {
+				m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache (scanned %s). Press 'r' to rescan.", len(m.tools), ageStr)
+			} else {
+				m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache. Press 'r' to rescan.", len(m.tools))
 			}
-			// Adopt any diff produced by an auto-refresh so badges + status
-			// reflect what changed in the remote catalog.
-			if info.Diff != nil && info.Diff.HasChanges() {
-				d := *info.Diff
-				m.lastDiff = &d
-				m.statusMsg = fmt.Sprintf("✓ Marketplace updated: %d new, %d changed, %d removed",
-					len(d.NewTools), len(d.ChangedTools), len(d.RemovedTools))
+		default:
+			if info := msg.catalogInfo; info != nil {
+				switch info.Source {
+				case catalog.SourceCache:
+					m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache", info.Tools)
+				case catalog.SourceRemote:
+					m.statusMsg = fmt.Sprintf("✓ Fetched catalog (%d tools)", info.Tools)
+				}
+				// Adopt any diff produced by an auto-refresh so badges + status
+				// reflect what changed in the remote catalog.
+				if info.Diff != nil && info.Diff.HasChanges() {
+					d := *info.Diff
+					m.lastDiff = &d
+					m.statusMsg = fmt.Sprintf("✓ Marketplace updated: %d new, %d changed, %d removed",
+						len(d.NewTools), len(d.ChangedTools), len(d.RemovedTools))
+				}
 			}
 		}
 
@@ -375,6 +407,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.phase = phaseResolving
 		m.pending = 0
+		fromCache := msg.scanInfo != nil && msg.scanInfo.Source == service.ScanSourceCache
 
 		// Reset filters — applyFilter() will rebuild sidebar items contextually.
 		m.categoryFilter = ""
@@ -434,6 +467,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.applyFilter()
 
+		// Cache hit: versions are already resolved, skip the per-tool
+		// subprocess queries entirely. Auto-select tools with available
+		// updates for batch upgrade, matching the resolve path.
+		if fromCache {
+			for i := range m.tools {
+				if m.tools[i].HasUpdate() {
+					m.updateSelected[i] = true
+				}
+			}
+			m.phase = phaseDone
+			m.loading = false
+			return m, nil
+		}
+
 		// Fire per-tool version resolution commands.
 		gen := m.scanGen
 		var cmds []tea.Cmd
@@ -449,6 +496,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			m.loading = false
 			m.statusMsg = ""
+			// Persist cache even when nothing was installed so repeat runs
+			// skip the PATH scan too — but only when the scan succeeded.
+			if m.scanOK {
+				_ = m.svc.SaveScanCache(m.tools)
+			}
 		}
 		return m, tea.Batch(cmds...)
 
@@ -472,6 +524,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			m.loading = false
 			m.statusMsg = ""
+			// Persist fully-resolved scan so the next launch is instant.
+			// Gated on scanOK: a partial PATH scan (msg.err on the initial
+			// scanResultMsg) must not be cached, since an incomplete cache
+			// would make future runs falsely treat the app as "up to date".
+			if m.scanOK {
+				_ = m.svc.SaveScanCache(m.tools)
+			}
 		}
 		return m, nil
 
@@ -500,6 +559,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.statusMsg = fmt.Sprintf("✓ %s refreshed", msg.tool.DisplayName)
 		m.applyFilter()
+		// Persist the updated state so future runs see the refreshed tool
+		// — but only when the original scan produced a complete tools list.
+		if m.scanOK {
+			_ = m.svc.SaveScanCache(m.tools)
+		}
 		// Rebuild the tool menu if the detail view is still showing.
 		if m.showDetail {
 			m.buildToolMenu()

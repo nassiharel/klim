@@ -12,12 +12,14 @@ import (
 	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/progress"
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/service"
 )
 
 var (
 	listCategoryFlag   string
 	listSourceFlag     string
 	listCategoriesFlag bool
+	listRefreshFlag    bool
 )
 
 var listCmd = &cobra.Command{
@@ -29,13 +31,15 @@ Flags:
   --category <name>   Show only tools in a specific category (e.g. Cloud, CLI, Containers)
   --source <name>     Show only tools from a specific install source (e.g. brew, winget, apt)
   --categories        Print available category names and exit
+  --refresh           Force a fresh scan, ignoring the on-disk cache
 
 Examples:
   clim list                          # all installed tools
   clim list --category Cloud         # only Cloud tools
   clim list --source brew            # only Homebrew-installed tools
   clim list --category IaC --source brew  # combine filters
-  clim list --categories             # list available categories`,
+  clim list --categories             # list available categories
+  clim list --refresh                # bypass cache and rescan`,
 	RunE: runList,
 }
 
@@ -43,24 +47,28 @@ func init() {
 	listCmd.Flags().StringVarP(&listCategoryFlag, "category", "c", "", "Filter by category (e.g. Cloud, CLI, Containers)")
 	listCmd.Flags().StringVar(&listSourceFlag, "source", "", "Filter by install source (e.g. brew, winget, apt)")
 	listCmd.Flags().BoolVar(&listCategoriesFlag, "categories", false, "Print available category names and exit")
+	listCmd.Flags().BoolVar(&listRefreshFlag, "refresh", false, "Force a fresh scan, ignoring the on-disk cache")
 }
 
 func runList(cmd *cobra.Command, args []string) error {
 	sp := progress.New("Loading marketplace catalog...")
-	tools, info, err := svc.LoadAndResolve(cmd.Context())
+	tools, info, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), listRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
 	}
 
-	if info != nil {
+	switch {
+	case scanInfo != nil && scanInfo.Source == service.ScanSourceCache:
+		sp.Done(fmt.Sprintf("Loaded %d tools from scan cache (use --refresh to rescan)", len(tools)))
+	case info != nil:
 		switch info.Source {
 		case catalog.SourceCache:
 			sp.Done(fmt.Sprintf("Loaded %d tools from cache", info.Tools))
 		case catalog.SourceRemote:
 			sp.Done(fmt.Sprintf("Fetched marketplace catalog (%d tools)", info.Tools))
 		}
-	} else {
+	default:
 		sp.Done("Catalog loaded")
 	}
 

@@ -90,6 +90,12 @@ func runImport(cmd *cobra.Command, args []string) error {
 	}
 
 	succeeded, failed := executeInstalls(ps.toInstall)
+	// Any install attempt may have changed what's on PATH, so invalidate
+	// the scan cache. Subsequent `clim list` / `clim export` runs will
+	// rescan and rewrite the cache instead of serving stale data.
+	if err := svc.InvalidateScanCache(); err != nil {
+		fmt.Fprintf(os.Stderr, "  ⚠ Failed to invalidate scan cache: %v\n", err)
+	}
 	fmt.Fprintf(os.Stderr, "\n──── Done: %d installed, %d failed, %d already present ────\n",
 		succeeded, failed, len(ps.alreadyInstalled))
 	if failed > 0 {
