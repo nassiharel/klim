@@ -303,9 +303,10 @@ func tabFromName(name string) int {
 
 // Init starts the initial tool discovery process.
 func (m Model) Init() tea.Cmd {
+	gen := m.scanGen
 	return tea.Batch(
 		m.spinner.Tick,
-		func() tea.Msg { return findToolsCmd(m.svc, false)() },
+		func() tea.Msg { return findToolsCmd(m.svc, false, gen)() },
 	)
 }
 
@@ -315,12 +316,16 @@ func (m Model) Init() tea.Cmd {
 // call this first. startScan always performs a fresh scan (no cache) since
 // it's called after mutating actions and user-triggered rescans.
 func (m *Model) startScan() tea.Cmd {
+	// Bump the generation up front so any in-flight results from a prior
+	// scan (scanResultMsg or toolVersionMsg) are discarded on arrival.
+	m.scanGen++
+	gen := m.scanGen
+
 	m.loading = true
 	m.phase = phaseLoading
 	m.tools = nil
 	m.filteredIndex = nil
 	m.cursor = 0
-	m.scanGen++
 	m.pending = 0
 	m.scanOK = false
 	// Clear upgrade selection — indices are tied to the old tool ordering
@@ -330,7 +335,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.batchQueue = nil
 	return tea.Batch(
 		m.spinner.Tick,
-		func() tea.Msg { return findToolsCmd(m.svc, true)() },
+		func() tea.Msg { return findToolsCmd(m.svc, true, gen)() },
 	)
 }
 
@@ -341,20 +346,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 
 	case scanResultMsg:
+		// Discard stale scan results from an earlier scan generation. Without
+		// this, pressing "r" rapidly (or receiving an import-triggered rescan
+		// while an earlier one is still in flight) could overwrite the
+		// model with stale tools from the first scan.
+		if msg.gen != m.scanGen {
+			return m, nil
+		}
 		m.tools = msg.tools
 		sort.Slice(m.tools, func(i, j int) bool {
 			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
 		})
-		m.scanGen++
 		// Only writes from a clean scan are safe to persist — a partial
 		// scan (PATH walk failed mid-flight) can't be distinguished from a
 		// full one on load, and caching it would poison future runs.
 		m.scanOK = msg.err == nil
 
 		// Set status based on how the catalog was loaded.
-		if msg.err != nil {
+		switch {
+		case msg.err != nil:
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
-		} else if msg.scanInfo != nil && msg.scanInfo.Source == service.ScanSourceCache {
+		case msg.cacheWarning != "":
+			// Non-fatal: cache was invalidated but the fresh scan succeeded.
+			m.statusMsg = fmt.Sprintf("⚠ %s", msg.cacheWarning)
+		case msg.scanInfo != nil && msg.scanInfo.Source == service.ScanSourceCache:
 			// Cache hit: scan results came from disk, no subprocess calls ran.
 			ageStr := humaniseCacheAge(msg.scanInfo.CacheAt)
 			if ageStr != "" {
@@ -362,20 +377,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache. Press 'r' to rescan.", len(m.tools))
 			}
-		} else if info := msg.catalogInfo; info != nil {
-			switch info.Source {
-			case catalog.SourceCache:
-				m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache", info.Tools)
-			case catalog.SourceRemote:
-				m.statusMsg = fmt.Sprintf("✓ Fetched catalog (%d tools)", info.Tools)
-			}
-			// Adopt any diff produced by an auto-refresh so badges + status
-			// reflect what changed in the remote catalog.
-			if info.Diff != nil && info.Diff.HasChanges() {
-				d := *info.Diff
-				m.lastDiff = &d
-				m.statusMsg = fmt.Sprintf("✓ Marketplace updated: %d new, %d changed, %d removed",
-					len(d.NewTools), len(d.ChangedTools), len(d.RemovedTools))
+		default:
+			if info := msg.catalogInfo; info != nil {
+				switch info.Source {
+				case catalog.SourceCache:
+					m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache", info.Tools)
+				case catalog.SourceRemote:
+					m.statusMsg = fmt.Sprintf("✓ Fetched catalog (%d tools)", info.Tools)
+				}
+				// Adopt any diff produced by an auto-refresh so badges + status
+				// reflect what changed in the remote catalog.
+				if info.Diff != nil && info.Diff.HasChanges() {
+					d := *info.Diff
+					m.lastDiff = &d
+					m.statusMsg = fmt.Sprintf("✓ Marketplace updated: %d new, %d changed, %d removed",
+						len(d.NewTools), len(d.ChangedTools), len(d.RemovedTools))
+				}
 			}
 		}
 

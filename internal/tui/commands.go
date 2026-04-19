@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -117,10 +118,15 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 // --- Scan & version resolution messages ---
 
 type scanResultMsg struct {
+	gen         int // scan generation captured at dispatch; stale results are discarded
 	tools       []registry.Tool
 	catalogInfo *service.CatalogInfo // how the catalog was loaded
 	scanInfo    *service.ScanInfo    // cache vs fresh
 	err         error                // non-nil if catalog load or PATH scan failed
+	// cacheWarning is a non-fatal message shown to the user when the cache
+	// was unreadable and had to be discarded (distinct from err, which is
+	// reserved for errors that should prevent persisting a new cache).
+	cacheWarning string
 }
 
 type toolVersionMsg struct {
@@ -244,19 +250,40 @@ type marketplaceRefreshMsg struct {
 // findToolsCmd builds the initial scan command. When force is false it will
 // try to serve results from the scan cache (fast path: no version
 // resolution). When force is true the cache is invalidated first and a full
-// scan runs.
-func findToolsCmd(svc *service.ToolService, force bool) func() scanResultMsg {
+// scan runs. The returned message carries the scan generation supplied by
+// the caller so stale results from earlier scans can be discarded.
+func findToolsCmd(svc *service.ToolService, force bool, gen int) func() scanResultMsg {
 	return func() scanResultMsg {
 		ctx := context.Background()
 		if force {
 			_ = svc.InvalidateScanCache()
 		} else {
-			if tools, info, scanInfo, err := svc.LoadCached(ctx); err == nil {
-				return scanResultMsg{tools: tools, catalogInfo: info, scanInfo: scanInfo}
+			tools, info, scanInfo, err := svc.LoadCached(ctx)
+			switch {
+			case err == nil:
+				return scanResultMsg{gen: gen, tools: tools, catalogInfo: info, scanInfo: scanInfo}
+			case os.IsNotExist(err):
+				// Cold start — fall through to a fresh scan silently.
+			default:
+				// Cache exists but is unreadable or schema-incompatible.
+				// Delete it so we don't keep retrying the same bad file,
+				// and surface a warning alongside the fresh scan result.
+				_ = svc.InvalidateScanCache()
+				slog.Warn("scan cache unreadable, invalidated", "error", err)
+				tools, info, scanErr := svc.LoadAndScan(ctx)
+				return scanResultMsg{
+					gen:          gen,
+					tools:        tools,
+					catalogInfo:  info,
+					scanInfo:     &service.ScanInfo{Source: service.ScanSourceFresh},
+					err:          scanErr,
+					cacheWarning: fmt.Sprintf("scan cache ignored (%v) — rebuilding", err),
+				}
 			}
 		}
 		tools, info, err := svc.LoadAndScan(ctx)
 		return scanResultMsg{
+			gen:         gen,
 			tools:       tools,
 			catalogInfo: info,
 			scanInfo:    &service.ScanInfo{Source: service.ScanSourceFresh},

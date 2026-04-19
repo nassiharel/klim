@@ -9,6 +9,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -117,7 +119,9 @@ func (s *ToolService) LoadAndResolveCached(ctx context.Context, force bool) ([]r
 		return tools, info, &ScanInfo{Source: ScanSourceFresh}, err
 	}
 
-	if entries, savedAt, err := scancache.Load(); err == nil {
+	entries, savedAt, err := scancache.Load()
+	switch {
+	case err == nil:
 		tools, info, catErr := s.Catalog.LoadTools(ctx)
 		if catErr != nil {
 			return nil, nil, nil, fmt.Errorf("loading catalog: %w", catErr)
@@ -125,10 +129,18 @@ func (s *ToolService) LoadAndResolveCached(ctx context.Context, force bool) ([]r
 		tools = scancache.Apply(tools, entries)
 		sortToolsByName(tools)
 		return tools, info, &ScanInfo{Source: ScanSourceCache, CacheAt: savedAt}, nil
+	case errors.Is(err, os.ErrNotExist):
+		// Cold start — no cache yet. Nothing to clean up.
+	default:
+		// The cache file exists but is unreadable or has an incompatible
+		// schema. Remove it so we don't keep retrying a known-bad file on
+		// every launch; the fresh scan below will write a good one.
+		slog.Warn("scan cache unreadable, invalidating", "error", err)
+		_ = scancache.Delete()
 	}
 
-	tools, info, err := s.LoadAndResolve(ctx)
-	return tools, info, &ScanInfo{Source: ScanSourceFresh}, err
+	tools, info, resolveErr := s.LoadAndResolve(ctx)
+	return tools, info, &ScanInfo{Source: ScanSourceFresh}, resolveErr
 }
 
 // ScanOnly loads the catalog and scans PATH without resolving versions.
