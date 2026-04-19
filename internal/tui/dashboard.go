@@ -347,9 +347,6 @@ func (m Model) renderDashboardView() string {
 	}
 
 	backups := m.myBackupFiles
-	if backups == nil {
-		backups = scanBackupsDir()
-	}
 	backupCount := len(backups)
 
 	// Marketplace packs gauge.

@@ -169,8 +169,13 @@ func exportMyPackFileCmd(pack registry.Pack) tea.Cmd {
 		}
 		filename := safeName + ".yaml"
 		for i := 1; ; i++ {
-			if _, err := os.Stat(filename); os.IsNotExist(err) {
+			_, err := os.Stat(filename)
+			if os.IsNotExist(err) {
 				break
+			}
+			if err != nil {
+				// Permission or other I/O error — don't loop forever.
+				return myPackActionMsg{action: "export", err: fmt.Errorf("checking filename: %w", err)}
 			}
 			filename = fmt.Sprintf("%s-%d.yaml", safeName, i)
 		}

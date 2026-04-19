@@ -399,6 +399,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.customPacks = cp
 		}
 
+		// Cache backup file list for dashboard.
+		m.myBackupFiles = scanBackupsDir()
+
 		// Clamp pack-related indices to the new list size.
 		if m.showPackDetail && m.packDetailIdx >= len(m.packs) {
 			m.showPackDetail = false
@@ -1190,15 +1193,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "down", "j":
 			if m.activeTab == tabDashboard {
-				// Estimate content lines from data size to clamp scroll.
-				maxLines := 20 + len(m.tools)/3 + len(m.customPacks) + len(m.myBackupFiles)
-				maxScroll := maxLines - (m.height / 2)
-				if maxScroll < 0 {
-					maxScroll = 0
-				}
-				if m.dashboardScroll < maxScroll {
-					m.dashboardScroll++
-				}
+				m.dashboardScroll++
+				// Render-side clamp in renderView ensures this never overscrolls.
 			}
 			return m, nil
 		case "home", "g":
