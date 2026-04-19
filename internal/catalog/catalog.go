@@ -88,7 +88,7 @@ func CachePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "clim", "marketplace-cache.yaml"), nil
+	return filepath.Join(dir, "clim", "marketplace", "marketplace-cache.yaml"), nil
 }
 
 // LoadSource indicates where the catalog was loaded from.

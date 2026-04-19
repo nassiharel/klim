@@ -106,7 +106,7 @@ func Path() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "clim", "config.yaml"), nil
+	return filepath.Join(dir, "clim", "config", "config.yaml"), nil
 }
 
 // Load reads config.yaml. If the file doesn't exist, it writes a default
@@ -149,6 +149,15 @@ func MustLoad() *Config {
 }
 
 const configHeader = "# clim — Configuration\n# All values are optional. Defaults are shown below.\n# Restart clim after editing for changes to take effect.\n\n"
+
+// Save writes the config to config.yaml.
+func Save(cfg *Config) error {
+	path, err := Path()
+	if err != nil {
+		return err
+	}
+	return writeDefault(path, cfg)
+}
 
 func writeDefault(path string, cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

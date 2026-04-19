@@ -85,7 +85,7 @@ func resolveLogPath() string {
 	if err != nil {
 		return ""
 	}
-	logDir := filepath.Join(dir, "clim")
+	logDir := filepath.Join(dir, "clim", "logs")
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return ""
 	}
