@@ -292,6 +292,19 @@ func refreshMarketplaceCmd(fetcher catalog.MarketplaceFetcher) tea.Cmd {
 	}
 }
 
+// backupsDir returns the path to the backups directory, creating it if needed.
+func backupsDir() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	bdir := filepath.Join(dir, "clim", "backups")
+	if err := os.MkdirAll(bdir, 0o755); err != nil {
+		return "", err
+	}
+	return bdir, nil
+}
+
 // --- Export command ---
 
 func exportToolsCmd(tools []registry.Tool) tea.Cmd {
@@ -337,19 +350,20 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 			return exportFinishedMsg{err: err}
 		}
 
-		filename := fmt.Sprintf("clim-export-%s.yaml", time.Now().Format("2006-01-02"))
+		bdir, err := backupsDir()
+		if err != nil {
+			return exportFinishedMsg{err: fmt.Errorf("creating backups dir: %w", err)}
+		}
+
+		filename := filepath.Join(bdir, fmt.Sprintf("clim-export-%s.yaml", time.Now().Format("2006-01-02")))
 		// Avoid silently overwriting an existing export from today.
 		if _, err := os.Stat(filename); err == nil {
-			filename = fmt.Sprintf("clim-export-%s.yaml", time.Now().Format("2006-01-02-150405"))
+			filename = filepath.Join(bdir, fmt.Sprintf("clim-export-%s.yaml", time.Now().Format("2006-01-02-150405")))
 		}
 		header := "# clim — Installed Tools Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   clim import " + filename + "\n#\n\n"
 
 		if err := os.WriteFile(filename, []byte(header+string(data)), 0o644); err != nil {
 			return exportFinishedMsg{err: err}
-		}
-
-		if abs, err := filepath.Abs(filename); err == nil {
-			filename = abs
 		}
 
 		return exportFinishedMsg{path: filename, count: len(exported)}

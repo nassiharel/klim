@@ -106,7 +106,7 @@ func Path() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "clim", "config.yaml"), nil
+	return filepath.Join(dir, "clim", "config", "config.yaml"), nil
 }
 
 // Load reads config.yaml. If the file doesn't exist, it writes a default

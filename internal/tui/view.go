@@ -73,6 +73,36 @@ func (m Model) renderView() string {
 		return m.layoutWithFooter(body.String(), m.renderHelp())
 	}
 
+	// Dashboard tab has its own rendering path — supports scrolling.
+	if m.activeTab == tabDashboard {
+		content := m.renderDashboardView()
+		lines := strings.Split(content, "\n")
+
+		// Clamp scroll offset.
+		maxScroll := len(lines) - (m.height / 2)
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		scroll := m.dashboardScroll
+		if scroll > maxScroll {
+			scroll = maxScroll
+		}
+
+		// Apply scroll.
+		if scroll > 0 && scroll < len(lines) {
+			lines = lines[scroll:]
+		}
+
+		body.WriteString(strings.Join(lines, "\n"))
+		footer := m.renderHelp()
+		if scroll > 0 {
+			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
+		} else if len(strings.Split(content, "\n")) > m.height-4 {
+			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
+		}
+		return m.layoutWithFooter(body.String(), footer)
+	}
+
 	// Search bar.
 	body.WriteString(m.renderSearchBar() + "\n")
 
@@ -243,6 +273,7 @@ func (m Model) renderTabBar() string {
 		{"Updates", tabUpdates},
 		{"Marketplace", tabDiscover},
 		{"Backup", tabBackup},
+		{"Dashboard", tabDashboard},
 		{"Config", tabConfig},
 	}
 
@@ -1261,6 +1292,21 @@ func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 func (m Model) renderBackupView() string {
 	var b strings.Builder
 
+	// Pack creation wizard.
+	if m.creatingPack {
+		return m.renderPackCreateView()
+	}
+
+	// My Packs view.
+	if m.viewingMyPacks {
+		return m.renderMyPacksView()
+	}
+
+	// My Backups view.
+	if m.viewingMyBackups {
+		return m.renderMyBackupsView()
+	}
+
 	if m.backupMode == backupModeIdle {
 		b.WriteString("\n")
 
@@ -1273,6 +1319,9 @@ func (m Model) renderBackupView() string {
 			{"Import", "Reinstall tools from a manifest file"},
 			{"Share", "Generate a share token for chat/messaging"},
 			{"Open Token", "Install tools from a share token"},
+			{"Create Pack", "Build a custom pack from marketplace tools"},
+			{"My Packs", "View and manage your custom packs"},
+			{"My Backups", "View and restore saved backups"},
 		}
 
 		for i, item := range items {

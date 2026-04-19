@@ -15,6 +15,7 @@ import (
 
 	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/clim/internal/custompacks"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
 )
@@ -24,6 +25,7 @@ const (
 	tabUpdates
 	tabDiscover
 	tabBackup
+	tabDashboard
 	tabConfig
 	tabCount // total number of tabs, used for modular cycling
 )
@@ -45,11 +47,14 @@ const (
 
 // Backup tab menu indices.
 const (
-	backupMenuExport    = 0
-	backupMenuImport    = 1
-	backupMenuShare     = 2
-	backupMenuOpenToken = 3
-	backupMenuCount     = 4
+	backupMenuExport     = 0
+	backupMenuImport     = 1
+	backupMenuShare      = 2
+	backupMenuOpenToken  = 3
+	backupMenuCreatePack = 4
+	backupMenuMyPacks    = 5
+	backupMenuMyBackups  = 6
+	backupMenuCount      = 7
 )
 
 // Sentinel values.
@@ -169,6 +174,36 @@ type Model struct {
 	updateSelected map[int]bool      // tool index → selected for batch upgrade
 	batchUpdating  bool              // true while batch upgrade is in progress
 	batchQueue     batchUpgradeQueue // remaining tool indices to upgrade
+
+	// Pack creation state (Backup tab → Create Pack).
+	creatingPack       bool                // true = pack creation wizard is active
+	packCreatePhase    int                 // 0=name, 1=display_name, 2=description, 3=select tools, 4=output choice, 5=done
+	packCreateName     textinput.Model     // name input
+	packCreateDispName textinput.Model     // display_name input
+	packCreateDesc     textinput.Model     // description input
+	packCreateSelected map[int]bool        // tool index → selected for pack
+	packCreateCursor   int                 // cursor for tool selection list
+	packCreateFilter   string              // search filter for tool selection
+	packCreateFiltered []int               // filtered tool indices
+	packCreateResult   string              // result message (file path or token)
+	packCreateToken    string              // generated share token (if token output chosen)
+
+	// My Packs state (Backup tab → My Packs).
+	customPacks        []registry.Pack // loaded from custom-packs.yaml
+	viewingMyPacks     bool            // true = My Packs list is active
+	myPacksCursor      int
+	viewingMyPackDetail bool           // true = detail view for a custom pack
+	myPackDetailIdx    int             // index into customPacks
+	myPackMenuCursor   int             // cursor in detail action menu
+	myPackToken        string          // generated share token (for display in detail view)
+
+	// My Backups state (Backup tab → My Backups).
+	viewingMyBackups bool
+	myBackupsCursor  int
+	myBackupFiles    []backupFileInfo
+
+	// Dashboard scroll offset.
+	dashboardScroll int
 }
 
 // NewModel creates a new TUI model.
@@ -188,15 +223,34 @@ func NewModel() Model {
 	ti2.Placeholder = "paste share token here..."
 	ti2.CharLimit = 1000
 
+	pcName := textinput.New()
+	pcName.Placeholder = "my-custom-pack"
+	pcName.CharLimit = 60
+	pcName.SetWidth(40)
+
+	pcDisp := textinput.New()
+	pcDisp.Placeholder = "(defaults to name)"
+	pcDisp.CharLimit = 80
+	pcDisp.SetWidth(40)
+
+	pcDesc := textinput.New()
+	pcDesc.Placeholder = "A brief description of your pack"
+	pcDesc.CharLimit = 200
+	pcDesc.SetWidth(60)
+
 	return Model{
-		svc:            service.New(),
-		clip:           systemClipboard{},
-		spinner:        s,
-		filterInput:    ti,
-		importInput:    ii,
-		tokenInput:     ti2,
-		backupBar:      progress.New(progress.WithWidth(40)),
-		updateSelected: make(map[int]bool),
+		svc:                service.New(),
+		clip:               systemClipboard{},
+		spinner:            s,
+		filterInput:        ti,
+		importInput:        ii,
+		tokenInput:         ti2,
+		packCreateName:     pcName,
+		packCreateDispName: pcDisp,
+		packCreateDesc:     pcDesc,
+		packCreateSelected: make(map[int]bool),
+		backupBar:          progress.New(progress.WithWidth(40)),
+		updateSelected:     make(map[int]bool),
 		loading:        true,
 		phase:          phaseLoading,
 		activeTab:      tabInstalled,
@@ -227,6 +281,8 @@ func tabFromName(name string) int {
 		return tabDiscover
 	case "backup":
 		return tabBackup
+	case "dashboard":
+		return tabDashboard
 	case "config":
 		return tabConfig
 	default:
@@ -324,6 +380,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else {
 			m.packs = packs
+		}
+
+		// Load custom packs.
+		if cp, err := custompacks.Load(); err != nil {
+			slog.Warn("failed to load custom packs", "error", err)
+		} else {
+			m.customPacks = cp
 		}
 
 		// Clamp pack-related indices to the new list size.
@@ -586,6 +649,77 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = "✓ Pack operation complete — refreshing..."
 		return m, cmd
 
+	case packSavedMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ Save failed: %s", msg.err)
+			return m, nil
+		}
+		// Reload custom packs and navigate to My Packs detail view.
+		if cp, err := custompacks.Load(); err == nil {
+			m.customPacks = cp
+		}
+		m.resetPackCreate()
+		m.viewingMyPacks = true
+		m.viewingMyPackDetail = true
+		m.myPackMenuCursor = 0
+		// Find the saved pack by name.
+		m.myPackDetailIdx = 0
+		for i, p := range m.customPacks {
+			if p.Name == msg.name {
+				m.myPackDetailIdx = i
+				m.myPacksCursor = i
+				break
+			}
+		}
+		m.statusMsg = fmt.Sprintf("✓ Pack '%s' saved", msg.name)
+		return m, nil
+
+	case myPackActionMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ %s failed: %s", msg.action, msg.err)
+			return m, nil
+		}
+		if msg.token != "" {
+			// Share action — store token for display, copy to clipboard.
+			m.myPackToken = msg.token
+			if err := m.clip.WriteAll(msg.token); err == nil {
+				m.statusMsg = "✓ Copied to clipboard!"
+			} else {
+				m.statusMsg = msg.result
+			}
+		} else {
+			m.statusMsg = "✓ " + msg.result
+		}
+		return m, nil
+
+	case myPackDeletedMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ Delete failed: %s", msg.err)
+			return m, nil
+		}
+		m.statusMsg = fmt.Sprintf("✓ Pack '%s' deleted", msg.name)
+		m.viewingMyPackDetail = false
+		// Reload custom packs.
+		if cp, err := custompacks.Load(); err == nil {
+			m.customPacks = cp
+		}
+		if m.myPacksCursor >= len(m.customPacks) {
+			m.myPacksCursor = max(0, len(m.customPacks)-1)
+		}
+		return m, nil
+
+	case backupDeletedMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ Delete failed: %s", msg.err)
+			return m, nil
+		}
+		m.statusMsg = fmt.Sprintf("✓ Backup '%s' deleted", msg.name)
+		m.myBackupFiles = scanBackupsDir()
+		if m.myBackupsCursor >= len(m.myBackupFiles) {
+			m.myBackupsCursor = max(0, len(m.myBackupFiles)-1)
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -602,6 +736,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.tokenInput, cmd = m.tokenInput.Update(msg)
 			return m, cmd
+		}
+		if m.creatingPack {
+			switch m.packCreatePhase {
+			case packCreatePhaseName:
+				var cmd tea.Cmd
+				m.packCreateName, cmd = m.packCreateName.Update(msg)
+				return m, cmd
+			case packCreatePhaseDispName:
+				var cmd tea.Cmd
+				m.packCreateDispName, cmd = m.packCreateDispName.Update(msg)
+				return m, cmd
+			case packCreatePhaseDesc:
+				var cmd tea.Cmd
+				m.packCreateDesc, cmd = m.packCreateDesc.Update(msg)
+				return m, cmd
+			}
 		}
 		if m.loading {
 			var cmd tea.Cmd
@@ -650,6 +800,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.backupConfirm {
 		return m.handleKeyBackupConfirm(msg)
+	}
+	if m.creatingPack {
+		return m.handleKeyPackCreate(msg)
+	}
+	if m.viewingMyPackDetail {
+		return m.handleKeyMyPackDetail(msg)
+	}
+	if m.viewingMyPacks {
+		return m.handleKeyMyPacks(msg)
+	}
+	if m.viewingMyBackups {
+		return m.handleKeyMyBackups(msg)
 	}
 	if m.categoryPicker {
 		return m.handleKeySidebar(msg)
@@ -984,6 +1146,74 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 	}
 
+	// Dashboard and Config tabs are static — swallow navigation keys.
+	// Only allow quit, tab switching, and refresh.
+	if m.activeTab == tabDashboard || m.activeTab == tabConfig {
+		switch msg.String() {
+		case "q", "ctrl+c":
+			m.quitting = true
+			return m, tea.Quit
+		case "up", "k":
+			if m.activeTab == tabDashboard && m.dashboardScroll > 0 {
+				m.dashboardScroll--
+			}
+			return m, nil
+		case "down", "j":
+			if m.activeTab == tabDashboard {
+				m.dashboardScroll++
+			}
+			return m, nil
+		case "home", "g":
+			if m.activeTab == tabDashboard {
+				m.dashboardScroll = 0
+			}
+			return m, nil
+		case "right", "tab":
+			m.activeTab = (m.activeTab + 1) % tabCount
+			m.cursor = 0
+			m.discoverSubTab = discoverTools
+			m.applyFilter()
+			return m, nil
+		case "left", "shift+tab":
+			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
+			m.cursor = 0
+			m.discoverSubTab = discoverTools
+			m.applyFilter()
+			return m, nil
+		case "1":
+			m.activeTab = tabInstalled
+			m.cursor = 0
+			m.applyFilter()
+			return m, nil
+		case "2":
+			m.activeTab = tabUpdates
+			m.cursor = 0
+			m.applyFilter()
+			return m, nil
+		case "3":
+			m.activeTab = tabDiscover
+			m.cursor = 0
+			m.applyFilter()
+			return m, nil
+		case "4":
+			m.activeTab = tabBackup
+			m.cursor = 0
+			return m, nil
+		case "5":
+			m.activeTab = tabDashboard
+			m.cursor = 0
+			return m, nil
+		case "6":
+			m.activeTab = tabConfig
+			m.cursor = 0
+			return m, nil
+		case "r":
+			cmd := m.startScan()
+			return m, cmd
+		}
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		m.quitting = true
@@ -1069,6 +1299,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		return m, nil
 	case "5":
+		m.activeTab = tabDashboard
+		m.cursor = 0
+		m.dashboardScroll = 0
+		return m, nil
+	case "6":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		return m, nil
@@ -1187,6 +1422,37 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				m.enteringToken = true
 				return m, m.tokenInput.Focus()
+			case backupMenuCreatePack:
+				// Create Pack — enter pack creation wizard.
+				if m.phase < phaseDone {
+					m.statusMsg = "Still scanning — please wait..."
+					return m, nil
+				}
+				if len(m.tools) == 0 {
+					m.statusMsg = "No tools available to create a pack."
+					return m, nil
+				}
+				m.startPackCreate()
+				return m, m.packCreateName.Focus()
+			case backupMenuMyPacks:
+				// My Packs — view saved custom packs.
+				if cp, err := custompacks.Load(); err != nil {
+					m.statusMsg = fmt.Sprintf("✗ %v", err)
+				} else {
+					m.customPacks = cp
+					m.viewingMyPacks = true
+					m.myPacksCursor = 0
+					m.statusMsg = ""
+				}
+				return m, nil
+			case backupMenuMyBackups:
+				// My Backups — view saved backup files.
+				files := scanBackupsDir()
+				m.myBackupFiles = files
+				m.viewingMyBackups = true
+				m.myBackupsCursor = 0
+				m.statusMsg = ""
+				return m, nil
 			}
 			return m, nil
 		}
@@ -1329,6 +1595,8 @@ func (m *Model) matchesTab(tool registry.Tool) bool {
 		return !tool.IsInstalled()
 	case tabBackup:
 		return false // Backup tab renders from backupItems, not tools
+	case tabDashboard:
+		return false // Dashboard tab renders aggregate stats, not tools
 	case tabConfig:
 		return false // Config tab renders static content, not tools
 	}
@@ -1690,6 +1958,8 @@ func (m Model) rowCount() int {
 			return backupMenuCount
 		}
 		return len(m.backupItems)
+	case tabDashboard:
+		return 0
 	case tabConfig:
 		return 0
 	default:
