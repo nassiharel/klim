@@ -46,7 +46,7 @@ jobs:
         run: |
           Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
           Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
-          "$HOME\scoop\shims" | Out-File -FilePath $env:GITHUB_PATH -Append
+          Add-Content -Path $env:GITHUB_PATH -Value "$HOME\scoop\shims" -Encoding utf8
 
       - name: Run live check
         run: go test -tags=integration -v -timeout=40m -count=1 ./internal/marketplace/livecheck/...
