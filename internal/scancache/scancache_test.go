@@ -118,10 +118,17 @@ func TestDeleteRemovesFile(t *testing.T) {
 func TestSaveSkipsEmptyEntries(t *testing.T) {
 	withTempCache(t)
 
+	// Tool with latest known but not installed — should also be skipped.
+	notInstalledWithLatest := registry.Tool{
+		Name: "terraform", DisplayName: "Terraform",
+		Latest: "1.9.0", LatestFrom: "brew",
+	}
+
 	tools := []registry.Tool{
 		sampleTool(),
 		{Name: "ansible", DisplayName: "Ansible"}, // not installed, no latest
 		{Name: "argocd", DisplayName: "ArgoCD"},   // not installed, no latest
+		notInstalledWithLatest,
 	}
 	if err := Save(tools); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -133,11 +140,10 @@ func TestSaveSkipsEmptyEntries(t *testing.T) {
 	if _, ok := entries["kubectl"]; !ok {
 		t.Errorf("kubectl should be cached")
 	}
-	if _, ok := entries["ansible"]; ok {
-		t.Errorf("ansible has no scan data — should not be cached")
-	}
-	if _, ok := entries["argocd"]; ok {
-		t.Errorf("argocd has no scan data — should not be cached")
+	for _, name := range []string{"ansible", "argocd", "terraform"} {
+		if _, ok := entries[name]; ok {
+			t.Errorf("%s is not installed — should not be cached", name)
+		}
 	}
 }
 

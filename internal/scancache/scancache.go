@@ -84,10 +84,10 @@ func Save(tools []registry.Tool) error {
 
 	entries := make(map[string]Entry, len(tools))
 	for _, t := range tools {
-		// Skip tools with no scan data to keep the cache compact. A missing
-		// entry on Apply() means "not installed, no latest known", which is
-		// the correct state for these tools.
-		if len(t.Instances) == 0 && t.Latest == "" && t.LatestFrom == "" {
+		// Only cache installed tools. Not-installed tools have no useful
+		// per-host state worth persisting — a missing cache entry on
+		// Apply() already means "not installed", which is correct.
+		if !t.IsInstalled() {
 			continue
 		}
 		e := Entry{
@@ -107,7 +107,7 @@ func Save(tools []registry.Tool) error {
 	f := file{
 		Version:   cacheVersion,
 		SavedAt:   time.Now().UTC(),
-		ToolCount: len(tools),
+		ToolCount: len(entries),
 		Tools:     entries,
 	}
 
