@@ -168,8 +168,11 @@ func exportMyPackFileCmd(pack registry.Pack) tea.Cmd {
 			safeName = "custom-pack"
 		}
 		filename := safeName + ".yaml"
-		if _, err := os.Stat(filename); err == nil {
-			filename = fmt.Sprintf("%s-%d.yaml", safeName, len(pack.ToolNames))
+		for i := 1; ; i++ {
+			if _, err := os.Stat(filename); os.IsNotExist(err) {
+				break
+			}
+			filename = fmt.Sprintf("%s-%d.yaml", safeName, i)
 		}
 		header := fmt.Sprintf("# clim — Custom Pack: %s\n# %s\n\n", pack.DisplayName, pack.Description)
 		if err := os.WriteFile(filename, []byte(header+string(data)), 0o644); err != nil {

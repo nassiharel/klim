@@ -185,8 +185,6 @@ type Model struct {
 	packCreateCursor   int                 // cursor for tool selection list
 	packCreateFilter   string              // search filter for tool selection
 	packCreateFiltered []int               // filtered tool indices
-	packCreateResult   string              // result message (file path or token)
-	packCreateToken    string              // generated share token (if token output chosen)
 
 	// My Packs state (Backup tab → My Packs).
 	customPacks        []registry.Pack // loaded from custom-packs.yaml
@@ -204,6 +202,12 @@ type Model struct {
 
 	// Dashboard scroll offset.
 	dashboardScroll int
+
+	// Config editor state.
+	configCursor    int
+	configEditing   bool            // true = text input active for a setting
+	configEditInput textinput.Model // text input for string/int/duration settings
+	configScroll    int             // scroll offset for config tab
 }
 
 // NewModel creates a new TUI model.
@@ -238,6 +242,11 @@ func NewModel() Model {
 	pcDesc.CharLimit = 200
 	pcDesc.SetWidth(60)
 
+	cfgEdit := textinput.New()
+	cfgEdit.Placeholder = "enter value"
+	cfgEdit.CharLimit = 200
+	cfgEdit.SetWidth(40)
+
 	return Model{
 		svc:                service.New(),
 		clip:               systemClipboard{},
@@ -249,6 +258,7 @@ func NewModel() Model {
 		packCreateDispName: pcDisp,
 		packCreateDesc:     pcDesc,
 		packCreateSelected: make(map[int]bool),
+		configEditInput:    cfgEdit,
 		backupBar:          progress.New(progress.WithWidth(40)),
 		updateSelected:     make(map[int]bool),
 		loading:        true,
@@ -720,6 +730,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case configSavedMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ Save failed: %s", msg.err)
+		} else {
+			m.statusMsg = "✓ Config saved"
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -752,6 +770,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.packCreateDesc, cmd = m.packCreateDesc.Update(msg)
 				return m, cmd
 			}
+		}
+		if m.configEditing {
+			var cmd tea.Cmd
+			m.configEditInput, cmd = m.configEditInput.Update(msg)
+			return m, cmd
 		}
 		if m.loading {
 			var cmd tea.Cmd
@@ -1146,9 +1169,9 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 	}
 
-	// Dashboard and Config tabs are static — swallow navigation keys.
-	// Only allow quit, tab switching, and refresh.
-	if m.activeTab == tabDashboard || m.activeTab == tabConfig {
+	// Dashboard tab is static — swallow navigation keys.
+	// Only allow quit, tab switching, scroll, and refresh.
+	if m.activeTab == tabDashboard {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
@@ -1160,7 +1183,15 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "down", "j":
 			if m.activeTab == tabDashboard {
-				m.dashboardScroll++
+				// Estimate content lines from data size to clamp scroll.
+				maxLines := 20 + len(m.tools)/3 + len(m.customPacks) + len(m.myBackupFiles)
+				maxScroll := maxLines - (m.height / 2)
+				if maxScroll < 0 {
+					maxScroll = 0
+				}
+				if m.dashboardScroll < maxScroll {
+					m.dashboardScroll++
+				}
 			}
 			return m, nil
 		case "home", "g":
@@ -1210,12 +1241,18 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "6":
 			m.activeTab = tabConfig
 			m.cursor = 0
+			m.configScroll = 0
 			return m, nil
 		case "r":
 			cmd := m.startScan()
 			return m, cmd
 		}
 		return m, nil
+	}
+
+	// Config tab uses the config editor.
+	if m.activeTab == tabConfig {
+		return m.handleKeyConfigEditor(msg)
 	}
 
 	switch msg.String() {
@@ -1311,6 +1348,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "6":
 		m.activeTab = tabConfig
 		m.cursor = 0
+		m.configScroll = 0
 		return m, nil
 	case "up", "k":
 		if m.cursor > 0 {

@@ -105,11 +105,14 @@ func Save(packs []registry.Pack) error {
 	if err := os.WriteFile(tmp, []byte(header+string(data)), 0o644); err != nil {
 		return err
 	}
-	// Windows: remove target before rename.
-	_ = os.Remove(path)
+	// Try rename directly (atomic on POSIX). On Windows os.Rename fails
+	// when the destination exists, so fall back to remove + retry.
 	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return err
+		_ = os.Remove(path)
+		if retryErr := os.Rename(tmp, path); retryErr != nil {
+			_ = os.Remove(tmp)
+			return retryErr
+		}
 	}
 	return nil
 }

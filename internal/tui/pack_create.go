@@ -18,8 +18,6 @@ const (
 	packCreatePhaseDispName = 1 // enter display name
 	packCreatePhaseDesc     = 2 // enter description
 	packCreatePhaseTools    = 3 // select tools
-	packCreatePhaseOutput   = 4 // choose output: file or token
-	packCreatePhaseDone     = 5 // show result
 )
 
 // packSavedMsg is sent after a pack is saved to custom-packs.yaml.
@@ -38,8 +36,6 @@ func (m *Model) startPackCreate() {
 	m.packCreateSelected = make(map[int]bool)
 	m.packCreateCursor = 0
 	m.packCreateFilter = ""
-	m.packCreateResult = ""
-	m.packCreateToken = ""
 	m.rebuildPackCreateFiltered()
 	m.statusMsg = ""
 }
@@ -51,8 +47,6 @@ func (m *Model) resetPackCreate() {
 	m.packCreateSelected = make(map[int]bool)
 	m.packCreateFiltered = nil
 	m.packCreateFilter = ""
-	m.packCreateResult = ""
-	m.packCreateToken = ""
 	m.statusMsg = ""
 }
 

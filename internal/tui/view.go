@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"runtime"
 	"sort"
 	"strconv"
@@ -12,7 +11,6 @@ import (
 	"github.com/mattn/go-runewidth"
 
 	"github.com/nassiharel/clim/internal/build"
-	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/logging"
 	"github.com/nassiharel/clim/internal/registry"
@@ -67,10 +65,40 @@ func (m Model) renderView() string {
 		return m.layoutWithFooter(body.String(), footer)
 	}
 
-	// Config tab has its own rendering path.
+	// Config tab — supports scrolling.
 	if m.activeTab == tabConfig {
-		body.WriteString(m.renderConfigView())
-		return m.layoutWithFooter(body.String(), m.renderHelp())
+		content := m.renderConfigView()
+		lines := strings.Split(content, "\n")
+
+		footer := m.renderHelp()
+		footerRows := visualRows(footer, m.width)
+		const cfgHeaderRows = 3
+		const cfgMinGap = 1
+		visibleRows := m.height - cfgHeaderRows - footerRows - cfgMinGap
+		if visibleRows < 5 {
+			visibleRows = 5
+		}
+
+		maxScroll := len(lines) - visibleRows
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		scroll := m.configScroll
+		if scroll > maxScroll {
+			scroll = maxScroll
+		}
+
+		if scroll > 0 && scroll < len(lines) {
+			lines = lines[scroll:]
+		}
+
+		body.WriteString(strings.Join(lines, "\n"))
+		if scroll > 0 {
+			footer = "  " + dimVersion.Render("↑/↓ scroll") + "    " + footer
+		} else if len(strings.Split(content, "\n")) > visibleRows {
+			footer = "  " + dimVersion.Render("↓ more below") + "    " + footer
+		}
+		return m.layoutWithFooter(body.String(), footer)
 	}
 
 	// Dashboard tab has its own rendering path — supports scrolling.
@@ -78,8 +106,19 @@ func (m Model) renderView() string {
 		content := m.renderDashboardView()
 		lines := strings.Split(content, "\n")
 
-		// Clamp scroll offset.
-		maxScroll := len(lines) - (m.height / 2)
+		// Compute available visible rows: total height minus tab bar (2 lines),
+		// footer, and 1-line gap between body and footer.
+		footer := m.renderHelp()
+		footerRows := visualRows(footer, m.width)
+		const headerRows = 3 // title bar + tab bar + blank
+		const minGap = 1
+		visibleRows := m.height - headerRows - footerRows - minGap
+		if visibleRows < 5 {
+			visibleRows = 5
+		}
+
+		// Clamp scroll offset so last screenful of content stays visible.
+		maxScroll := len(lines) - visibleRows
 		if maxScroll < 0 {
 			maxScroll = 0
 		}
@@ -94,10 +133,9 @@ func (m Model) renderView() string {
 		}
 
 		body.WriteString(strings.Join(lines, "\n"))
-		footer := m.renderHelp()
 		if scroll > 0 {
 			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
-		} else if len(strings.Split(content, "\n")) > m.height-4 {
+		} else if len(strings.Split(content, "\n")) > visibleRows {
 			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
 		}
 		return m.layoutWithFooter(body.String(), footer)
@@ -1548,16 +1586,6 @@ func (m Model) renderConfigView() string {
 
 	// File paths.
 	b.WriteString("\n")
-	marketplacePath := dim("(unknown)")
-	if p, err := catalog.CachePath(); err == nil {
-		marketplacePath = p
-	}
-	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Marketplace", 18)), marketplacePath)
-
-	if m.cfg != nil && m.cfg.Marketplace.URL != "" {
-		fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Catalog URL", 18)), m.cfg.Marketplace.URL)
-	}
-
 	configPath := dim("(unknown)")
 	if p, err := config.Path(); err == nil {
 		configPath = p
@@ -1569,18 +1597,6 @@ func (m Model) renderConfigView() string {
 		logPath = dim("(unavailable)")
 	}
 	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Log", 18)), logPath)
-
-	// Editor.
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = os.Getenv("VISUAL")
-	}
-	if editor == "" {
-		editor = dim("(not set)")
-	} else {
-		editor += "  " + dim("($EDITOR)")
-	}
-	fmt.Fprintf(&b, "  %s  %s\n", label(fixedWidth("Editor", 18)), editor)
 
 	// Package managers.
 	b.WriteString("\n")
@@ -1595,18 +1611,8 @@ func (m Model) renderConfigView() string {
 		fmt.Fprintf(&b, "    %s  %-10s %s\n", icon, string(pm.Source), status)
 	}
 
-	// Tool stats.
-	b.WriteString("\n")
-	inst, upd, notInst := m.stats()
-	total := inst + notInst
-	fmt.Fprintf(&b, "  %s  %d total · %d installed · %d updates\n",
-		label(fixedWidth("Tools", 18)), total, inst, upd)
-
-	// Pad remaining height.
-	used := 18 + len(registry.AllPMStatusForOS())
-	if remaining := m.height - used - 6; remaining > 0 {
-		b.WriteString(strings.Repeat("\n", remaining))
-	}
+	// Editable settings.
+	b.WriteString(m.renderConfigEditor())
 
 	return b.String()
 }
@@ -1662,7 +1668,25 @@ func (m Model) renderHelp() string {
 			}
 		}
 	case tabConfig:
+		if m.configEditing {
+			parts = []string{
+				dimVersion.Render("Enter") + " confirm",
+				dimVersion.Render("Esc") + " cancel",
+			}
+		} else {
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Enter") + " edit",
+				dimVersion.Render("S") + " save",
+				dimVersion.Render("r") + " reset",
+				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("q") + " quit",
+			}
+		}
+	case tabDashboard:
 		parts = []string{
+			dimVersion.Render("↑↓") + " scroll",
+			dimVersion.Render("Home") + " top",
 			dimVersion.Render("←→") + " tab",
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",

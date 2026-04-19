@@ -14,7 +14,6 @@ var (
 	dashGaugeFill  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))  // green
 	dashGaugeWarn  = lipgloss.NewStyle().Foreground(lipgloss.Color("214")) // orange
 	dashGaugeInfo  = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))  // cyan
-	dashCardBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("62"))  // muted purple
 	dashNumber     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
 	dashLabel      = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 	dashSection    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
@@ -36,32 +35,6 @@ func gauge(filled, total, width int, fillStyle, emptyStyle lipgloss.Style) strin
 	bar := fillStyle.Render(strings.Repeat("█", pct)) +
 		emptyStyle.Render(strings.Repeat("░", width-pct))
 	return bar
-}
-
-// miniBar renders a tiny inline spark using block chars: ▁▂▃▄▅▆▇█
-func miniBar(values []int) string {
-	if len(values) == 0 {
-		return ""
-	}
-	blocks := []rune("▁▂▃▄▅▆▇█")
-	maxVal := 0
-	for _, v := range values {
-		if v > maxVal {
-			maxVal = v
-		}
-	}
-	if maxVal == 0 {
-		return dashDim.Render(strings.Repeat("▁", len(values)))
-	}
-	var sb strings.Builder
-	for _, v := range values {
-		idx := v * 7 / maxVal
-		if idx > 7 {
-			idx = 7
-		}
-		sb.WriteRune(blocks[idx])
-	}
-	return dashGaugeInfo.Render(sb.String())
 }
 
 // renderDashboardView renders the Dashboard tab with aggregate stats.
