@@ -1167,6 +1167,7 @@ func collectPackageEntries(pkgs registry.PackageIDs) []packageEntry {
 	all := []packageEntry{
 		{source: string(registry.SourceWinget), id: pkgs.Winget},
 		{source: string(registry.SourceChoco), id: pkgs.Choco},
+		{source: string(registry.SourceScoop), id: pkgs.Scoop},
 		{source: string(registry.SourceBrew), id: pkgs.Brew},
 		{source: string(registry.SourceApt), id: pkgs.Apt},
 		{source: string(registry.SourceSnap), id: pkgs.Snap},
@@ -1194,7 +1195,7 @@ func derivePlatforms(pkgs registry.PackageIDs) []string {
 		}
 	}
 
-	if pkgs.Winget != "" || pkgs.Choco != "" {
+	if pkgs.Winget != "" || pkgs.Choco != "" || pkgs.Scoop != "" {
 		add("Windows")
 	}
 	if pkgs.Brew != "" {

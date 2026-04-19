@@ -9,6 +9,7 @@ binary_names:
     - argocd
 packages:
     winget: argoproj.argocd
+    scoop: argocd
     choco: argocd-cli
     brew: argocd
 github: argoproj/argo-cd

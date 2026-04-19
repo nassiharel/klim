@@ -8,6 +8,7 @@ binary_names:
     - docker
 packages:
     winget: Docker.DockerDesktop
+    scoop: docker
     choco: docker-desktop
     brew: docker
     apt: docker.io

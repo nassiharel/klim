@@ -89,6 +89,7 @@ type packDef struct {
 type PackageDef struct {
 	Winget string `yaml:"winget,omitempty"`
 	Choco  string `yaml:"choco,omitempty"`
+	Scoop  string `yaml:"scoop,omitempty"`
 	Brew   string `yaml:"brew,omitempty"`
 	Apt    string `yaml:"apt,omitempty"`
 	Snap   string `yaml:"snap,omitempty"`
@@ -148,6 +149,7 @@ func defsToTools(defs []ToolDef) []Tool {
 			Packages: PackageIDs{
 				Winget: d.Packages.Winget,
 				Choco:  d.Packages.Choco,
+				Scoop:  d.Packages.Scoop,
 				Brew:   d.Packages.Brew,
 				Apt:    d.Packages.Apt,
 				Snap:   d.Packages.Snap,

@@ -8,6 +8,7 @@ tags:
 binary_names:
     - cosign
 packages:
-    winget: sigstore.cosign
+    winget: Sigstore.Cosign
+    scoop: cosign
     brew: cosign
 github: sigstore/cosign

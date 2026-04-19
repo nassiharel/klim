@@ -449,6 +449,57 @@ func TestParseAptCachePolicy(t *testing.T) {
 	}
 }
 
+func TestParseScoopList(t *testing.T) {
+	// Representative output from `scoop list <pkg>` — includes the header
+	// row, separator line, and a data row. Scoop localises headers via the
+	// console culture, but the default English form is what we test here.
+	standard := "\nInstalled apps:\n\n" +
+		"Name Version Source Updated             Info\n" +
+		"---- ------- ------ -------             ----\n" +
+		"bat  0.24.0  main   2024-01-15 10:11:12\n"
+
+	// Case-insensitive match: scoop sometimes prints the name exactly as
+	// stored in the manifest, which may differ in case from user input.
+	mixedCase := "Name Version Source\n---- ------- ------\nBat  0.24.0  main\n"
+
+	// Multiple results (e.g. when `scoop list` is called without a pattern).
+	multi := "Name Version Source\n---- ------- ------\n" +
+		"7zip 23.01   main\n" +
+		"bat  0.24.0  main\n" +
+		"gh   2.44.1  main\n"
+
+	// Not installed — only the header survives.
+	notFound := "Name Version Source\n---- ------- ------\n"
+
+	tests := []struct {
+		name   string
+		output string
+		pkg    string
+		want   string
+	}{
+		{"standard", standard, "bat", "0.24.0"},
+		{"case-insensitive", mixedCase, "bat", "0.24.0"},
+		{"multi rows pick match", multi, "bat", "0.24.0"},
+		{"multi rows other match", multi, "gh", "2.44.1"},
+		{"not installed", notFound, "bat", ""},
+		{"empty output", "", "bat", ""},
+		// Header-looking row whose package name literally equals "Name"
+		// should be skipped, not returned as version "Version".
+		{"skip header row", "Name Version Source\n---- ------- ------\n", "Name", ""},
+		// Separator row starting with dashes should be skipped.
+		{"skip separator row", "---- ------- ------\n", "----", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseScoopList(tt.output, tt.pkg)
+			if got != tt.want {
+				t.Errorf("parseScoopList(..., %q) = %q, want %q", tt.pkg, got, tt.want)
+			}
+		})
+	}
+}
+
 // --- Test helper functions that mirror the parsing logic ---
 
 func parseBrewInfoJSON(jsonStr string) string {

@@ -9,7 +9,8 @@ tags:
 binary_names:
     - sops
 packages:
-    winget: Mozilla.sops
+    winget: Mozilla.SOPS
+    scoop: sops
     choco: sops
     brew: sops
 github: getsops/sops

@@ -24,6 +24,7 @@ type Tool struct {
 type Packages struct {
 	Winget string `yaml:"winget,omitempty"`
 	Choco  string `yaml:"choco,omitempty"`
+	Scoop  string `yaml:"scoop,omitempty"`
 	Brew   string `yaml:"brew,omitempty"`
 	Apt    string `yaml:"apt,omitempty"`
 	Snap   string `yaml:"snap,omitempty"`

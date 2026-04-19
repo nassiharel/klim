@@ -8,6 +8,7 @@ binary_names:
     - sqlite3
 packages:
     winget: SQLite.SQLite
+    scoop: sqlite3
     choco: sqlite
     brew: sqlite
     apt: sqlite3

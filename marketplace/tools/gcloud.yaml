@@ -9,6 +9,7 @@ binary_names:
     - gcloud
 packages:
     winget: Google.CloudSDK
+    scoop: gcloud
     choco: gcloudsdk
     brew: google-cloud-sdk
     snap: google-cloud-cli

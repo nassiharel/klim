@@ -8,6 +8,7 @@ binary_names:
     - fd
 packages:
     winget: sharkdp.fd
+    scoop: fd
     choco: fd
     brew: fd
     apt: fd-find

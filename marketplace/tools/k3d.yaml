@@ -8,7 +8,8 @@ tags:
 binary_names:
     - k3d
 packages:
-    winget: k3d-io.k3d
+    winget: k3d.k3d
+    scoop: k3d
     choco: k3d
     brew: k3d
 github: k3d-io/k3d

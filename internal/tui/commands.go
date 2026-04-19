@@ -374,6 +374,7 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 				Packages: manifest.Packages{
 					Winget: tool.Packages.Winget,
 					Choco:  tool.Packages.Choco,
+					Scoop:  tool.Packages.Scoop,
 					Brew:   tool.Packages.Brew,
 					Apt:    tool.Packages.Apt,
 					Snap:   tool.Packages.Snap,
@@ -464,6 +465,7 @@ func buildImportPlanCmd(svc *service.ToolService, path string) tea.Cmd {
 				pkgs = registry.PackageIDs{
 					Winget: mt.Packages.Winget,
 					Choco:  mt.Packages.Choco,
+					Scoop:  mt.Packages.Scoop,
 					Brew:   mt.Packages.Brew,
 					Apt:    mt.Packages.Apt,
 					Snap:   mt.Packages.Snap,

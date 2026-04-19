@@ -8,6 +8,7 @@ binary_names:
     - go
 packages:
     winget: GoLang.Go
+    scoop: go
     choco: golang
     brew: go
     apt: golang-go

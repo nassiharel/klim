@@ -8,6 +8,7 @@ binary_names:
     - hyperfine
 packages:
     winget: sharkdp.hyperfine
+    scoop: hyperfine
     choco: hyperfine
     brew: hyperfine
     apt: hyperfine

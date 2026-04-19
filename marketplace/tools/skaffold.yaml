@@ -9,6 +9,7 @@ binary_names:
     - skaffold
 packages:
     winget: Google.ContainerTools.Skaffold
+    scoop: skaffold
     choco: skaffold
     brew: skaffold
 github: GoogleContainerTools/skaffold

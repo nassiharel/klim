@@ -9,6 +9,7 @@ func TestInstallCmd(t *testing.T) {
 	pkgs := PackageIDs{
 		Winget: "Git.Git",
 		Choco:  "git",
+		Scoop:  "git",
 		Brew:   "git",
 		Apt:    "git",
 		Snap:   "git",
@@ -21,6 +22,7 @@ func TestInstallCmd(t *testing.T) {
 	}{
 		{SourceWinget, "winget install --id Git.Git"},
 		{SourceChoco, "choco install git"},
+		{SourceScoop, "scoop install git"},
 		{SourceBrew, "brew install git"},
 		{SourceApt, "sudo apt install git"},
 		{SourceSnap, "sudo snap install git"},
@@ -45,6 +47,7 @@ func TestUpgradeCmd(t *testing.T) {
 	pkgs := PackageIDs{
 		Winget: "Git.Git",
 		Choco:  "git",
+		Scoop:  "git",
 		Brew:   "git",
 		Apt:    "git",
 		Snap:   "git",
@@ -57,6 +60,7 @@ func TestUpgradeCmd(t *testing.T) {
 	}{
 		{SourceWinget, "winget upgrade --id Git.Git"},
 		{SourceChoco, "choco upgrade git"},
+		{SourceScoop, "scoop update git"},
 		{SourceBrew, "brew upgrade git"},
 		{SourceApt, "sudo apt upgrade git"},
 		{SourceSnap, "sudo snap refresh git"},
@@ -79,6 +83,7 @@ func TestRemoveCmd(t *testing.T) {
 	pkgs := PackageIDs{
 		Winget: "Git.Git",
 		Choco:  "git",
+		Scoop:  "git",
 		Brew:   "git",
 		Apt:    "git",
 		Snap:   "git",
@@ -91,6 +96,7 @@ func TestRemoveCmd(t *testing.T) {
 	}{
 		{SourceWinget, "winget uninstall --id Git.Git"},
 		{SourceChoco, "choco uninstall git"},
+		{SourceScoop, "scoop uninstall git"},
 		{SourceBrew, "brew uninstall git"},
 		{SourceApt, "sudo apt remove git"},
 		{SourceSnap, "sudo snap remove git"},
@@ -112,7 +118,7 @@ func TestRemoveCmd(t *testing.T) {
 func TestCommandsWithEmptyPackageIDs(t *testing.T) {
 	empty := PackageIDs{}
 	sources := []InstallSource{
-		SourceWinget, SourceChoco, SourceBrew,
+		SourceWinget, SourceChoco, SourceScoop, SourceBrew,
 		SourceApt, SourceSnap, SourceNPM,
 	}
 

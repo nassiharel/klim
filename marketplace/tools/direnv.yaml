@@ -9,6 +9,7 @@ binary_names:
     - direnv
 packages:
     winget: direnv.direnv
+    scoop: direnv
     brew: direnv
     apt: direnv
 github: direnv/direnv

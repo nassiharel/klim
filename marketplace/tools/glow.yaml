@@ -8,6 +8,7 @@ binary_names:
     - glow
 packages:
     winget: charmbracelet.glow
+    scoop: glow
     choco: glow
     brew: glow
 github: charmbracelet/glow

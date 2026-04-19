@@ -203,7 +203,7 @@ func validateToolFile(path string, seen map[string]string, allowedCategories, al
 		seenTags[tag] = true
 	}
 
-	if tool.Packages.Winget == "" && tool.Packages.Choco == "" && tool.Packages.Brew == "" &&
+	if tool.Packages.Winget == "" && tool.Packages.Choco == "" && tool.Packages.Scoop == "" && tool.Packages.Brew == "" &&
 		tool.Packages.Apt == "" && tool.Packages.Snap == "" && tool.Packages.NPM == "" {
 		errs = append(errs, rel+": must define at least one package manager in 'packages'")
 	}

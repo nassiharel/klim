@@ -9,6 +9,7 @@ binary_names:
     - nmap
 packages:
     winget: Insecure.Nmap
+    scoop: nmap
     choco: nmap
     brew: nmap
     apt: nmap

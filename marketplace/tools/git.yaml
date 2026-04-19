@@ -8,6 +8,7 @@ binary_names:
     - git
 packages:
     winget: Git.Git
+    scoop: git
     choco: git
     brew: git
     apt: git

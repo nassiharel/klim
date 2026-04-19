@@ -9,6 +9,7 @@ binary_names:
     - nvim
 packages:
     winget: Neovim.Neovim
+    scoop: nvim
     choco: neovim
     brew: neovim
     apt: neovim

@@ -9,6 +9,7 @@ binary_names:
     - lazydocker
 packages:
     winget: JesseDuffield.Lazydocker
+    scoop: lazydocker
     choco: lazydocker
     brew: lazydocker
     snap: lazydocker

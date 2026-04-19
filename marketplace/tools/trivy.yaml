@@ -10,6 +10,7 @@ binary_names:
     - trivy
 packages:
     winget: AquaSecurity.Trivy
+    scoop: trivy
     choco: trivy
     brew: trivy
     apt: trivy

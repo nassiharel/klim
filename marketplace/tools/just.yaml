@@ -9,6 +9,7 @@ binary_names:
     - just
 packages:
     winget: Casey.Just
+    scoop: just
     choco: just
     brew: just
 github: casey/just
