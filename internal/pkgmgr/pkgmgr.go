@@ -252,10 +252,20 @@ func chocoLatestVersion(ctx context.Context, pkg string) string {
 // so we find the line whose first field matches the package (case-insensitive)
 // and return the second field.
 func scoopInstalledVersion(ctx context.Context, pkg string) string {
-	out := runCmd(ctx, "scoop", "list", pkg)
+	return parseScoopList(runCmd(ctx, "scoop", "list", pkg), pkg)
+}
+
+// parseScoopList extracts the version column for pkg from `scoop list` output.
+// Split out from scoopInstalledVersion so it can be covered by unit tests
+// without shelling out.
+func parseScoopList(out, pkg string) string {
 	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(strings.TrimSpace(line))
 		if len(fields) >= 2 && strings.EqualFold(fields[0], pkg) {
+			// Skip header/separator lines like "Name Version ..." or "---- -------".
+			if strings.EqualFold(fields[0], "Name") || strings.HasPrefix(fields[0], "---") {
+				continue
+			}
 			return fields[1]
 		}
 	}

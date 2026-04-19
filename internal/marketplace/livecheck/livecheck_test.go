@@ -157,27 +157,27 @@ var managers = []packageManager{
 
 // TestMarketplacePackageIDsResolve walks every tool YAML and, for every
 // package manager supported on the current host, verifies the declared
-// package ID resolves to a real package. Subtests are skipped (not
-// failed) when the package manager binary isn't installed on the
-// runner, so the same test can execute unchanged on Windows/macOS/Linux
-// CI images.
+// package ID resolves to a real package. Each package manager runs as a
+// subtest and calls t.Skipf when its binary is not on PATH, so skips
+// show up explicitly in the test output. If no package manager is
+// available on this host the parent test is marked skipped.
 func TestMarketplacePackageIDsResolve(t *testing.T) {
 	defs := loadTools(t)
 	if len(defs) == 0 {
 		t.Fatal("no tool YAMLs found")
 	}
 
-	var okCount, failCount int
+	var okCount, failCount, attempted int
 	for _, pm := range managers {
 		pm := pm
-		if !matches(runtime.GOOS, pm.supportedOS) {
-			continue
-		}
-		if !pmAvailable(pm.bin) {
-			t.Logf("skipping %s: %q not on PATH", pm.source, pm.bin)
-			continue
-		}
 		t.Run(string(pm.source), func(t *testing.T) {
+			if !matches(runtime.GOOS, pm.supportedOS) {
+				t.Skipf("%s not applicable on %s", pm.source, runtime.GOOS)
+			}
+			if !pmAvailable(pm.bin) {
+				t.Skipf("%s binary %q not on PATH", pm.source, pm.bin)
+			}
+			attempted++
 			for _, d := range defs {
 				d := d
 				id := pm.pkgID(d.Packages)
@@ -201,8 +201,12 @@ func TestMarketplacePackageIDsResolve(t *testing.T) {
 		})
 	}
 
-	t.Logf("livecheck summary: %d resolved, %d failed (%d tools, %d managers)",
-		okCount, failCount, len(defs), len(managers))
+	if attempted == 0 {
+		t.Skip("no supported package manager available on this host; nothing probed")
+	}
+
+	t.Logf("livecheck summary: %d resolved, %d failed (%d tools, %d managers attempted)",
+		okCount, failCount, len(defs), attempted)
 }
 
 // --- per-package-manager probes ---

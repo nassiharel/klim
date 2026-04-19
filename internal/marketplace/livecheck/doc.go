@@ -8,8 +8,10 @@
 //
 //	go test -tags=integration -timeout=30m ./internal/marketplace/livecheck/...
 //
-// Per-tool/per-PM subtests are reported as Skip when the package
-// manager binary is not installed on the current host, so the same
-// command works on every CI runner (Windows, macOS, Linux) — each
-// runner only exercises the package managers it natively supports.
+// Each package manager is run as a subtest; when its binary is not on
+// PATH the subtest calls t.Skipf, so skips appear explicitly in the
+// test log and machine-readable output (SKIP rather than silent no-op).
+// If none of the supported package managers are available on the host
+// the whole test is marked skipped — catching minimal runners where the
+// job would otherwise pass without probing anything.
 package livecheck

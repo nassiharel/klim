@@ -284,7 +284,7 @@ func pmAvailable(source InstallSource) bool {
 
 // BestInstallSource returns the recommended package manager for the current OS.
 // Only suggests package managers that are actually installed on the system.
-// Priority: Windows: winget→choco→npm, macOS: brew→npm, Linux: apt→snap→brew→npm.
+// Priority: Windows: winget→choco→scoop→npm, macOS: brew→npm, Linux: apt→snap→brew→npm.
 func (p PackageIDs) BestInstallSource() InstallSource {
 	candidates := sourcePriority()
 	for _, src := range candidates {
