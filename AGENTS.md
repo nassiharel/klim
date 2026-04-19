@@ -34,6 +34,7 @@ internal/
   manifest/    YAML schema for export/import manifests
   pkgmgr/      Package manager queries (installed + latest versions)
   registry/    Tool, Instance, PackageIDs, Pack structs; version comparison
+  scancache/   Per-host scan cache: installed/not, paths, versions → ~/.config/clim/scan-cache.yaml
   selfupdate/  Self-update from GitHub Releases (download → extract → replace)
   service/     ToolService: composition root wiring catalog + finder + resolver
   share/       Compact token encode/decode for sharing tool lists
@@ -141,6 +142,7 @@ make marketplace-assemble  # assemble → marketplace.yaml
 - **`marketplace/` is the single source of truth.** No tool definitions in Go code. Individual YAML files are assembled into `marketplace.yaml` by CI.
 - **Never edit root `marketplace.yaml` directly** — it's auto-generated. Edit files in `marketplace/tools/` and `marketplace/packs/` instead.
 - **Catalog is fetched at runtime**, not embedded. No network + no cache = catalog failure.
+- **Scan cache (`~/.config/clim/scan-cache.yaml`) is user-controlled.** Written after every successful scan; loaded on startup to skip PATH scan + version resolution. Invalidated by TUI `r` key or CLI `--refresh` flag. Mutating actions (install/upgrade/remove) trigger `startScan` which always rescans and rewrites the cache.
 - **`config.yaml` is optional.** `config.Load()` returns defaults if missing; writes defaults on first run.
 - **Version comparison stops at first non-numeric segment.** `"2.53.0.windows.1"` → `[2, 53, 0]`.
 - **`VersionsMatch` handles PE padding** (`1400` ≈ `14`), `CompareVersions` does not.

@@ -304,14 +304,15 @@ func tabFromName(name string) int {
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
-		func() tea.Msg { return findToolsCmd(m.svc)() },
+		func() tea.Msg { return findToolsCmd(m.svc, false)() },
 	)
 }
 
 // startScan prepares the model for a new scan, invalidating any in-flight
 // version resolution from a previous scan so stale toolVersionMsg messages
 // are discarded immediately. Every code path that fires findToolsCmd must
-// call this first.
+// call this first. startScan always performs a fresh scan (no cache) since
+// it's called after mutating actions and user-triggered rescans.
 func (m *Model) startScan() tea.Cmd {
 	m.loading = true
 	m.phase = phaseLoading
@@ -327,7 +328,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.batchQueue = nil
 	return tea.Batch(
 		m.spinner.Tick,
-		func() tea.Msg { return findToolsCmd(m.svc)() },
+		func() tea.Msg { return findToolsCmd(m.svc, true)() },
 	)
 }
 
@@ -347,6 +348,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Set status based on how the catalog was loaded.
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
+		} else if msg.scanInfo != nil && msg.scanInfo.Source == service.ScanSourceCache {
+			// Cache hit: scan results came from disk, no subprocess calls ran.
+			ageStr := humaniseCacheAge(msg.scanInfo.CacheAt)
+			if ageStr != "" {
+				m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache (scanned %s). Press 'r' to rescan.", len(m.tools), ageStr)
+			} else {
+				m.statusMsg = fmt.Sprintf("✓ Loaded %d tools from cache. Press 'r' to rescan.", len(m.tools))
+			}
 		} else if info := msg.catalogInfo; info != nil {
 			switch info.Source {
 			case catalog.SourceCache:
@@ -375,6 +384,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.phase = phaseResolving
 		m.pending = 0
+		fromCache := msg.scanInfo != nil && msg.scanInfo.Source == service.ScanSourceCache
 
 		// Reset filters — applyFilter() will rebuild sidebar items contextually.
 		m.categoryFilter = ""
@@ -434,6 +444,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.applyFilter()
 
+		// Cache hit: versions are already resolved, skip the per-tool
+		// subprocess queries entirely. Auto-select tools with available
+		// updates for batch upgrade, matching the resolve path.
+		if fromCache {
+			for i := range m.tools {
+				if m.tools[i].HasUpdate() {
+					m.updateSelected[i] = true
+				}
+			}
+			m.phase = phaseDone
+			m.loading = false
+			return m, nil
+		}
+
 		// Fire per-tool version resolution commands.
 		gen := m.scanGen
 		var cmds []tea.Cmd
@@ -449,6 +473,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			m.loading = false
 			m.statusMsg = ""
+			// Persist cache even when nothing was installed so repeat runs
+			// skip the PATH scan too.
+			_ = m.svc.SaveScanCache(m.tools)
 		}
 		return m, tea.Batch(cmds...)
 
@@ -472,6 +499,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			m.loading = false
 			m.statusMsg = ""
+			// Persist fully-resolved scan so the next launch is instant.
+			_ = m.svc.SaveScanCache(m.tools)
 		}
 		return m, nil
 
@@ -500,6 +529,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.statusMsg = fmt.Sprintf("✓ %s refreshed", msg.tool.DisplayName)
 		m.applyFilter()
+		// Persist the updated state so future runs see the refreshed tool.
+		_ = m.svc.SaveScanCache(m.tools)
 		// Rebuild the tool menu if the detail view is still showing.
 		if m.showDetail {
 			m.buildToolMenu()

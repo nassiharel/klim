@@ -18,7 +18,25 @@ import (
 	"github.com/nassiharel/clim/internal/finder"
 	"github.com/nassiharel/clim/internal/pkgmgr"
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/scancache"
 )
+
+// ScanSource describes where fully-resolved tool data came from.
+type ScanSource string
+
+const (
+	// ScanSourceCache means the scan result was loaded from the on-disk
+	// scan cache (fast path).
+	ScanSourceCache ScanSource = "cache"
+	// ScanSourceFresh means a fresh PATH scan + version resolution ran.
+	ScanSourceFresh ScanSource = "fresh"
+)
+
+// ScanInfo describes how a resolved tool list was produced.
+type ScanInfo struct {
+	Source  ScanSource
+	CacheAt time.Time // when the cache was written (zero if not from cache)
+}
 
 // CatalogInfo describes how the catalog was loaded.
 type CatalogInfo struct {
@@ -83,7 +101,34 @@ func (s *ToolService) LoadAndResolve(ctx context.Context) ([]registry.Tool, *Cat
 
 	s.Resolver.ResolveVersions(ctx, tools, s.Concurrency)
 	sortToolsByName(tools)
+	_ = scancache.Save(tools) // best-effort: cache is a pure optimisation
 	return tools, info, nil
+}
+
+// LoadAndResolveCached returns fully resolved tools, preferring the on-disk
+// scan cache to avoid the cost of running package-manager subprocesses on
+// every invocation. When force is true, or the cache is missing/invalid,
+// it falls back to the full LoadAndResolve pipeline and rewrites the cache.
+// The returned ScanInfo reports which path was taken.
+func (s *ToolService) LoadAndResolveCached(ctx context.Context, force bool) ([]registry.Tool, *CatalogInfo, *ScanInfo, error) {
+	if force {
+		_ = scancache.Delete()
+		tools, info, err := s.LoadAndResolve(ctx)
+		return tools, info, &ScanInfo{Source: ScanSourceFresh}, err
+	}
+
+	if entries, savedAt, err := scancache.Load(); err == nil {
+		tools, info, catErr := s.Catalog.LoadTools(ctx)
+		if catErr != nil {
+			return nil, nil, nil, fmt.Errorf("loading catalog: %w", catErr)
+		}
+		tools = scancache.Apply(tools, entries)
+		sortToolsByName(tools)
+		return tools, info, &ScanInfo{Source: ScanSourceCache, CacheAt: savedAt}, nil
+	}
+
+	tools, info, err := s.LoadAndResolve(ctx)
+	return tools, info, &ScanInfo{Source: ScanSourceFresh}, err
 }
 
 // ScanOnly loads the catalog and scans PATH without resolving versions.
@@ -116,6 +161,37 @@ func (s *ToolService) LoadAndScan(ctx context.Context) ([]registry.Tool, *Catalo
 
 	sortToolsByName(tools)
 	return tools, info, nil
+}
+
+// LoadCached tries to produce a fully resolved tool list from the on-disk
+// scan cache. It is the TUI fast path: on a cache hit, both PATH scanning
+// and version resolution are skipped. Returns os.ErrNotExist (wrapped) when
+// no cache is available so the caller can fall back to a fresh scan.
+func (s *ToolService) LoadCached(ctx context.Context) ([]registry.Tool, *CatalogInfo, *ScanInfo, error) {
+	entries, savedAt, err := scancache.Load()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	tools, info, catErr := s.Catalog.LoadTools(ctx)
+	if catErr != nil {
+		return nil, nil, nil, fmt.Errorf("loading catalog: %w", catErr)
+	}
+	tools = scancache.Apply(tools, entries)
+	sortToolsByName(tools)
+	return tools, info, &ScanInfo{Source: ScanSourceCache, CacheAt: savedAt}, nil
+}
+
+// SaveScanCache persists the given fully-resolved tools to the scan cache.
+// Errors are swallowed by callers that treat the cache as an optimisation.
+func (s *ToolService) SaveScanCache(tools []registry.Tool) error {
+	return scancache.Save(tools)
+}
+
+// InvalidateScanCache removes the on-disk scan cache so the next load
+// performs a fresh scan. Called before mutating actions (install, remove,
+// upgrade) to avoid serving stale install state.
+func (s *ToolService) InvalidateScanCache() error {
+	return scancache.Delete()
 }
 
 // ResolveOne resolves versions for a single tool.

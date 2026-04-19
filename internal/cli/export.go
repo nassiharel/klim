@@ -10,7 +10,10 @@ import (
 
 	"github.com/nassiharel/clim/internal/manifest"
 	"github.com/nassiharel/clim/internal/progress"
+	"github.com/nassiharel/clim/internal/service"
 )
+
+var exportRefreshFlag bool
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
@@ -20,6 +23,7 @@ var exportCmd = &cobra.Command{
 Usage:
   clim export > my-tools.yaml        # save to file
   clim export                         # print to stdout
+  clim export --refresh               # force a fresh scan (skip cache)
 
 On the new machine, install them with:
   clim import my-tools.yaml`,
@@ -27,17 +31,22 @@ On the new machine, install them with:
 }
 
 func init() {
+	exportCmd.Flags().BoolVar(&exportRefreshFlag, "refresh", false, "Force a fresh scan, ignoring the on-disk cache")
 	rootCmd.AddCommand(exportCmd)
 }
 
 func runExport(cmd *cobra.Command, args []string) error {
 	sp := progress.New("Scanning installed tools...")
-	tools, _, err := svc.LoadAndResolve(cmd.Context())
+	tools, _, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), exportRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
 	}
-	sp.Done("Tools scanned")
+	if scanInfo != nil && scanInfo.Source == service.ScanSourceCache {
+		sp.Done("Loaded from cache (use --refresh to rescan)")
+	} else {
+		sp.Done("Tools scanned")
+	}
 
 	var exported []manifest.Tool
 	for _, tool := range tools {

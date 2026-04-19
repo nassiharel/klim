@@ -119,6 +119,7 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 type scanResultMsg struct {
 	tools       []registry.Tool
 	catalogInfo *service.CatalogInfo // how the catalog was loaded
+	scanInfo    *service.ScanInfo    // cache vs fresh
 	err         error                // non-nil if catalog load or PATH scan failed
 }
 
@@ -240,11 +241,27 @@ type marketplaceRefreshMsg struct {
 
 // --- Scan & version commands ---
 
-func findToolsCmd(svc *service.ToolService) func() scanResultMsg {
+// findToolsCmd builds the initial scan command. When force is false it will
+// try to serve results from the scan cache (fast path: no version
+// resolution). When force is true the cache is invalidated first and a full
+// scan runs.
+func findToolsCmd(svc *service.ToolService, force bool) func() scanResultMsg {
 	return func() scanResultMsg {
 		ctx := context.Background()
+		if force {
+			_ = svc.InvalidateScanCache()
+		} else {
+			if tools, info, scanInfo, err := svc.LoadCached(ctx); err == nil {
+				return scanResultMsg{tools: tools, catalogInfo: info, scanInfo: scanInfo}
+			}
+		}
 		tools, info, err := svc.LoadAndScan(ctx)
-		return scanResultMsg{tools: tools, catalogInfo: info, err: err}
+		return scanResultMsg{
+			tools:       tools,
+			catalogInfo: info,
+			scanInfo:    &service.ScanInfo{Source: service.ScanSourceFresh},
+			err:         err,
+		}
 	}
 }
 
@@ -726,4 +743,30 @@ func execBatchUpgradeCmd(toolIdx int, args []string) tea.Cmd {
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return batchUpgradeItemMsg{toolIdx: toolIdx, err: err}
 	})
+}
+
+// humaniseCacheAge renders a cache-write timestamp as a short, human-friendly
+// relative string ("just now", "3m ago", "2h ago", "yesterday", "4d ago").
+// Returns "" for a zero timestamp so callers can fall back to a generic label.
+func humaniseCacheAge(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := time.Since(t)
+	switch {
+	case d < 45*time.Second:
+		return "just now"
+	case d < 90*time.Second:
+		return "1m ago"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 2*time.Hour:
+		return "1h ago"
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	case d < 48*time.Hour:
+		return "yesterday"
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
 }
