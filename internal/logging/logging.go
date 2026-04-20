@@ -12,6 +12,8 @@ import (
 	"sync"
 
 	"gopkg.in/natefinch/lumberjack.v2"
+
+	"github.com/nassiharel/clim/internal/paths"
 )
 
 var (
@@ -81,13 +83,12 @@ func parseLevel(s string) slog.Level {
 }
 
 func resolveLogPath() string {
-	dir, err := os.UserConfigDir()
+	p, err := paths.LogFile()
 	if err != nil {
 		return ""
 	}
-	logDir := filepath.Join(dir, "clim", "logs")
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return ""
 	}
-	return filepath.Join(logDir, "clim.log")
+	return p
 }

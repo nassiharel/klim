@@ -19,6 +19,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -84,11 +86,7 @@ func (f *GitHubFetcher) httpClient() *http.Client {
 
 // CachePath returns the path to the marketplace cache file.
 func CachePath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "clim", "marketplace", "marketplace-cache.yaml"), nil
+	return paths.CatalogCache()
 }
 
 // LoadSource indicates where the catalog was loaded from.
@@ -182,7 +180,7 @@ func LoadOrFetchWithOptions(ctx context.Context, fetcher MarketplaceFetcher, opt
 
 	// Write cache atomically: write to temp file, then rename.
 	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr == nil {
-		if writeErr := atomicWriteFile(path, data, 0o644); writeErr != nil {
+		if writeErr := fileutil.AtomicWrite(path, data, 0o644); writeErr != nil {
 			slog.Warn("failed to write catalog cache", "path", path, "error", writeErr)
 		}
 	}
@@ -215,7 +213,7 @@ func tryRefreshCache(ctx context.Context, fetcher MarketplaceFetcher, path strin
 	}
 	diff := Diff(prev, remote)
 	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr == nil {
-		if writeErr := atomicWriteFile(path, remote, 0o644); writeErr != nil {
+		if writeErr := fileutil.AtomicWrite(path, remote, 0o644); writeErr != nil {
 			slog.Warn("failed to write catalog cache", "path", path, "error", writeErr)
 		}
 	} else {
@@ -384,7 +382,7 @@ func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, e
 
 	// Update the cache.
 	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr == nil {
-		if writeErr := atomicWriteFile(cachePath, remote, 0o644); writeErr != nil {
+		if writeErr := fileutil.AtomicWrite(cachePath, remote, 0o644); writeErr != nil {
 			slog.Warn("failed to write catalog cache", "path", cachePath, "error", writeErr)
 		}
 	}
@@ -395,43 +393,3 @@ func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, e
 	}, nil
 }
 
-// atomicWriteFile writes data to a temp file in the same directory, then
-// renames it to the target path. This prevents partial/corrupt files if the
-// process is interrupted mid-write. Uses os.CreateTemp for safe temp names.
-func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return err
-	}
-
-	if err := os.Rename(tmpPath, path); err != nil {
-		// On Windows os.Rename fails if the destination exists.
-		// Remove the destination and retry once; on non-Windows this
-		// path is only reached for unexpected errors.
-		if removeErr := os.Remove(path); removeErr == nil {
-			if retryErr := os.Rename(tmpPath, path); retryErr == nil {
-				return nil
-			}
-		}
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	return nil
-}

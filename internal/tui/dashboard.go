@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/nassiharel/clim/internal/registry"
 )
 
 // Dashboard color palette.
@@ -19,6 +21,22 @@ var (
 	dashSection    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
 	dashDim        = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 )
+
+// namedCount is a generic name+count pair used in dashboard bar charts.
+type namedCount struct {
+	name  string
+	count int
+}
+
+// sortByCountDesc sorts named counts by count descending, name ascending.
+func sortByCountDesc(items []namedCount) {
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].count != items[j].count {
+			return items[i].count > items[j].count
+		}
+		return items[i].name < items[j].name
+	})
+}
 
 // gauge renders a horizontal gauge bar: [████████░░░░░░░░] 75%
 func gauge(filled, total, width int, fillStyle, emptyStyle lipgloss.Style) string {
@@ -135,24 +153,15 @@ func (m Model) renderDashboardView() string {
 	}
 
 	if len(pmCounts) > 0 {
-		type pmEntry struct {
-			name  string
-			count int
-		}
-		var pms []pmEntry
+		var pms []namedCount
 		maxCount := 0
 		for name, count := range pmCounts {
-			pms = append(pms, pmEntry{name, count})
+			pms = append(pms, namedCount{name, count})
 			if count > maxCount {
 				maxCount = count
 			}
 		}
-		sort.Slice(pms, func(i, j int) bool {
-			if pms[i].count != pms[j].count {
-				return pms[i].count > pms[j].count
-			}
-			return pms[i].name < pms[j].name
-		})
+		sortByCountDesc(pms)
 
 		barMax := m.width - 26
 		if barMax < 10 {
@@ -207,24 +216,15 @@ func (m Model) renderDashboardView() string {
 	}
 
 	if len(catCounts) > 0 {
-		type catEntry struct {
-			name  string
-			count int
-		}
-		var cats []catEntry
+		var cats []namedCount
 		maxCat := 0
 		for name, count := range catCounts {
-			cats = append(cats, catEntry{name, count})
+			cats = append(cats, namedCount{name, count})
 			if count > maxCat {
 				maxCat = count
 			}
 		}
-		sort.Slice(cats, func(i, j int) bool {
-			if cats[i].count != cats[j].count {
-				return cats[i].count > cats[j].count
-			}
-			return cats[i].name < cats[j].name
-		})
+		sortByCountDesc(cats)
 
 		miniW := 10
 		for _, cat := range cats {
@@ -262,20 +262,11 @@ func (m Model) renderDashboardView() string {
 	}
 
 	if len(tagCounts) > 0 {
-		type tagEntry struct {
-			name  string
-			count int
-		}
-		var tags []tagEntry
+		var tags []namedCount
 		for name, count := range tagCounts {
-			tags = append(tags, tagEntry{name, count})
+			tags = append(tags, namedCount{name, count})
 		}
-		sort.Slice(tags, func(i, j int) bool {
-			if tags[i].count != tags[j].count {
-				return tags[i].count > tags[j].count
-			}
-			return tags[i].name < tags[j].name
-		})
+		sortByCountDesc(tags)
 		if len(tags) > 12 {
 			tags = tags[:12]
 		}
@@ -308,12 +299,7 @@ func (m Model) renderDashboardView() string {
 	b.WriteString("\n  " + dashSection.Render("Packs & Backups") + "\n\n")
 
 	// Build installed tool set for pack status.
-	installedSet := make(map[string]bool, len(m.tools))
-	for _, tool := range m.tools {
-		if tool.IsInstalled() {
-			installedSet[tool.Name] = true
-		}
-	}
+	installedSet := registry.InstalledSet(m.tools)
 
 	// Count fully/partially installed marketplace packs.
 	fullPacks, partialPacks := 0, 0
@@ -410,20 +396,11 @@ func (m Model) renderDashboardView() string {
 		}
 	}
 	if len(platCounts) > 0 {
-		type pe struct {
-			name  string
-			count int
-		}
-		var plats []pe
+		var plats []namedCount
 		for name, count := range platCounts {
-			plats = append(plats, pe{name, count})
+			plats = append(plats, namedCount{name, count})
 		}
-		sort.Slice(plats, func(i, j int) bool {
-			if plats[i].count != plats[j].count {
-				return plats[i].count > plats[j].count
-			}
-			return plats[i].name < plats[j].name
-		})
+		sortByCountDesc(plats)
 
 		for _, p := range plats {
 			pct := p.count * 100 / total

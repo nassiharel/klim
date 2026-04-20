@@ -3,6 +3,7 @@ package registry
 import (
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -400,4 +401,31 @@ func TruncatePath(path string, maxLen int) string {
 		return path
 	}
 	return "..." + path[len(path)-maxLen+3:]
+}
+
+// SortByName sorts tools alphabetically by name (case-insensitive).
+func SortByName(tools []Tool) {
+	sort.Slice(tools, func(i, j int) bool {
+		return strings.ToLower(tools[i].Name) < strings.ToLower(tools[j].Name)
+	})
+}
+
+// ToolMap builds a name→*Tool lookup map from a slice.
+func ToolMap(tools []Tool) map[string]*Tool {
+	m := make(map[string]*Tool, len(tools))
+	for i := range tools {
+		m[tools[i].Name] = &tools[i]
+	}
+	return m
+}
+
+// InstalledSet returns a set of names of installed tools.
+func InstalledSet(tools []Tool) map[string]bool {
+	m := make(map[string]bool)
+	for _, t := range tools {
+		if t.IsInstalled() {
+			m[t.Name] = true
+		}
+	}
+	return m
 }

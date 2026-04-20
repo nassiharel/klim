@@ -395,12 +395,7 @@ func (m Model) renderPacksList() string {
 		headerStyle.Render(fixedWidth("TOOLS", colPackTools)) + "  " +
 		headerStyle.Render("STATUS") + "\n")
 
-	toolMap := make(map[string]bool, len(m.tools))
-	for _, t := range m.tools {
-		if t.IsInstalled() {
-			toolMap[t.Name] = true
-		}
-	}
+	toolMap := registry.InstalledSet(m.tools)
 
 	visibleRows := m.height - 12
 	if visibleRows < 3 {
@@ -619,13 +614,10 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 	// Static view — show tool list with install status.
 	b.WriteString("  " + label("Tools:") + "\n\n")
 
-	toolMap := make(map[string]bool, len(m.tools))
+	toolMap := registry.InstalledSet(m.tools)
 	toolByName := make(map[string]registry.Tool, len(m.tools))
 	for _, t := range m.tools {
 		toolByName[t.Name] = t
-		if t.IsInstalled() {
-			toolMap[t.Name] = true
-		}
 	}
 
 	installed := 0

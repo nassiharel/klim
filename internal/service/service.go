@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/nassiharel/clim/internal/catalog"
@@ -237,9 +235,7 @@ func (s *ToolService) RefreshTool(ctx context.Context, tool registry.Tool) regis
 }
 
 func sortToolsByName(tools []registry.Tool) {
-	sort.Slice(tools, func(i, j int) bool {
-		return strings.ToLower(tools[i].Name) < strings.ToLower(tools[j].Name)
-	})
+	registry.SortByName(tools)
 }
 
 // DefaultCatalog loads tools by fetching/caching the marketplace from GitHub.

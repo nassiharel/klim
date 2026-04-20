@@ -28,17 +28,21 @@ internal/
   catalog/     Fetch marketplace.yaml from GitHub, cache locally, diff, refresh
   cli/         Cobra commands: list, export, import, open, share, update, tools, config
   config/      config.yaml: logging, marketplace URL, performance, UI prefs
+  custompacks/ User-created pack definitions → ~/.config/clim/marketplace/custom-packs.yaml
   detector/    Fallback version detection (Go buildinfo, Windows PE resources)
+  favorites/   Favorites list persistence → ~/.config/clim/favorites/favorites.yaml
+  fileutil/    Shared file I/O: AtomicWrite, EnsureDir, ReadYAML, WriteYAML
   finder/      PATH scanning, install source detection (brew/winget/scoop/apt/manual)
   logging/     slog structured logging + lumberjack file rotation
-  manifest/    YAML schema for export/import manifests
+  manifest/    YAML schema for export/import manifests + FromRegistryTool converter
+  paths/       Single source of truth for all ~/.config/clim/* paths
   pkgmgr/      Package manager queries (installed + latest versions)
-  registry/    Tool, Instance, PackageIDs, Pack structs; version comparison
+  registry/    Tool, Instance, PackageIDs, Pack structs; version comparison; SortByName, ToolMap, InstalledSet helpers
   scancache/   Per-host scan cache: installed/not, paths, versions → ~/.config/clim/scan-cache.yaml
   selfupdate/  Self-update from GitHub Releases (download → extract → replace)
   service/     ToolService: composition root wiring catalog + finder + resolver
   share/       Compact token encode/decode for sharing tool lists
-  tui/         Bubbletea Model (model.go), commands (commands.go), rendering (view.go), styles
+  tui/         Bubbletea Model (model.go), commands (commands.go), rendering (view.go), favorites (favorites.go), styles
 ```
 
 ## Architecture
@@ -58,13 +62,15 @@ ToolService
 
 ## TUI Tabs
 
-| Tab | Content |
-|---|---|
-| Installed | All detected tools with version status (✓ / ⬆) |
-| Updates | Tools with available upgrades; batch upgrade support |
-| Discover | Sub-tabs: **Tools** (marketplace), **Packs** (curated bundles), **For You** (smart recommendations) |
-| Backup | Export/import toolchain; share tokens |
-| Config | View config.yaml path and settings |
+| Tab | Key | Content |
+|---|---|---|
+| Installed | 1 | All detected tools with version status (✓ / ⬆). Press `*` to favorite. |
+| ★ Favorites | 2 | Favorited tools. `e` export, `s` share, `x` clear all, `*` unfavorite. |
+| Updates | 3 | Tools with available upgrades; batch upgrade support |
+| Discover | 4 | Sub-tabs: **Tools** (marketplace), **Packs** (curated bundles), **For You** (smart recommendations) |
+| Backup | 5 | Export/import toolchain; share tokens; My Packs; My Backups |
+| Dashboard | 6 | Aggregate stats, gauges, category/tag/platform breakdowns |
+| Config | 7 | View/edit config.yaml settings |
 
 **Filter sidebar:** Category / Platform / Tag filters with counters. Configurable left/right position (`config.yaml → ui.sidebar_right`).
 
@@ -156,3 +162,55 @@ go test -tags=integration -timeout=40m ./internal/marketplace/livecheck/...
 - **`VersionsMatch` handles PE padding** (`1400` ≈ `14`), `CompareVersions` does not.
 - **Windows cannot delete a running exe.** Self-update leaves `.old`, cleaned up next launch.
 - **TUI `pending` counter:** reset with `scanGen++` on rescan to invalidate stale in-flight messages.
+
+## Shared Utilities
+
+**DO NOT duplicate file I/O, path resolution, or data conversion.** Use the shared packages:
+
+### `internal/paths` — All config/data file paths
+
+Single source for every `~/.config/clim/*` path. Never call `os.UserConfigDir()` directly.
+
+```go
+paths.Config()       // config/config.yaml
+paths.Favorites()    // favorites/favorites.yaml
+paths.CustomPacks()  // marketplace/custom-packs.yaml
+paths.ScanCache()    // scan-cache.yaml
+paths.CatalogCache() // marketplace/marketplace-cache.yaml
+paths.BackupsDir()   // backups/
+paths.LogFile()      // logs/clim.log
+paths.Join("x","y")  // arbitrary sub-path
+```
+
+### `internal/fileutil` — Atomic writes and YAML I/O
+
+```go
+fileutil.AtomicWrite(path, data, 0o644)       // temp+rename, Windows-safe
+fileutil.WriteYAML(path, &obj, "# header\n")  // marshal + atomic write + EnsureDir
+fileutil.ReadYAML(path, &obj)                 // returns (found bool, err)
+fileutil.EnsureDir(path)                      // MkdirAll on parent
+```
+
+### `internal/registry` — Tool collection helpers
+
+```go
+registry.SortByName(tools)    // case-insensitive alphabetical sort
+registry.ToolMap(tools)       // map[string]*Tool by name
+registry.InstalledSet(tools)  // map[string]bool of installed tool names
+```
+
+### `internal/manifest` — Registry-to-manifest conversion
+
+```go
+manifest.FromRegistryTool(tool)  // registry.Tool → manifest.Tool (with version/source from PrimaryInstance)
+```
+
+## Favorites Feature
+
+Favorites persist at `~/.config/clim/favorites/favorites.yaml` (simple list of tool names). The `internal/favorites` package provides `Load`, `Save`, `Add`, `Remove`, `Toggle`, `Contains`, `Set`.
+
+TUI integration:
+- `*` key toggles favorite on any tool-list tab (Installed, Favorites, Updates, Discover)
+- ★ indicator shown next to favorited tools on all tabs
+- Favorites tab: `e` export to YAML manifest, `s` share via token, `x` clear all (y/n confirm)
+- `m.favoriteNames map[string]bool` in-memory set, loaded at startup via `favorites.Set()`

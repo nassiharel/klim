@@ -4,12 +4,8 @@
 package custompacks
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-
-	"gopkg.in/yaml.v3"
-
+	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -26,34 +22,28 @@ type packDef struct {
 	Tools       []string `yaml:"tools"`
 }
 
+const yamlHeader = "# clim — Custom Packs\n# User-created packs. Managed by clim; safe to edit manually.\n\n"
+
 // StoragePath returns the path to the custom packs file.
 func StoragePath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "clim", "marketplace", "custom-packs.yaml"), nil
+	return paths.CustomPacks()
 }
 
 // Load reads all custom packs from disk. Returns an empty (non-nil) slice
 // if the file doesn't exist yet.
 func Load() ([]registry.Pack, error) {
-	path, err := StoragePath()
+	path, err := paths.CustomPacks()
 	if err != nil {
 		return nil, err
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []registry.Pack{}, nil
-		}
-		return nil, fmt.Errorf("reading custom packs: %w", err)
-	}
-
 	var f packFile
-	if err := yaml.Unmarshal(data, &f); err != nil {
-		return nil, fmt.Errorf("parsing custom packs: %w", err)
+	found, err := fileutil.ReadYAML(path, &f)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return []registry.Pack{}, nil
 	}
 
 	packs := make([]registry.Pack, 0, len(f.Packs))
@@ -74,7 +64,7 @@ func Load() ([]registry.Pack, error) {
 
 // Save writes all custom packs to disk atomically.
 func Save(packs []registry.Pack) error {
-	path, err := StoragePath()
+	path, err := paths.CustomPacks()
 	if err != nil {
 		return err
 	}
@@ -89,32 +79,7 @@ func Save(packs []registry.Pack) error {
 		})
 	}
 
-	data, err := yaml.Marshal(&f)
-	if err != nil {
-		return fmt.Errorf("marshalling custom packs: %w", err)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-
-	header := "# clim — Custom Packs\n# User-created packs. Managed by clim; safe to edit manually.\n\n"
-
-	// Atomic write: temp file + rename.
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(header+string(data)), 0o644); err != nil {
-		return err
-	}
-	// Try rename directly (atomic on POSIX). On Windows os.Rename fails
-	// when the destination exists, so fall back to remove + retry.
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(path)
-		if retryErr := os.Rename(tmp, path); retryErr != nil {
-			_ = os.Remove(tmp)
-			return retryErr
-		}
-	}
-	return nil
+	return fileutil.WriteYAML(path, &f, yamlHeader)
 }
 
 // Add appends a pack (or replaces one with the same name) and saves.

@@ -4,11 +4,12 @@ package config
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/clim/internal/paths"
 )
 
 // DefaultMarketplaceURL is the canonical marketplace.yaml location on GitHub.
@@ -102,37 +103,28 @@ func Default() *Config {
 
 // Path returns the path to config.yaml.
 func Path() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "clim", "config", "config.yaml"), nil
+	return paths.Config()
 }
 
 // Load reads config.yaml. If the file doesn't exist, it writes a default
 // config and returns the defaults. Returns an error only if the file exists
 // but is unreadable or has invalid YAML.
 func Load() (*Config, error) {
-	path, err := Path()
+	path, err := paths.Config()
 	if err != nil {
 		return Default(), nil
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// First run — write defaults so user can discover the file.
-			cfg := Default()
-			_ = writeDefault(path, cfg)
-			return cfg, nil
-		}
-		return nil, fmt.Errorf("reading config.yaml: %w", err) // permission error, etc.
-	}
-
 	// Start from defaults, then overlay the file values.
 	cfg := Default()
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("parsing config.yaml: %w", err)
+	found, err := fileutil.ReadYAML(path, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		// First run — write defaults so user can discover the file.
+		_ = Save(cfg)
+		return cfg, nil
 	}
 
 	return cfg, nil
@@ -150,22 +142,11 @@ func MustLoad() *Config {
 
 const configHeader = "# clim — Configuration\n# All values are optional. Defaults are shown below.\n# Restart clim after editing for changes to take effect.\n\n"
 
-// Save writes the config to config.yaml.
+// Save writes the config to config.yaml atomically.
 func Save(cfg *Config) error {
-	path, err := Path()
+	path, err := paths.Config()
 	if err != nil {
 		return err
 	}
-	return writeDefault(path, cfg)
-}
-
-func writeDefault(path string, cfg *Config) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(configHeader+string(data)), 0o644)
+	return fileutil.WriteYAML(path, cfg, configHeader)
 }

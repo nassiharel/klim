@@ -18,6 +18,7 @@ import (
 
 	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/manifest"
+	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/share"
@@ -338,11 +339,10 @@ func refreshMarketplaceCmd(fetcher catalog.MarketplaceFetcher) tea.Cmd {
 
 // backupsDir returns the path to the backups directory, creating it if needed.
 func backupsDir() (string, error) {
-	dir, err := os.UserConfigDir()
+	bdir, err := paths.BackupsDir()
 	if err != nil {
 		return "", err
 	}
-	bdir := filepath.Join(dir, "clim", "backups")
 	if err := os.MkdirAll(bdir, 0o755); err != nil {
 		return "", err
 	}
@@ -355,32 +355,14 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 	return func() tea.Msg {
 		sorted := make([]registry.Tool, len(tools))
 		copy(sorted, tools)
-		sort.Slice(sorted, func(i, j int) bool {
-			return strings.ToLower(sorted[i].Name) < strings.ToLower(sorted[j].Name)
-		})
+		registry.SortByName(sorted)
 
 		var exported []manifest.Tool
 		for _, tool := range sorted {
 			if !tool.IsInstalled() {
 				continue
 			}
-			primary := tool.PrimaryInstance()
-			exported = append(exported, manifest.Tool{
-				Name:        tool.Name,
-				DisplayName: tool.DisplayName,
-				Version:     primary.Version,
-				Source:      string(primary.Source),
-				Category:    tool.Category,
-				Packages: manifest.Packages{
-					Winget: tool.Packages.Winget,
-					Choco:  tool.Packages.Choco,
-					Scoop:  tool.Packages.Scoop,
-					Brew:   tool.Packages.Brew,
-					Apt:    tool.Packages.Apt,
-					Snap:   tool.Packages.Snap,
-					NPM:    tool.Packages.NPM,
-				},
-			})
+			exported = append(exported, manifest.FromRegistryTool(tool))
 		}
 
 		m := manifest.Manifest{
@@ -437,10 +419,7 @@ func buildImportPlanCmd(svc *service.ToolService, path string) tea.Cmd {
 			return backupPlanMsg{err: fmt.Errorf("scanning PATH: %w", err)}
 		}
 
-		regMap := make(map[string]*registry.Tool, len(regTools))
-		for i := range regTools {
-			regMap[regTools[i].Name] = &regTools[i]
-		}
+		regMap := registry.ToolMap(regTools)
 
 		var items []backupItem
 		for _, mt := range m.Tools {
@@ -699,25 +678,7 @@ func exportFavoritesCmd(tools []registry.Tool, favNames map[string]bool) tea.Cmd
 			if !favNames[tool.Name] {
 				continue
 			}
-			mt := manifest.Tool{
-				Name:        tool.Name,
-				DisplayName: tool.DisplayName,
-				Category:    tool.Category,
-				Packages: manifest.Packages{
-					Winget: tool.Packages.Winget,
-					Choco:  tool.Packages.Choco,
-					Scoop:  tool.Packages.Scoop,
-					Brew:   tool.Packages.Brew,
-					Apt:    tool.Packages.Apt,
-					Snap:   tool.Packages.Snap,
-					NPM:    tool.Packages.NPM,
-				},
-			}
-			if primary := tool.PrimaryInstance(); primary != nil {
-				mt.Version = primary.Version
-				mt.Source = string(primary.Source)
-			}
-			exported = append(exported, mt)
+			exported = append(exported, manifest.FromRegistryTool(tool))
 		}
 		if len(exported) == 0 {
 			return exportFinishedMsg{err: errors.New("no favorites to export")}
@@ -793,10 +754,7 @@ func buildTokenImportPlanCmd(svc *service.ToolService, token string) tea.Cmd {
 			return backupPlanMsg{err: fmt.Errorf("scanning PATH: %w", err), fromToken: true}
 		}
 
-		regMap := make(map[string]*registry.Tool, len(regTools))
-		for i := range regTools {
-			regMap[regTools[i].Name] = &regTools[i]
-		}
+		regMap := registry.ToolMap(regTools)
 
 		var items []backupItem
 		for _, name := range names {

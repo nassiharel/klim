@@ -365,9 +365,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.tools = msg.tools
-		sort.Slice(m.tools, func(i, j int) bool {
-			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
-		})
+		registry.SortByName(m.tools)
 		// Only writes from a clean scan are safe to persist — a partial
 		// scan (PATH walk failed mid-flight) can't be distinguished from a
 		// full one on load, and caching it would poison future runs.

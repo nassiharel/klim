@@ -3,12 +3,10 @@
 package favorites
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 
-	"gopkg.in/yaml.v3"
+	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/clim/internal/paths"
 )
 
 // favFile is the on-disk YAML structure.
@@ -16,37 +14,27 @@ type favFile struct {
 	Tools []string `yaml:"tools"`
 }
 
+const yamlHeader = "# clim — Favorites\n# Managed by clim; safe to edit manually.\n\n"
+
 // StoragePath returns the path to the favorites file.
 func StoragePath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "clim", "favorites", "favorites.yaml"), nil
+	return paths.Favorites()
 }
 
 // Load reads all favorite tool names from disk. Returns an empty (non-nil)
 // slice if the file doesn't exist yet.
 func Load() ([]string, error) {
-	path, err := StoragePath()
+	path, err := paths.Favorites()
 	if err != nil {
 		return nil, err
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
-		return nil, fmt.Errorf("reading favorites: %w", err)
-	}
-
 	var f favFile
-	if err := yaml.Unmarshal(data, &f); err != nil {
-		return nil, fmt.Errorf("parsing favorites: %w", err)
+	found, err := fileutil.ReadYAML(path, &f)
+	if err != nil {
+		return nil, err
 	}
-
-	if f.Tools == nil {
+	if !found || f.Tools == nil {
 		return []string{}, nil
 	}
 	return f.Tools, nil
@@ -54,7 +42,7 @@ func Load() ([]string, error) {
 
 // Save writes favorite tool names to disk atomically.
 func Save(names []string) error {
-	path, err := StoragePath()
+	path, err := paths.Favorites()
 	if err != nil {
 		return err
 	}
@@ -63,30 +51,7 @@ func Save(names []string) error {
 	copy(sorted, names)
 	sort.Strings(sorted)
 
-	f := favFile{Tools: sorted}
-	data, err := yaml.Marshal(&f)
-	if err != nil {
-		return fmt.Errorf("marshalling favorites: %w", err)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-
-	header := "# clim — Favorites\n# Managed by clim; safe to edit manually.\n\n"
-
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(header+string(data)), 0o644); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(path)
-		if retryErr := os.Rename(tmp, path); retryErr != nil {
-			_ = os.Remove(tmp)
-			return retryErr
-		}
-	}
-	return nil
+	return fileutil.WriteYAML(path, &favFile{Tools: sorted}, yamlHeader)
 }
 
 // Add adds a tool name to favorites (no-op if already present).
