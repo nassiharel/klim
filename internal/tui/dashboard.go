@@ -55,6 +55,39 @@ func gauge(filled, total, width int, fillStyle, emptyStyle lipgloss.Style) strin
 	return bar
 }
 
+// renderStatCard renders a single bordered stat card with rounded corners.
+func renderStatCard(icon, value, label string, iconStyle lipgloss.Style, width int) string {
+	if width < 8 {
+		width = 8
+	}
+	// Build card content, then frame it.
+	inner := width - 4 // padding (1 each side) + border (1 each side)
+	if inner < 4 {
+		inner = 4
+	}
+
+	content := iconStyle.Render(icon) + " " + dashNumber.Render(value)
+	labelStr := dashLabel.Render(label)
+
+	// Pad content lines to inner width.
+	contentW := lipgloss.Width(content)
+	if contentW < inner {
+		content += strings.Repeat(" ", inner-contentW)
+	}
+	labelW := lipgloss.Width(labelStr)
+	if labelW < inner {
+		labelStr += strings.Repeat(" ", inner-labelW)
+	}
+
+	border := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	top := border.Render("╭" + strings.Repeat("─", inner+2) + "╮")
+	mid1 := border.Render("│") + " " + content + " " + border.Render("│")
+	mid2 := border.Render("│") + " " + labelStr + " " + border.Render("│")
+	bot := border.Render("╰" + strings.Repeat("─", inner+2) + "╯")
+
+	return top + "\n" + mid1 + "\n" + mid2 + "\n" + bot
+}
+
 // renderDashboardView renders the Dashboard tab with aggregate stats.
 func (m Model) renderDashboardView() string {
 	var b strings.Builder
@@ -71,12 +104,52 @@ func (m Model) renderDashboardView() string {
 	total := installed + notInstalled
 	upToDate := installed - updates
 
-	// ═══════════════════════════════════════════════════
-	// SUMMARY CARDS
-	// ═══════════════════════════════════════════════════
+	// §1  HERO STAT CARDS — 4 bordered boxes side by side.
 	b.WriteString("\n")
 
-	// Installation gauge.
+	// Each card = inner + 4 (border+padding). 4 cards + 3 gaps + 2 indent = total.
+	cardW := (m.width - 5) / 4 // total width per card including border
+	if cardW < 12 {
+		cardW = 12
+	}
+	if cardW > 22 {
+		cardW = 22
+	}
+
+	cards := []struct {
+		icon  string
+		value string
+		label string
+		style lipgloss.Style
+	}{
+		{"●", fmt.Sprintf("%d", installed), "Installed", dashGaugeFill},
+		{"▲", fmt.Sprintf("%d", updates), "Updates", dashGaugeWarn},
+		{"○", fmt.Sprintf("%d", notInstalled), "Available", dashGaugeInfo},
+		{"★", fmt.Sprintf("%d", len(m.favoriteNames)), "Favorites", dashGaugeWarn},
+	}
+
+	var cardStrs []string
+	for i, c := range cards {
+		cardStrs = append(cardStrs, renderStatCard(c.icon, c.value, c.label, c.style, cardW))
+		if i < len(cards)-1 {
+			cardStrs = append(cardStrs, " ") // gap between cards
+		}
+	}
+	joined := lipgloss.JoinHorizontal(lipgloss.Top, cardStrs...)
+	// Indent every line (JoinHorizontal produces multi-line output).
+	for i, line := range strings.Split(joined, "\n") {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("  " + line)
+	}
+	b.WriteString("\n")
+
+	// ═══════════════════════════════════════════════════
+	// §2  TOOL COVERAGE — gauges
+	// ═══════════════════════════════════════════════════
+	b.WriteString("\n  " + dashSection.Render("Tool Coverage") + "\n\n")
+
 	gaugeWidth := m.width - 30
 	if gaugeWidth < 20 {
 		gaugeWidth = 20
@@ -90,18 +163,16 @@ func (m Model) renderDashboardView() string {
 		pctInstalled = installed * 100 / total
 	}
 
-	b.WriteString("  " + dashSection.Render("Tool Coverage") + "\n\n")
-	b.WriteString(fmt.Sprintf("  %s / %s tools installed  ",
+	b.WriteString(fmt.Sprintf("  %s / %s installed  ",
 		dashNumber.Render(fmt.Sprintf("%d", installed)),
 		dashDim.Render(fmt.Sprintf("%d", total)),
 	))
 	b.WriteString(gauge(installed, total, gaugeWidth, dashGaugeFill, dashGaugeEmpty))
 	b.WriteString(fmt.Sprintf("  %s\n", dashNumber.Render(fmt.Sprintf("%d%%", pctInstalled))))
 
-	// Update status gauge.
 	if installed > 0 {
 		pctUpToDate := upToDate * 100 / installed
-		b.WriteString(fmt.Sprintf("  %s / %s up to date      ",
+		b.WriteString(fmt.Sprintf("  %s / %s up to date  ",
 			dashNumber.Render(fmt.Sprintf("%d", upToDate)),
 			dashDim.Render(fmt.Sprintf("%d", installed)),
 		))
@@ -113,31 +184,121 @@ func (m Model) renderDashboardView() string {
 		b.WriteString(fmt.Sprintf("  %s\n", dashNumber.Render(fmt.Sprintf("%d%%", pctUpToDate))))
 	}
 
-	// Quick stats row.
-	b.WriteString("\n  ")
-	statCards := []struct {
-		icon  string
-		label string
-		value string
-		style lipgloss.Style
-	}{
-		{"●", "Installed", fmt.Sprintf("%d", installed), dashGaugeFill},
-		{"▲", "Updates", fmt.Sprintf("%d", updates), dashGaugeWarn},
-		{"○", "Available", fmt.Sprintf("%d", notInstalled), dashGaugeInfo},
-		{"★", "Favorites", fmt.Sprintf("%d", len(m.favoriteNames)), dashGaugeWarn},
-	}
-	for i, card := range statCards {
-		if i > 0 {
-			b.WriteString("   ")
+	// ═══════════════════════════════════════════════════
+	// §3  ATTENTION NEEDED
+	// ═══════════════════════════════════════════════════
+	b.WriteString("\n  " + dashSection.Render("Attention") + "\n\n")
+
+	var alerts []string
+
+	// Updates available.
+	if updates > 0 {
+		var updateNames []string
+		for _, t := range m.tools {
+			if t.HasUpdate() && len(updateNames) < 2 {
+				updateNames = append(updateNames, t.Name)
+			}
 		}
-		b.WriteString(card.style.Render(card.icon) + " ")
-		b.WriteString(dashNumber.Render(card.value) + " ")
-		b.WriteString(dashLabel.Render(card.label))
+		msg := fmt.Sprintf("%d tools have updates available", updates)
+		if len(updateNames) > 0 {
+			msg += " (" + strings.Join(updateNames, ", ")
+			if updates > len(updateNames) {
+				msg += ", ..."
+			}
+			msg += ")"
+		}
+		alerts = append(alerts, "  "+upgradableStyle.Render("▲")+"  "+upgradableStyle.Render(msg))
 	}
-	b.WriteString("\n")
+
+	// Favorite tools with updates.
+	favUpdates := 0
+	for _, t := range m.tools {
+		if t.HasUpdate() && m.favoriteNames[t.Name] {
+			favUpdates++
+		}
+	}
+	if favUpdates > 0 {
+		alerts = append(alerts, "  "+dashGaugeWarn.Render("★")+"  "+dashGaugeWarn.Render(
+			fmt.Sprintf("%d favorite tool(s) have updates", favUpdates)))
+	}
+
+	// New marketplace additions.
+	newCount := 0
+	for _, t := range m.tools {
+		if t.MarketplaceStatus == registry.StatusNew {
+			newCount++
+		}
+	}
+	if newCount > 0 {
+		alerts = append(alerts, "  "+dashGaugeInfo.Render("●")+"  "+dashGaugeInfo.Render(
+			fmt.Sprintf("%d new tools added to marketplace", newCount))+"  "+chipStyle.Render("NEW"))
+	}
+
+	if len(alerts) == 0 {
+		b.WriteString("  " + upToDateStyle.Render("✓ All good! Everything is up to date.") + "\n")
+	} else {
+		for _, a := range alerts {
+			b.WriteString(a + "\n")
+		}
+	}
 
 	// ═══════════════════════════════════════════════════
-	// PACKAGE MANAGERS — horizontal bar chart
+	// §4  GITHUB HIGHLIGHTS — top starred installed tools
+	// ═══════════════════════════════════════════════════
+	type starredTool struct {
+		name     string
+		stars    int
+		pushedAt string
+	}
+	var starred []starredTool
+	for _, t := range m.tools {
+		if t.IsInstalled() && t.GitHubInfo != nil && t.GitHubInfo.Stars > 0 {
+			starred = append(starred, starredTool{
+				name:     t.DisplayName,
+				stars:    t.GitHubInfo.Stars,
+				pushedAt: t.GitHubInfo.PushedAt,
+			})
+		}
+	}
+	if len(starred) > 0 {
+		sort.Slice(starred, func(i, j int) bool {
+			return starred[i].stars > starred[j].stars
+		})
+		if len(starred) > 5 {
+			starred = starred[:5]
+		}
+
+		b.WriteString("\n  " + dashSection.Render("GitHub Highlights") + "\n\n")
+		for _, s := range starred {
+			starsStr := dashGaugeWarn.Render(fixedWidth("★ "+formatStars(s.stars), 10))
+			nameStr := nameStyle.Render(fixedWidth(s.name, 22))
+			pushStr := ""
+			if s.pushedAt != "" {
+				pushStr = dashDim.Render("pushed " + formatGitHubDate(s.pushedAt))
+			}
+			b.WriteString(fmt.Sprintf("  %s  %s  %s\n", starsStr, nameStr, pushStr))
+		}
+	}
+
+	// ═══════════════════════════════════════════════════
+	// §5  TOP PICKS FOR YOU — recommendation preview
+	// ═══════════════════════════════════════════════════
+	if len(m.recommendations) > 0 {
+		b.WriteString("\n  " + dashSection.Render("Top Picks for You") + "\n\n")
+		shown := len(m.recommendations)
+		if shown > 3 {
+			shown = 3
+		}
+		for i := 0; i < shown; i++ {
+			b.WriteString(m.renderRecCard(m.recommendations[i], false, true) + "\n")
+		}
+		if len(m.recommendations) > 3 {
+			b.WriteString("  " + dashDim.Render(fmt.Sprintf("… and %d more in Marketplace → For You", len(m.recommendations)-3)) + "\n")
+		}
+	}
+
+	// ═══════════════════════════════════════════════════
+	// §6  PACKAGE MANAGERS — horizontal bar chart
 	// ═══════════════════════════════════════════════════
 	b.WriteString("\n  " + dashSection.Render("Package Managers") + "\n\n")
 
@@ -171,14 +332,13 @@ func (m Model) renderDashboardView() string {
 			barMax = 50
 		}
 
-		// Assign colors by rank.
 		pmColors := []lipgloss.Style{
-			lipgloss.NewStyle().Foreground(lipgloss.Color("42")),  // green
-			lipgloss.NewStyle().Foreground(lipgloss.Color("39")),  // cyan
-			lipgloss.NewStyle().Foreground(lipgloss.Color("214")), // orange
-			lipgloss.NewStyle().Foreground(lipgloss.Color("135")), // purple
-			lipgloss.NewStyle().Foreground(lipgloss.Color("222")), // yellow
-			lipgloss.NewStyle().Foreground(lipgloss.Color("167")), // red
+			lipgloss.NewStyle().Foreground(lipgloss.Color("42")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("39")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("214")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("135")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("222")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("167")),
 		}
 
 		for i, pm := range pms {
@@ -204,7 +364,7 @@ func (m Model) renderDashboardView() string {
 	}
 
 	// ═══════════════════════════════════════════════════
-	// CATEGORIES — mini bar chart with sparklines
+	// §7  CATEGORIES — mini bar chart
 	// ═══════════════════════════════════════════════════
 	b.WriteString("\n  " + dashSection.Render("Categories") + "\n\n")
 
@@ -245,7 +405,7 @@ func (m Model) renderDashboardView() string {
 	}
 
 	// ═══════════════════════════════════════════════════
-	// TOP TAGS — pill/badge style
+	// §8  TOP TAGS — pill/badge style
 	// ═══════════════════════════════════════════════════
 	b.WriteString("\n  " + dashSection.Render("Top Tags") + "\n\n")
 
@@ -294,14 +454,12 @@ func (m Model) renderDashboardView() string {
 	}
 
 	// ═══════════════════════════════════════════════════
-	// PACKS & BACKUPS — summary with sparkline
+	// §9  PACKS
 	// ═══════════════════════════════════════════════════
-	b.WriteString("\n  " + dashSection.Render("Packs & Backups") + "\n\n")
+	b.WriteString("\n  " + dashSection.Render("Packs") + "\n\n")
 
-	// Build installed tool set for pack status.
 	installedSet := registry.InstalledSet(m.tools)
 
-	// Count fully/partially installed marketplace packs.
 	fullPacks, partialPacks := 0, 0
 	for _, pack := range m.packs {
 		have := 0
@@ -317,7 +475,6 @@ func (m Model) renderDashboardView() string {
 		}
 	}
 
-	// Count fully/partially installed custom packs.
 	fullCustom, partialCustom := 0, 0
 	for _, pack := range m.customPacks {
 		have := 0
@@ -333,10 +490,6 @@ func (m Model) renderDashboardView() string {
 		}
 	}
 
-	backups := m.myBackupFiles
-	backupCount := len(backups)
-
-	// Marketplace packs gauge.
 	b.WriteString(fmt.Sprintf("  %s  %s  %s\n",
 		dashLabel.Render(fixedWidth("Marketplace", 14)),
 		gauge(fullPacks, len(m.packs), 15, dashGaugeFill, dashGaugeEmpty),
@@ -347,7 +500,6 @@ func (m Model) renderDashboardView() string {
 		),
 	))
 
-	// Custom packs gauge.
 	b.WriteString(fmt.Sprintf("  %s  %s  %s\n",
 		dashLabel.Render(fixedWidth("Custom", 14)),
 		gauge(fullCustom, len(m.customPacks), 15, dashGaugeInfo, dashGaugeEmpty),
@@ -358,13 +510,20 @@ func (m Model) renderDashboardView() string {
 		),
 	))
 
-	// Backups summary.
-	b.WriteString(fmt.Sprintf("\n  %s  %s\n",
-		dashLabel.Render(fixedWidth("Backups", 14)),
-		dashNumber.Render(fmt.Sprintf("%d", backupCount)),
-	))
-	if backupCount > 0 {
-		// Show most recent backups (up to 3).
+	// ═══════════════════════════════════════════════════
+	// §10  BACKUPS
+	// ═══════════════════════════════════════════════════
+	b.WriteString("\n  " + dashSection.Render("Backups") + "\n\n")
+
+	backups := m.myBackupFiles
+	backupCount := len(backups)
+
+	if backupCount == 0 {
+		b.WriteString("  " + dashDim.Render("No backups yet. Export from the Backup tab to create one.") + "\n")
+	} else {
+		b.WriteString(fmt.Sprintf("  %s backup file(s)\n\n",
+			dashNumber.Render(fmt.Sprintf("%d", backupCount)),
+		))
 		shown := backupCount
 		if shown > 3 {
 			shown = 3
@@ -380,36 +539,6 @@ func (m Model) renderDashboardView() string {
 		if backupCount > 3 {
 			b.WriteString(fmt.Sprintf("    %s\n",
 				dashDim.Render(fmt.Sprintf("… and %d more", backupCount-3)),
-			))
-		}
-	}
-
-	// ═══════════════════════════════════════════════════
-	// PLATFORM COVERAGE — donut-style gauge per platform
-	// ═══════════════════════════════════════════════════
-	b.WriteString("\n  " + dashSection.Render("Platform Coverage") + "\n\n")
-
-	platCounts := make(map[string]int)
-	for _, tool := range m.tools {
-		for _, p := range derivePlatforms(tool.Packages) {
-			platCounts[p]++
-		}
-	}
-	if len(platCounts) > 0 {
-		var plats []namedCount
-		for name, count := range platCounts {
-			plats = append(plats, namedCount{name, count})
-		}
-		sortByCountDesc(plats)
-
-		for _, p := range plats {
-			pct := p.count * 100 / total
-			miniG := gauge(p.count, total, 15, dashGaugeInfo, dashGaugeEmpty)
-			b.WriteString(fmt.Sprintf("  %s  %s  %s %s\n",
-				dashLabel.Render(fixedWidth(p.name, 10)),
-				miniG,
-				dashNumber.Render(fixedWidth(fmt.Sprintf("%d", p.count), 4)),
-				dashDim.Render(fmt.Sprintf("(%d%%)", pct)),
 			))
 		}
 	}
