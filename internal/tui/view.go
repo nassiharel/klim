@@ -498,93 +498,10 @@ func (m Model) renderForYouList() string {
 		end = len(m.recommendations)
 	}
 
-	// Fixed column widths for alignment.
-	const (
-		colCat      = 14 // category column (padded)
-		colStarsFY  = 10 // stars badge column
-		gaugeWidth  = 12
-		colPct      = 5  // " 85%"
-		colReasonFY = 34 // "You use: ..." column
-	)
-
 	for vi := start; vi < end; vi++ {
 		rec := m.recommendations[vi]
-		if rec.toolIdx >= len(m.tools) {
-			continue
-		}
-		tool := m.tools[rec.toolIdx]
 		selected := vi == m.cursor
-
-		// --- Row 1: cursor + name (fixed) + category (fixed) + stars (fixed) + gauge + pct ---
-		cursor := "  "
-		if selected {
-			cursor = "▸ "
-		}
-
-		displayName := tool.DisplayName
-		if displayName == "" {
-			displayName = tool.Name
-		}
-		nameCell := nameStyle.Render(fixedWidth(displayName, colName))
-
-		catText := ""
-		if rec.category != "" {
-			catText = chipStyle.Render(rec.category)
-		}
-		catCell := fixedWidthANSI(catText, colCat)
-
-		starsText := ""
-		if rec.stars > 0 {
-			starsText = dimVersion.Render("★ " + formatStars(rec.stars))
-		}
-		starsCell := fixedWidthANSI(starsText, colStarsFY)
-
-		pct := rec.matchPct
-		filled := pct * gaugeWidth / 100
-		if filled < 1 && pct > 0 {
-			filled = 1
-		}
-		bar := gauge(filled, gaugeWidth, gaugeWidth, dashGaugeFill, dashGaugeEmpty)
-		pctCell := fixedWidthANSI(upgradableStyle.Render(fmt.Sprintf("%d%%", pct)), colPct)
-
-		line1 := cursor + nameCell + " " + catCell + " " + starsCell + " " + bar + " " + pctCell
-
-		if selected {
-			w := lipgloss.Width(line1)
-			if w < m.width {
-				line1 += strings.Repeat(" ", m.width-w)
-			}
-			line1 = selectedRowStyle.Render(line1)
-		}
-		b.WriteString(line1 + "\n")
-
-		// --- Row 2: indent + description (fixed) + reason (fixed) ---
-		// Indent matches cursor (2) + aligns under name.
-		desc := rec.description
-		if desc == "" {
-			desc = "No description"
-		}
-		if len(desc) > colName {
-			desc = desc[:colName-1] + "…"
-		}
-		descCell := dimVersion.Render(fixedWidth(desc, colName))
-
-		reasonText := ""
-		if rec.reason != "" {
-			reasonText = "You use: " + rec.reason
-		}
-		reasonCell := dimVersion.Render(fixedWidth(reasonText, colReasonFY))
-
-		line2 := "  " + descCell + " " + reasonCell
-
-		if selected {
-			w := lipgloss.Width(line2)
-			if w < m.width {
-				line2 += strings.Repeat(" ", m.width-w)
-			}
-			line2 = selectedRowStyle.Render(line2)
-		}
-		b.WriteString(line2 + "\n")
+		b.WriteString(m.renderRecCard(rec, selected, false) + "\n")
 
 		// Blank separator between cards (not after last).
 		if vi < end-1 {
@@ -600,6 +517,98 @@ func (m Model) renderForYouList() string {
 	}
 
 	return b.String()
+}
+
+// Fixed column widths for recommendation card alignment.
+const (
+	colCatFY     = 14 // category column
+	colStarsFY   = 10 // stars badge column
+	colGaugeFY   = 12 // match gauge width
+	colPctFY     = 5  // percentage column
+	colReasonFY  = 34 // "You use: ..." column
+)
+
+// renderRecCard renders a single 2-line recommendation card.
+// selected highlights both lines. compact omits row 2 (for inline use in detail views).
+func (m Model) renderRecCard(rec recommendation, selected, compact bool) string {
+	if rec.toolIdx >= len(m.tools) {
+		return ""
+	}
+	tool := m.tools[rec.toolIdx]
+
+	// --- Row 1: cursor + name + category + stars + gauge + pct ---
+	cursor := "  "
+	if selected {
+		cursor = "▸ "
+	}
+
+	displayName := tool.DisplayName
+	if displayName == "" {
+		displayName = tool.Name
+	}
+	nameCell := nameStyle.Render(fixedWidth(displayName, colName))
+
+	catText := ""
+	if rec.category != "" {
+		catText = chipStyle.Render(rec.category)
+	}
+	catCell := fixedWidthANSI(catText, colCatFY)
+
+	starsText := ""
+	if rec.stars > 0 {
+		starsText = dimVersion.Render("★ " + formatStars(rec.stars))
+	}
+	starsCell := fixedWidthANSI(starsText, colStarsFY)
+
+	pct := rec.matchPct
+	filled := pct * colGaugeFY / 100
+	if filled < 1 && pct > 0 {
+		filled = 1
+	}
+	bar := gauge(filled, colGaugeFY, colGaugeFY, dashGaugeFill, dashGaugeEmpty)
+	pctCell := fixedWidthANSI(upgradableStyle.Render(fmt.Sprintf("%d%%", pct)), colPctFY)
+
+	line1 := cursor + nameCell + " " + catCell + " " + starsCell + " " + bar + " " + pctCell
+
+	if selected {
+		w := lipgloss.Width(line1)
+		if w < m.width {
+			line1 += strings.Repeat(" ", m.width-w)
+		}
+		line1 = selectedRowStyle.Render(line1)
+	}
+
+	if compact {
+		return line1
+	}
+
+	// --- Row 2: indent + description + reason ---
+	desc := rec.description
+	if desc == "" {
+		desc = "No description"
+	}
+	if len(desc) > colName {
+		desc = desc[:colName-1] + "…"
+	}
+	descCell := dimVersion.Render(fixedWidth(desc, colName))
+
+	reasonText := ""
+	if rec.reason != "" {
+		reasonText = "You use: " + rec.reason
+	}
+	reasonCell := dimVersion.Render(fixedWidth(reasonText, colReasonFY))
+
+	line2 := "  " + descCell + " " + reasonCell
+
+	if selected {
+		w := lipgloss.Width(line2)
+		if w < m.width {
+			line2 += strings.Repeat(" ", m.width-w)
+		}
+		line2 = selectedRowStyle.Render(line2)
+	}
+
+	return line1 + "\n" + line2
 }
 
 // renderPackDetailView renders the detail view for a selected pack.
@@ -980,32 +989,8 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	// Related tools.
 	if related := m.relatedTools(tool); len(related) > 0 {
 		b.WriteString(divider("You might also like"))
-		maxScore := 1
 		for _, r := range related {
-			if r.score > maxScore {
-				maxScore = r.score
-			}
-		}
-		for _, r := range related {
-			if r.toolIdx >= len(m.tools) {
-				continue
-			}
-			rt := m.tools[r.toolIdx]
-			barLen := (r.score * 8) / maxScore
-			if barLen < 1 {
-				barLen = 1
-			}
-			bar := dashGaugeInfo.Render(strings.Repeat("█", barLen)) +
-				dashGaugeEmpty.Render(strings.Repeat("░", 8-barLen))
-			installedMark := ""
-			if rt.IsInstalled() {
-				installedMark = "  " + upToDateStyle.Render("●")
-			}
-			fmt.Fprintf(&b, "  %s  %s%s\n",
-				nameStyle.Render(fixedWidth(rt.Name, 18)),
-				bar,
-				installedMark,
-			)
+			b.WriteString(m.renderRecCard(r, false, true) + "\n")
 		}
 		b.WriteString("\n")
 	}
@@ -1278,8 +1263,6 @@ func (m Model) renderPackageManagers(tool registry.Tool) string {
 	}
 
 	var b strings.Builder
-	dim := dimVersion.Render
-	cmdStyle := detailCmdStyle.Render
 
 	for _, p := range pkgs {
 		// Bullet reflects availability on THIS host:
@@ -1298,36 +1281,10 @@ func (m Model) renderPackageManagers(tool registry.Tool) string {
 		pmName := sourceStyle.Render(fixedWidth(p.source, 8))
 		pkgID := nameStyle.Render(p.id)
 
-		// Install command (if generatable for this PM).
-		var cmdCell string
-		if cmd := tool.Packages.InstallCmd(registry.InstallSource(p.source)); cmd != "" {
-			cmdCell = dashDim.Render("│  ") + cmdStyle(cmd)
-		} else {
-			cmdCell = dashDim.Render("│  ") + dim("(no install command)")
-		}
-
-		fmt.Fprintf(&b, "  %s  %s  %s  %s\n", bullet, pmName, pkgID, cmdCell)
+		fmt.Fprintf(&b, "  %s  %s  %s\n", bullet, pmName, pkgID)
 	}
 	b.WriteString("\n")
 
-	// Extra commands (upgrade/remove) only relevant when the tool is
-	// installed — and specifically via its primary PM. This avoids duplicating
-	// the install command shown above.
-	if tool.IsInstalled() {
-		if primary := tool.PrimaryInstance(); primary != nil {
-			label := detailLabelStyle.Render
-			var extras []string
-			if cmd := tool.Packages.UpgradeCmd(primary.Source); cmd != "" {
-				extras = append(extras, "  "+label(fixedWidth("Upgrade", 14))+cmdStyle(cmd))
-			}
-			if cmd := tool.Packages.RemoveCmd(primary.Source); cmd != "" {
-				extras = append(extras, "  "+label(fixedWidth("Remove", 14))+cmdStyle(cmd))
-			}
-			if len(extras) > 0 {
-				b.WriteString(strings.Join(extras, "\n") + "\n\n")
-			}
-		}
-	}
 	return b.String()
 }
 
@@ -2284,7 +2241,8 @@ func toolLabel(tool registry.Tool) string {
 	return tool.Name
 }
 
-// relatedTools returns up to 5 not-installed tools that share tags with the given tool.
+// relatedTools returns up to 5 not-installed tools that share tags with the given tool,
+// enriched with display metadata.
 func (m Model) relatedTools(tool registry.Tool) []recommendation {
 	if len(tool.Tags) == 0 {
 		return nil
@@ -2295,6 +2253,7 @@ func (m Model) relatedTools(tool registry.Tool) []recommendation {
 	}
 
 	var recs []recommendation
+	maxScore := 0
 	for i, t := range m.tools {
 		if t.Name == tool.Name || t.IsInstalled() {
 			continue
@@ -2308,7 +2267,22 @@ func (m Model) relatedTools(tool registry.Tool) []recommendation {
 		if score == 0 {
 			continue
 		}
-		recs = append(recs, recommendation{toolIdx: i, score: score})
+		desc := ""
+		stars := 0
+		if t.GitHubInfo != nil {
+			desc = t.GitHubInfo.Description
+			stars = t.GitHubInfo.Stars
+		}
+		recs = append(recs, recommendation{
+			toolIdx:     i,
+			score:       score,
+			category:    t.Category,
+			description: desc,
+			stars:       stars,
+		})
+		if score > maxScore {
+			maxScore = score
+		}
 	}
 
 	sort.Slice(recs, func(i, j int) bool {
@@ -2320,6 +2294,16 @@ func (m Model) relatedTools(tool registry.Tool) []recommendation {
 
 	if len(recs) > 5 {
 		recs = recs[:5]
+	}
+
+	// Compute matchPct.
+	if maxScore > 0 {
+		for i := range recs {
+			recs[i].matchPct = recs[i].score * 100 / maxScore
+			if recs[i].matchPct < 1 {
+				recs[i].matchPct = 1
+			}
+		}
 	}
 	return recs
 }
