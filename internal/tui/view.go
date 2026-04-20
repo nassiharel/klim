@@ -171,7 +171,12 @@ func (m Model) renderView() string {
 	}
 
 	// Two-column layout: sidebar | tool list.
-	visibleRows := m.height - 8
+	// Account for vertical overhead: title + tabs + blank + search + footer + gap.
+	overhead := 8
+	if m.activeTab == tabDiscover {
+		overhead++ // sub-tab bar takes an extra line
+	}
+	visibleRows := m.height - overhead
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
@@ -397,7 +402,7 @@ func (m Model) renderPacksList() string {
 
 	toolMap := registry.InstalledSet(m.tools)
 
-	visibleRows := m.height - 12
+	visibleRows := m.height - 11 // title + tabs + blank + search + sub-tabs + header + footer + gap
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
@@ -473,7 +478,7 @@ func (m Model) renderForYouList() string {
 		headerStyle.Render(fixedWidth("BECAUSE YOU HAVE", colReason)) + "  " +
 		headerStyle.Render("STATUS") + "\n")
 
-	visibleRows := m.height - 12
+	visibleRows := m.height - 11 // title + tabs + blank + search + sub-tabs + header + footer + gap
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
