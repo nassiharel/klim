@@ -31,29 +31,46 @@ var resolveSem = make(chan struct{}, 4)
 
 // --- Recommendation types ---
 
-// recommendation represents a tool suggested based on tag overlap with installed tools.
+// recommendation represents a tool suggested based on tag/topic/category overlap
+// with installed tools, enriched with display metadata.
 type recommendation struct {
-	toolIdx int    // index into the tools slice
-	score   int    // tag overlap score (higher = more relevant)
-	reason  string // sorted installed tool names, e.g. "helm, kubectl, stern"
+	toolIdx     int    // index into the tools slice
+	score       int    // combined relevance score (higher = more relevant)
+	reason      string // sorted installed tool names, e.g. "helm, kubectl, stern"
+	category    string // tool's category for display
+	description string // from GitHubInfo.Description
+	stars       int    // from GitHubInfo.Stars
+	matchPct    int    // 0–100 normalized score for display
 }
 
 // maxRecommendations caps the number of recommendations shown.
-const maxRecommendations = 20
+const maxRecommendations = 25
 
-// computeRecommendations ranks not-installed tools by tag overlap with installed tools.
+// computeRecommendations ranks not-installed tools by tag/topic overlap with
+// installed tools, boosted by category match, GitHub stars, and recency.
 func computeRecommendations(tools []registry.Tool) []recommendation {
-	// Build tag frequency from installed tools.
+	// Build tag+topic frequency from installed tools.
 	tagFreq := make(map[string]int)
-	// Track which installed tools have each tag (for "why" reasons).
 	tagSources := make(map[string][]string) // tag → installed tool names
+	installedCats := make(map[string]bool)
+
 	for _, t := range tools {
 		if !t.IsInstalled() {
 			continue
 		}
+		if t.Category != "" {
+			installedCats[t.Category] = true
+		}
 		for _, tag := range t.Tags {
 			tagFreq[tag]++
 			tagSources[tag] = append(tagSources[tag], t.Name)
+		}
+		// Merge GitHub Topics into the same frequency map.
+		if t.GitHubInfo != nil {
+			for _, topic := range t.GitHubInfo.Topics {
+				tagFreq[topic]++
+				tagSources[topic] = append(tagSources[topic], t.Name)
+			}
 		}
 	}
 
@@ -63,21 +80,67 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 
 	// Score each not-installed tool.
 	var recs []recommendation
+	maxScore := 0
 	for i, t := range tools {
 		if t.IsInstalled() {
 			continue
 		}
+		// Skip archived tools.
+		if t.GitHubInfo != nil && t.GitHubInfo.Archived {
+			continue
+		}
+		// Skip tools not installable on this OS.
+		if !t.Packages.HasAnyPackageForOS() {
+			continue
+		}
+
 		score := 0
 		matchedTools := make(map[string]struct{})
+
+		// Tag overlap.
 		for _, tag := range t.Tags {
 			if freq, ok := tagFreq[tag]; ok {
 				score += freq
-				// Collect up to 3 installed tool names that share this tag.
 				for _, src := range tagSources[tag] {
 					matchedTools[src] = struct{}{}
 				}
 			}
 		}
+		// GitHub Topics overlap.
+		if t.GitHubInfo != nil {
+			for _, topic := range t.GitHubInfo.Topics {
+				if freq, ok := tagFreq[topic]; ok {
+					score += freq
+					for _, src := range tagSources[topic] {
+						matchedTools[src] = struct{}{}
+					}
+				}
+			}
+		}
+
+		// Category match bonus.
+		if t.Category != "" && installedCats[t.Category] {
+			score += 2
+		}
+
+		// GitHub stars popularity boost.
+		if t.GitHubInfo != nil {
+			if t.GitHubInfo.Stars > 10000 {
+				score += 2
+			} else if t.GitHubInfo.Stars > 1000 {
+				score += 1
+			}
+		}
+
+		// Recency boost: pushed within last 6 months.
+		if t.GitHubInfo != nil && t.GitHubInfo.PushedAt != "" {
+			if pushed, err := time.Parse(time.RFC3339, t.GitHubInfo.PushedAt); err == nil {
+				if time.Since(pushed) < 6*30*24*time.Hour {
+					score += 1
+				}
+			}
+		}
+
 		if score == 0 {
 			continue
 		}
@@ -91,13 +154,26 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 		if len(reasons) > 3 {
 			reasons = reasons[:3]
 		}
-		reason := strings.Join(reasons, ", ")
 
-		recs = append(recs, recommendation{
-			toolIdx: i,
-			score:   score,
-			reason:  reason,
-		})
+		desc := ""
+		stars := 0
+		if t.GitHubInfo != nil {
+			desc = t.GitHubInfo.Description
+			stars = t.GitHubInfo.Stars
+		}
+
+		rec := recommendation{
+			toolIdx:     i,
+			score:       score,
+			reason:      strings.Join(reasons, ", "),
+			category:    t.Category,
+			description: desc,
+			stars:       stars,
+		}
+		recs = append(recs, rec)
+		if score > maxScore {
+			maxScore = score
+		}
 	}
 
 	// Sort by score descending, then name ascending.
@@ -111,6 +187,16 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 	// Cap at maxRecommendations.
 	if len(recs) > maxRecommendations {
 		recs = recs[:maxRecommendations]
+	}
+
+	// Compute normalized percentages.
+	if maxScore > 0 {
+		for i := range recs {
+			recs[i].matchPct = recs[i].score * 100 / maxScore
+			if recs[i].matchPct < 1 {
+				recs[i].matchPct = 1
+			}
+		}
 	}
 
 	return recs

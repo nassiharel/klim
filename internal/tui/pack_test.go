@@ -273,12 +273,13 @@ func TestBuildPackInstallItems_MixedCatalogAndMissing(t *testing.T) {
 // --- Recommendation tests ---
 
 func TestComputeRecommendations_Basic(t *testing.T) {
+	pkg := registry.PackageIDs{Brew: "x", Winget: "x"} // at least one PM so HasAnyPackageForOS passes
 	tools := []registry.Tool{
 		{Name: "kubectl", Tags: []string{"kubernetes", "k8s", "cluster"}, Instances: []registry.Instance{{Path: "/usr/bin/kubectl"}}},
 		{Name: "helm", Tags: []string{"kubernetes", "k8s", "charts"}, Instances: []registry.Instance{{Path: "/usr/bin/helm"}}},
-		{Name: "stern", Tags: []string{"kubernetes", "k8s", "logs", "tail"}},
-		{Name: "k9s", Tags: []string{"kubernetes", "k8s", "tui"}},
-		{Name: "ansible", Tags: []string{"automation", "ssh", "agentless"}},
+		{Name: "stern", Tags: []string{"kubernetes", "k8s", "logs", "tail"}, Packages: pkg},
+		{Name: "k9s", Tags: []string{"kubernetes", "k8s", "tui"}, Packages: pkg},
+		{Name: "ansible", Tags: []string{"automation", "ssh", "agentless"}, Packages: pkg},
 	}
 
 	recs := computeRecommendations(tools)
@@ -306,11 +307,12 @@ func TestComputeRecommendations_Basic(t *testing.T) {
 }
 
 func TestComputeRecommendations_ScoreOrdering(t *testing.T) {
+	pkg := registry.PackageIDs{Brew: "x", Winget: "x"}
 	tools := []registry.Tool{
 		{Name: "git", Tags: []string{"vcs", "scm"}, Instances: []registry.Instance{{Path: "/usr/bin/git"}}},
 		{Name: "kubectl", Tags: []string{"kubernetes", "k8s"}, Instances: []registry.Instance{{Path: "/usr/bin/kubectl"}}},
-		{Name: "helm", Tags: []string{"kubernetes", "k8s", "charts"}},
-		{Name: "gh", Tags: []string{"vcs", "github"}},
+		{Name: "helm", Tags: []string{"kubernetes", "k8s", "charts"}, Packages: pkg},
+		{Name: "gh", Tags: []string{"vcs", "github"}, Packages: pkg},
 	}
 
 	recs := computeRecommendations(tools)
@@ -350,9 +352,10 @@ func TestComputeRecommendations_AllInstalled(t *testing.T) {
 }
 
 func TestComputeRecommendations_ReasonContainsToolNames(t *testing.T) {
+	pkg := registry.PackageIDs{Brew: "x", Winget: "x"}
 	tools := []registry.Tool{
 		{Name: "kubectl", Tags: []string{"kubernetes"}, Instances: []registry.Instance{{Path: "/usr/bin/kubectl"}}},
-		{Name: "stern", Tags: []string{"kubernetes", "logs"}},
+		{Name: "stern", Tags: []string{"kubernetes", "logs"}, Packages: pkg},
 	}
 
 	recs := computeRecommendations(tools)

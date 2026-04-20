@@ -1530,7 +1530,27 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "*":
-		// Toggle favorite on any tool-list tab.
+		// Toggle favorite — For You sub-tab uses recommendations, not filteredIndex.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
+			if m.cursor < len(m.recommendations) {
+				idx := m.recommendations[m.cursor].toolIdx
+				if idx < len(m.tools) {
+					name := m.tools[idx].Name
+					added, err := favorites.Toggle(name)
+					if err != nil {
+						m.statusMsg = fmt.Sprintf("⚠ %v", err)
+					} else if added {
+						m.favoriteNames[name] = true
+						m.statusMsg = "★ Added to favorites"
+					} else {
+						delete(m.favoriteNames, name)
+						m.statusMsg = "☆ Removed from favorites"
+					}
+				}
+			}
+			return m, nil
+		}
+		// Toggle favorite on other tool-list tabs.
 		if m.activeTab <= tabDiscover && m.cursor < len(m.filteredIndex) {
 			idx := m.filteredIndex[m.cursor]
 			if idx < len(m.tools) {
@@ -1548,6 +1568,33 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
+		}
+		return m, nil
+	case "i":
+		// Quick install from For You sub-tab.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
+			if m.cursor < len(m.recommendations) {
+				rec := m.recommendations[m.cursor]
+				if rec.toolIdx < len(m.tools) {
+					tool := m.tools[rec.toolIdx]
+					src := tool.Packages.BestInstallSource()
+					if src == "" {
+						m.statusMsg = "⚠ No package manager available for this tool"
+						return m, nil
+					}
+					args := tool.Packages.InstallArgs(src)
+					if args == nil {
+						m.statusMsg = "⚠ No install command available"
+						return m, nil
+					}
+					m.pendingAction = &pendingAction{
+						toolIdx: rec.toolIdx,
+						action:  actionInstall,
+						cmdArgs: args,
+					}
+				}
+			}
+			return m, nil
 		}
 		return m, nil
 	case "a":

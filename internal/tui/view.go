@@ -467,35 +467,47 @@ func (m Model) renderForYouList() string {
 	var b strings.Builder
 
 	if len(m.recommendations) == 0 {
-		b.WriteString("\n  " + dimVersion.Render("No recommendations — install some tools first!") + "\n")
+		b.WriteString("\n\n")
+		b.WriteString("  " + dimVersion.Render("No recommendations yet.") + "\n\n")
+		b.WriteString("  " + dimVersion.Render("Install a few tools and clim will suggest related ones") + "\n")
+		b.WriteString("  " + dimVersion.Render("based on what you use.") + "\n")
 		return b.String()
 	}
 
-	// Header.
-	b.WriteString("  " +
-		headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
-		headerStyle.Render(fixedWidth("MATCH", 5)) + "  " +
-		headerStyle.Render(fixedWidth("BECAUSE YOU HAVE", colReason)) + "  " +
-		headerStyle.Render("STATUS") + "\n")
+	// Section header.
+	b.WriteString("  " + dashSection.Render("Recommended for you") +
+		"  " + dimVersion.Render(fmt.Sprintf("(%d suggestions)", len(m.recommendations))) + "\n\n")
 
-	visibleRows := m.height - 11 // title + tabs + blank + search + sub-tabs + header + footer + gap
-	if visibleRows < 3 {
-		visibleRows = 3
+	// 2-line cards + 1-line separator = 3 visual lines per item.
+	visibleLines := m.height - 12
+	if visibleLines < 6 {
+		visibleLines = 6
 	}
+	itemsPerPage := visibleLines / 3
+	if itemsPerPage < 2 {
+		itemsPerPage = 2
+	}
+
 	start := 0
-	if m.cursor >= visibleRows {
-		start = m.cursor - visibleRows + 1
+	if m.cursor >= itemsPerPage {
+		start = m.cursor - itemsPerPage + 1
 	}
 
-	// Find max score for relative bar sizing.
-	maxScore := 1
-	for _, rec := range m.recommendations {
-		if rec.score > maxScore {
-			maxScore = rec.score
-		}
+	end := start + itemsPerPage
+	if end > len(m.recommendations) {
+		end = len(m.recommendations)
 	}
 
-	for vi := start; vi < len(m.recommendations) && vi < start+visibleRows; vi++ {
+	// Fixed column widths for alignment.
+	const (
+		colCat      = 14 // category column (padded)
+		colStarsFY  = 10 // stars badge column
+		gaugeWidth  = 12
+		colPct      = 5  // " 85%"
+		colReasonFY = 34 // "You use: ..." column
+	)
+
+	for vi := start; vi < end; vi++ {
 		rec := m.recommendations[vi]
 		if rec.toolIdx >= len(m.tools) {
 			continue
@@ -503,39 +515,87 @@ func (m Model) renderForYouList() string {
 		tool := m.tools[rec.toolIdx]
 		selected := vi == m.cursor
 
+		// --- Row 1: cursor + name (fixed) + category (fixed) + stars (fixed) + gauge + pct ---
 		cursor := "  "
 		if selected {
 			cursor = "▸ "
 		}
 
-		nameCell := nameStyle.Render(fixedWidth(tool.Name, colName))
-
-		// Score bar: scale to 5 chars max.
-		barLen := (rec.score * 5) / maxScore
-		if barLen < 1 {
-			barLen = 1
+		displayName := tool.DisplayName
+		if displayName == "" {
+			displayName = tool.Name
 		}
-		bar := upgradableStyle.Render(strings.Repeat("█", barLen) + strings.Repeat("░", 5-barLen))
+		nameCell := nameStyle.Render(fixedWidth(displayName, colName))
 
-		reasonCell := dimVersion.Render(fixedWidth(rec.reason, colReason))
-
-		line := cursor + nameCell + "  " + bar + "  " + reasonCell
-		if badge := githubStarsBadge(tool); badge != "" {
-			line += "  " + fixedWidthANSI(dimVersion.Render(badge), colStars)
+		catText := ""
+		if rec.category != "" {
+			catText = chipStyle.Render(rec.category)
 		}
+		catCell := fixedWidthANSI(catText, colCat)
+
+		starsText := ""
+		if rec.stars > 0 {
+			starsText = dimVersion.Render("★ " + formatStars(rec.stars))
+		}
+		starsCell := fixedWidthANSI(starsText, colStarsFY)
+
+		pct := rec.matchPct
+		filled := pct * gaugeWidth / 100
+		if filled < 1 && pct > 0 {
+			filled = 1
+		}
+		bar := gauge(filled, gaugeWidth, gaugeWidth, dashGaugeFill, dashGaugeEmpty)
+		pctCell := fixedWidthANSI(upgradableStyle.Render(fmt.Sprintf("%d%%", pct)), colPct)
+
+		line1 := cursor + nameCell + " " + catCell + " " + starsCell + " " + bar + " " + pctCell
+
 		if selected {
-			w := lipgloss.Width(line)
+			w := lipgloss.Width(line1)
 			if w < m.width {
-				line += strings.Repeat(" ", m.width-w)
+				line1 += strings.Repeat(" ", m.width-w)
 			}
-			line = selectedRowStyle.Render(line)
+			line1 = selectedRowStyle.Render(line1)
 		}
-		b.WriteString(line + "\n")
+		b.WriteString(line1 + "\n")
+
+		// --- Row 2: indent + description (fixed) + reason (fixed) ---
+		// Indent matches cursor (2) + aligns under name.
+		desc := rec.description
+		if desc == "" {
+			desc = "No description"
+		}
+		if len(desc) > colName {
+			desc = desc[:colName-1] + "…"
+		}
+		descCell := dimVersion.Render(fixedWidth(desc, colName))
+
+		reasonText := ""
+		if rec.reason != "" {
+			reasonText = "You use: " + rec.reason
+		}
+		reasonCell := dimVersion.Render(fixedWidth(reasonText, colReasonFY))
+
+		line2 := "  " + descCell + " " + reasonCell
+
+		if selected {
+			w := lipgloss.Width(line2)
+			if w < m.width {
+				line2 += strings.Repeat(" ", m.width-w)
+			}
+			line2 = selectedRowStyle.Render(line2)
+		}
+		b.WriteString(line2 + "\n")
+
+		// Blank separator between cards (not after last).
+		if vi < end-1 {
+			b.WriteString("\n")
+		}
 	}
 
-	// Pad remaining rows.
-	rendered := max(min(len(m.recommendations)-start, visibleRows), 0)
-	for range max(visibleRows-rendered, 0) {
+	// Pad remaining lines to prevent layout jitter.
+	renderedItems := end - start
+	renderedLines := renderedItems*2 + max(renderedItems-1, 0)
+	for i := renderedLines; i < visibleLines; i++ {
 		b.WriteString("\n")
 	}
 
@@ -2026,6 +2086,16 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("u") + " upgrade",
 				dimVersion.Render("f") + " category",
 				dimVersion.Render("Enter") + " detail",
+				dimVersion.Render("q") + " quit",
+			}
+		}
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Enter") + " detail",
+				dimVersion.Render("i") + " install",
+				dimVersion.Render("*") + " favorite",
+				dimVersion.Render("←→") + " tab",
 				dimVersion.Render("q") + " quit",
 			}
 		}
