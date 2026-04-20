@@ -691,6 +691,93 @@ func shareToolsCmd(tools []registry.Tool) tea.Cmd {
 	}
 }
 
+// exportFavoritesCmd exports only the favorited tools to a YAML manifest.
+func exportFavoritesCmd(tools []registry.Tool, favNames map[string]bool) tea.Cmd {
+	return func() tea.Msg {
+		var exported []manifest.Tool
+		for _, tool := range tools {
+			if !favNames[tool.Name] {
+				continue
+			}
+			mt := manifest.Tool{
+				Name:        tool.Name,
+				DisplayName: tool.DisplayName,
+				Category:    tool.Category,
+				Packages: manifest.Packages{
+					Winget: tool.Packages.Winget,
+					Choco:  tool.Packages.Choco,
+					Scoop:  tool.Packages.Scoop,
+					Brew:   tool.Packages.Brew,
+					Apt:    tool.Packages.Apt,
+					Snap:   tool.Packages.Snap,
+					NPM:    tool.Packages.NPM,
+				},
+			}
+			if primary := tool.PrimaryInstance(); primary != nil {
+				mt.Version = primary.Version
+				mt.Source = string(primary.Source)
+			}
+			exported = append(exported, mt)
+		}
+		if len(exported) == 0 {
+			return exportFinishedMsg{err: errors.New("no favorites to export")}
+		}
+
+		sort.Slice(exported, func(i, j int) bool {
+			return strings.ToLower(exported[i].Name) < strings.ToLower(exported[j].Name)
+		})
+
+		m := manifest.Manifest{
+			GeneratedBy: "clim favorites export",
+			OS:          runtime.GOOS,
+			Arch:        runtime.GOARCH,
+			Tools:       exported,
+		}
+
+		data, err := yaml.Marshal(&m)
+		if err != nil {
+			return exportFinishedMsg{err: err}
+		}
+
+		bdir, err := backupsDir()
+		if err != nil {
+			return exportFinishedMsg{err: fmt.Errorf("creating backups dir: %w", err)}
+		}
+
+		filename := filepath.Join(bdir, fmt.Sprintf("clim-favorites-%s.yaml", time.Now().Format("2006-01-02")))
+		if _, err := os.Stat(filename); err == nil {
+			filename = filepath.Join(bdir, fmt.Sprintf("clim-favorites-%s.yaml", time.Now().Format("2006-01-02-150405")))
+		}
+		header := "# clim — Favorites Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   clim import favorites.yaml\n#\n\n"
+
+		if err := os.WriteFile(filename, []byte(header+string(data)), 0o644); err != nil {
+			return exportFinishedMsg{err: err}
+		}
+
+		return exportFinishedMsg{path: filename, count: len(exported)}
+	}
+}
+
+// shareFavoritesCmd encodes favorite tool names into a share token.
+func shareFavoritesCmd(favNames map[string]bool) tea.Cmd {
+	return func() tea.Msg {
+		var names []string
+		for name := range favNames {
+			names = append(names, name)
+		}
+		if len(names) == 0 {
+			return shareFinishedMsg{err: errors.New("no favorites to share")}
+		}
+		sort.Strings(names)
+
+		token, err := share.Encode(names)
+		if err != nil {
+			return shareFinishedMsg{err: err}
+		}
+		return shareFinishedMsg{token: token, count: len(names)}
+	}
+}
+
 // buildTokenImportPlanCmd decodes a share token and builds an import plan.
 func buildTokenImportPlanCmd(svc *service.ToolService, token string) tea.Cmd {
 	return func() tea.Msg {

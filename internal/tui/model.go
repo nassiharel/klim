@@ -16,12 +16,14 @@ import (
 	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/custompacks"
+	"github.com/nassiharel/clim/internal/favorites"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
 )
 
 const (
 	tabInstalled = iota
+	tabFavorites
 	tabUpdates
 	tabDiscover
 	tabBackup
@@ -125,8 +127,9 @@ type Model struct {
 	lastDiff *catalog.DiffResult
 
 	// Detail view.
-	detailIdx  int // index into m.tools, -1 = no detail
-	showDetail bool
+	detailIdx    int // index into m.tools, -1 = no detail
+	showDetail   bool
+	detailScroll int // vertical scroll offset (in rendered lines) for detail body
 
 	// Loading state.
 	phase    int // 0=scanning, 1=resolving, 2=done
@@ -204,6 +207,11 @@ type Model struct {
 	// Dashboard scroll offset.
 	dashboardScroll int
 
+	// Favorites state.
+	favoriteNames    map[string]bool // in-memory lookup set, loaded at init
+	favMode          string          // "" (list), "export", "share"
+	favClearConfirm  bool            // true = awaiting y/n to clear all favorites
+
 	// Config editor state.
 	configCursor    int
 	configEditing   bool            // true = text input active for a setting
@@ -262,6 +270,7 @@ func NewModel() Model {
 		configEditInput:    cfgEdit,
 		backupBar:          progress.New(progress.WithWidth(40)),
 		updateSelected:     make(map[int]bool),
+		favoriteNames:      loadFavoriteNames(),
 		loading:        true,
 		phase:          phaseLoading,
 		activeTab:      tabInstalled,
@@ -286,6 +295,8 @@ func tabFromName(name string) int {
 	switch name {
 	case "installed":
 		return tabInstalled
+	case "favorites":
+		return tabFavorites
 	case "updates":
 		return tabUpdates
 	case "marketplace":
@@ -589,6 +600,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case exportFinishedMsg:
+		// Favorites tab export — simple status, no progress animation.
+		if m.activeTab == tabFavorites {
+			if msg.err != nil {
+				m.statusMsg = fmt.Sprintf("✗ Export failed: %s", msg.err)
+			} else {
+				m.statusMsg = fmt.Sprintf("✓ Exported %d favorites to %s", msg.count, msg.path)
+			}
+			m.favMode = ""
+			return m, nil
+		}
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("✗ Export failed: %s", msg.err)
 			for i := range m.backupItems {
@@ -692,11 +713,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case shareFinishedMsg:
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("✗ Share failed: %s", msg.err)
+			if m.activeTab == tabFavorites {
+				m.favMode = ""
+			}
 			return m, nil
 		}
 		m.sharedToken = msg.token
-		m.backupMode = backupModeShare
 		m.tokenCopied = false
+		if m.activeTab != tabFavorites {
+			m.backupMode = backupModeShare
+		}
 		// Auto-copy to clipboard.
 		if err := m.clip.WriteAll(msg.token); err != nil {
 			m.statusMsg = fmt.Sprintf("✓ Token generated (%d tools)", msg.count)
@@ -1112,21 +1138,54 @@ func (m Model) prevSelectableIdx(idx int) int {
 }
 
 // handleKeyDetail handles navigation in the tool detail/action menu view.
+//
+// Key bindings:
+//   - up/k, down/j   — move the action-menu selection
+//   - PgUp/PgDn      — scroll the detail body by one page
+//   - Home/End       — jump to top/bottom of the detail body
+//   - Enter          — run the selected action
+//   - Esc/q/Backspace — close the detail view
 func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "backspace":
 		m.showDetail = false
 		m.toolMenu = noMenu
 		m.toolMenuItems = nil
+		m.detailScroll = 0
 		return m, nil
 	case "up", "k":
 		if m.toolMenu > 0 {
 			m.toolMenu--
+		} else if m.detailScroll > 0 {
+			m.detailScroll--
 		}
 	case "down", "j":
 		if m.toolMenu < len(m.toolMenuItems)-1 {
 			m.toolMenu++
+		} else {
+			// Render-side clamp in renderDetailView caps overscroll.
+			m.detailScroll++
 		}
+	case "pgup":
+		page := m.height - 6
+		if page < 1 {
+			page = 1
+		}
+		m.detailScroll -= page
+		if m.detailScroll < 0 {
+			m.detailScroll = 0
+		}
+	case "pgdown", " ":
+		page := m.height - 6
+		if page < 1 {
+			page = 1
+		}
+		m.detailScroll += page
+	case "home", "g":
+		m.detailScroll = 0
+	case "end", "G":
+		// A large number; renderDetailView clamps to maxScroll.
+		m.detailScroll = 1 << 30
 	case "enter":
 		if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
 			action := m.toolMenuItems[m.toolMenu]
@@ -1286,26 +1345,31 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.applyFilter()
 			return m, nil
 		case "2":
-			m.activeTab = tabUpdates
+			m.activeTab = tabFavorites
 			m.cursor = 0
 			m.applyFilter()
 			return m, nil
 		case "3":
-			m.activeTab = tabDiscover
+			m.activeTab = tabUpdates
 			m.cursor = 0
 			m.applyFilter()
 			return m, nil
 		case "4":
+			m.activeTab = tabDiscover
+			m.cursor = 0
+			m.applyFilter()
+			return m, nil
+		case "5":
 			m.activeTab = tabBackup
 			m.cursor = 0
 			return m, nil
-		case "5":
+		case "6":
 			m.activeTab = tabDashboard
 			m.cursor = 0
 			m.dashboardScroll = 0
 			m.myBackupFiles = scanBackupsDir()
 			return m, nil
-		case "6":
+		case "7":
 			m.activeTab = tabConfig
 			m.cursor = 0
 			m.configScroll = 0
@@ -1320,6 +1384,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Config tab uses the config editor.
 	if m.activeTab == tabConfig {
 		return m.handleKeyConfigEditor(msg)
+	}
+
+	// Favorites tab — handle export/share modes and favorites-specific keys.
+	if m.activeTab == tabFavorites {
+		return m.handleKeyFavorites(msg)
 	}
 
 	switch msg.String() {
@@ -1393,26 +1462,31 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.applyFilter()
 		return m, nil
 	case "2":
-		m.activeTab = tabUpdates
+		m.activeTab = tabFavorites
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
 	case "3":
-		m.activeTab = tabDiscover
+		m.activeTab = tabUpdates
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
 	case "4":
+		m.activeTab = tabDiscover
+		m.cursor = 0
+		m.applyFilter()
+		return m, nil
+	case "5":
 		m.activeTab = tabBackup
 		m.cursor = 0
 		return m, nil
-	case "5":
+	case "6":
 		m.activeTab = tabDashboard
 		m.cursor = 0
 		m.dashboardScroll = 0
 		m.myBackupFiles = scanBackupsDir()
 		return m, nil
-	case "6":
+	case "7":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0
@@ -1454,6 +1528,27 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Advance cursor.
 			if m.cursor < m.rowCount()-1 {
 				m.cursor++
+			}
+		}
+		return m, nil
+	case "*":
+		// Toggle favorite on any tool-list tab.
+		if m.activeTab <= tabDiscover && m.cursor < len(m.filteredIndex) {
+			idx := m.filteredIndex[m.cursor]
+			if idx < len(m.tools) {
+				name := m.tools[idx].Name
+				added, err := favorites.Toggle(name)
+				if err != nil {
+					m.statusMsg = fmt.Sprintf("⚠ %v", err)
+				} else {
+					if added {
+						m.favoriteNames[name] = true
+						m.statusMsg = "★ Added to favorites"
+					} else {
+						delete(m.favoriteNames, name)
+						m.statusMsg = "☆ Removed from favorites"
+					}
+				}
 			}
 		}
 		return m, nil
@@ -1585,6 +1680,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.cursor < len(m.recommendations) {
 				m.detailIdx = m.recommendations[m.cursor].toolIdx
 				m.showDetail = true
+				m.detailScroll = 0
 				m.buildToolMenu()
 			}
 			return m, nil
@@ -1593,6 +1689,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Open tool detail view.
 			m.detailIdx = m.filteredIndex[m.cursor]
 			m.showDetail = true
+			m.detailScroll = 0
 			m.buildToolMenu()
 		}
 		return m, nil
@@ -1699,6 +1796,8 @@ func (m *Model) matchesTab(tool registry.Tool) bool {
 	switch m.activeTab {
 	case tabInstalled:
 		return tool.IsInstalled()
+	case tabFavorites:
+		return m.favoriteNames[tool.Name]
 	case tabUpdates:
 		return tool.HasUpdate()
 	case tabDiscover:

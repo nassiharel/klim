@@ -65,6 +65,15 @@ func (m Model) renderView() string {
 		return m.layoutWithFooter(body.String(), footer)
 	}
 
+	// Favorites tab — custom rendering for share token / empty state.
+	if m.activeTab == tabFavorites {
+		if custom := m.renderFavoritesView(); custom != "" {
+			body.WriteString(custom)
+			return m.layoutWithFooter(body.String(), m.renderHelp())
+		}
+		// Fall through to standard two-column layout for non-empty favorites list.
+	}
+
 	// Config tab — supports scrolling.
 	if m.activeTab == tabConfig {
 		content := m.renderConfigView()
@@ -308,6 +317,7 @@ func (m Model) renderTabBar() string {
 		idx   int
 	}{
 		{"Installed", tabInstalled},
+		{"★ Favorites", tabFavorites},
 		{"Updates", tabUpdates},
 		{"Marketplace", tabDiscover},
 		{"Backup", tabBackup},
@@ -704,12 +714,17 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 	var line string
 
 	switch m.activeTab {
-	case tabInstalled:
+	case tabInstalled, tabFavorites:
 		line = m.renderInstalledRow(tool, selected)
 	case tabUpdates:
 		line = m.renderUpdateRow(tool, toolIdx, selected)
 	case tabDiscover:
 		line = m.renderDiscoverRow(tool, selected)
+	}
+
+	// Prepend star indicator for favorited tools.
+	if m.favoriteNames[tool.Name] {
+		line = upgradableStyle.Render("★") + line[1:]
 	}
 
 	if selected {
@@ -852,162 +867,62 @@ func (m Model) versionInfoStyled(tool registry.Tool) string {
 
 // --- Detail view ---
 
+// renderDetailView renders the tool detail page. Sections (from top):
+//
+//  1. Hero      — name, status badge, category, description, quick stats bar
+//  2. Installed — installed version vs latest, source/path, all instances,
+//     recommendations (only shown when the tool is installed)
+//  3. Package Managers — unified table of every declared PM with package id,
+//     availability on the current host and the `install` command
+//  4. About     — tags + topics (deduped), platforms, binary names
+//  5. Community — GitHub repo/homepage/license, stars gauge, forks, last push
+//  6. Related   — "You might also like" with match bars
+//  7. Actions   — footer menu + key hints
 func (m Model) renderDetailView(tool registry.Tool) string {
 	var b strings.Builder
-	label := detailLabelStyle.Render
-	dim := dimVersion.Render
 
-	// ── Header ──────────────────────────────────────────────────
-	nameLabel := tool.Name
-	if tool.DisplayName != "" && !strings.EqualFold(tool.Name, tool.DisplayName) {
-		nameLabel += " (" + tool.DisplayName + ")"
-	}
-	b.WriteString("  " + detailTitleStyle.Render(nameLabel))
-	b.WriteString("  " + categoryStyle.Render(tool.Category))
-	divLen := max(m.width-lipgloss.Width(nameLabel)-lipgloss.Width(tool.Category)-8, 10)
-	b.WriteString("  " + strings.Repeat("─", divLen))
-	b.WriteString("\n\n")
-
-	// ── Description (word-wrapped) ──────────────────────────────
-	if tool.GitHubInfo != nil && tool.GitHubInfo.Description != "" {
-		maxW := m.width - 6
-		if maxW < 20 {
-			maxW = 20
+	divider := func(title string) string {
+		section := dashSection.Render
+		w := m.width - lipgloss.Width(title) - 8
+		if w < 4 {
+			w = 4
 		}
-		for _, line := range wordWrap(tool.GitHubInfo.Description, maxW) {
-			b.WriteString("  " + dim(line) + "\n")
-		}
-		b.WriteString("\n")
-	} else {
-		b.WriteString("  " + dim("No description available.") + "\n\n")
+		return "  " + dashDim.Render("▸ ") + section(title) + " " + dashDim.Render(strings.Repeat("─", w)) + "\n"
 	}
 
-	// ── Version & Status ────────────────────────────────────────
+	// Hero block: name, badge, category, description, quick stats.
+	b.WriteString(m.renderHeroHeader(tool))
+
+	// Installed section.
 	if tool.IsInstalled() {
-		ver := tool.InstalledVersion()
-		if ver == "" {
-			ver = "—"
-		}
-		b.WriteString("  " + label("Version:    ") + nameStyle.Render(ver))
-		if tool.Latest != "" {
-			if registry.VersionsMatch(ver, tool.Latest) {
-				b.WriteString("  " + upToDateStyle.Render("✓ up to date"))
-			} else if tool.HasUpdate() {
-				b.WriteString("  " + upgradableStyle.Render("⬆ "+tool.Latest+" available"))
-			}
-			if tool.LatestFrom != "" {
-				b.WriteString("  " + dim("(via "+tool.LatestFrom+")"))
-			}
-		}
-		b.WriteString("\n")
-	} else {
-		b.WriteString("  " + label("Status:     ") + dim("Not installed") + "\n")
+		b.WriteString(divider("Installed"))
+		b.WriteString(m.renderInstalledStatus(tool))
 	}
 
-	// ── Instances ───────────────────────────────────────────────
-	if tool.IsInstalled() {
-		b.WriteString("  " + label("Instances:  "))
-		if len(tool.Instances) == 1 {
-			b.WriteString(dim("1 installation") + "\n")
-		} else {
-			b.WriteString(upgradableStyle.Render(fmt.Sprintf("%d installations", len(tool.Instances))) + "\n")
-		}
-		for i, inst := range tool.Instances {
-			bullet := "○"
-			style := detailSecondary
-			if i == 0 {
-				bullet = "●"
-				style = detailPrimary
-			}
-			instVer := inst.Version
-			if instVer == "" {
-				instVer = "—"
-			}
-			fmt.Fprintf(&b, "    %s  %-14s  %-8s  %s\n",
-				style.Render(bullet),
-				instVer,
-				sourceStyle.Render(string(inst.Source)),
-				dim(registry.TruncatePath(inst.Path, m.width-40)),
-			)
-		}
-		b.WriteString("\n")
-
-		// Smart recommendations for multiple instances.
-		if len(tool.Instances) > 1 {
-			b.WriteString(m.renderInstanceRecommendations(tool))
-		}
+	// Package managers (installed + not installed).
+	pms := m.renderPackageManagers(tool)
+	if pms != "" {
+		b.WriteString(divider("Package Managers"))
+		b.WriteString(pms)
 	}
 
-	// ── Supported Platforms ─────────────────────────────────────
-	platforms := derivePlatforms(tool.Packages)
-	if len(platforms) > 0 {
-		b.WriteString("  " + label("Platforms:  ") + dim(strings.Join(platforms, ", ")) + "\n")
+	// About: binaries, platforms, tags + topics.
+	about := m.renderAboutSection(tool)
+	if about != "" {
+		b.WriteString(divider("About"))
+		b.WriteString(about)
 	}
 
-	// ── Binary names ────────────────────────────────────────────
-	if len(tool.BinaryNames) > 0 {
-		b.WriteString("  " + label("Binaries:   ") + dim(strings.Join(tool.BinaryNames, ", ")) + "\n")
+	// Community (GitHub).
+	community := m.renderCommunitySection(tool)
+	if community != "" {
+		b.WriteString(divider("Community"))
+		b.WriteString(community)
 	}
 
-	// ── Display name ────────────────────────────────────────────
-	if tool.DisplayName != "" {
-		b.WriteString("  " + label("Display:    ") + dim(tool.DisplayName) + "\n")
-	}
-
-	// ── Category ────────────────────────────────────────────────
-	if tool.Category != "" {
-		b.WriteString("  " + label("Category:   ") + dim(tool.Category) + "\n")
-	}
-
-	// ── Tags ────────────────────────────────────────────────────
-	if len(tool.Tags) > 0 {
-		b.WriteString("  " + label("Tags:       ") + dim(strings.Join(tool.Tags, ", ")) + "\n")
-	}
-
-	// ── Packages (package manager IDs) ──────────────────────────
-	if pkgs := collectPackageEntries(tool.Packages); len(pkgs) > 0 {
-		b.WriteString("  " + label("Packages:") + "\n")
-		for _, p := range pkgs {
-			fmt.Fprintf(&b, "    %-8s  %s\n",
-				sourceStyle.Render(p.source),
-				dim(p.id),
-			)
-		}
-	}
-	b.WriteString("\n")
-
-	// ── GitHub repository metadata ─────────────────────────────
-	b.WriteString(m.renderGitHubSection(tool))
-
-	// ── Install / Upgrade / Remove commands ─────────────────────
-	if tool.IsInstalled() {
-		if primary := tool.PrimaryInstance(); primary != nil {
-			if cmd := tool.Packages.UpgradeCmd(primary.Source); cmd != "" {
-				b.WriteString("  " + label("Upgrade:    ") + detailCmdStyle.Render(cmd) + "\n")
-			}
-			if cmd := tool.Packages.RemoveCmd(primary.Source); cmd != "" {
-				b.WriteString("  " + label("Remove:     ") + detailCmdStyle.Render(cmd) + "\n")
-			}
-		}
-		b.WriteString("\n")
-	}
-
-	// Install commands for all available sources on this OS.
-	installCmds := m.collectInstallCmds(tool)
-	if len(installCmds) > 0 {
-		b.WriteString("  " + label("Install:") + "\n")
-		for _, ic := range installCmds {
-			fmt.Fprintf(&b, "    %-8s  %s\n",
-				sourceStyle.Render(ic.source),
-				detailCmdStyle.Render(ic.cmd),
-			)
-		}
-		b.WriteString("\n")
-	}
-
-	// ── You might also like ────────────────────────────────────
+	// Related tools.
 	if related := m.relatedTools(tool); len(related) > 0 {
-		b.WriteString("  " + label("You might also like:") + "\n")
+		b.WriteString(divider("You might also like"))
 		maxScore := 1
 		for _, r := range related {
 			if r.score > maxScore {
@@ -1019,23 +934,29 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 				continue
 			}
 			rt := m.tools[r.toolIdx]
-			barLen := (r.score * 5) / maxScore
+			barLen := (r.score * 8) / maxScore
 			if barLen < 1 {
 				barLen = 1
 			}
-			bar := upgradableStyle.Render(strings.Repeat("█", barLen) + strings.Repeat("░", 5-barLen))
-			fmt.Fprintf(&b, "    %s %s\n",
-				nameStyle.Render(fixedWidth(rt.Name, 16)),
+			bar := dashGaugeInfo.Render(strings.Repeat("█", barLen)) +
+				dashGaugeEmpty.Render(strings.Repeat("░", 8-barLen))
+			installedMark := ""
+			if rt.IsInstalled() {
+				installedMark = "  " + upToDateStyle.Render("●")
+			}
+			fmt.Fprintf(&b, "  %s  %s%s\n",
+				nameStyle.Render(fixedWidth(rt.Name, 18)),
 				bar,
+				installedMark,
 			)
 		}
 		b.WriteString("\n")
 	}
 
-	// ── Action menu ─────────────────────────────────────────────
+	// Footer: actions menu + help bar.
 	var footer strings.Builder
 	if len(m.toolMenuItems) > 0 {
-		footer.WriteString("  " + label("Actions:") + "\n")
+		footer.WriteString(divider("Actions"))
 		for i, item := range m.toolMenuItems {
 			cursor := "  "
 			if i == m.toolMenu {
@@ -1054,7 +975,7 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		footer.WriteString("\n")
 	}
 
-	// ── Help bar ────────────────────────────────────────────────
+	dim := dimVersion.Render
 	switch {
 	case m.pendingAction != nil:
 		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
@@ -1063,19 +984,409 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 	default:
 		hints := []string{
 			dim("↑↓") + " navigate",
+			dim("PgUp/PgDn") + " scroll",
 			dim("Enter") + " select",
 			dim("Esc") + " back",
 		}
 		footer.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
 	}
 
-	return m.layoutWithFooter(b.String(), footer.String())
+	return m.layoutDetailWithScroll(b.String(), footer.String())
 }
 
-// installCmdEntry pairs a source label with the formatted command string.
-type installCmdEntry struct {
-	source string
-	cmd    string
+// layoutDetailWithScroll applies m.detailScroll to the rendered body so the
+// tool detail view can scroll vertically, then hands off to layoutWithFooter
+// for bottom-pinning of the footer. Also clamps m.detailScroll in-place via
+// the returned model... except we have a value receiver on renderDetailView,
+// so we clamp locally and just use the clamped value here. The next user
+// input re-renders and settles any over-scroll silently.
+func (m Model) layoutDetailWithScroll(body, footer string) string {
+	if m.height <= 0 {
+		return m.layoutWithFooter(body, footer)
+	}
+
+	lines := strings.Split(body, "\n")
+
+	footerRows := visualRows(footer, m.width)
+	const minGap = 1
+	visibleRows := m.height - footerRows - minGap
+	if visibleRows < 5 {
+		visibleRows = 5
+	}
+
+	// Count body rows visually (wrapping counts as multiple rows).
+	totalRows := 0
+	for _, ln := range lines {
+		totalRows += visualRows(ln, m.width)
+	}
+
+	maxScroll := totalRows - visibleRows
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	scroll := m.detailScroll
+	if scroll > maxScroll {
+		scroll = maxScroll
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+
+	// Drop `scroll` visual rows from the top.
+	if scroll > 0 {
+		dropped := 0
+		start := 0
+		for i, ln := range lines {
+			r := visualRows(ln, m.width)
+			if dropped+r > scroll {
+				start = i
+				break
+			}
+			dropped += r
+			start = i + 1
+		}
+		lines = lines[start:]
+	}
+
+	// Annotate the footer with scroll position when applicable.
+	if scroll > 0 || (totalRows > visibleRows && maxScroll > 0) {
+		pct := 0
+		if maxScroll > 0 {
+			pct = (scroll * 100) / maxScroll
+		}
+		indicator := fmt.Sprintf("[%d%%]", pct)
+		footer = "  " + dimVersion.Render(indicator) + "   " + strings.TrimLeft(footer, " ")
+	}
+
+	return m.layoutWithFooter(strings.Join(lines, "\n"), footer)
+}
+
+// renderHeroHeader renders the top-of-page "hero" block: name, status badge,
+// category pill, description, and an at-a-glance stats bar (stars, forks,
+// license, last push).
+func (m Model) renderHeroHeader(tool registry.Tool) string {
+	var b strings.Builder
+
+	// Name + alias.
+	name := detailTitleStyle.Render(tool.DisplayName)
+	if tool.DisplayName != tool.Name {
+		name += "  " + dimVersion.Render("("+tool.Name+")")
+	}
+
+	// Status badge.
+	var badge string
+	switch {
+	case tool.IsInstalled() && tool.HasUpdate():
+		badge = upgradableStyle.Render(" ⬆ UPDATE AVAILABLE ")
+	case tool.IsInstalled():
+		badge = upToDateStyle.Render(" ✓ INSTALLED ")
+	default:
+		badge = dashDim.Render(" ○ NOT INSTALLED ")
+	}
+
+	// Category + archived chips.
+	chips := []string{badge}
+	if tool.Category != "" {
+		chips = append(chips, chipStyle.Render(tool.Category))
+	}
+	if tool.GitHubInfo != nil && tool.GitHubInfo.Archived {
+		chips = append(chips, upgradableStyle.Render(" ⚠ ARCHIVED "))
+	}
+
+	b.WriteString("  " + name + "  " + strings.Join(chips, "  ") + "\n")
+
+	// Description — readable, not dim.
+	if info := tool.GitHubInfo; info != nil && info.Description != "" {
+		maxW := m.width - 6
+		if maxW < 20 {
+			maxW = 20
+		}
+		b.WriteString("\n")
+		for _, line := range wordWrap(info.Description, maxW) {
+			b.WriteString("  " + heroDescStyle.Render(line) + "\n")
+		}
+	}
+
+	// Quick stats bar: ★ stars · ⑂ forks · 📜 license · 🕒 last push.
+	// Shown at the top so the most-asked-for info is above the fold.
+	// (The Community section below does not repeat these.)
+	if stats := m.renderQuickStats(tool); stats != "" {
+		b.WriteString("\n  " + stats + "\n")
+	}
+
+	b.WriteString("\n")
+	return b.String()
+}
+
+// renderQuickStats renders the single-line summary of GitHub stats. Returns
+// "" when the tool has no enriched metadata.
+func (m Model) renderQuickStats(tool registry.Tool) string {
+	info := tool.GitHubInfo
+	if info == nil {
+		return ""
+	}
+	var parts []string
+	sep := dashDim.Render(" · ")
+
+	if info.Stars > 0 {
+		parts = append(parts, upgradableStyle.Render("★ ")+dashNumber.Render(formatStars(info.Stars)))
+	}
+	if info.Forks > 0 {
+		parts = append(parts, dashDim.Render("⑂ ")+dashNumber.Render(formatStars(info.Forks)))
+	}
+	if info.License != "" {
+		parts = append(parts, dashDim.Render("📜 ")+dimVersion.Render(info.License))
+	}
+	if d := formatGitHubDate(info.PushedAt); d != "" {
+		parts = append(parts, dashDim.Render("🕒 ")+dimVersion.Render(d))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, sep)
+}
+
+// renderInstalledStatus renders the "Installed" section: primary version vs
+// latest, source and path, and (when present) the list of additional instances
+// plus actionable recommendations.
+func (m Model) renderInstalledStatus(tool registry.Tool) string {
+	var b strings.Builder
+	label := detailLabelStyle.Render
+	dim := dimVersion.Render
+
+	ver := tool.InstalledVersion()
+	if ver == "" {
+		ver = "—"
+	}
+
+	line := "  " + label(fixedWidth("Version", 14)) + dashNumber.Render(ver)
+	if tool.Latest != "" {
+		switch {
+		case registry.VersionsMatch(ver, tool.Latest):
+			line += "  " + upToDateStyle.Render("✓ latest")
+		case tool.HasUpdate():
+			line += "  " + dashDim.Render("→") + "  " + upgradableStyle.Render(tool.Latest) + "  " + upgradableStyle.Render("available")
+		}
+		if tool.LatestFrom != "" {
+			line += "  " + dim("via "+tool.LatestFrom)
+		}
+	}
+	b.WriteString(line + "\n")
+
+	if primary := tool.PrimaryInstance(); primary != nil {
+		b.WriteString("  " + label(fixedWidth("Source", 14)) + sourceStyle.Render(string(primary.Source)) + "\n")
+		b.WriteString("  " + label(fixedWidth("Path", 14)) + dim(registry.TruncatePath(primary.Path, m.width-20)) + "\n")
+	}
+	b.WriteString("\n")
+
+	// Multiple instances.
+	if len(tool.Instances) > 1 {
+		b.WriteString("  " + detailLabelStyle.Render(fmt.Sprintf("%d installations found", len(tool.Instances))) + "\n")
+		for i, inst := range tool.Instances {
+			bullet := dashDim.Render("○")
+			if i == 0 {
+				bullet = upToDateStyle.Render("●")
+			}
+			instVer := inst.Version
+			if instVer == "" {
+				instVer = "—"
+			}
+			fmt.Fprintf(&b, "  %s  %s  %s  %s\n",
+				bullet,
+				nameStyle.Render(fixedWidth(instVer, 14)),
+				sourceStyle.Render(fixedWidth(string(inst.Source), 8)),
+				dim(registry.TruncatePath(inst.Path, m.width-36)),
+			)
+		}
+		b.WriteString("\n")
+		b.WriteString(m.renderInstanceRecommendations(tool))
+	}
+	return b.String()
+}
+
+// renderPackageManagers renders a unified view of every declared package
+// manager: availability dot, PM name, package id, and the `install` command.
+// Replaces the older separate "Packages" and "Install" sections.
+func (m Model) renderPackageManagers(tool registry.Tool) string {
+	pkgs := collectPackageEntries(tool.Packages)
+	if len(pkgs) == 0 {
+		return ""
+	}
+
+	// Map PM → availability on this host (nil entry means "don't know / not
+	// applicable on this OS"; presence means "we can check").
+	avail := make(map[string]bool, len(registry.AllPMStatusForOS()))
+	for _, pm := range registry.AllPMStatusForOS() {
+		avail[string(pm.Source)] = pm.Available
+	}
+
+	var b strings.Builder
+	dim := dimVersion.Render
+	cmdStyle := detailCmdStyle.Render
+
+	for _, p := range pkgs {
+		// Bullet reflects availability on THIS host:
+		//   ●  PM is on PATH
+		//   ○  PM known to clim for this OS but not on PATH
+		//   ·  PM not applicable to this OS (still listed for reference)
+		bullet := dashDim.Render("·")
+		if isAvail, ok := avail[p.source]; ok {
+			if isAvail {
+				bullet = upToDateStyle.Render("●")
+			} else {
+				bullet = dashDim.Render("○")
+			}
+		}
+
+		pmName := sourceStyle.Render(fixedWidth(p.source, 8))
+		pkgID := nameStyle.Render(p.id)
+
+		// Install command (if generatable for this PM).
+		var cmdCell string
+		if cmd := tool.Packages.InstallCmd(registry.InstallSource(p.source)); cmd != "" {
+			cmdCell = dashDim.Render("│  ") + cmdStyle(cmd)
+		} else {
+			cmdCell = dashDim.Render("│  ") + dim("(no install command)")
+		}
+
+		fmt.Fprintf(&b, "  %s  %s  %s  %s\n", bullet, pmName, pkgID, cmdCell)
+	}
+	b.WriteString("\n")
+
+	// Extra commands (upgrade/remove) only relevant when the tool is
+	// installed — and specifically via its primary PM. This avoids duplicating
+	// the install command shown above.
+	if tool.IsInstalled() {
+		if primary := tool.PrimaryInstance(); primary != nil {
+			label := detailLabelStyle.Render
+			var extras []string
+			if cmd := tool.Packages.UpgradeCmd(primary.Source); cmd != "" {
+				extras = append(extras, "  "+label(fixedWidth("Upgrade", 14))+cmdStyle(cmd))
+			}
+			if cmd := tool.Packages.RemoveCmd(primary.Source); cmd != "" {
+				extras = append(extras, "  "+label(fixedWidth("Remove", 14))+cmdStyle(cmd))
+			}
+			if len(extras) > 0 {
+				b.WriteString(strings.Join(extras, "\n") + "\n\n")
+			}
+		}
+	}
+	return b.String()
+}
+
+// renderAboutSection renders consolidated metadata: binary names, platforms,
+// and a deduped list of tags + GitHub topics.
+func (m Model) renderAboutSection(tool registry.Tool) string {
+	var b strings.Builder
+	label := detailLabelStyle.Render
+	dim := dimVersion.Render
+
+	// Binaries.
+	if len(tool.BinaryNames) > 0 {
+		b.WriteString("  " + label(fixedWidth("Binaries", 14)) + dim(strings.Join(tool.BinaryNames, ", ")) + "\n")
+	}
+
+	// Platforms as colored pills (highlighted for the current OS).
+	if platforms := derivePlatforms(tool.Packages); len(platforms) > 0 {
+		current := currentOSLabel()
+		line := "  " + label(fixedWidth("Platforms", 14))
+		for i, p := range platforms {
+			pill := chipStyle.Render(p)
+			if p == current {
+				pill = chipAccentStyle.Render(p + " (this host)")
+			}
+			line += pill
+			if i < len(platforms)-1 {
+				line += " "
+			}
+		}
+		b.WriteString(line + "\n")
+	}
+
+	// Tags + topics (deduped, case-insensitive).
+	if labels := combineTagsAndTopics(tool); len(labels) > 0 {
+		line := "  " + label(fixedWidth("Tags", 14))
+		for _, t := range labels {
+			pill := chipStyle.Render(t)
+			pillW := lipgloss.Width(pill) + 1
+			if lipgloss.Width(line)+pillW > m.width-4 {
+				b.WriteString(line + "\n")
+				line = "  " + strings.Repeat(" ", 14)
+			}
+			line += pill + " "
+		}
+		b.WriteString(line + "\n")
+	}
+
+	if b.Len() > 0 {
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// renderCommunitySection renders GitHub repo URL + homepage. Counts, license
+// and activity are surfaced in the hero quick-stats bar to avoid duplication.
+// Returns "" when the tool has no GitHub slug.
+func (m Model) renderCommunitySection(tool registry.Tool) string {
+	if tool.GitHubSlug == "" && tool.GitHubInfo == nil {
+		return ""
+	}
+
+	var b strings.Builder
+	label := detailLabelStyle.Render
+	dim := dimVersion.Render
+
+	if url := githubRepoURL(tool.GitHubSlug); url != "" {
+		b.WriteString("  " + label(fixedWidth("GitHub", 14)) + dim(url) + "\n")
+	}
+	if info := tool.GitHubInfo; info != nil && info.Homepage != "" {
+		b.WriteString("  " + label(fixedWidth("Homepage", 14)) + dim(info.Homepage) + "\n")
+	}
+
+	if b.Len() == 0 {
+		return ""
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// combineTagsAndTopics merges catalog tags and GitHub topics, de-duplicating
+// case-insensitively while preserving the first-seen original casing. Tags
+// come first (curated), then topics (crowd-sourced).
+func combineTagsAndTopics(tool registry.Tool) []string {
+	seen := make(map[string]bool)
+	var out []string
+	add := func(s string) {
+		key := strings.ToLower(strings.TrimSpace(s))
+		if key == "" || seen[key] {
+			return
+		}
+		seen[key] = true
+		out = append(out, s)
+	}
+	for _, t := range tool.Tags {
+		add(t)
+	}
+	if tool.GitHubInfo != nil {
+		for _, t := range tool.GitHubInfo.Topics {
+			add(t)
+		}
+	}
+	return out
+}
+
+// currentOSLabel returns the "Windows" / "macOS" / "Linux" label matching the
+// runtime platform, matching the strings produced by derivePlatforms.
+func currentOSLabel() string {
+	switch runtime.GOOS {
+	case "windows":
+		return "Windows"
+	case "darwin":
+		return "macOS"
+	case "linux":
+		return "Linux"
+	}
+	return ""
 }
 
 // renderGitHubSection renders a multi-line block with GitHub repository
@@ -1139,20 +1450,6 @@ func (m Model) renderGitHubSection(tool registry.Tool) string {
 
 	b.WriteString("\n")
 	return b.String()
-}
-
-// collectInstallCmds returns install commands for all available sources on this OS.
-func (m Model) collectInstallCmds(tool registry.Tool) []installCmdEntry {
-	var entries []installCmdEntry
-	for _, src := range registry.SourcesForOS() {
-		if cmd := tool.Packages.InstallCmd(src); cmd != "" {
-			entries = append(entries, installCmdEntry{
-				source: string(src),
-				cmd:    cmd,
-			})
-		}
-	}
-	return entries
 }
 
 // packageEntry is one package-manager → package-id pairing for the detail view.
@@ -1692,10 +1989,33 @@ func (m Model) renderHelp() string {
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
 		}
+	case tabFavorites:
+		if m.favClearConfirm {
+			parts = []string{
+				dimVersion.Render("y") + " confirm",
+				dimVersion.Render("n/Esc") + " cancel",
+			}
+		} else if m.favMode == "share" && m.sharedToken != "" {
+			parts = []string{
+				dimVersion.Render("c") + " copy to clipboard",
+				dimVersion.Render("Esc") + " back",
+				dimVersion.Render("q") + " quit",
+			}
+		} else {
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("*") + " unfavorite",
+				dimVersion.Render("e") + " export",
+				dimVersion.Render("s") + " share",
+				dimVersion.Render("x") + " clear all",
+				dimVersion.Render("q") + " quit",
+			}
+		}
 	default:
 		parts = []string{
 			dimVersion.Render("↑↓") + " navigate",
 			dimVersion.Render("←→") + " tab",
+			dimVersion.Render("*") + " favorite",
 			dimVersion.Render("Enter") + " detail",
 			dimVersion.Render("f") + " filter",
 			dimVersion.Render("r") + " refresh",

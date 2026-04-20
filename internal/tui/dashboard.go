@@ -106,6 +106,7 @@ func (m Model) renderDashboardView() string {
 		{"●", "Installed", fmt.Sprintf("%d", installed), dashGaugeFill},
 		{"▲", "Updates", fmt.Sprintf("%d", updates), dashGaugeWarn},
 		{"○", "Available", fmt.Sprintf("%d", notInstalled), dashGaugeInfo},
+		{"★", "Favorites", fmt.Sprintf("%d", len(m.favoriteNames)), dashGaugeWarn},
 	}
 	for i, card := range statCards {
 		if i > 0 {
