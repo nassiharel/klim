@@ -345,7 +345,7 @@ func findToolsCmd(svc *service.ToolService, force bool, gen int) func() scanResu
 	return func() scanResultMsg {
 		ctx := context.Background()
 		if force {
-			_ = svc.InvalidateScanCache()
+			// Don't delete cache — just ignore it. Fresh scan will overwrite.
 		} else {
 			tools, info, scanInfo, err := svc.LoadCached(ctx)
 			switch {
@@ -354,11 +354,8 @@ func findToolsCmd(svc *service.ToolService, force bool, gen int) func() scanResu
 			case os.IsNotExist(err):
 				// Cold start — fall through to a fresh scan silently.
 			default:
-				// Cache exists but is unreadable or schema-incompatible.
-				// Delete it so we don't keep retrying the same bad file,
-				// and surface a warning alongside the fresh scan result.
-				_ = svc.InvalidateScanCache()
-				slog.Warn("scan cache unreadable, invalidated", "error", err)
+				// Cache exists but is unreadable — ignore it, fresh scan overwrites.
+				slog.Warn("scan cache unreadable, will rescan", "error", err)
 				tools, info, scanErr := svc.LoadAndScan(ctx)
 				return scanResultMsg{
 					gen:          gen,
