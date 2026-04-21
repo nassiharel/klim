@@ -1224,11 +1224,20 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.openDetailView(m.detailRelated[m.detailRelCursor].toolIdx)
 			return m, nil
 		}
+		// Enter on PM row → primary action (install or upgrade).
 		if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
 			action := m.toolMenuItems[m.toolMenu]
-			m.toolMenu = noMenu
-			m.toolMenuItems = nil
-			m.startAction(action.picker)
+			if action.picker != nil {
+				m.startAction(action.picker)
+			}
+		}
+	case "x":
+		// Remove via selected PM.
+		if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
+			action := m.toolMenuItems[m.toolMenu]
+			if action.removePicker != nil {
+				m.startAction(action.removePicker)
+			}
 		}
 	}
 	return m, nil
@@ -2103,42 +2112,63 @@ func (m *Model) buildToolMenu() bool {
 	m.toolMenuItems = nil
 	idx := m.currentToolIdx()
 	if tool.IsInstalled() {
-		if p := m.resolveUpgradeAction(); p != nil {
-			m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: "Upgrade", picker: p})
+		// One menu item per declared PM, ordered to match collectPackageEntries.
+		// Each item can have upgrade and/or remove actions.
+		primary := tool.PrimaryInstance()
+		installedSources := make(map[registry.InstallSource]bool)
+		if primary != nil {
+			installedSources[primary.Source] = true
 		}
-		if p := m.resolveRemoveAction(); p != nil {
-			m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: "Remove", picker: p})
+		for _, inst := range tool.Instances {
+			installedSources[inst.Source] = true
 		}
-	} else {
-		// Install — show each source as a separate menu item.
-		// Build availability map for labeling.
-		pmAvail := make(map[registry.InstallSource]bool)
-		for _, pm := range registry.AllPMStatusForOS() {
-			pmAvail[pm.Source] = pm.Available
+
+		allPMs := []registry.InstallSource{
+			registry.SourceWinget, registry.SourceChoco, registry.SourceScoop,
+			registry.SourceBrew, registry.SourceApt, registry.SourceSnap, registry.SourceNPM,
 		}
-		if p := m.resolveInstallAction(); p != nil {
-			if len(p.choices) == 1 {
-				label := "Install"
-				if !pmAvail[p.choices[0].source] {
-					label += " via " + string(p.choices[0].source) + " (not installed)"
-				}
-				m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: label, picker: p})
-			} else {
-				for _, c := range p.choices {
-					label := "Install via " + string(c.source)
-					if !pmAvail[c.source] {
-						label += " (not installed)"
+		for _, src := range allPMs {
+			if tool.Packages.InstallArgs(src) == nil {
+				continue // tool has no package ID for this PM
+			}
+			item := toolMenuAction{}
+			if installedSources[src] {
+				if args := tool.Packages.UpgradeArgs(src); args != nil {
+					item.picker = &sourcePicker{
+						toolIdx: idx, action: actionUpgrade,
+						choices: []sourceChoice{{source: src, cmdArgs: args}},
 					}
-					m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{
-						label: label,
-						picker: &sourcePicker{
-							toolIdx: idx,
-							action:  actionInstall,
-							choices: []sourceChoice{c},
-						},
-					})
+				}
+				if args := tool.Packages.RemoveArgs(src); args != nil {
+					item.removePicker = &sourcePicker{
+						toolIdx: idx, action: actionRemove,
+						choices: []sourceChoice{{source: src, cmdArgs: args}},
+					}
 				}
 			}
+			m.toolMenuItems = append(m.toolMenuItems, item)
+		}
+	} else {
+		// Install — one menu item per declared package manager, ordered to
+		// match renderPackageManagers (collectPackageEntries order).
+		// This allows toolMenu index to map directly to PM row in the view.
+		allPMs := []registry.InstallSource{
+			registry.SourceWinget, registry.SourceChoco, registry.SourceScoop,
+			registry.SourceBrew, registry.SourceApt, registry.SourceSnap, registry.SourceNPM,
+		}
+		for _, src := range allPMs {
+			args := tool.Packages.InstallArgs(src)
+			if args == nil {
+				continue
+			}
+			m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{
+				label: "Install via " + string(src),
+				picker: &sourcePicker{
+					toolIdx: idx,
+					action:  actionInstall,
+					choices: []sourceChoice{{source: src, cmdArgs: args}},
+				},
+			})
 		}
 	}
 	if len(m.toolMenuItems) == 0 {

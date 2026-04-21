@@ -256,8 +256,9 @@ type sourcePicker struct {
 
 // toolMenuAction represents one selectable action in the tool action menu.
 type toolMenuAction struct {
-	label  string        // "Upgrade", "Remove", "Install"
-	picker *sourcePicker // resolved sources for this action
+	label        string        // "Upgrade", "Remove", "Install"
+	picker       *sourcePicker // primary action (install or upgrade)
+	removePicker *sourcePicker // optional remove action (for installed PM rows)
 }
 
 // --- Backup types ---

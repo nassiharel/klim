@@ -1036,27 +1036,8 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		b.WriteString("\n")
 	}
 
-	// Footer: actions menu + help bar.
+	// Footer: help bar only (actions are now inline in Package Managers section).
 	var footer strings.Builder
-	if len(m.toolMenuItems) > 0 {
-		footer.WriteString(divider("Actions"))
-		for i, item := range m.toolMenuItems {
-			cursor := "  "
-			if i == m.toolMenu {
-				cursor = "▸ "
-			}
-			line := "  " + cursor + nameStyle.Render(item.label)
-			if i == m.toolMenu {
-				w := lipgloss.Width(line)
-				if w < m.width {
-					line += strings.Repeat(" ", m.width-w)
-				}
-				line = selectedRowStyle.Render(line)
-			}
-			footer.WriteString(line + "\n")
-		}
-		footer.WriteString("\n")
-	}
 
 	dim := dimVersion.Render
 	switch {
@@ -1288,28 +1269,32 @@ func (m Model) renderInstalledStatus(tool registry.Tool) string {
 }
 
 // renderPackageManagers renders a unified view of every declared package
-// manager: availability dot, PM name, package id, and the `install` command.
-// Replaces the older separate "Packages" and "Install" sections.
+// manager: availability dot, PM name, and package id.
+// Interactive: toolMenu cursor navigates PM rows. Enter to install/upgrade, x to remove.
 func (m Model) renderPackageManagers(tool registry.Tool) string {
 	pkgs := collectPackageEntries(tool.Packages)
 	if len(pkgs) == 0 {
 		return ""
 	}
 
-	// Map PM → availability on this host (nil entry means "don't know / not
-	// applicable on this OS"; presence means "we can check").
 	avail := make(map[string]bool, len(registry.AllPMStatusForOS()))
 	for _, pm := range registry.AllPMStatusForOS() {
 		avail[string(pm.Source)] = pm.Available
 	}
 
+	interactive := len(m.toolMenuItems) > 0
+
+	// Build installed source set for showing action hints.
+	installedSources := make(map[string]bool)
+	if tool.IsInstalled() {
+		for _, inst := range tool.Instances {
+			installedSources[string(inst.Source)] = true
+		}
+	}
+
 	var b strings.Builder
 
-	for _, p := range pkgs {
-		// Bullet reflects availability on THIS host:
-		//   ●  PM is on PATH
-		//   ○  PM known to clim for this OS but not on PATH
-		//   ·  PM not applicable to this OS (still listed for reference)
+	for i, p := range pkgs {
 		bullet := dashDim.Render("·")
 		if isAvail, ok := avail[p.source]; ok {
 			if isAvail {
@@ -1319,10 +1304,50 @@ func (m Model) renderPackageManagers(tool registry.Tool) string {
 			}
 		}
 
+		cursor := "  "
+		if interactive && i == m.toolMenu {
+			cursor = "▸ "
+		}
+
 		pmName := sourceStyle.Render(fixedWidth(p.source, 8))
 		pkgID := nameStyle.Render(p.id)
 
-		fmt.Fprintf(&b, "  %s  %s  %s\n", bullet, pmName, pkgID)
+		// Action hints on the selected row.
+		hint := ""
+		if interactive && i == m.toolMenu {
+			if tool.IsInstalled() {
+				var actions []string
+				if i < len(m.toolMenuItems) && m.toolMenuItems[i].picker != nil {
+					actions = append(actions, dimVersion.Render("Enter")+" upgrade")
+				}
+				if i < len(m.toolMenuItems) && m.toolMenuItems[i].removePicker != nil {
+					actions = append(actions, dimVersion.Render("x")+" remove")
+				}
+				if len(actions) == 0 && !installedSources[p.source] {
+					hint = "  " + dashDim.Render("(not installed via this PM)")
+				} else {
+					hint = "  " + strings.Join(actions, "  ")
+				}
+			} else {
+				if isAvail, ok := avail[p.source]; ok && !isAvail {
+					hint = "  " + dashDim.Render("(PM not installed)")
+				} else {
+					hint = "  " + dimVersion.Render("Enter") + " install"
+				}
+			}
+		}
+
+		line := cursor + bullet + "  " + pmName + "  " + pkgID + hint
+
+		if interactive && i == m.toolMenu {
+			w := lipgloss.Width(line)
+			if w < m.width {
+				line += strings.Repeat(" ", m.width-w)
+			}
+			line = selectedRowStyle.Render(line)
+		}
+
+		b.WriteString(line + "\n")
 	}
 	b.WriteString("\n")
 
