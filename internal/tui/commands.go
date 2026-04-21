@@ -344,9 +344,7 @@ type marketplaceRefreshMsg struct {
 func findToolsCmd(svc *service.ToolService, force bool, gen int) func() scanResultMsg {
 	return func() scanResultMsg {
 		ctx := context.Background()
-		if force {
-			// Don't delete cache — just ignore it. Fresh scan will overwrite.
-		} else {
+		if !force {
 			tools, info, scanInfo, err := svc.LoadCached(ctx)
 			switch {
 			case err == nil:
