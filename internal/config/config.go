@@ -3,7 +3,10 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -108,26 +111,102 @@ func Path() (string, error) {
 
 // Load reads config.yaml. If the file doesn't exist, it writes a default
 // config and returns the defaults. Returns an error only if the file exists
-// but is unreadable or has invalid YAML.
+// but is unreadable or has invalid YAML. Warnings (e.g. unknown fields) are
+// returned separately and do not prevent loading.
 func Load() (*Config, error) {
+	cfg, _, err := LoadWithWarnings()
+	return cfg, err
+}
+
+// LoadWithWarnings reads config.yaml and returns the config plus any warnings
+// about unknown/misspelled fields. The config is still usable even when
+// warnings are present — unknown fields are simply ignored.
+func LoadWithWarnings() (*Config, []string, error) {
 	path, err := paths.Config()
 	if err != nil {
-		return Default(), nil
+		return Default(), nil, nil
 	}
 
 	// Start from defaults, then overlay the file values.
 	cfg := Default()
 	found, err := fileutil.ReadYAML(path, cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !found {
 		// First run — write defaults so user can discover the file.
 		_ = Save(cfg)
-		return cfg, nil
+		return cfg, nil, nil
 	}
 
-	return cfg, nil
+	// Check for unknown fields via strict decode.
+	var warnings []string
+	data, readErr := os.ReadFile(path)
+	if readErr == nil {
+		warnings = detectUnknownFields(data)
+	}
+
+	// Validate known field values.
+	warnings = append(warnings, cfg.Validate()...)
+
+	return cfg, warnings, nil
+}
+
+// detectUnknownFields attempts a strict YAML decode that rejects unknown keys.
+// Returns human-readable warnings for each unknown field found.
+func detectUnknownFields(data []byte) []string {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	var strict Config
+	if err := dec.Decode(&strict); err != nil {
+		// Extract the useful part of the error message.
+		msg := err.Error()
+		// yaml.v3 errors for unknown fields look like:
+		// "line N: field foo not found in type config.Config"
+		if strings.Contains(msg, "not found in type") {
+			return []string{"config.yaml: " + msg}
+		}
+		// Other strict errors — report as-is.
+		return []string{"config.yaml: " + msg}
+	}
+	return nil
+}
+
+// Validate checks field values and returns warnings for invalid/suspicious values.
+func (c *Config) Validate() []string {
+	var w []string
+
+	// Logging level.
+	switch c.Logging.Level {
+	case "debug", "info", "warn", "error":
+		// ok
+	default:
+		w = append(w, fmt.Sprintf("logging.level: unknown value %q (expected debug/info/warn/error)", c.Logging.Level))
+	}
+
+	// UI default tab.
+	validTabs := map[string]bool{
+		"installed": true, "favorites": true, "updates": true,
+		"marketplace": true, "backup": true, "dashboard": true, "config": true,
+	}
+	if c.UI.DefaultTab != "" && !validTabs[c.UI.DefaultTab] {
+		w = append(w, fmt.Sprintf("ui.default_tab: unknown value %q", c.UI.DefaultTab))
+	}
+
+	// Performance.
+	if c.Performance.Concurrency < 0 {
+		w = append(w, fmt.Sprintf("performance.concurrency: negative value %d", c.Performance.Concurrency))
+	}
+	if c.Performance.CommandTimeout.Duration < 0 {
+		w = append(w, "performance.command_timeout: negative duration")
+	}
+
+	// Marketplace URL.
+	if c.Marketplace.URL != "" && !strings.HasPrefix(c.Marketplace.URL, "http") {
+		w = append(w, fmt.Sprintf("marketplace.url: %q doesn't look like a URL", c.Marketplace.URL))
+	}
+
+	return w
 }
 
 // MustLoad calls Load and panics on error (corrupt YAML).

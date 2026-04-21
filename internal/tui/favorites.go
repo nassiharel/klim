@@ -136,9 +136,7 @@ func (m Model) handleKeyFavorites(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		// Open tool detail.
 		if m.cursor < len(m.filteredIndex) {
-			m.detailIdx = m.filteredIndex[m.cursor]
-			m.showDetail = true
-			m.detailScroll = 0
+			m.openDetailView(m.filteredIndex[m.cursor])
 		}
 		return m, nil
 	case "/":

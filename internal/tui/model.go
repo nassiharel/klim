@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -65,6 +66,13 @@ const (
 	noMenu   = -1 // toolMenu when no action menu is shown
 )
 
+// Sort modes for tool list tabs.
+const (
+	sortByName  = 0
+	sortByStars = 1
+	sortModeCount = 2
+)
+
 // Backup mode states.
 const (
 	backupModeIdle   = ""
@@ -93,6 +101,10 @@ type Model struct {
 
 	// Tabs.
 	activeTab int
+	sortMode  int // sortByName or sortByStars
+
+	// Config warnings (unknown fields, invalid values).
+	configWarnings []string
 
 	// Filter.
 	filterInput    textinput.Model
@@ -127,9 +139,11 @@ type Model struct {
 	lastDiff *catalog.DiffResult
 
 	// Detail view.
-	detailIdx    int // index into m.tools, -1 = no detail
-	showDetail   bool
-	detailScroll int // vertical scroll offset (in rendered lines) for detail body
+	detailIdx       int // index into m.tools, -1 = no detail
+	showDetail      bool
+	detailScroll    int              // vertical scroll offset (in rendered lines) for detail body
+	detailRelated   []recommendation // cached related tools for current detail view
+	detailRelCursor int              // cursor in "You might also like" list (-1 = not focused)
 
 	// Loading state.
 	phase    int // 0=scanning, 1=resolving, 2=done
@@ -282,11 +296,12 @@ func NewModel() Model {
 }
 
 // NewModelWithConfig creates a new TUI model configured from the given Config.
-func NewModelWithConfig(cfg *config.Config) Model {
+func NewModelWithConfig(cfg *config.Config, warnings []string) Model {
 	m := NewModel()
 	m.svc = service.NewWithConfig(cfg)
 	m.activeTab = tabFromName(cfg.UI.DefaultTab)
 	m.cfg = cfg
+	m.configWarnings = warnings
 	return m
 }
 
@@ -892,12 +907,12 @@ func (m Model) View() tea.View {
 
 // Run starts the interactive TUI.
 func Run() error {
-	return RunWithConfig(config.Default())
+	return RunWithConfig(config.Default(), nil)
 }
 
 // RunWithConfig launches the TUI with the given configuration.
-func RunWithConfig(cfg *config.Config) error {
-	model := NewModelWithConfig(cfg)
+func RunWithConfig(cfg *config.Config, warnings []string) error {
+	model := NewModelWithConfig(cfg, warnings)
 	p := tea.NewProgram(model)
 	_, err := p.Run()
 	if err != nil {
@@ -1150,18 +1165,38 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.toolMenu = noMenu
 		m.toolMenuItems = nil
 		m.detailScroll = 0
+		m.detailRelCursor = -1
+		m.detailRelated = nil
 		return m, nil
 	case "up", "k":
-		if m.toolMenu > 0 {
+		// Navigate: related tools → action menu → scroll.
+		if m.detailRelCursor > 0 {
+			m.detailRelCursor--
+		} else if m.detailRelCursor == 0 {
+			// Move from related list back to action menu (last item).
+			m.detailRelCursor = -1
+			if len(m.toolMenuItems) > 0 {
+				m.toolMenu = len(m.toolMenuItems) - 1
+			}
+		} else if m.toolMenu > 0 {
 			m.toolMenu--
 		} else if m.detailScroll > 0 {
 			m.detailScroll--
 		}
 	case "down", "j":
-		if m.toolMenu < len(m.toolMenuItems)-1 {
+		// Navigate: scroll → action menu → related tools.
+		if m.detailRelCursor >= 0 {
+			// In related list.
+			if m.detailRelCursor < len(m.detailRelated)-1 {
+				m.detailRelCursor++
+			}
+		} else if m.toolMenu < len(m.toolMenuItems)-1 {
 			m.toolMenu++
+		} else if len(m.detailRelated) > 0 && m.detailRelCursor == -1 {
+			// Move from action menu to related list.
+			m.detailRelCursor = 0
+			m.toolMenu = len(m.toolMenuItems) - 1 // keep menu at last item visually
 		} else {
-			// Render-side clamp in renderDetailView caps overscroll.
 			m.detailScroll++
 		}
 	case "pgup":
@@ -1182,9 +1217,13 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "home", "g":
 		m.detailScroll = 0
 	case "end", "G":
-		// A large number; renderDetailView clamps to maxScroll.
 		m.detailScroll = 1 << 30
 	case "enter":
+		// Enter on related tool → open its detail view.
+		if m.detailRelCursor >= 0 && m.detailRelCursor < len(m.detailRelated) {
+			m.openDetailView(m.detailRelated[m.detailRelCursor].toolIdx)
+			return m, nil
+		}
 		if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
 			action := m.toolMenuItems[m.toolMenu]
 			m.toolMenu = noMenu
@@ -1283,10 +1322,22 @@ func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.filtering = false
 		return m, nil
+	case "up", "k":
+		// Navigate filtered list while search is active.
+		if m.cursor > 0 {
+			m.cursor--
+		}
+		return m, nil
+	case "down", "j":
+		if m.cursor < m.rowCount()-1 {
+			m.cursor++
+		}
+		return m, nil
 	default:
 		var cmd tea.Cmd
 		m.filterInput, cmd = m.filterInput.Update(msg)
 		m.filterText = m.filterInput.Value()
+		m.cursor = 0
 		m.applyFilter()
 		return m, cmd
 	}
@@ -1488,6 +1539,20 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0
+		return m, nil
+	case "s":
+		// Cycle sort mode on tool-list tabs (not Backup/Dashboard/Config).
+		if m.activeTab <= tabDiscover && !(m.activeTab == tabDiscover && m.discoverSubTab != discoverTools) {
+			m.sortMode = (m.sortMode + 1) % sortModeCount
+			m.cursor = 0
+			m.applyFilter()
+			switch m.sortMode {
+			case sortByName:
+				m.statusMsg = "Sort: A→Z name"
+			case sortByStars:
+				m.statusMsg = "Sort: ★ stars"
+			}
+		}
 		return m, nil
 	case "up", "k":
 		if m.cursor > 0 {
@@ -1723,19 +1788,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// On Marketplace For You sub-tab, open the recommended tool's detail.
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 			if m.cursor < len(m.recommendations) {
-				m.detailIdx = m.recommendations[m.cursor].toolIdx
-				m.showDetail = true
-				m.detailScroll = 0
-				m.buildToolMenu()
+				m.openDetailView(m.recommendations[m.cursor].toolIdx)
 			}
 			return m, nil
 		}
 		if m.cursor < len(m.filteredIndex) {
-			// Open tool detail view.
-			m.detailIdx = m.filteredIndex[m.cursor]
-			m.showDetail = true
-			m.detailScroll = 0
-			m.buildToolMenu()
+			m.openDetailView(m.filteredIndex[m.cursor])
 		}
 		return m, nil
 	case "r":
@@ -1802,6 +1860,21 @@ func (m *Model) applyFilter() {
 		}
 		m.filteredIndex = append(m.filteredIndex, i)
 	}
+
+	// Apply sort mode.
+	if m.sortMode == sortByStars {
+		sort.SliceStable(m.filteredIndex, func(a, b int) bool {
+			starsA, starsB := 0, 0
+			if m.tools[m.filteredIndex[a]].GitHubInfo != nil {
+				starsA = m.tools[m.filteredIndex[a]].GitHubInfo.Stars
+			}
+			if m.tools[m.filteredIndex[b]].GitHubInfo != nil {
+				starsB = m.tools[m.filteredIndex[b]].GitHubInfo.Stars
+			}
+			return starsA > starsB
+		})
+	}
+
 	if m.cursor >= len(m.filteredIndex) {
 		m.cursor = max(0, len(m.filteredIndex)-1)
 	}
@@ -2038,13 +2111,26 @@ func (m *Model) buildToolMenu() bool {
 		}
 	} else {
 		// Install — show each source as a separate menu item.
+		// Build availability map for labeling.
+		pmAvail := make(map[registry.InstallSource]bool)
+		for _, pm := range registry.AllPMStatusForOS() {
+			pmAvail[pm.Source] = pm.Available
+		}
 		if p := m.resolveInstallAction(); p != nil {
 			if len(p.choices) == 1 {
-				m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: "Install", picker: p})
+				label := "Install"
+				if !pmAvail[p.choices[0].source] {
+					label += " via " + string(p.choices[0].source) + " (not installed)"
+				}
+				m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: label, picker: p})
 			} else {
 				for _, c := range p.choices {
+					label := "Install via " + string(c.source)
+					if !pmAvail[c.source] {
+						label += " (not installed)"
+					}
 					m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{
-						label: "Install via " + string(c.source),
+						label: label,
 						picker: &sourcePicker{
 							toolIdx: idx,
 							action:  actionInstall,
@@ -2060,6 +2146,20 @@ func (m *Model) buildToolMenu() bool {
 	}
 	m.toolMenu = 0
 	return true
+}
+
+// openDetailView sets up the detail view for the tool at the given index.
+func (m *Model) openDetailView(toolIdx int) {
+	m.detailIdx = toolIdx
+	m.showDetail = true
+	m.detailScroll = 0
+	m.detailRelCursor = -1
+	if toolIdx >= 0 && toolIdx < len(m.tools) {
+		m.detailRelated = m.relatedTools(m.tools[toolIdx])
+	} else {
+		m.detailRelated = nil
+	}
+	m.buildToolMenu()
 }
 
 // currentTool returns the tool at the current cursor position, or nil.
@@ -2091,8 +2191,10 @@ func (m Model) resolveInstallAction() *sourcePicker {
 	if tool == nil || tool.IsInstalled() {
 		return nil
 	}
+	// Show all package managers that have a package ID for this tool,
+	// including ones not currently on PATH.
 	var choices []sourceChoice
-	for _, src := range registry.SourcesForOS() {
+	for _, src := range allSourcesForOS() {
 		if args := tool.Packages.InstallArgs(src); args != nil {
 			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
 		}
@@ -2104,6 +2206,27 @@ func (m Model) resolveInstallAction() *sourcePicker {
 		toolIdx: m.currentToolIdx(),
 		action:  actionInstall,
 		choices: choices,
+	}
+}
+
+// allSourcesForOS returns all package managers for the current OS,
+// regardless of whether they're installed on PATH.
+func allSourcesForOS() []registry.InstallSource {
+	switch runtime.GOOS {
+	case "windows":
+		return []registry.InstallSource{
+			registry.SourceWinget, registry.SourceScoop,
+			registry.SourceChoco, registry.SourceNPM,
+		}
+	case "darwin":
+		return []registry.InstallSource{
+			registry.SourceBrew, registry.SourceNPM,
+		}
+	default:
+		return []registry.InstallSource{
+			registry.SourceApt, registry.SourceSnap,
+			registry.SourceBrew, registry.SourceNPM,
+		}
 	}
 }
 

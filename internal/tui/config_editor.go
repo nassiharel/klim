@@ -341,9 +341,13 @@ func saveConfigCmd(cfg *config.Config) tea.Cmd {
 // configPreambleLines returns the number of rendered lines in renderConfigView
 // before the editable settings section (version info, paths, package managers).
 func (m Model) configPreambleLines() int {
-	// 1 blank + Version + OS + Go + 1 blank + Config + Log + 1 blank + "Package Managers" header
-	lines := 9
+	// 1 blank + Version + OS + Go + 1 blank + Config + Log + Last Scan + 1 blank + "Package Managers" header
+	lines := 10
 	lines += len(registry.AllPMStatusForOS())
+	// Config warnings section: 1 blank + header + 1 blank + N warnings.
+	if len(m.configWarnings) > 0 {
+		lines += 3 + len(m.configWarnings)
+	}
 	return lines
 }
 
@@ -353,8 +357,8 @@ func (m *Model) autoScrollConfig(settings []configSetting) {
 	preamble := m.configPreambleLines()
 	cursorLine := preamble + settingLineOffset(settings, m.configCursor)
 
-	// Match renderView's visible rows formula: height - headerRows(3) - footerRows(~2) - gap(1).
-	visibleRows := m.height - 6
+	// Match renderView's visible rows: height - headerRows(3) - gap(1) - footer.
+	visibleRows := m.height - 4 - m.footerHeight()
 	if visibleRows < 5 {
 		visibleRows = 5
 	}

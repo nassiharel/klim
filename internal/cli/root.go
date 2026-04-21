@@ -15,10 +15,20 @@ import (
 )
 
 // cfg is the global configuration loaded once on startup.
-var cfg = config.MustLoad()
+// configWarnings holds any warnings about unknown/invalid config fields.
+var (
+	cfg, configWarnings = loadConfig()
+	svc                 = service.NewWithConfig(cfg)
+)
 
-// svc is the shared ToolService used by all CLI subcommands.
-var svc = service.NewWithConfig(cfg)
+func loadConfig() (*config.Config, []string) {
+	c, w, err := config.LoadWithWarnings()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		return config.Default(), nil
+	}
+	return c, w
+}
 
 var verboseFlag bool
 
@@ -37,7 +47,7 @@ for non-interactive operation.`,
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if term.IsTerminal(int(os.Stdout.Fd())) {
-			return tui.RunWithConfig(cfg)
+			return tui.RunWithConfig(cfg, configWarnings)
 		}
 		return runList(cmd, args)
 	},
