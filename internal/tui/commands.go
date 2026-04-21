@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -395,9 +396,57 @@ func resolveToolVersionCmd(svc *service.ToolService, index int, gen int, tool re
 
 // --- Single-tool action commands ---
 
+// toolActionCmd wraps a PM command + post-run pause into a single ExecCommand.
+// This keeps the terminal in raw mode during the pause so the user can read output.
+type toolActionCmd struct {
+	args   []string
+	action string
+	stdin  io.Reader
+	stdout io.Writer
+	stderr io.Writer
+}
+
+func (c *toolActionCmd) SetStdin(r io.Reader)  { c.stdin = r }
+func (c *toolActionCmd) SetStdout(w io.Writer) { c.stdout = w }
+func (c *toolActionCmd) SetStderr(w io.Writer) { c.stderr = w }
+
+func (c *toolActionCmd) Run() error {
+	cmd := exec.Command(c.args[0], c.args[1:]...)
+	cmd.Stdin = c.stdin
+	cmd.Stdout = c.stdout
+	cmd.Stderr = c.stderr
+
+	err := cmd.Run()
+
+	// Show result and wait for keypress — terminal is still ours.
+	w := c.stderr
+	if w == nil {
+		w = os.Stderr
+	}
+	if err != nil {
+		fmt.Fprintf(w, "\n✗ %s failed: %s\n", c.action, err)
+	} else {
+		fmt.Fprintf(w, "\n✓ %s completed successfully.\n", c.action)
+	}
+	fmt.Fprint(w, "\nPress Enter to return to clim...")
+
+	// Wait for Enter. Terminal is in cooked mode (ExecProcess releases raw mode).
+	r := c.stdin
+	if r == nil {
+		r = os.Stdin
+	}
+	buf := make([]byte, 64)
+	r.Read(buf) //nolint:errcheck
+
+	return err
+}
+
 func execToolActionCmd(pa pendingAction) tea.Cmd {
-	cmd := exec.Command(pa.cmdArgs[0], pa.cmdArgs[1:]...)
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+	c := &toolActionCmd{
+		args:   pa.cmdArgs,
+		action: pa.action,
+	}
+	return tea.Exec(c, func(err error) tea.Msg {
 		return execFinishedMsg{
 			toolIdx: pa.toolIdx,
 			action:  pa.action,
