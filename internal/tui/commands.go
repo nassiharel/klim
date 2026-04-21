@@ -411,16 +411,10 @@ func (c *toolActionCmd) SetStdout(w io.Writer) { c.stdout = w }
 func (c *toolActionCmd) SetStderr(w io.Writer) { c.stderr = w }
 
 func (c *toolActionCmd) Run() error {
-	// Capture output while also displaying it, so we can detect failures
-	// even when the exit code is 0 (e.g., winget).
-	var outputBuf strings.Builder
-	stdoutW := io.MultiWriter(c.stdout, &outputBuf)
-	stderrW := io.MultiWriter(c.stderr, &outputBuf)
-
 	cmd := exec.Command(c.args[0], c.args[1:]...)
 	cmd.Stdin = c.stdin
-	cmd.Stdout = stdoutW
-	cmd.Stderr = stderrW
+	cmd.Stdout = c.stdout
+	cmd.Stderr = c.stderr
 
 	runErr := cmd.Run()
 
@@ -432,26 +426,18 @@ func (c *toolActionCmd) Run() error {
 	}
 	slog.Info("tool action finished", "action", c.action, "cmd", c.args, "exitCode", exitCode, "err", runErr)
 
-	// Some package managers (winget) return exit code 0 on failure.
-	// Check output for common failure patterns.
-	output := outputBuf.String()
-	softFail := runErr == nil && looksLikePMFailure(output)
-
 	// Show result and wait for keypress — terminal is still ours.
 	w := c.stderr
 	if w == nil {
 		w = os.Stderr
 	}
 	if runErr != nil {
-		fmt.Fprintf(w, "\n✗ %s failed: %s\n", c.action, runErr)
-	} else if softFail {
-		fmt.Fprintf(w, "\n⚠ %s may have failed (check output above).\n", c.action)
+		fmt.Fprintf(w, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
 	} else {
-		fmt.Fprintf(w, "\n✓ %s completed successfully.\n", c.action)
+		fmt.Fprintf(w, "\n✓ %s completed (exit code 0)\n", c.action)
 	}
 	fmt.Fprint(w, "\nPress Enter to return to clim...")
 
-	// Wait for Enter. Terminal is in cooked mode (ExecProcess releases raw mode).
 	r := c.stdin
 	if r == nil {
 		r = os.Stdin
@@ -459,35 +445,7 @@ func (c *toolActionCmd) Run() error {
 	buf := make([]byte, 64)
 	r.Read(buf) //nolint:errcheck
 
-	if softFail {
-		return fmt.Errorf("command output indicates failure")
-	}
 	return runErr
-}
-
-// looksLikePMFailure checks command output for common failure patterns
-// from package managers that return exit code 0 on errors.
-func looksLikePMFailure(output string) bool {
-	lower := strings.ToLower(output)
-	failurePatterns := []string{
-		"no package found",
-		"couldn't find",
-		"could not find",
-		"not found",
-		"no applicable",
-		"failed to",
-		"error:",
-		"is not recognized",
-		"unable to locate",
-		"no match",
-		"no installed product",
-	}
-	for _, p := range failurePatterns {
-		if strings.Contains(lower, p) {
-			return true
-		}
-	}
-	return false
 }
 
 func execToolActionCmd(pa pendingAction) tea.Cmd {
