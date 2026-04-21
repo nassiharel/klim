@@ -1224,21 +1224,37 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.openDetailView(m.detailRelated[m.detailRelCursor].toolIdx)
 			return m, nil
 		}
-		// Enter on PM row → primary action (install or upgrade).
+		// Enter on PM row → execute primary action (install or upgrade) directly.
 		if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
 			action := m.toolMenuItems[m.toolMenu]
-			if action.picker != nil {
-				m.startAction(action.picker)
+			if action.picker != nil && len(action.picker.choices) > 0 {
+				pa := pendingAction{
+					toolIdx: action.picker.toolIdx,
+					action:  action.picker.action,
+					cmdArgs: action.picker.choices[0].cmdArgs,
+				}
+				slog.Info("executing tool action", "action", pa.action, "cmd", strings.Join(pa.cmdArgs, " "))
+				m.statusMsg = fmt.Sprintf("Running %s...", pa.action)
+				return m, execToolActionCmd(pa)
 			}
 		}
+		return m, nil
 	case "x":
-		// Remove via selected PM.
+		// Remove via selected PM — execute directly.
 		if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
 			action := m.toolMenuItems[m.toolMenu]
-			if action.removePicker != nil {
-				m.startAction(action.removePicker)
+			if action.removePicker != nil && len(action.removePicker.choices) > 0 {
+				pa := pendingAction{
+					toolIdx: action.removePicker.toolIdx,
+					action:  action.removePicker.action,
+					cmdArgs: action.removePicker.choices[0].cmdArgs,
+				}
+				slog.Info("executing tool action", "action", pa.action, "cmd", strings.Join(pa.cmdArgs, " "))
+				m.statusMsg = fmt.Sprintf("Running %s...", pa.action)
+				return m, execToolActionCmd(pa)
 			}
 		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -2142,6 +2158,14 @@ func (m *Model) buildToolMenu() bool {
 				if args := tool.Packages.RemoveArgs(src); args != nil {
 					item.removePicker = &sourcePicker{
 						toolIdx: idx, action: actionRemove,
+						choices: []sourceChoice{{source: src, cmdArgs: args}},
+					}
+				}
+			} else {
+				// Not installed via this PM — offer install.
+				if args := tool.Packages.InstallArgs(src); args != nil {
+					item.picker = &sourcePicker{
+						toolIdx: idx, action: actionInstall,
 						choices: []sourceChoice{{source: src, cmdArgs: args}},
 					}
 				}

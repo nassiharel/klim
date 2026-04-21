@@ -1315,17 +1315,20 @@ func (m Model) renderPackageManagers(tool registry.Tool) string {
 		// Action hints on the selected row.
 		hint := ""
 		if interactive && i == m.toolMenu {
-			if tool.IsInstalled() {
+			if tool.IsInstalled() && i < len(m.toolMenuItems) {
+				item := m.toolMenuItems[i]
 				var actions []string
-				if i < len(m.toolMenuItems) && m.toolMenuItems[i].picker != nil {
-					actions = append(actions, dimVersion.Render("Enter")+" upgrade")
+				if item.picker != nil {
+					if item.picker.action == actionUpgrade {
+						actions = append(actions, dimVersion.Render("Enter")+" upgrade")
+					} else {
+						actions = append(actions, dimVersion.Render("Enter")+" install")
+					}
 				}
-				if i < len(m.toolMenuItems) && m.toolMenuItems[i].removePicker != nil {
+				if item.removePicker != nil {
 					actions = append(actions, dimVersion.Render("x")+" remove")
 				}
-				if len(actions) == 0 && !installedSources[p.source] {
-					hint = "  " + dashDim.Render("(not installed via this PM)")
-				} else {
+				if len(actions) > 0 {
 					hint = "  " + strings.Join(actions, "  ")
 				}
 			} else {
