@@ -2237,7 +2237,8 @@ func (m *Model) openDetailView(toolIdx int) {
 }
 
 // computeDetailMaxScroll computes the max scroll (in logical lines) from the
-// actual rendered detail body. Uses the same split logic as layoutDetailWithScroll.
+// actual rendered detail body. Computes footer height the same way as
+// renderDetailView to avoid mismatch.
 func (m *Model) computeDetailMaxScroll() {
 	if !m.showDetail || m.detailIdx < 0 || m.detailIdx >= len(m.tools) {
 		m.detailMaxScroll = 0
@@ -2246,7 +2247,11 @@ func (m *Model) computeDetailMaxScroll() {
 	body := m.renderDetailBody(m.tools[m.detailIdx])
 	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
 
-	visibleRows := m.height - m.footerHeight() - 1
+	// Build the same footer as renderDetailView to measure its height.
+	footerRows := m.detailFooterHeight()
+
+	const minGap = 1
+	visibleRows := m.height - footerRows - minGap
 	if visibleRows < 5 {
 		visibleRows = 5
 	}
@@ -2254,6 +2259,31 @@ func (m *Model) computeDetailMaxScroll() {
 	if m.detailMaxScroll < 0 {
 		m.detailMaxScroll = 0
 	}
+}
+
+// detailFooterHeight returns the visual row count of the detail view footer,
+// matching what renderDetailView builds.
+func (m Model) detailFooterHeight() int {
+	dim := dimVersion.Render
+	var footer strings.Builder
+	switch {
+	case m.pendingAction != nil:
+		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
+		keys := dim("y") + " confirm   " + dim("Esc") + " cancel"
+		footer.WriteString(prompt + "  " + keys)
+	default:
+		hints := []string{
+			dim("↑↓") + " navigate",
+			dim("PgUp/PgDn") + " scroll",
+			dim("Enter") + " select",
+			dim("Esc") + " back",
+		}
+		footer.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
+	}
+	if m.statusMsg != "" {
+		footer.WriteString("\n  " + upgradableStyle.Render(m.statusMsg))
+	}
+	return visualRows(footer.String(), m.width)
 }
 
 // clampDetailScroll ensures detailScroll stays within [0, detailMaxScroll].

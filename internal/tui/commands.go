@@ -434,16 +434,23 @@ func (c *toolActionCmd) Run() error {
 	runErr := cmd.Run()
 
 	// Log exit code for debugging.
-	exitCode := 0
 	var exitErr *exec.ExitError
-	if errors.As(runErr, &exitErr) {
+	hasExitCode := errors.As(runErr, &exitErr)
+	exitCode := -1
+	if hasExitCode {
 		exitCode = exitErr.ExitCode()
+	} else if runErr == nil {
+		exitCode = 0
 	}
 	slog.Info("tool action finished", "action", c.action, "cmd", c.args, "exitCode", exitCode, "err", runErr)
 
 	// Show result and wait for keypress — terminal is still ours.
 	if runErr != nil {
-		fmt.Fprintf(stderr, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
+		if hasExitCode {
+			fmt.Fprintf(stderr, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
+		} else {
+			fmt.Fprintf(stderr, "\n✗ %s failed: %s\n", c.action, runErr)
+		}
 	} else {
 		fmt.Fprintf(stderr, "\n✓ %s completed (exit code 0)\n", c.action)
 	}
