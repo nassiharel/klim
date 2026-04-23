@@ -17,11 +17,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -53,11 +54,7 @@ type file struct {
 
 // Path returns the absolute path to the scan cache file.
 func Path() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "clim", "scan-cache.yaml"), nil
+	return paths.ScanCache()
 }
 
 // Exists reports whether the cache file is present on disk.
@@ -78,7 +75,7 @@ func Save(tools []registry.Tool) error {
 	if err != nil {
 		return err
 	}
-	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
+	if mkErr := fileutil.EnsureDir(path); mkErr != nil {
 		return fmt.Errorf("creating cache dir: %w", mkErr)
 	}
 
@@ -116,7 +113,7 @@ func Save(tools []registry.Tool) error {
 		return fmt.Errorf("marshalling cache: %w", err)
 	}
 
-	return atomicWrite(path, data, 0o644)
+	return fileutil.AtomicWrite(path, data, 0o644)
 }
 
 // Load reads the cache file and returns a map keyed by tool name along
@@ -128,13 +125,13 @@ func Load() (map[string]Entry, time.Time, error) {
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	data, err := os.ReadFile(path)
+	var f file
+	found, err := fileutil.ReadYAML(path, &f)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	var f file
-	if err := yaml.Unmarshal(data, &f); err != nil {
-		return nil, time.Time{}, fmt.Errorf("parsing cache: %w", err)
+	if !found {
+		return nil, time.Time{}, os.ErrNotExist
 	}
 	if f.Version != cacheVersion {
 		return nil, time.Time{}, fmt.Errorf("cache schema version %d unsupported (want %d)", f.Version, cacheVersion)
@@ -184,38 +181,3 @@ func Delete() error {
 
 // atomicWrite writes data to a temp file in the same directory then renames
 // it over the target, matching the catalog package's approach.
-func atomicWrite(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return err
-	}
-
-	if err := os.Rename(tmpPath, path); err != nil {
-		// Windows: Rename fails if destination exists. Remove and retry.
-		if removeErr := os.Remove(path); removeErr == nil {
-			if retryErr := os.Rename(tmpPath, path); retryErr == nil {
-				return nil
-			}
-		}
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	return nil
-}

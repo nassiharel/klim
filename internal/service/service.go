@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/nassiharel/clim/internal/catalog"
@@ -114,7 +112,9 @@ func (s *ToolService) LoadAndResolve(ctx context.Context) ([]registry.Tool, *Cat
 // The returned ScanInfo reports which path was taken.
 func (s *ToolService) LoadAndResolveCached(ctx context.Context, force bool) ([]registry.Tool, *CatalogInfo, *ScanInfo, error) {
 	if force {
-		_ = scancache.Delete()
+		// Skip cache, do fresh scan. Old cache stays on disk until overwritten
+		// by scancache.Save() after scan completes — avoids losing the cache
+		// if user quits mid-scan.
 		tools, info, err := s.LoadAndResolve(ctx)
 		return tools, info, &ScanInfo{Source: ScanSourceFresh}, err
 	}
@@ -130,13 +130,10 @@ func (s *ToolService) LoadAndResolveCached(ctx context.Context, force bool) ([]r
 		sortToolsByName(tools)
 		return tools, info, &ScanInfo{Source: ScanSourceCache, CacheAt: savedAt}, nil
 	case errors.Is(err, os.ErrNotExist):
-		// Cold start — no cache yet. Nothing to clean up.
+		// Cold start — no cache yet.
 	default:
-		// The cache file exists but is unreadable or has an incompatible
-		// schema. Remove it so we don't keep retrying a known-bad file on
-		// every launch; the fresh scan below will write a good one.
-		slog.Warn("scan cache unreadable, invalidating", "error", err)
-		_ = scancache.Delete()
+		// Cache unreadable/incompatible — ignore it, fresh scan will overwrite.
+		slog.Warn("scan cache unreadable, will rescan", "error", err)
 	}
 
 	tools, info, resolveErr := s.LoadAndResolve(ctx)
@@ -237,9 +234,7 @@ func (s *ToolService) RefreshTool(ctx context.Context, tool registry.Tool) regis
 }
 
 func sortToolsByName(tools []registry.Tool) {
-	sort.Slice(tools, func(i, j int) bool {
-		return strings.ToLower(tools[i].Name) < strings.ToLower(tools[j].Name)
-	})
+	registry.SortByName(tools)
 }
 
 // DefaultCatalog loads tools by fetching/caching the marketplace from GitHub.

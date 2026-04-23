@@ -53,24 +53,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 		if !tool.IsInstalled() {
 			continue
 		}
-		primary := tool.PrimaryInstance()
-
-		exported = append(exported, manifest.Tool{
-			Name:        tool.Name,
-			DisplayName: tool.DisplayName,
-			Version:     primary.Version,
-			Source:      string(primary.Source),
-			Category:    tool.Category,
-			Packages: manifest.Packages{
-				Winget: tool.Packages.Winget,
-				Choco:  tool.Packages.Choco,
-				Scoop:  tool.Packages.Scoop,
-				Brew:   tool.Packages.Brew,
-				Apt:    tool.Packages.Apt,
-				Snap:   tool.Packages.Snap,
-				NPM:    tool.Packages.NPM,
-			},
-		})
+		exported = append(exported, manifest.FromRegistryTool(tool))
 	}
 
 	m := manifest.Manifest{

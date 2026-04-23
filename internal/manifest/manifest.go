@@ -2,6 +2,8 @@
 // Used by both the CLI commands and the TUI to ensure a single source of truth.
 package manifest
 
+import "github.com/nassiharel/clim/internal/registry"
+
 // Manifest is the top-level YAML structure for import/export.
 type Manifest struct {
 	GeneratedBy string `yaml:"generated_by"`
@@ -29,4 +31,27 @@ type Packages struct {
 	Apt    string `yaml:"apt,omitempty"`
 	Snap   string `yaml:"snap,omitempty"`
 	NPM    string `yaml:"npm,omitempty"`
+}
+
+// FromRegistryTool converts a registry.Tool to a manifest.Tool.
+func FromRegistryTool(t registry.Tool) Tool {
+	mt := Tool{
+		Name:        t.Name,
+		DisplayName: t.DisplayName,
+		Category:    t.Category,
+		Packages: Packages{
+			Winget: t.Packages.Winget,
+			Choco:  t.Packages.Choco,
+			Scoop:  t.Packages.Scoop,
+			Brew:   t.Packages.Brew,
+			Apt:    t.Packages.Apt,
+			Snap:   t.Packages.Snap,
+			NPM:    t.Packages.NPM,
+		},
+	}
+	if primary := t.PrimaryInstance(); primary != nil {
+		mt.Version = primary.Version
+		mt.Source = string(primary.Source)
+	}
+	return mt
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -16,12 +17,14 @@ import (
 	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/custompacks"
+	"github.com/nassiharel/clim/internal/favorites"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
 )
 
 const (
 	tabInstalled = iota
+	tabFavorites
 	tabUpdates
 	tabDiscover
 	tabBackup
@@ -63,6 +66,13 @@ const (
 	noMenu   = -1 // toolMenu when no action menu is shown
 )
 
+// Sort modes for tool list tabs.
+const (
+	sortByName  = 0
+	sortByStars = 1
+	sortModeCount = 2
+)
+
 // Backup mode states.
 const (
 	backupModeIdle   = ""
@@ -91,6 +101,10 @@ type Model struct {
 
 	// Tabs.
 	activeTab int
+	sortMode  int // sortByName or sortByStars
+
+	// Config warnings (unknown fields, invalid values).
+	configWarnings []string
 
 	// Filter.
 	filterInput    textinput.Model
@@ -125,8 +139,12 @@ type Model struct {
 	lastDiff *catalog.DiffResult
 
 	// Detail view.
-	detailIdx  int // index into m.tools, -1 = no detail
-	showDetail bool
+	detailIdx       int // index into m.tools, -1 = no detail
+	showDetail      bool
+	detailScroll    int              // vertical scroll offset (in rendered lines) for detail body
+	detailMaxScroll int              // last computed max scroll (set by view, used by key handler)
+	detailRelated   []recommendation // cached related tools for current detail view
+	detailRelCursor int              // cursor in "You might also like" list (-1 = not focused)
 
 	// Loading state.
 	phase    int // 0=scanning, 1=resolving, 2=done
@@ -204,6 +222,11 @@ type Model struct {
 	// Dashboard scroll offset.
 	dashboardScroll int
 
+	// Favorites state.
+	favoriteNames    map[string]bool // in-memory lookup set, loaded at init
+	favMode          string          // "" (list), "export", "share"
+	favClearConfirm  bool            // true = awaiting y/n to clear all favorites
+
 	// Config editor state.
 	configCursor    int
 	configEditing   bool            // true = text input active for a setting
@@ -262,6 +285,7 @@ func NewModel() Model {
 		configEditInput:    cfgEdit,
 		backupBar:          progress.New(progress.WithWidth(40)),
 		updateSelected:     make(map[int]bool),
+		favoriteNames:      loadFavoriteNames(),
 		loading:        true,
 		phase:          phaseLoading,
 		activeTab:      tabInstalled,
@@ -273,11 +297,12 @@ func NewModel() Model {
 }
 
 // NewModelWithConfig creates a new TUI model configured from the given Config.
-func NewModelWithConfig(cfg *config.Config) Model {
+func NewModelWithConfig(cfg *config.Config, warnings []string) Model {
 	m := NewModel()
 	m.svc = service.NewWithConfig(cfg)
 	m.activeTab = tabFromName(cfg.UI.DefaultTab)
 	m.cfg = cfg
+	m.configWarnings = warnings
 	return m
 }
 
@@ -286,6 +311,8 @@ func tabFromName(name string) int {
 	switch name {
 	case "installed":
 		return tabInstalled
+	case "favorites":
+		return tabFavorites
 	case "updates":
 		return tabUpdates
 	case "marketplace":
@@ -354,9 +381,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.tools = msg.tools
-		sort.Slice(m.tools, func(i, j int) bool {
-			return strings.ToLower(m.tools[i].Name) < strings.ToLower(m.tools[j].Name)
-		})
+		registry.SortByName(m.tools)
 		// Only writes from a clean scan are safe to persist — a partial
 		// scan (PATH walk failed mid-flight) can't be distinguished from a
 		// full one on load, and caching it would poison future runs.
@@ -589,6 +614,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case exportFinishedMsg:
+		// Favorites tab export — simple status, no progress animation.
+		if m.activeTab == tabFavorites {
+			if msg.err != nil {
+				m.statusMsg = fmt.Sprintf("✗ Export failed: %s", msg.err)
+			} else {
+				m.statusMsg = fmt.Sprintf("✓ Exported %d favorites to %s", msg.count, msg.path)
+			}
+			m.favMode = ""
+			return m, nil
+		}
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("✗ Export failed: %s", msg.err)
 			for i := range m.backupItems {
@@ -692,11 +727,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case shareFinishedMsg:
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("✗ Share failed: %s", msg.err)
+			if m.activeTab == tabFavorites {
+				m.favMode = ""
+			}
 			return m, nil
 		}
 		m.sharedToken = msg.token
-		m.backupMode = backupModeShare
 		m.tokenCopied = false
+		if m.activeTab != tabFavorites {
+			m.backupMode = backupModeShare
+		}
 		// Auto-copy to clipboard.
 		if err := m.clip.WriteAll(msg.token); err != nil {
 			m.statusMsg = fmt.Sprintf("✓ Token generated (%d tools)", msg.count)
@@ -815,6 +855,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.configScroll > 0 {
 			m.configScroll = max(0, min(m.configScroll, m.height))
 		}
+		if m.showDetail {
+			m.computeDetailMaxScroll()
+			m.clampDetailScroll()
+		}
 		return m, nil
 
 	default:
@@ -868,12 +912,12 @@ func (m Model) View() tea.View {
 
 // Run starts the interactive TUI.
 func Run() error {
-	return RunWithConfig(config.Default())
+	return RunWithConfig(config.Default(), nil)
 }
 
 // RunWithConfig launches the TUI with the given configuration.
-func RunWithConfig(cfg *config.Config) error {
-	model := NewModelWithConfig(cfg)
+func RunWithConfig(cfg *config.Config, warnings []string) error {
+	model := NewModelWithConfig(cfg, warnings)
 	p := tea.NewProgram(model)
 	_, err := p.Run()
 	if err != nil {
@@ -1112,28 +1156,112 @@ func (m Model) prevSelectableIdx(idx int) int {
 }
 
 // handleKeyDetail handles navigation in the tool detail/action menu view.
+//
+// Key bindings:
+//   - up/k, down/j   — move the action-menu selection
+//   - PgUp/PgDn      — scroll the detail body by one page
+//   - Home/End       — jump to top/bottom of the detail body
+//   - Enter          — run the selected action
+//   - Esc/q/Backspace — close the detail view
 func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q", "backspace":
 		m.showDetail = false
 		m.toolMenu = noMenu
 		m.toolMenuItems = nil
+		m.detailScroll = 0
+		m.detailRelCursor = -1
+		m.detailRelated = nil
 		return m, nil
 	case "up", "k":
-		if m.toolMenu > 0 {
+		// Navigate: related tools → action menu → scroll.
+		if m.detailRelCursor > 0 {
+			m.detailRelCursor--
+		} else if m.detailRelCursor == 0 {
+			// Move from related list back to action menu (last item).
+			m.detailRelCursor = -1
+			if len(m.toolMenuItems) > 0 {
+				m.toolMenu = len(m.toolMenuItems) - 1
+			}
+		} else if m.toolMenu > 0 {
 			m.toolMenu--
+		} else if m.detailScroll > 0 {
+			m.detailScroll--
 		}
 	case "down", "j":
-		if m.toolMenu < len(m.toolMenuItems)-1 {
+		// Navigate: scroll → action menu → related tools.
+		if m.detailRelCursor >= 0 {
+			// In related list.
+			if m.detailRelCursor < len(m.detailRelated)-1 {
+				m.detailRelCursor++
+			}
+		} else if m.toolMenu < len(m.toolMenuItems)-1 {
 			m.toolMenu++
+		} else if len(m.detailRelated) > 0 && m.detailRelCursor == -1 {
+			// Move from action menu to related list.
+			m.detailRelCursor = 0
+			m.toolMenu = len(m.toolMenuItems) - 1 // keep menu at last item visually
+		} else {
+			m.detailScroll++
 		}
+		m.clampDetailScroll()
+	case "pgup":
+		page := m.height - 6
+		if page < 1 {
+			page = 1
+		}
+		m.detailScroll -= page
+		if m.detailScroll < 0 {
+			m.detailScroll = 0
+		}
+	case "pgdown", " ":
+		page := m.height - 6
+		if page < 1 {
+			page = 1
+		}
+		m.detailScroll += page
+		m.clampDetailScroll()
+	case "home", "g":
+		m.detailScroll = 0
+	case "end", "G":
+		m.detailScroll = m.detailMaxScroll
 	case "enter":
+		// Enter on related tool → open its detail view.
+		if m.detailRelCursor >= 0 && m.detailRelCursor < len(m.detailRelated) {
+			m.openDetailView(m.detailRelated[m.detailRelCursor].toolIdx)
+			return m, nil
+		}
+		// Enter on PM row → execute primary action (install or upgrade) directly.
 		if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
 			action := m.toolMenuItems[m.toolMenu]
-			m.toolMenu = noMenu
-			m.toolMenuItems = nil
-			m.startAction(action.picker)
+			if action.picker != nil && len(action.picker.choices) > 0 {
+				pa := pendingAction{
+					toolIdx: action.picker.toolIdx,
+					action:  action.picker.action,
+					cmdArgs: action.picker.choices[0].cmdArgs,
+				}
+				slog.Info("executing tool action", "action", pa.action, "cmd", strings.Join(pa.cmdArgs, " "))
+				m.statusMsg = fmt.Sprintf("Running %s...", pa.action)
+				return m, execToolActionCmd(pa)
+			}
 		}
+		return m, nil
+	case "x":
+		// Remove via selected PM — execute directly.
+		if m.toolMenu >= 0 && m.toolMenu < len(m.toolMenuItems) {
+			action := m.toolMenuItems[m.toolMenu]
+			if action.removePicker != nil && len(action.removePicker.choices) > 0 {
+				pa := pendingAction{
+					toolIdx: action.removePicker.toolIdx,
+					action:  action.removePicker.action,
+					cmdArgs: action.removePicker.choices[0].cmdArgs,
+				}
+				slog.Info("executing tool action", "action", pa.action, "cmd", strings.Join(pa.cmdArgs, " "))
+				m.statusMsg = fmt.Sprintf("Running %s...", pa.action)
+				return m, execToolActionCmd(pa)
+			}
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -1226,10 +1354,21 @@ func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.filtering = false
 		return m, nil
+	case "up":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+		return m, nil
+	case "down":
+		if m.cursor < m.rowCount()-1 {
+			m.cursor++
+		}
+		return m, nil
 	default:
 		var cmd tea.Cmd
 		m.filterInput, cmd = m.filterInput.Update(msg)
 		m.filterText = m.filterInput.Value()
+		m.cursor = 0
 		m.applyFilter()
 		return m, cmd
 	}
@@ -1286,26 +1425,31 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.applyFilter()
 			return m, nil
 		case "2":
-			m.activeTab = tabUpdates
+			m.activeTab = tabFavorites
 			m.cursor = 0
 			m.applyFilter()
 			return m, nil
 		case "3":
-			m.activeTab = tabDiscover
+			m.activeTab = tabUpdates
 			m.cursor = 0
 			m.applyFilter()
 			return m, nil
 		case "4":
+			m.activeTab = tabDiscover
+			m.cursor = 0
+			m.applyFilter()
+			return m, nil
+		case "5":
 			m.activeTab = tabBackup
 			m.cursor = 0
 			return m, nil
-		case "5":
+		case "6":
 			m.activeTab = tabDashboard
 			m.cursor = 0
 			m.dashboardScroll = 0
 			m.myBackupFiles = scanBackupsDir()
 			return m, nil
-		case "6":
+		case "7":
 			m.activeTab = tabConfig
 			m.cursor = 0
 			m.configScroll = 0
@@ -1320,6 +1464,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Config tab uses the config editor.
 	if m.activeTab == tabConfig {
 		return m.handleKeyConfigEditor(msg)
+	}
+
+	// Favorites tab — handle export/share modes and favorites-specific keys.
+	if m.activeTab == tabFavorites {
+		return m.handleKeyFavorites(msg)
 	}
 
 	switch msg.String() {
@@ -1393,29 +1542,48 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.applyFilter()
 		return m, nil
 	case "2":
-		m.activeTab = tabUpdates
+		m.activeTab = tabFavorites
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
 	case "3":
-		m.activeTab = tabDiscover
+		m.activeTab = tabUpdates
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
 	case "4":
+		m.activeTab = tabDiscover
+		m.cursor = 0
+		m.applyFilter()
+		return m, nil
+	case "5":
 		m.activeTab = tabBackup
 		m.cursor = 0
 		return m, nil
-	case "5":
+	case "6":
 		m.activeTab = tabDashboard
 		m.cursor = 0
 		m.dashboardScroll = 0
 		m.myBackupFiles = scanBackupsDir()
 		return m, nil
-	case "6":
+	case "7":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0
+		return m, nil
+	case "s":
+		// Cycle sort mode on tool-list tabs (not Backup/Dashboard/Config).
+		if m.activeTab <= tabDiscover && !(m.activeTab == tabDiscover && m.discoverSubTab != discoverTools) {
+			m.sortMode = (m.sortMode + 1) % sortModeCount
+			m.cursor = 0
+			m.applyFilter()
+			switch m.sortMode {
+			case sortByName:
+				m.statusMsg = "Sort: A→Z name"
+			case sortByStars:
+				m.statusMsg = "Sort: ★ stars"
+			}
+		}
 		return m, nil
 	case "up", "k":
 		if m.cursor > 0 {
@@ -1455,6 +1623,74 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.cursor < m.rowCount()-1 {
 				m.cursor++
 			}
+		}
+		return m, nil
+	case "*":
+		// Toggle favorite — For You sub-tab uses recommendations, not filteredIndex.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
+			if m.cursor < len(m.recommendations) {
+				idx := m.recommendations[m.cursor].toolIdx
+				if idx < len(m.tools) {
+					name := m.tools[idx].Name
+					added, err := favorites.Toggle(name)
+					if err != nil {
+						m.statusMsg = fmt.Sprintf("⚠ %v", err)
+					} else if added {
+						m.favoriteNames[name] = true
+						m.statusMsg = "★ Added to favorites"
+					} else {
+						delete(m.favoriteNames, name)
+						m.statusMsg = "☆ Removed from favorites"
+					}
+				}
+			}
+			return m, nil
+		}
+		// Toggle favorite on other tool-list tabs.
+		if m.activeTab <= tabDiscover && m.cursor < len(m.filteredIndex) {
+			idx := m.filteredIndex[m.cursor]
+			if idx < len(m.tools) {
+				name := m.tools[idx].Name
+				added, err := favorites.Toggle(name)
+				if err != nil {
+					m.statusMsg = fmt.Sprintf("⚠ %v", err)
+				} else {
+					if added {
+						m.favoriteNames[name] = true
+						m.statusMsg = "★ Added to favorites"
+					} else {
+						delete(m.favoriteNames, name)
+						m.statusMsg = "☆ Removed from favorites"
+					}
+				}
+			}
+		}
+		return m, nil
+	case "i":
+		// Quick install from For You sub-tab.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
+			if m.cursor < len(m.recommendations) {
+				rec := m.recommendations[m.cursor]
+				if rec.toolIdx < len(m.tools) {
+					tool := m.tools[rec.toolIdx]
+					src := tool.Packages.BestInstallSource()
+					if src == "" {
+						m.statusMsg = "⚠ No package manager available for this tool"
+						return m, nil
+					}
+					args := tool.Packages.InstallArgs(src)
+					if args == nil {
+						m.statusMsg = "⚠ No install command available"
+						return m, nil
+					}
+					m.pendingAction = &pendingAction{
+						toolIdx: rec.toolIdx,
+						action:  actionInstall,
+						cmdArgs: args,
+					}
+				}
+			}
+			return m, nil
 		}
 		return m, nil
 	case "a":
@@ -1583,17 +1819,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// On Marketplace For You sub-tab, open the recommended tool's detail.
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 			if m.cursor < len(m.recommendations) {
-				m.detailIdx = m.recommendations[m.cursor].toolIdx
-				m.showDetail = true
-				m.buildToolMenu()
+				m.openDetailView(m.recommendations[m.cursor].toolIdx)
 			}
 			return m, nil
 		}
 		if m.cursor < len(m.filteredIndex) {
-			// Open tool detail view.
-			m.detailIdx = m.filteredIndex[m.cursor]
-			m.showDetail = true
-			m.buildToolMenu()
+			m.openDetailView(m.filteredIndex[m.cursor])
 		}
 		return m, nil
 	case "r":
@@ -1660,6 +1891,21 @@ func (m *Model) applyFilter() {
 		}
 		m.filteredIndex = append(m.filteredIndex, i)
 	}
+
+	// Apply sort mode.
+	if m.sortMode == sortByStars {
+		sort.SliceStable(m.filteredIndex, func(a, b int) bool {
+			starsA, starsB := 0, 0
+			if m.tools[m.filteredIndex[a]].GitHubInfo != nil {
+				starsA = m.tools[m.filteredIndex[a]].GitHubInfo.Stars
+			}
+			if m.tools[m.filteredIndex[b]].GitHubInfo != nil {
+				starsB = m.tools[m.filteredIndex[b]].GitHubInfo.Stars
+			}
+			return starsA > starsB
+		})
+	}
+
 	if m.cursor >= len(m.filteredIndex) {
 		m.cursor = max(0, len(m.filteredIndex)-1)
 	}
@@ -1699,6 +1945,8 @@ func (m *Model) matchesTab(tool registry.Tool) bool {
 	switch m.activeTab {
 	case tabInstalled:
 		return tool.IsInstalled()
+	case tabFavorites:
+		return m.favoriteNames[tool.Name]
 	case tabUpdates:
 		return tool.HasUpdate()
 	case tabDiscover:
@@ -1885,30 +2133,85 @@ func (m *Model) buildToolMenu() bool {
 	}
 	m.toolMenuItems = nil
 	idx := m.currentToolIdx()
+
+	// Only show PMs that are available on PATH.
+	pmAvail := make(map[registry.InstallSource]bool)
+	for _, pm := range registry.AllPMStatusForOS() {
+		if pm.Available {
+			pmAvail[pm.Source] = true
+		}
+	}
+
 	if tool.IsInstalled() {
-		if p := m.resolveUpgradeAction(); p != nil {
-			m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: "Upgrade", picker: p})
+		primary := tool.PrimaryInstance()
+		installedSources := make(map[registry.InstallSource]bool)
+		if primary != nil {
+			installedSources[primary.Source] = true
 		}
-		if p := m.resolveRemoveAction(); p != nil {
-			m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: "Remove", picker: p})
+		for _, inst := range tool.Instances {
+			installedSources[inst.Source] = true
 		}
-	} else {
-		// Install — show each source as a separate menu item.
-		if p := m.resolveInstallAction(); p != nil {
-			if len(p.choices) == 1 {
-				m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{label: "Install", picker: p})
+
+		allPMs := []registry.InstallSource{
+			registry.SourceWinget, registry.SourceChoco, registry.SourceScoop,
+			registry.SourceBrew, registry.SourceApt, registry.SourceSnap, registry.SourceNPM,
+		}
+		for _, src := range allPMs {
+			if tool.Packages.InstallArgs(src) == nil {
+				continue
+			}
+			if !pmAvail[src] {
+				continue // PM not on PATH — hide row
+			}
+			item := toolMenuAction{}
+			if installedSources[src] {
+				if args := tool.Packages.UpgradeArgs(src); args != nil {
+					item.picker = &sourcePicker{
+						toolIdx: idx, action: actionUpgrade,
+						choices: []sourceChoice{{source: src, cmdArgs: args}},
+					}
+				}
+				if args := tool.Packages.RemoveArgs(src); args != nil {
+					item.removePicker = &sourcePicker{
+						toolIdx: idx, action: actionRemove,
+						choices: []sourceChoice{{source: src, cmdArgs: args}},
+					}
+				}
 			} else {
-				for _, c := range p.choices {
-					m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{
-						label: "Install via " + string(c.source),
-						picker: &sourcePicker{
-							toolIdx: idx,
-							action:  actionInstall,
-							choices: []sourceChoice{c},
-						},
-					})
+				// Not installed via this PM — offer install.
+				if args := tool.Packages.InstallArgs(src); args != nil {
+					item.picker = &sourcePicker{
+						toolIdx: idx, action: actionInstall,
+						choices: []sourceChoice{{source: src, cmdArgs: args}},
+					}
 				}
 			}
+			m.toolMenuItems = append(m.toolMenuItems, item)
+		}
+	} else {
+		// Install — one menu item per declared package manager, ordered to
+		// match renderPackageManagers (collectPackageEntries order).
+		// This allows toolMenu index to map directly to PM row in the view.
+		allPMs := []registry.InstallSource{
+			registry.SourceWinget, registry.SourceChoco, registry.SourceScoop,
+			registry.SourceBrew, registry.SourceApt, registry.SourceSnap, registry.SourceNPM,
+		}
+		for _, src := range allPMs {
+			args := tool.Packages.InstallArgs(src)
+			if args == nil {
+				continue
+			}
+			if !pmAvail[src] {
+				continue // PM not on PATH — hide row
+			}
+			m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{
+				label: "Install via " + string(src),
+				picker: &sourcePicker{
+					toolIdx: idx,
+					action:  actionInstall,
+					choices: []sourceChoice{{source: src, cmdArgs: args}},
+				},
+			})
 		}
 	}
 	if len(m.toolMenuItems) == 0 {
@@ -1916,6 +2219,81 @@ func (m *Model) buildToolMenu() bool {
 	}
 	m.toolMenu = 0
 	return true
+}
+
+// openDetailView sets up the detail view for the tool at the given index.
+func (m *Model) openDetailView(toolIdx int) {
+	m.detailIdx = toolIdx
+	m.showDetail = true
+	m.detailScroll = 0
+	m.detailRelCursor = -1
+	if toolIdx >= 0 && toolIdx < len(m.tools) {
+		m.detailRelated = m.relatedTools(m.tools[toolIdx])
+	} else {
+		m.detailRelated = nil
+	}
+	m.buildToolMenu()
+	m.computeDetailMaxScroll()
+}
+
+// computeDetailMaxScroll computes the max scroll (in logical lines) from the
+// actual rendered detail body. Computes footer height the same way as
+// renderDetailView to avoid mismatch.
+func (m *Model) computeDetailMaxScroll() {
+	if !m.showDetail || m.detailIdx < 0 || m.detailIdx >= len(m.tools) {
+		m.detailMaxScroll = 0
+		return
+	}
+	body := m.renderDetailBody(m.tools[m.detailIdx])
+	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
+
+	// Build the same footer as renderDetailView to measure its height.
+	footerRows := m.detailFooterHeight()
+
+	const minGap = 1
+	visibleRows := m.height - footerRows - minGap
+	if visibleRows < 5 {
+		visibleRows = 5
+	}
+	m.detailMaxScroll = len(lines) - visibleRows
+	if m.detailMaxScroll < 0 {
+		m.detailMaxScroll = 0
+	}
+}
+
+// detailFooterHeight returns the visual row count of the detail view footer,
+// matching what renderDetailView builds.
+func (m Model) detailFooterHeight() int {
+	dim := dimVersion.Render
+	var footer strings.Builder
+	switch {
+	case m.pendingAction != nil:
+		prompt := confirmStyle.Render(fmt.Sprintf("  Run %s?", strings.Join(m.pendingAction.cmdArgs, " ")))
+		keys := dim("y") + " confirm   " + dim("Esc") + " cancel"
+		footer.WriteString(prompt + "  " + keys)
+	default:
+		hints := []string{
+			dim("↑↓") + " navigate",
+			dim("PgUp/PgDn") + " scroll",
+			dim("Enter") + " select",
+			dim("Esc") + " back",
+		}
+		footer.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
+	}
+	if m.statusMsg != "" {
+		footer.WriteString("\n  " + upgradableStyle.Render(m.statusMsg))
+	}
+	return visualRows(footer.String(), m.width)
+}
+
+// clampDetailScroll ensures detailScroll stays within [0, detailMaxScroll].
+func (m *Model) clampDetailScroll() {
+	if m.detailScroll > m.detailMaxScroll {
+		m.detailScroll = m.detailMaxScroll
+	}
+	if m.detailScroll < 0 {
+		m.detailScroll = 0
+	}
 }
 
 // currentTool returns the tool at the current cursor position, or nil.
@@ -1947,8 +2325,10 @@ func (m Model) resolveInstallAction() *sourcePicker {
 	if tool == nil || tool.IsInstalled() {
 		return nil
 	}
+	// Show all package managers that have a package ID for this tool,
+	// including ones not currently on PATH.
 	var choices []sourceChoice
-	for _, src := range registry.SourcesForOS() {
+	for _, src := range allSourcesForOS() {
 		if args := tool.Packages.InstallArgs(src); args != nil {
 			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
 		}
@@ -1960,6 +2340,27 @@ func (m Model) resolveInstallAction() *sourcePicker {
 		toolIdx: m.currentToolIdx(),
 		action:  actionInstall,
 		choices: choices,
+	}
+}
+
+// allSourcesForOS returns all package managers for the current OS,
+// regardless of whether they're installed on PATH.
+func allSourcesForOS() []registry.InstallSource {
+	switch runtime.GOOS {
+	case "windows":
+		return []registry.InstallSource{
+			registry.SourceWinget, registry.SourceScoop,
+			registry.SourceChoco, registry.SourceNPM,
+		}
+	case "darwin":
+		return []registry.InstallSource{
+			registry.SourceBrew, registry.SourceNPM,
+		}
+	default:
+		return []registry.InstallSource{
+			registry.SourceApt, registry.SourceSnap,
+			registry.SourceBrew, registry.SourceNPM,
+		}
 	}
 }
 

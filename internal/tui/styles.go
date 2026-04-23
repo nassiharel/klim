@@ -65,6 +65,21 @@ var (
 	detailPrimary    = lipgloss.NewStyle().Foreground(successColor)
 	detailSecondary  = lipgloss.NewStyle().Foreground(dimColor)
 
+	// Hero description — readable (not dim) so the main "what is this tool"
+	// line is prominent.
+	heroDescStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+
+	// Pill backgrounds for metadata chips (tags, topics, platforms, category).
+	chipStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("15")).
+			Background(lipgloss.Color("237")).
+			Padding(0, 1)
+	chipAccentStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("15")).
+			Background(tabActiveBg).
+			Padding(0, 1).
+			Bold(true)
+
 	// Category badge.
 	categoryStyle = lipgloss.NewStyle().Foreground(subtleColor)
 

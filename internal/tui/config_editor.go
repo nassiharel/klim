@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/clim/internal/registry"
 )
 
 // configSettingType describes what kind of value a setting holds.
@@ -272,25 +273,39 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			for m.configCursor > 0 && settings[m.configCursor].label == "" {
 				m.configCursor--
 			}
+		} else {
+			// At top of settings — scroll preamble into view.
+			if m.configScroll > 0 {
+				m.configScroll--
+			}
 		}
-		// Auto-scroll: estimate line offset (system info ~12 lines + 1 line per setting + 2 per section header).
-		cursorLine := settingLineOffset(settings, m.configCursor)
-		if cursorLine < m.configScroll {
-			m.configScroll = cursorLine
-		}
+		m.autoScrollConfig(settings)
 	case "down", "j":
 		if m.configCursor < len(settings)-1 {
 			m.configCursor++
+		} else {
+			// At bottom of settings — allow scrolling past.
+			m.configScroll++
 		}
-		// Auto-scroll: keep cursor visible.
-		visibleLines := m.height - 8
-		if visibleLines < 5 {
-			visibleLines = 5
+		m.autoScrollConfig(settings)
+	case "pgup":
+		page := m.height - 6
+		if page < 1 {
+			page = 1
 		}
-		cursorLine := settingLineOffset(settings, m.configCursor)
-		if cursorLine >= m.configScroll+visibleLines {
-			m.configScroll = cursorLine - visibleLines + 1
+		m.configScroll -= page
+		if m.configScroll < 0 {
+			m.configScroll = 0
 		}
+	case "pgdown":
+		page := m.height - 6
+		if page < 1 {
+			page = 1
+		}
+		m.configScroll += page
+	case "home", "g":
+		m.configScroll = 0
+		m.configCursor = 0
 	case "enter", "space":
 		if m.configCursor < len(settings) && m.cfg != nil {
 			s := settings[m.configCursor]
@@ -348,6 +363,41 @@ func saveConfigCmd(cfg *config.Config) tea.Cmd {
 }
 
 // --- Rendering ---
+
+// configPreambleLines returns the number of rendered lines in renderConfigView
+// before the editable settings section (version info, paths, package managers).
+func (m Model) configPreambleLines() int {
+	// 1 blank + Version + OS + Go + 1 blank + Config + Log + Last Scan + 1 blank + "Package Managers" header
+	lines := 10
+	lines += len(registry.AllPMStatusForOS())
+	// Config warnings section: 1 blank + header + 1 blank + N warnings.
+	if len(m.configWarnings) > 0 {
+		lines += 3 + len(m.configWarnings)
+	}
+	return lines
+}
+
+// autoScrollConfig keeps the cursor-selected setting visible within the
+// scrollable config view. Uses the same visible-rows calculation as renderView.
+func (m *Model) autoScrollConfig(settings []configSetting) {
+	preamble := m.configPreambleLines()
+	cursorLine := preamble + settingLineOffset(settings, m.configCursor)
+
+	// Match renderView's visible rows: height - headerRows(3) - gap(1) - footer.
+	visibleRows := m.height - 4 - m.footerHeight()
+	if visibleRows < 5 {
+		visibleRows = 5
+	}
+
+	// Scroll up if cursor above viewport.
+	if cursorLine < m.configScroll {
+		m.configScroll = cursorLine
+	}
+	// Scroll down if cursor below viewport.
+	if cursorLine >= m.configScroll+visibleRows {
+		m.configScroll = cursorLine - visibleRows + 1
+	}
+}
 
 func (m Model) renderConfigEditor() string {
 	var b strings.Builder

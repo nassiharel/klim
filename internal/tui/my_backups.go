@@ -154,7 +154,7 @@ func (m Model) renderMyBackupsView() string {
 		headerStyle.Render(fixedWidth("TOOLS", colPackTools)) + "  " +
 		headerStyle.Render("DATE") + "\n")
 
-	visibleRows := m.height - 12
+	visibleRows := m.height - 8 - m.footerHeight()
 	if visibleRows < 3 {
 		visibleRows = 3
 	}

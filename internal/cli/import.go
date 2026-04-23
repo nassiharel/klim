@@ -69,10 +69,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	regMap := make(map[string]*registry.Tool, len(regTools))
-	for i := range regTools {
-		regMap[regTools[i].Name] = &regTools[i]
-	}
+	regMap := registry.ToolMap(regTools)
 
 	// Build the install plan.
 	ps := buildImportPlan(m.Tools, regMap)

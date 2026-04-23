@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -17,7 +19,9 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/catalog"
+	"github.com/nassiharel/clim/internal/fileutil"
 	"github.com/nassiharel/clim/internal/manifest"
+	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/share"
@@ -30,29 +34,46 @@ var resolveSem = make(chan struct{}, 4)
 
 // --- Recommendation types ---
 
-// recommendation represents a tool suggested based on tag overlap with installed tools.
+// recommendation represents a tool suggested based on tag/topic/category overlap
+// with installed tools, enriched with display metadata.
 type recommendation struct {
-	toolIdx int    // index into the tools slice
-	score   int    // tag overlap score (higher = more relevant)
-	reason  string // sorted installed tool names, e.g. "helm, kubectl, stern"
+	toolIdx     int    // index into the tools slice
+	score       int    // combined relevance score (higher = more relevant)
+	reason      string // sorted installed tool names, e.g. "helm, kubectl, stern"
+	category    string // tool's category for display
+	description string // from GitHubInfo.Description
+	stars       int    // from GitHubInfo.Stars
+	matchPct    int    // 0–100 normalized score for display
 }
 
 // maxRecommendations caps the number of recommendations shown.
-const maxRecommendations = 20
+const maxRecommendations = 25
 
-// computeRecommendations ranks not-installed tools by tag overlap with installed tools.
+// computeRecommendations ranks not-installed tools by tag/topic overlap with
+// installed tools, boosted by category match, GitHub stars, and recency.
 func computeRecommendations(tools []registry.Tool) []recommendation {
-	// Build tag frequency from installed tools.
+	// Build tag+topic frequency from installed tools.
 	tagFreq := make(map[string]int)
-	// Track which installed tools have each tag (for "why" reasons).
 	tagSources := make(map[string][]string) // tag → installed tool names
+	installedCats := make(map[string]bool)
+
 	for _, t := range tools {
 		if !t.IsInstalled() {
 			continue
 		}
+		if t.Category != "" {
+			installedCats[t.Category] = true
+		}
 		for _, tag := range t.Tags {
 			tagFreq[tag]++
 			tagSources[tag] = append(tagSources[tag], t.Name)
+		}
+		// Merge GitHub Topics into the same frequency map.
+		if t.GitHubInfo != nil {
+			for _, topic := range t.GitHubInfo.Topics {
+				tagFreq[topic]++
+				tagSources[topic] = append(tagSources[topic], t.Name)
+			}
 		}
 	}
 
@@ -62,21 +83,67 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 
 	// Score each not-installed tool.
 	var recs []recommendation
+	maxScore := 0
 	for i, t := range tools {
 		if t.IsInstalled() {
 			continue
 		}
+		// Skip archived tools.
+		if t.GitHubInfo != nil && t.GitHubInfo.Archived {
+			continue
+		}
+		// Skip tools not installable on this OS.
+		if !t.Packages.HasAnyPackageForOS() {
+			continue
+		}
+
 		score := 0
 		matchedTools := make(map[string]struct{})
+
+		// Tag overlap.
 		for _, tag := range t.Tags {
 			if freq, ok := tagFreq[tag]; ok {
 				score += freq
-				// Collect up to 3 installed tool names that share this tag.
 				for _, src := range tagSources[tag] {
 					matchedTools[src] = struct{}{}
 				}
 			}
 		}
+		// GitHub Topics overlap.
+		if t.GitHubInfo != nil {
+			for _, topic := range t.GitHubInfo.Topics {
+				if freq, ok := tagFreq[topic]; ok {
+					score += freq
+					for _, src := range tagSources[topic] {
+						matchedTools[src] = struct{}{}
+					}
+				}
+			}
+		}
+
+		// Category match bonus.
+		if t.Category != "" && installedCats[t.Category] {
+			score += 2
+		}
+
+		// GitHub stars popularity boost.
+		if t.GitHubInfo != nil {
+			if t.GitHubInfo.Stars > 10000 {
+				score += 2
+			} else if t.GitHubInfo.Stars > 1000 {
+				score += 1
+			}
+		}
+
+		// Recency boost: pushed within last 6 months.
+		if t.GitHubInfo != nil && t.GitHubInfo.PushedAt != "" {
+			if pushed, err := time.Parse(time.RFC3339, t.GitHubInfo.PushedAt); err == nil {
+				if time.Since(pushed) < 6*30*24*time.Hour {
+					score += 1
+				}
+			}
+		}
+
 		if score == 0 {
 			continue
 		}
@@ -90,13 +157,26 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 		if len(reasons) > 3 {
 			reasons = reasons[:3]
 		}
-		reason := strings.Join(reasons, ", ")
 
-		recs = append(recs, recommendation{
-			toolIdx: i,
-			score:   score,
-			reason:  reason,
-		})
+		desc := ""
+		stars := 0
+		if t.GitHubInfo != nil {
+			desc = t.GitHubInfo.Description
+			stars = t.GitHubInfo.Stars
+		}
+
+		rec := recommendation{
+			toolIdx:     i,
+			score:       score,
+			reason:      strings.Join(reasons, ", "),
+			category:    t.Category,
+			description: desc,
+			stars:       stars,
+		}
+		recs = append(recs, rec)
+		if score > maxScore {
+			maxScore = score
+		}
 	}
 
 	// Sort by score descending, then name ascending.
@@ -110,6 +190,16 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 	// Cap at maxRecommendations.
 	if len(recs) > maxRecommendations {
 		recs = recs[:maxRecommendations]
+	}
+
+	// Compute normalized percentages.
+	if maxScore > 0 {
+		for i := range recs {
+			recs[i].matchPct = recs[i].score * 100 / maxScore
+			if recs[i].matchPct < 1 {
+				recs[i].matchPct = 1
+			}
+		}
 	}
 
 	return recs
@@ -169,8 +259,9 @@ type sourcePicker struct {
 
 // toolMenuAction represents one selectable action in the tool action menu.
 type toolMenuAction struct {
-	label  string        // "Upgrade", "Remove", "Install"
-	picker *sourcePicker // resolved sources for this action
+	label        string        // "Upgrade", "Remove", "Install"
+	picker       *sourcePicker // primary action (install or upgrade)
+	removePicker *sourcePicker // optional remove action (for installed PM rows)
 }
 
 // --- Backup types ---
@@ -255,9 +346,7 @@ type marketplaceRefreshMsg struct {
 func findToolsCmd(svc *service.ToolService, force bool, gen int) func() scanResultMsg {
 	return func() scanResultMsg {
 		ctx := context.Background()
-		if force {
-			_ = svc.InvalidateScanCache()
-		} else {
+		if !force {
 			tools, info, scanInfo, err := svc.LoadCached(ctx)
 			switch {
 			case err == nil:
@@ -265,11 +354,8 @@ func findToolsCmd(svc *service.ToolService, force bool, gen int) func() scanResu
 			case os.IsNotExist(err):
 				// Cold start — fall through to a fresh scan silently.
 			default:
-				// Cache exists but is unreadable or schema-incompatible.
-				// Delete it so we don't keep retrying the same bad file,
-				// and surface a warning alongside the fresh scan result.
-				_ = svc.InvalidateScanCache()
-				slog.Warn("scan cache unreadable, invalidated", "error", err)
+				// Cache exists but is unreadable — ignore it, fresh scan overwrites.
+				slog.Warn("scan cache unreadable, will rescan", "error", err)
 				tools, info, scanErr := svc.LoadAndScan(ctx)
 				return scanResultMsg{
 					gen:          gen,
@@ -307,9 +393,82 @@ func resolveToolVersionCmd(svc *service.ToolService, index int, gen int, tool re
 
 // --- Single-tool action commands ---
 
+// toolActionCmd wraps a PM command + post-run pause into a single ExecCommand.
+// This keeps the terminal in raw mode during the pause so the user can read output.
+type toolActionCmd struct {
+	args   []string
+	action string
+	stdin  io.Reader
+	stdout io.Writer
+	stderr io.Writer
+}
+
+func (c *toolActionCmd) SetStdin(r io.Reader)  { c.stdin = r }
+func (c *toolActionCmd) SetStdout(w io.Writer) { c.stdout = w }
+func (c *toolActionCmd) SetStderr(w io.Writer) { c.stderr = w }
+
+func (c *toolActionCmd) Run() error {
+	// Apply os.Std* fallbacks so command I/O works even if Bubble Tea
+	// didn't set the fields (nil stdio would discard output).
+	stdin := c.stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	stdout := c.stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := c.stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
+	// Clear screen before running command so previous exec output doesn't persist.
+	fmt.Fprint(stdout, "\033[2J\033[H") // ANSI: clear screen + cursor home
+
+	cmd := exec.Command(c.args[0], c.args[1:]...)
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	runErr := cmd.Run()
+
+	// Log exit code for debugging.
+	var exitErr *exec.ExitError
+	hasExitCode := errors.As(runErr, &exitErr)
+	exitCode := -1
+	if hasExitCode {
+		exitCode = exitErr.ExitCode()
+	} else if runErr == nil {
+		exitCode = 0
+	}
+	slog.Info("tool action finished", "action", c.action, "cmd", c.args, "exitCode", exitCode, "err", runErr)
+
+	// Show result and wait for keypress — terminal is still ours.
+	if runErr != nil {
+		if hasExitCode {
+			fmt.Fprintf(stderr, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
+		} else {
+			fmt.Fprintf(stderr, "\n✗ %s failed: %s\n", c.action, runErr)
+		}
+	} else {
+		fmt.Fprintf(stderr, "\n✓ %s completed (exit code 0)\n", c.action)
+	}
+	fmt.Fprint(stderr, "\nPress Enter to return to clim...")
+
+	// Read until newline so buffered stdin doesn't skip the pause.
+	br := bufio.NewReader(stdin)
+	_, _ = br.ReadString('\n')
+
+	return runErr
+}
+
 func execToolActionCmd(pa pendingAction) tea.Cmd {
-	cmd := exec.Command(pa.cmdArgs[0], pa.cmdArgs[1:]...)
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+	c := &toolActionCmd{
+		args:   pa.cmdArgs,
+		action: pa.action,
+	}
+	return tea.Exec(c, func(err error) tea.Msg {
 		return execFinishedMsg{
 			toolIdx: pa.toolIdx,
 			action:  pa.action,
@@ -338,11 +497,10 @@ func refreshMarketplaceCmd(fetcher catalog.MarketplaceFetcher) tea.Cmd {
 
 // backupsDir returns the path to the backups directory, creating it if needed.
 func backupsDir() (string, error) {
-	dir, err := os.UserConfigDir()
+	bdir, err := paths.BackupsDir()
 	if err != nil {
 		return "", err
 	}
-	bdir := filepath.Join(dir, "clim", "backups")
 	if err := os.MkdirAll(bdir, 0o755); err != nil {
 		return "", err
 	}
@@ -355,32 +513,14 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 	return func() tea.Msg {
 		sorted := make([]registry.Tool, len(tools))
 		copy(sorted, tools)
-		sort.Slice(sorted, func(i, j int) bool {
-			return strings.ToLower(sorted[i].Name) < strings.ToLower(sorted[j].Name)
-		})
+		registry.SortByName(sorted)
 
 		var exported []manifest.Tool
 		for _, tool := range sorted {
 			if !tool.IsInstalled() {
 				continue
 			}
-			primary := tool.PrimaryInstance()
-			exported = append(exported, manifest.Tool{
-				Name:        tool.Name,
-				DisplayName: tool.DisplayName,
-				Version:     primary.Version,
-				Source:      string(primary.Source),
-				Category:    tool.Category,
-				Packages: manifest.Packages{
-					Winget: tool.Packages.Winget,
-					Choco:  tool.Packages.Choco,
-					Scoop:  tool.Packages.Scoop,
-					Brew:   tool.Packages.Brew,
-					Apt:    tool.Packages.Apt,
-					Snap:   tool.Packages.Snap,
-					NPM:    tool.Packages.NPM,
-				},
-			})
+			exported = append(exported, manifest.FromRegistryTool(tool))
 		}
 
 		m := manifest.Manifest{
@@ -407,7 +547,7 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 		}
 		header := "# clim — Installed Tools Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   clim import my-tools.yaml\n#\n\n"
 
-		if err := os.WriteFile(filename, []byte(header+string(data)), 0o644); err != nil {
+		if err := fileutil.AtomicWrite(filename, []byte(header+string(data)), 0o644); err != nil {
 			return exportFinishedMsg{err: err}
 		}
 
@@ -437,10 +577,7 @@ func buildImportPlanCmd(svc *service.ToolService, path string) tea.Cmd {
 			return backupPlanMsg{err: fmt.Errorf("scanning PATH: %w", err)}
 		}
 
-		regMap := make(map[string]*registry.Tool, len(regTools))
-		for i := range regTools {
-			regMap[regTools[i].Name] = &regTools[i]
-		}
+		regMap := registry.ToolMap(regTools)
 
 		var items []backupItem
 		for _, mt := range m.Tools {
@@ -691,6 +828,75 @@ func shareToolsCmd(tools []registry.Tool) tea.Cmd {
 	}
 }
 
+// exportFavoritesCmd exports only the favorited tools to a YAML manifest.
+func exportFavoritesCmd(tools []registry.Tool, favNames map[string]bool) tea.Cmd {
+	return func() tea.Msg {
+		var exported []manifest.Tool
+		for _, tool := range tools {
+			if !favNames[tool.Name] {
+				continue
+			}
+			exported = append(exported, manifest.FromRegistryTool(tool))
+		}
+		if len(exported) == 0 {
+			return exportFinishedMsg{err: errors.New("no favorites to export")}
+		}
+
+		sort.Slice(exported, func(i, j int) bool {
+			return strings.ToLower(exported[i].Name) < strings.ToLower(exported[j].Name)
+		})
+
+		m := manifest.Manifest{
+			GeneratedBy: "clim favorites export",
+			OS:          runtime.GOOS,
+			Arch:        runtime.GOARCH,
+			Tools:       exported,
+		}
+
+		data, err := yaml.Marshal(&m)
+		if err != nil {
+			return exportFinishedMsg{err: err}
+		}
+
+		bdir, err := backupsDir()
+		if err != nil {
+			return exportFinishedMsg{err: fmt.Errorf("creating backups dir: %w", err)}
+		}
+
+		filename := filepath.Join(bdir, fmt.Sprintf("clim-favorites-%s.yaml", time.Now().Format("2006-01-02")))
+		if _, err := os.Stat(filename); err == nil {
+			filename = filepath.Join(bdir, fmt.Sprintf("clim-favorites-%s.yaml", time.Now().Format("2006-01-02-150405")))
+		}
+		header := "# clim — Favorites Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   clim import favorites.yaml\n#\n\n"
+
+		if err := fileutil.AtomicWrite(filename, []byte(header+string(data)), 0o644); err != nil {
+			return exportFinishedMsg{err: err}
+		}
+
+		return exportFinishedMsg{path: filename, count: len(exported)}
+	}
+}
+
+// shareFavoritesCmd encodes favorite tool names into a share token.
+func shareFavoritesCmd(favNames map[string]bool) tea.Cmd {
+	return func() tea.Msg {
+		var names []string
+		for name := range favNames {
+			names = append(names, name)
+		}
+		if len(names) == 0 {
+			return shareFinishedMsg{err: errors.New("no favorites to share")}
+		}
+		sort.Strings(names)
+
+		token, err := share.Encode(names)
+		if err != nil {
+			return shareFinishedMsg{err: err}
+		}
+		return shareFinishedMsg{token: token, count: len(names)}
+	}
+}
+
 // buildTokenImportPlanCmd decodes a share token and builds an import plan.
 func buildTokenImportPlanCmd(svc *service.ToolService, token string) tea.Cmd {
 	return func() tea.Msg {
@@ -706,10 +912,7 @@ func buildTokenImportPlanCmd(svc *service.ToolService, token string) tea.Cmd {
 			return backupPlanMsg{err: fmt.Errorf("scanning PATH: %w", err), fromToken: true}
 		}
 
-		regMap := make(map[string]*registry.Tool, len(regTools))
-		for i := range regTools {
-			regMap[regTools[i].Name] = &regTools[i]
-		}
+		regMap := registry.ToolMap(regTools)
 
 		var items []backupItem
 		for _, name := range names {

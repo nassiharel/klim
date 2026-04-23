@@ -301,7 +301,7 @@ func (m Model) renderPackCreateView() string {
 		b.WriteString("\n")
 
 		// Scrollable tool list.
-		visibleRows := m.height - 14
+		visibleRows := m.height - 10 - m.footerHeight()
 		if visibleRows < 5 {
 			visibleRows = 5
 		}
