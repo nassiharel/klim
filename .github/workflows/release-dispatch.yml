@@ -1,0 +1,61 @@
+name: Release (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 1.2.3)"
+        required: true
+      prerelease:
+        description: "Pre-release suffix (e.g. rc1, beta2) — leave empty for stable"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  tag-and-release:
+    name: Create Tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Validate version format
+        run: |
+          version="${{ inputs.version }}"
+          if ! echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version format '$version'. Expected: X.Y.Z (e.g. 1.2.3)"
+            exit 1
+          fi
+
+      - name: Compute tag
+        id: tag
+        run: |
+          tag="v${{ inputs.version }}"
+          if [ -n "${{ inputs.prerelease }}" ]; then
+            tag="${tag}-${{ inputs.prerelease }}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Creating tag: $tag"
+
+      - name: Check tag does not exist
+        run: |
+          if git rev-parse "${{ steps.tag.outputs.tag }}" >/dev/null 2>&1; then
+            echo "::error::Tag ${{ steps.tag.outputs.tag }} already exists."
+            exit 1
+          fi
+
+      - name: Create and push tag
+        run: |
+          git tag "${{ steps.tag.outputs.tag }}"
+          git push origin "${{ steps.tag.outputs.tag }}"
+
+      - name: Summary
+        run: |
+          echo "### 🏷️ Tag Created" >> "$GITHUB_SUMMARY"
+          echo "" >> "$GITHUB_SUMMARY"
+          echo "**Tag:** \`${{ steps.tag.outputs.tag }}\`" >> "$GITHUB_SUMMARY"
+          echo "" >> "$GITHUB_SUMMARY"
+          echo "The [Release workflow](../actions/workflows/release.yml) will now run automatically." >> "$GITHUB_SUMMARY"

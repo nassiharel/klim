@@ -34,6 +34,7 @@ function Get-LatestVersion {
         # Fallback: follow redirect
         try {
             $response = Invoke-WebRequest -Uri "https://github.com/$GithubRepo/releases/latest" -MaximumRedirection 0 -ErrorAction SilentlyContinue
+            $null = $response  # Suppress PSScriptAnalyzer warning; we only need the redirect exception
         }
         catch {
             if ($_.Exception.Response.Headers.Location) {
@@ -46,7 +47,9 @@ function Get-LatestVersion {
     }
 
     Write-Host "[error] Could not determine the latest version." -ForegroundColor Red
+    Write-Host "[error] This may be caused by GitHub API rate limiting." -ForegroundColor Red
     Write-Host "[error] Set `$env:CLIM_VERSION = 'v1.0.0' and retry." -ForegroundColor Red
+    Write-Host "[error] Check releases at: https://github.com/$GithubRepo/releases" -ForegroundColor Red
     exit 1
 }
 
@@ -55,9 +58,10 @@ function Get-Arch {
     switch ($arch) {
         "AMD64" { return "amd64" }
         "x86"   { return "amd64" }  # 32-bit PS on 64-bit OS is common
+        "ARM64" { return "arm64" }
         default {
-            Write-Host "[error] Unsupported architecture: $arch" -ForegroundColor Red
-            exit 1
+            Write-Host "[warn]  Unknown architecture: $arch — will attempt go install fallback." -ForegroundColor Yellow
+            return $null
         }
     }
 }
@@ -81,16 +85,82 @@ function Test-InstalledVersion {
     return $false
 }
 
+function Install-GoFallback {
+    param([string]$Tag)
+
+    $goCmd = Get-Command go -ErrorAction SilentlyContinue
+    if (-not $goCmd) {
+        Write-Host "[error] No prebuilt binary for this platform and Go is not installed." -ForegroundColor Red
+        Write-Host "[error] Install Go (https://go.dev/dl/) or use a supported platform." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "[info]  Building from source via go install..." -ForegroundColor Green
+    & go install "github.com/nassiharel/clim/cmd/clim@$Tag"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[error] go install failed." -ForegroundColor Red
+        exit 1
+    }
+
+    $gopath = & go env GOPATH
+    $goBin = Join-Path $gopath "bin\$BinaryName.exe"
+    if (-not (Test-Path $goBin)) {
+        $goBin = & go env GOBIN
+        $goBin = Join-Path $goBin "$BinaryName.exe"
+    }
+
+    if (-not (Test-Path $goBin)) {
+        Write-Host "[error] go install succeeded but binary not found in GOPATH/bin or GOBIN." -ForegroundColor Red
+        exit 1
+    }
+
+    if (-not (Test-Path $InstallDir)) {
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
+
+    Copy-Item -Path $goBin -Destination (Join-Path $InstallDir "$BinaryName.exe") -Force
+    Write-Host "[info]  Installed $BinaryName.exe (built from source) to $InstallDir" -ForegroundColor Green
+}
+
+function Add-ToPathAndVerify {
+    # Add to PATH if not already present
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($userPath -notlike "*$InstallDir*") {
+        [Environment]::SetEnvironmentVariable("PATH", "$userPath;$InstallDir", "User")
+        $env:PATH = "$env:PATH;$InstallDir"
+        Write-Host "[info]  Added $InstallDir to user PATH." -ForegroundColor Green
+        Write-Host "[info]  Restart your terminal for PATH changes to take effect." -ForegroundColor Yellow
+    }
+
+    # Verify installation
+    try {
+        $versionOutput = & (Join-Path $InstallDir "$BinaryName.exe") version 2>&1
+        Write-Host "[info]  $versionOutput" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "[info]  $BinaryName installed successfully." -ForegroundColor Green
+    }
+}
+
 function Install-Clim {
     $arch = Get-Arch
     $tag = Get-LatestVersion
-
-    Write-Host "[info]  Installing $BinaryName $tag for windows/$arch..." -ForegroundColor Green
 
     # Check if already installed
     if (Test-InstalledVersion -Tag $tag) {
         return
     }
+
+    # Determine if prebuilt binary exists for this arch
+    $hasPrebuilt = ($null -ne $arch) -and ($arch -eq "amd64")
+    if (-not $hasPrebuilt) {
+        Write-Host "[info]  No prebuilt binary for windows/$($arch ?? $env:PROCESSOR_ARCHITECTURE)." -ForegroundColor Yellow
+        Install-GoFallback -Tag $tag
+        Add-ToPathAndVerify
+        return
+    }
+
+    Write-Host "[info]  Installing $BinaryName $tag for windows/$arch..." -ForegroundColor Green
 
     $version = $tag.TrimStart("v")
     $zipName = "${BinaryName}_${version}_windows_${arch}.zip"
@@ -154,23 +224,7 @@ function Install-Clim {
         Copy-Item -Path $sourceBin -Destination (Join-Path $InstallDir "$BinaryName.exe") -Force
         Write-Host "[info]  Installed $BinaryName.exe to $InstallDir" -ForegroundColor Green
 
-        # Add to PATH if not already present
-        $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-        if ($userPath -notlike "*$InstallDir*") {
-            [Environment]::SetEnvironmentVariable("PATH", "$userPath;$InstallDir", "User")
-            $env:PATH = "$env:PATH;$InstallDir"
-            Write-Host "[info]  Added $InstallDir to user PATH." -ForegroundColor Green
-            Write-Host "[info]  Restart your terminal for PATH changes to take effect." -ForegroundColor Yellow
-        }
-
-        # Verify installation
-        try {
-            $versionOutput = & (Join-Path $InstallDir "$BinaryName.exe") version 2>&1
-            Write-Host "[info]  $versionOutput" -ForegroundColor Green
-        }
-        catch {
-            Write-Host "[info]  $BinaryName installed successfully." -ForegroundColor Green
-        }
+        Add-ToPathAndVerify
     }
     finally {
         # Cleanup

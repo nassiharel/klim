@@ -9,38 +9,41 @@ LDFLAGS := -s -w \
   -X $(MODULE)/internal/build.Date=$(DATE)
 
 .DEFAULT_GOAL := all
-.PHONY: all build run test lint tidy vulncheck cover clean marketplace-validate marketplace-assemble
+.PHONY: all build run test lint tidy vulncheck cover clean marketplace-validate marketplace-assemble help
 
-all: lint test build
+all: lint test build ## Run lint, test, and build
 
-build:
+build: ## Build the clim binary
 	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/clim ./cmd/clim
 
-run:
+run: ## Run clim from source
 	go run -ldflags "$(LDFLAGS)" ./cmd/clim
 
-test:
+test: ## Run all tests
 	go test -race -count=1 ./...
 
-lint:
+lint: ## Run golangci-lint
 	golangci-lint run
 
-tidy:
+tidy: ## Check go.mod tidiness
 	go mod tidy -diff
 
-vulncheck:
+vulncheck: ## Run govulncheck for known vulnerabilities
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
-cover:
+cover: ## Generate test coverage report
 	go test -race -count=1 -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
-clean:
+clean: ## Remove build artifacts
 	rm -rf bin/ dist/ coverage.out coverage.html
 
-marketplace-validate:
+marketplace-validate: ## Validate marketplace tool YAML files
 	go run ./internal/marketplace/validate
 
-marketplace-assemble:
+marketplace-assemble: ## Assemble marketplace.yaml from individual tool files
 	go run ./internal/marketplace/assemble -fallback "$$(test -f marketplace.yaml && printf '%s' marketplace.yaml || printf '%s' /dev/null)" -o marketplace.yaml
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":[^:]*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
