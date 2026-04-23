@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/custompacks"
+	"github.com/nassiharel/clim/internal/fileutil"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/share"
 )
@@ -180,7 +181,7 @@ func exportMyPackFileCmd(pack registry.Pack) tea.Cmd {
 			filename = fmt.Sprintf("%s-%d.yaml", safeName, i)
 		}
 		header := fmt.Sprintf("# clim — Custom Pack: %s\n# %s\n\n", pack.DisplayName, pack.Description)
-		if err := os.WriteFile(filename, []byte(header+string(data)), 0o644); err != nil {
+		if err := fileutil.AtomicWrite(filename, []byte(header+string(data)), 0o644); err != nil {
 			return myPackActionMsg{action: "export", err: err}
 		}
 		abs, _ := filepath.Abs(filename)

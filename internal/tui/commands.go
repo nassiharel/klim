@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/catalog"
+	"github.com/nassiharel/clim/internal/fileutil"
 	"github.com/nassiharel/clim/internal/manifest"
 	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
@@ -406,17 +408,28 @@ func (c *toolActionCmd) SetStdout(w io.Writer) { c.stdout = w }
 func (c *toolActionCmd) SetStderr(w io.Writer) { c.stderr = w }
 
 func (c *toolActionCmd) Run() error {
-	// Clear screen before running command so previous exec output doesn't persist.
-	out := c.stdout
-	if out == nil {
-		out = os.Stdout
+	// Apply os.Std* fallbacks so command I/O works even if Bubble Tea
+	// didn't set the fields (nil stdio would discard output).
+	stdin := c.stdin
+	if stdin == nil {
+		stdin = os.Stdin
 	}
-	fmt.Fprint(out, "\033[2J\033[H") // ANSI: clear screen + cursor home
+	stdout := c.stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := c.stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
+	// Clear screen before running command so previous exec output doesn't persist.
+	fmt.Fprint(stdout, "\033[2J\033[H") // ANSI: clear screen + cursor home
 
 	cmd := exec.Command(c.args[0], c.args[1:]...)
-	cmd.Stdin = c.stdin
-	cmd.Stdout = c.stdout
-	cmd.Stderr = c.stderr
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	runErr := cmd.Run()
 
@@ -429,23 +442,16 @@ func (c *toolActionCmd) Run() error {
 	slog.Info("tool action finished", "action", c.action, "cmd", c.args, "exitCode", exitCode, "err", runErr)
 
 	// Show result and wait for keypress — terminal is still ours.
-	w := c.stderr
-	if w == nil {
-		w = os.Stderr
-	}
 	if runErr != nil {
-		fmt.Fprintf(w, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
+		fmt.Fprintf(stderr, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
 	} else {
-		fmt.Fprintf(w, "\n✓ %s completed (exit code 0)\n", c.action)
+		fmt.Fprintf(stderr, "\n✓ %s completed (exit code 0)\n", c.action)
 	}
-	fmt.Fprint(w, "\nPress Enter to return to clim...")
+	fmt.Fprint(stderr, "\nPress Enter to return to clim...")
 
-	r := c.stdin
-	if r == nil {
-		r = os.Stdin
-	}
-	buf := make([]byte, 64)
-	r.Read(buf) //nolint:errcheck
+	// Read until newline so buffered stdin doesn't skip the pause.
+	br := bufio.NewReader(stdin)
+	_, _ = br.ReadString('\n')
 
 	return runErr
 }
@@ -534,7 +540,7 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 		}
 		header := "# clim — Installed Tools Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   clim import my-tools.yaml\n#\n\n"
 
-		if err := os.WriteFile(filename, []byte(header+string(data)), 0o644); err != nil {
+		if err := fileutil.AtomicWrite(filename, []byte(header+string(data)), 0o644); err != nil {
 			return exportFinishedMsg{err: err}
 		}
 
@@ -856,7 +862,7 @@ func exportFavoritesCmd(tools []registry.Tool, favNames map[string]bool) tea.Cmd
 		}
 		header := "# clim — Favorites Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   clim import favorites.yaml\n#\n\n"
 
-		if err := os.WriteFile(filename, []byte(header+string(data)), 0o644); err != nil {
+		if err := fileutil.AtomicWrite(filename, []byte(header+string(data)), 0o644); err != nil {
 			return exportFinishedMsg{err: err}
 		}
 
