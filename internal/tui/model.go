@@ -855,6 +855,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.configScroll > 0 {
 			m.configScroll = max(0, min(m.configScroll, m.height))
 		}
+		if m.showDetail {
+			m.computeDetailMaxScroll()
+			m.clampDetailScroll()
+		}
 		return m, nil
 
 	default:
@@ -2232,8 +2236,8 @@ func (m *Model) openDetailView(toolIdx int) {
 	m.computeDetailMaxScroll()
 }
 
-// computeDetailMaxScroll estimates the max scroll for the current detail view
-// based on the tool's content sections.
+// computeDetailMaxScroll estimates the max scroll (in logical lines) for the
+// current detail view. Uses the same line-based unit as layoutDetailWithScroll.
 func (m *Model) computeDetailMaxScroll() {
 	if !m.showDetail || m.detailIdx < 0 || m.detailIdx >= len(m.tools) {
 		m.detailMaxScroll = 0
@@ -2241,13 +2245,13 @@ func (m *Model) computeDetailMaxScroll() {
 	}
 	tool := m.tools[m.detailIdx]
 
-	// Estimate body line count from tool data.
-	lines := 8 // hero header (name, badge, category, desc, stats bar, blanks)
+	// Estimate logical line count from tool data.
+	lines := 8 // hero header
 	if tool.IsInstalled() {
-		lines += 4 + len(tool.Instances)*2 // installed section
+		lines += 4 + len(tool.Instances)*2
 	}
-	lines += 3 + len(m.toolMenuItems) // package managers section
-	lines += 6                         // about section (binaries, platforms, tags)
+	lines += 3 + len(m.toolMenuItems) // package managers
+	lines += 6                         // about section
 	if tool.GitHubInfo != nil {
 		lines += 8 // community section
 	}

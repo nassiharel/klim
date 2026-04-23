@@ -1093,13 +1093,9 @@ func (m Model) layoutDetailWithScroll(body, footer string) string {
 		visibleRows = 5
 	}
 
-	// Count body rows visually (wrapping counts as multiple rows).
-	totalRows := 0
-	for _, ln := range lines {
-		totalRows += visualRows(ln, m.width)
-	}
-
-	maxScroll := totalRows - visibleRows
+	// Line-based scrolling: scroll and maxScroll are in logical lines,
+	// matching the unit we slice by. No visual-row / logical-line mismatch.
+	maxScroll := len(lines) - visibleRows
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -1111,24 +1107,13 @@ func (m Model) layoutDetailWithScroll(body, footer string) string {
 		scroll = 0
 	}
 
-	// Drop `scroll` visual rows from the top.
-	if scroll > 0 {
-		dropped := 0
-		start := 0
-		for i, ln := range lines {
-			r := visualRows(ln, m.width)
-			if dropped+r > scroll {
-				start = i
-				break
-			}
-			dropped += r
-			start = i + 1
-		}
-		lines = lines[start:]
+	// Slice lines by scroll offset.
+	if scroll > 0 && scroll < len(lines) {
+		lines = lines[scroll:]
 	}
 
 	// Annotate the footer with scroll position when applicable.
-	if scroll > 0 || (totalRows > visibleRows && maxScroll > 0) {
+	if scroll > 0 || maxScroll > 0 {
 		pct := 0
 		if maxScroll > 0 {
 			pct = (scroll * 100) / maxScroll
