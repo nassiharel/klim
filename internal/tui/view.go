@@ -829,11 +829,15 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 		line = m.renderDiscoverRow(tool, selected)
 	}
 
-	// Prepend star indicator for favorited tools (replace first rune, not first byte).
+	// Star indicator for favorited tools — inserted after cursor prefix,
+	// before the name. Keeps ▸ cursor visible for selected rows.
 	if m.favoriteNames[tool.Name] {
+		// Row format is "▸ NAME..." or "  NAME...". Replace the space
+		// after cursor with a styled star.
 		runes := []rune(line)
-		if len(runes) > 0 {
-			line = upgradableStyle.Render("★") + string(runes[1:])
+		if len(runes) >= 2 {
+			// runes[0] = cursor char (▸ or space), runes[1] = space
+			line = string(runes[0:1]) + upgradableStyle.Render("★") + string(runes[2:])
 		}
 	}
 
@@ -2361,11 +2365,14 @@ func truncateANSI(s string, maxWidth int) string {
 	runes := []rune(s)
 	truncated := false
 	for i < len(runes) {
-		// Detect ANSI escape sequence: ESC [ ... final byte (0x40–0x7E).
+		// Detect CSI sequence: ESC [ <params> <final byte>.
+		// Final byte is 0x40–0x7E. Parameter/intermediate bytes are 0x20–0x3F.
 		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
-			// Copy entire escape sequence without counting width.
 			buf.WriteRune(runes[i]) // ESC
 			i++
+			buf.WriteRune(runes[i]) // [
+			i++
+			// Copy parameter and intermediate bytes (0x20–0x3F), then final byte (0x40–0x7E).
 			for i < len(runes) {
 				buf.WriteRune(runes[i])
 				if runes[i] >= 0x40 && runes[i] <= 0x7E {

@@ -142,6 +142,7 @@ type Model struct {
 	detailIdx       int // index into m.tools, -1 = no detail
 	showDetail      bool
 	detailScroll    int              // vertical scroll offset (in rendered lines) for detail body
+	detailMaxScroll int              // last computed max scroll (set by view, used by key handler)
 	detailRelated   []recommendation // cached related tools for current detail view
 	detailRelCursor int              // cursor in "You might also like" list (-1 = not focused)
 
@@ -1198,10 +1199,8 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.toolMenu = len(m.toolMenuItems) - 1 // keep menu at last item visually
 		} else {
 			m.detailScroll++
-			if m.detailScroll > 200 { // safety cap, view clamps to actual max
-				m.detailScroll = 200
-			}
 		}
+		m.clampDetailScroll()
 	case "pgup":
 		page := m.height - 6
 		if page < 1 {
@@ -1217,25 +1216,11 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			page = 1
 		}
 		m.detailScroll += page
-		if m.detailScroll > 200 {
-			m.detailScroll = 200
-		}
+		m.clampDetailScroll()
 	case "home", "g":
 		m.detailScroll = 0
 	case "end", "G":
-		// Estimate max scroll from content height. The detail view has:
-		// hero(~8) + installed(~6) + PMs(~8) + about(~6) + community(~8) + related(~6) ≈ 42 lines.
-		// Subtract visible area to get max scroll.
-		estimatedContent := 50
-		visibleRows := m.height - 6
-		if visibleRows < 5 {
-			visibleRows = 5
-		}
-		maxScroll := estimatedContent - visibleRows
-		if maxScroll < 0 {
-			maxScroll = 0
-		}
-		m.detailScroll = maxScroll
+		m.detailScroll = m.detailMaxScroll
 	case "enter":
 		// Enter on related tool → open its detail view.
 		if m.detailRelCursor >= 0 && m.detailRelCursor < len(m.detailRelated) {
@@ -2244,6 +2229,48 @@ func (m *Model) openDetailView(toolIdx int) {
 		m.detailRelated = nil
 	}
 	m.buildToolMenu()
+	m.computeDetailMaxScroll()
+}
+
+// computeDetailMaxScroll estimates the max scroll for the current detail view
+// based on the tool's content sections.
+func (m *Model) computeDetailMaxScroll() {
+	if !m.showDetail || m.detailIdx < 0 || m.detailIdx >= len(m.tools) {
+		m.detailMaxScroll = 0
+		return
+	}
+	tool := m.tools[m.detailIdx]
+
+	// Estimate body line count from tool data.
+	lines := 8 // hero header (name, badge, category, desc, stats bar, blanks)
+	if tool.IsInstalled() {
+		lines += 4 + len(tool.Instances)*2 // installed section
+	}
+	lines += 3 + len(m.toolMenuItems) // package managers section
+	lines += 6                         // about section (binaries, platforms, tags)
+	if tool.GitHubInfo != nil {
+		lines += 8 // community section
+	}
+	lines += len(m.detailRelated) + 2 // related tools
+
+	visibleRows := m.height - m.footerHeight() - 1
+	if visibleRows < 5 {
+		visibleRows = 5
+	}
+	m.detailMaxScroll = lines - visibleRows
+	if m.detailMaxScroll < 0 {
+		m.detailMaxScroll = 0
+	}
+}
+
+// clampDetailScroll ensures detailScroll stays within [0, detailMaxScroll].
+func (m *Model) clampDetailScroll() {
+	if m.detailScroll > m.detailMaxScroll {
+		m.detailScroll = m.detailMaxScroll
+	}
+	if m.detailScroll < 0 {
+		m.detailScroll = 0
+	}
 }
 
 // currentTool returns the tool at the current cursor position, or nil.

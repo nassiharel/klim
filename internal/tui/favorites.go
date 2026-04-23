@@ -241,7 +241,14 @@ func (m Model) renderFavoritesView() string {
 	}
 
 	if len(m.filteredIndex) == 0 && m.favMode == "" {
-		return m.renderFavEmptyState()
+		if len(m.favoriteNames) == 0 {
+			return m.renderFavEmptyState()
+		}
+		// Has favorites but current filter/search hides them all.
+		var b strings.Builder
+		b.WriteString("\n\n")
+		b.WriteString("  " + dimVersion.Render("No favorites match the current filter.") + "\n")
+		return b.String()
 	}
 
 	return ""
