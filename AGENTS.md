@@ -38,7 +38,7 @@ internal/
   paths/       Single source of truth for all ~/.config/clim/* paths
   pkgmgr/      Package manager queries (installed + latest versions)
   registry/    Tool, Instance, PackageIDs, Pack structs; version comparison; SortByName, ToolMap, InstalledSet helpers
-  scancache/   Per-host scan cache: installed/not, paths, versions → ~/.config/clim/scan-cache.yaml
+  scancache/   Per-host scan cache: installed/not, paths, versions → ~/.config/clim/cache/scan-cache.yaml
   selfupdate/  Self-update from GitHub Releases (download → extract → replace)
   service/     ToolService: composition root wiring catalog + finder + resolver
   share/       Compact token encode/decode for sharing tool lists
@@ -156,7 +156,7 @@ go test -tags=integration -timeout=40m ./internal/marketplace/livecheck/...
 - **`marketplace/` is the single source of truth.** No tool definitions in Go code. Individual YAML files are assembled into `marketplace.yaml` by CI.
 - **Never edit root `marketplace.yaml` directly** — it's auto-generated. Edit files in `marketplace/tools/` and `marketplace/packs/` instead.
 - **Catalog is fetched at runtime**, not embedded. No network + no cache = catalog failure.
-- **Scan cache (`~/.config/clim/scan-cache.yaml`) is user-controlled.** Written after every successful scan; loaded on startup to skip PATH scan + version resolution. Only installed tools are persisted (a missing entry means "not installed"). Invalidated by TUI `r` key or CLI `--refresh` flag. In the TUI, mutating actions (install/upgrade/remove) trigger `startScan` which rescans and rewrites the cache. In the CLI, `clim import` calls `svc.InvalidateScanCache()` after install attempts so later `clim list` / `clim export` runs rescan automatically.
+- **Scan cache (`~/.config/clim/cache/scan-cache.yaml`) is user-controlled.** Written after every successful scan; loaded on startup to skip PATH scan + version resolution. Only installed tools are persisted (a missing entry means "not installed"). Invalidated by TUI `r` key or CLI `--refresh` flag. In the TUI, mutating actions (install/upgrade/remove) trigger `startScan` which rescans and rewrites the cache. In the CLI, `clim import` calls `svc.InvalidateScanCache()` after install attempts so later `clim list` / `clim export` runs rescan automatically.
 - **`config.yaml` is optional.** `config.Load()` returns defaults if missing; writes defaults on first run.
 - **Version comparison stops at first non-numeric segment.** `"2.53.0.windows.1"` → `[2, 53, 0]`.
 - **`VersionsMatch` handles PE padding** (`1400` ≈ `14`), `CompareVersions` does not.
@@ -175,7 +175,7 @@ Single source for every `~/.config/clim/*` path. Never call `os.UserConfigDir()`
 paths.Config()       // config/config.yaml
 paths.Favorites()    // favorites/favorites.yaml
 paths.CustomPacks()  // marketplace/custom-packs.yaml
-paths.ScanCache()    // scan-cache.yaml
+paths.ScanCache()    // cache/scan-cache.yaml
 paths.CatalogCache() // marketplace/marketplace-cache.yaml
 paths.BackupsDir()   // backups/
 paths.LogFile()      // logs/clim.log

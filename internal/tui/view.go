@@ -1143,8 +1143,12 @@ func (m Model) renderHeroHeader(tool registry.Tool) string {
 	var b strings.Builder
 
 	// Name + alias.
-	name := detailTitleStyle.Render(tool.DisplayName)
-	if tool.DisplayName != tool.Name {
+	displayName := tool.DisplayName
+	if displayName == "" {
+		displayName = tool.Name
+	}
+	name := detailTitleStyle.Render(displayName)
+	if tool.DisplayName != "" && tool.DisplayName != tool.Name {
 		name += "  " + dimVersion.Render("("+tool.Name+")")
 	}
 
@@ -2355,6 +2359,7 @@ func truncateANSI(s string, maxWidth int) string {
 	visW := 0
 	i := 0
 	runes := []rune(s)
+	truncated := false
 	for i < len(runes) {
 		// Detect ANSI escape sequence: ESC [ ... final byte (0x40–0x7E).
 		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
@@ -2374,6 +2379,7 @@ func truncateANSI(s string, maxWidth int) string {
 
 		rw := runewidth.RuneWidth(runes[i])
 		if visW+rw > maxWidth {
+			truncated = true
 			break
 		}
 		buf.WriteRune(runes[i])
@@ -2381,22 +2387,10 @@ func truncateANSI(s string, maxWidth int) string {
 		i++
 	}
 
-	// Append any remaining ANSI reset sequences so styling doesn't bleed.
-	for i < len(runes) {
-		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
-			buf.WriteRune(runes[i])
-			i++
-			for i < len(runes) {
-				buf.WriteRune(runes[i])
-				if runes[i] >= 0x40 && runes[i] <= 0x7E {
-					i++
-					break
-				}
-				i++
-			}
-		} else {
-			break
-		}
+	// Always append an explicit ANSI reset when truncation occurred
+	// to prevent style bleed into subsequent content.
+	if truncated {
+		buf.WriteString("\x1b[0m")
 	}
 
 	return buf.String()

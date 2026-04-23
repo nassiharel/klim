@@ -1198,6 +1198,9 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.toolMenu = len(m.toolMenuItems) - 1 // keep menu at last item visually
 		} else {
 			m.detailScroll++
+			if m.detailScroll > 200 { // safety cap, view clamps to actual max
+				m.detailScroll = 200
+			}
 		}
 	case "pgup":
 		page := m.height - 6
@@ -1214,10 +1217,25 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			page = 1
 		}
 		m.detailScroll += page
+		if m.detailScroll > 200 {
+			m.detailScroll = 200
+		}
 	case "home", "g":
 		m.detailScroll = 0
 	case "end", "G":
-		m.detailScroll = 1 << 30
+		// Estimate max scroll from content height. The detail view has:
+		// hero(~8) + installed(~6) + PMs(~8) + about(~6) + community(~8) + related(~6) ≈ 42 lines.
+		// Subtract visible area to get max scroll.
+		estimatedContent := 50
+		visibleRows := m.height - 6
+		if visibleRows < 5 {
+			visibleRows = 5
+		}
+		maxScroll := estimatedContent - visibleRows
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		m.detailScroll = maxScroll
 	case "enter":
 		// Enter on related tool → open its detail view.
 		if m.detailRelCursor >= 0 && m.detailRelCursor < len(m.detailRelated) {
