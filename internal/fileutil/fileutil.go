@@ -38,13 +38,15 @@ func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 
 	if err := os.Rename(tmpPath, path); err != nil {
 		// Windows: Rename fails if destination exists. Remove and retry.
-		if removeErr := os.Remove(path); removeErr == nil {
-			if retryErr := os.Rename(tmpPath, path); retryErr == nil {
-				return nil
-			}
+		removeErr := os.Remove(path)
+		if removeErr != nil {
+			_ = os.Remove(tmpPath)
+			return fmt.Errorf("rename %s → %s: %w (remove dest: %v)", tmpPath, path, err, removeErr)
 		}
-		_ = os.Remove(tmpPath)
-		return err
+		if retryErr := os.Rename(tmpPath, path); retryErr != nil {
+			_ = os.Remove(tmpPath)
+			return fmt.Errorf("rename retry %s → %s: %w", tmpPath, path, retryErr)
+		}
 	}
 	return nil
 }

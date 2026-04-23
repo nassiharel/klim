@@ -1000,56 +1000,7 @@ func (m Model) versionInfoStyled(tool registry.Tool) string {
 //  6. Related   — "You might also like" with match bars
 //  7. Actions   — footer menu + key hints
 func (m Model) renderDetailView(tool registry.Tool) string {
-	var b strings.Builder
-
-	divider := func(title string) string {
-		section := dashSection.Render
-		w := m.width - lipgloss.Width(title) - 8
-		if w < 4 {
-			w = 4
-		}
-		return "  " + dashDim.Render("▸ ") + section(title) + " " + dashDim.Render(strings.Repeat("─", w)) + "\n"
-	}
-
-	// Hero block: name, badge, category, description, quick stats.
-	b.WriteString(m.renderHeroHeader(tool))
-
-	// Installed section.
-	if tool.IsInstalled() {
-		b.WriteString(divider("Installed"))
-		b.WriteString(m.renderInstalledStatus(tool))
-	}
-
-	// Package managers (installed + not installed).
-	pms := m.renderPackageManagers(tool)
-	if pms != "" {
-		b.WriteString(divider("Package Managers"))
-		b.WriteString(pms)
-	}
-
-	// About: binaries, platforms, tags + topics.
-	about := m.renderAboutSection(tool)
-	if about != "" {
-		b.WriteString(divider("About"))
-		b.WriteString(about)
-	}
-
-	// Community (GitHub).
-	community := m.renderCommunitySection(tool)
-	if community != "" {
-		b.WriteString(divider("Community"))
-		b.WriteString(community)
-	}
-
-	// Related tools.
-	if len(m.detailRelated) > 0 {
-		b.WriteString(divider("You might also like"))
-		for i, r := range m.detailRelated {
-			selected := i == m.detailRelCursor
-			b.WriteString(m.renderRecCard(r, selected, true) + "\n")
-		}
-		b.WriteString("\n")
-	}
+	body := m.renderDetailBody(tool)
 
 	// Footer: help bar only (actions are now inline in Package Managers section).
 	var footer strings.Builder
@@ -1070,7 +1021,59 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 		footer.WriteString("  " + helpStyle.Render(strings.Join(hints, "   ")))
 	}
 
-	return m.layoutDetailWithScroll(b.String(), footer.String())
+	return m.layoutDetailWithScroll(body, footer.String())
+}
+
+// renderDetailBody renders the scrollable body of the tool detail page
+// (everything except the footer). Extracted so computeDetailMaxScroll
+// can measure actual line count.
+func (m Model) renderDetailBody(tool registry.Tool) string {
+	var b strings.Builder
+
+	divider := func(title string) string {
+		section := dashSection.Render
+		w := m.width - lipgloss.Width(title) - 8
+		if w < 4 {
+			w = 4
+		}
+		return "  " + dashDim.Render("▸ ") + section(title) + " " + dashDim.Render(strings.Repeat("─", w)) + "\n"
+	}
+
+	b.WriteString(m.renderHeroHeader(tool))
+
+	if tool.IsInstalled() {
+		b.WriteString(divider("Installed"))
+		b.WriteString(m.renderInstalledStatus(tool))
+	}
+
+	pms := m.renderPackageManagers(tool)
+	if pms != "" {
+		b.WriteString(divider("Package Managers"))
+		b.WriteString(pms)
+	}
+
+	about := m.renderAboutSection(tool)
+	if about != "" {
+		b.WriteString(divider("About"))
+		b.WriteString(about)
+	}
+
+	community := m.renderCommunitySection(tool)
+	if community != "" {
+		b.WriteString(divider("Community"))
+		b.WriteString(community)
+	}
+
+	if len(m.detailRelated) > 0 {
+		b.WriteString(divider("You might also like"))
+		for i, r := range m.detailRelated {
+			selected := i == m.detailRelCursor
+			b.WriteString(m.renderRecCard(r, selected, true) + "\n")
+		}
+		b.WriteString("\n")
+	}
+
+	return b.String()
 }
 
 // layoutDetailWithScroll applies m.detailScroll to the rendered body so the
@@ -1084,7 +1087,8 @@ func (m Model) layoutDetailWithScroll(body, footer string) string {
 		return m.layoutWithFooter(body, footer)
 	}
 
-	lines := strings.Split(body, "\n")
+	// Trim trailing newline to avoid inflating line count with an empty entry.
+	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
 
 	footerRows := visualRows(footer, m.width)
 	const minGap = 1

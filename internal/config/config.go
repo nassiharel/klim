@@ -153,7 +153,8 @@ func LoadWithWarnings() (*Config, []string, error) {
 }
 
 // detectUnknownFields attempts a strict YAML decode that rejects unknown keys.
-// Returns human-readable warnings for each unknown field found.
+// Returns a warning if an unknown field is found. Note: yaml.v3 strict decoding
+// stops at the first unknown key, so at most one warning is returned per call.
 func detectUnknownFields(data []byte) []string {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)

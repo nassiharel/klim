@@ -2236,32 +2236,21 @@ func (m *Model) openDetailView(toolIdx int) {
 	m.computeDetailMaxScroll()
 }
 
-// computeDetailMaxScroll estimates the max scroll (in logical lines) for the
-// current detail view. Uses the same line-based unit as layoutDetailWithScroll.
+// computeDetailMaxScroll computes the max scroll (in logical lines) from the
+// actual rendered detail body. Uses the same split logic as layoutDetailWithScroll.
 func (m *Model) computeDetailMaxScroll() {
 	if !m.showDetail || m.detailIdx < 0 || m.detailIdx >= len(m.tools) {
 		m.detailMaxScroll = 0
 		return
 	}
-	tool := m.tools[m.detailIdx]
-
-	// Estimate logical line count from tool data.
-	lines := 8 // hero header
-	if tool.IsInstalled() {
-		lines += 4 + len(tool.Instances)*2
-	}
-	lines += 3 + len(m.toolMenuItems) // package managers
-	lines += 6                         // about section
-	if tool.GitHubInfo != nil {
-		lines += 8 // community section
-	}
-	lines += len(m.detailRelated) + 2 // related tools
+	body := m.renderDetailBody(m.tools[m.detailIdx])
+	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
 
 	visibleRows := m.height - m.footerHeight() - 1
 	if visibleRows < 5 {
 		visibleRows = 5
 	}
-	m.detailMaxScroll = lines - visibleRows
+	m.detailMaxScroll = len(lines) - visibleRows
 	if m.detailMaxScroll < 0 {
 		m.detailMaxScroll = 0
 	}
