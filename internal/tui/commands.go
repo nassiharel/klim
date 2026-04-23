@@ -406,6 +406,13 @@ func (c *toolActionCmd) SetStdout(w io.Writer) { c.stdout = w }
 func (c *toolActionCmd) SetStderr(w io.Writer) { c.stderr = w }
 
 func (c *toolActionCmd) Run() error {
+	// Clear screen before running command so previous exec output doesn't persist.
+	out := c.stdout
+	if out == nil {
+		out = os.Stdout
+	}
+	fmt.Fprint(out, "\033[2J\033[H") // ANSI: clear screen + cursor home
+
 	cmd := exec.Command(c.args[0], c.args[1:]...)
 	cmd.Stdin = c.stdin
 	cmd.Stdout = c.stdout

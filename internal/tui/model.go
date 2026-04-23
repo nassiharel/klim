@@ -1347,13 +1347,12 @@ func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.filtering = false
 		return m, nil
-	case "up", "k":
-		// Navigate filtered list while search is active.
+	case "up":
 		if m.cursor > 0 {
 			m.cursor--
 		}
 		return m, nil
-	case "down", "j":
+	case "down":
 		if m.cursor < m.rowCount()-1 {
 			m.cursor++
 		}
@@ -2127,9 +2126,16 @@ func (m *Model) buildToolMenu() bool {
 	}
 	m.toolMenuItems = nil
 	idx := m.currentToolIdx()
+
+	// Only show PMs that are available on PATH.
+	pmAvail := make(map[registry.InstallSource]bool)
+	for _, pm := range registry.AllPMStatusForOS() {
+		if pm.Available {
+			pmAvail[pm.Source] = true
+		}
+	}
+
 	if tool.IsInstalled() {
-		// One menu item per declared PM, ordered to match collectPackageEntries.
-		// Each item can have upgrade and/or remove actions.
 		primary := tool.PrimaryInstance()
 		installedSources := make(map[registry.InstallSource]bool)
 		if primary != nil {
@@ -2145,7 +2151,10 @@ func (m *Model) buildToolMenu() bool {
 		}
 		for _, src := range allPMs {
 			if tool.Packages.InstallArgs(src) == nil {
-				continue // tool has no package ID for this PM
+				continue
+			}
+			if !pmAvail[src] {
+				continue // PM not on PATH — hide row
 			}
 			item := toolMenuAction{}
 			if installedSources[src] {
@@ -2184,6 +2193,9 @@ func (m *Model) buildToolMenu() bool {
 			args := tool.Packages.InstallArgs(src)
 			if args == nil {
 				continue
+			}
+			if !pmAvail[src] {
+				continue // PM not on PATH — hide row
 			}
 			m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{
 				label: "Install via " + string(src),

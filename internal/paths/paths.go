@@ -45,7 +45,7 @@ func CustomPacks() (string, error) {
 
 // ScanCache returns the path to the scan cache file.
 func ScanCache() (string, error) {
-	return Join("scan-cache.yaml")
+	return Join("cache", "scan-cache.yaml")
 }
 
 // CatalogCache returns the path to the marketplace cache file.

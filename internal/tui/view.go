@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	colName      = 28 // width for name column
+	colName      = 22 // width for name column in tool lists
+	colNameWide  = 32 // width for name column in recommendation cards
 	colVersion   = 24 // width for version info column
 	colSource    = 8  // width for source column
 	colCategory  = 12 // width for category column
@@ -187,12 +188,13 @@ func (m Model) renderView() string {
 		visibleRows = 3
 	}
 
+	sidebarOnRight := m.cfg != nil && m.cfg.UI.SidebarRight
+
 	sidebarLines := m.buildSidebarLines(visibleRows)
 	toolLines := m.buildToolLines(visibleRows)
 
 	// Always produce exactly visibleRows lines so footer position is stable.
 	totalLines := visibleRows
-	sidebarOnRight := m.cfg != nil && m.cfg.UI.SidebarRight
 
 	for i := range totalLines {
 		left := ""
@@ -206,7 +208,11 @@ func (m Model) renderView() string {
 
 		var line string
 		if sidebarOnRight {
-			line = right + " │ " + left
+			toolWidth := m.width - colSidebar - 3 // 3 = " │ "
+			if toolWidth < 20 {
+				toolWidth = 20
+			}
+			line = fixedWidthANSI(right, toolWidth) + " │ " + left
 		} else {
 			line = fixedWidthANSI(left, colSidebar) + " │ " + right
 		}
@@ -583,7 +589,7 @@ func (m Model) renderRecCard(rec recommendation, selected, compact bool) string 
 	if displayName == "" {
 		displayName = tool.Name
 	}
-	nameCell := nameStyle.Render(fixedWidth(displayName, colName))
+	nameCell := nameStyle.Render(fixedWidth(displayName, colNameWide))
 
 	catText := ""
 	if rec.category != "" {
@@ -624,10 +630,8 @@ func (m Model) renderRecCard(rec recommendation, selected, compact bool) string 
 	if desc == "" {
 		desc = "No description"
 	}
-	if len(desc) > colName {
-		desc = desc[:colName-1] + "…"
-	}
-	descCell := dimVersion.Render(fixedWidth(desc, colName))
+	desc = fixedWidth(desc, colNameWide)
+	descCell := dimVersion.Render(desc)
 
 	reasonText := ""
 	if rec.reason != "" {
@@ -834,9 +838,16 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 	}
 
 	if selected {
+		// Pad to tool column width (not full terminal width) so the selection
+		// highlight doesn't bleed into the sidebar column.
+		padWidth := m.width
+		hasSidebar := len(m.sidebarItems) > 0
+		if hasSidebar {
+			padWidth = m.width - colSidebar - 3
+		}
 		w := lipgloss.Width(line)
-		if w < m.width {
-			line += strings.Repeat(" ", m.width-w)
+		if w < padWidth {
+			line += strings.Repeat(" ", padWidth-w)
 		}
 		line = selectedRowStyle.Render(line)
 	}
@@ -1293,19 +1304,26 @@ func (m Model) renderPackageManagers(tool registry.Tool) string {
 	}
 
 	var b strings.Builder
+	pmIdx := 0 // tracks index into m.toolMenuItems (only available PMs)
 
-	for i, p := range pkgs {
-		bullet := dashDim.Render("·")
-		if isAvail, ok := avail[p.source]; ok {
-			if isAvail {
-				bullet = upToDateStyle.Render("●")
-			} else {
-				bullet = dashDim.Render("○")
-			}
+	for _, p := range pkgs {
+		isAvailable, knownPM := avail[p.source]
+		// Skip PMs not available on PATH.
+		if knownPM && !isAvailable {
+			continue
+		}
+		if !knownPM {
+			continue // PM not applicable to this OS
+		}
+
+		// Bullet color: green = installed via this PM, orange = PM available but not used.
+		bullet := upgradableStyle.Render("●") // orange — available but not installed via this PM
+		if installedSources[p.source] {
+			bullet = upToDateStyle.Render("●") // green — installed via this PM
 		}
 
 		cursor := "  "
-		if interactive && i == m.toolMenu {
+		if interactive && pmIdx == m.toolMenu {
 			cursor = "▸ "
 		}
 
@@ -1314,9 +1332,9 @@ func (m Model) renderPackageManagers(tool registry.Tool) string {
 
 		// Action hints on the selected row.
 		hint := ""
-		if interactive && i == m.toolMenu {
-			if tool.IsInstalled() && i < len(m.toolMenuItems) {
-				item := m.toolMenuItems[i]
+		if interactive && pmIdx == m.toolMenu {
+			if tool.IsInstalled() && pmIdx < len(m.toolMenuItems) {
+				item := m.toolMenuItems[pmIdx]
 				var actions []string
 				if item.picker != nil {
 					if item.picker.action == actionUpgrade {
@@ -1332,17 +1350,13 @@ func (m Model) renderPackageManagers(tool registry.Tool) string {
 					hint = "  " + strings.Join(actions, "  ")
 				}
 			} else {
-				if isAvail, ok := avail[p.source]; ok && !isAvail {
-					hint = "  " + dashDim.Render("(PM not installed)")
-				} else {
-					hint = "  " + dimVersion.Render("Enter") + " install"
-				}
+				hint = "  " + dimVersion.Render("Enter") + " install"
 			}
 		}
 
 		line := cursor + bullet + "  " + pmName + "  " + pkgID + hint
 
-		if interactive && i == m.toolMenu {
+		if interactive && pmIdx == m.toolMenu {
 			w := lipgloss.Width(line)
 			if w < m.width {
 				line += strings.Repeat(" ", m.width-w)
@@ -1351,6 +1365,7 @@ func (m Model) renderPackageManagers(tool registry.Tool) string {
 		}
 
 		b.WriteString(line + "\n")
+		pmIdx++
 	}
 	b.WriteString("\n")
 
@@ -2329,22 +2344,61 @@ func fixedWidthANSI(s string, width int) string {
 }
 
 // truncateANSI truncates a string containing ANSI escape codes to the given
-// display width. It walks runes, tracking visible width via lipgloss.Width on
-// the accumulated result, and stops before exceeding maxWidth.
+// display width. It preserves escape sequences intact and tracks visible width
+// incrementally via runewidth (O(n), not O(n²)).
 func truncateANSI(s string, maxWidth int) string {
 	if lipgloss.Width(s) <= maxWidth {
 		return s
 	}
-	// Walk runes, accumulating until we'd exceed width.
+
 	var buf strings.Builder
-	for _, r := range s {
-		buf.WriteRune(r)
-		if lipgloss.Width(buf.String()) > maxWidth {
-			// Back off: return without this rune.
-			result := buf.String()
-			return result[:len(result)-len(string(r))]
+	visW := 0
+	i := 0
+	runes := []rune(s)
+	for i < len(runes) {
+		// Detect ANSI escape sequence: ESC [ ... final byte (0x40–0x7E).
+		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
+			// Copy entire escape sequence without counting width.
+			buf.WriteRune(runes[i]) // ESC
+			i++
+			for i < len(runes) {
+				buf.WriteRune(runes[i])
+				if runes[i] >= 0x40 && runes[i] <= 0x7E {
+					i++
+					break
+				}
+				i++
+			}
+			continue
+		}
+
+		rw := runewidth.RuneWidth(runes[i])
+		if visW+rw > maxWidth {
+			break
+		}
+		buf.WriteRune(runes[i])
+		visW += rw
+		i++
+	}
+
+	// Append any remaining ANSI reset sequences so styling doesn't bleed.
+	for i < len(runes) {
+		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
+			buf.WriteRune(runes[i])
+			i++
+			for i < len(runes) {
+				buf.WriteRune(runes[i])
+				if runes[i] >= 0x40 && runes[i] <= 0x7E {
+					i++
+					break
+				}
+				i++
+			}
+		} else {
+			break
 		}
 	}
+
 	return buf.String()
 }
 

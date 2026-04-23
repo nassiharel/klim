@@ -273,13 +273,39 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			for m.configCursor > 0 && settings[m.configCursor].label == "" {
 				m.configCursor--
 			}
+		} else {
+			// At top of settings — scroll preamble into view.
+			if m.configScroll > 0 {
+				m.configScroll--
+			}
 		}
 		m.autoScrollConfig(settings)
 	case "down", "j":
 		if m.configCursor < len(settings)-1 {
 			m.configCursor++
+		} else {
+			// At bottom of settings — allow scrolling past.
+			m.configScroll++
 		}
 		m.autoScrollConfig(settings)
+	case "pgup":
+		page := m.height - 6
+		if page < 1 {
+			page = 1
+		}
+		m.configScroll -= page
+		if m.configScroll < 0 {
+			m.configScroll = 0
+		}
+	case "pgdown":
+		page := m.height - 6
+		if page < 1 {
+			page = 1
+		}
+		m.configScroll += page
+	case "home", "g":
+		m.configScroll = 0
+		m.configCursor = 0
 	case "enter", "space":
 		if m.configCursor < len(settings) && m.cfg != nil {
 			s := settings[m.configCursor]
