@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/nassiharel/clim/internal/favorites"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/clim/internal/teamfile"
 )
 
 const (
@@ -233,6 +235,11 @@ type Model struct {
 	configEditing   bool            // true = text input active for a setting
 	configEditInput textinput.Model // text input for string/int/duration settings
 	configScroll    int             // scroll offset for config tab
+
+	// Team file (.clim.yaml) state.
+	teamFilePath    string                  // path to detected .clim.yaml ("" = not found)
+	teamFile        *teamfile.TeamFile      // parsed team file (nil = not found)
+	teamCheckResult []teamfile.CheckResult  // check results (nil = not checked yet)
 }
 
 // NewModel creates a new TUI model.
@@ -460,6 +467,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Cache backup file list for dashboard.
 		m.myBackupFiles = scanBackupsDir()
+
+		// Detect and check .clim.yaml for dashboard.
+		if cwd, err := os.Getwd(); err == nil {
+			if path := teamfile.Find(cwd); path != "" {
+				m.teamFilePath = path
+				if tf, err := teamfile.Parse(path); err == nil {
+					m.teamFile = tf
+					m.teamCheckResult = teamfile.Check(tf, m.tools)
+				}
+			}
+		}
 
 		// Clamp pack-related indices to the new list size.
 		if m.showPackDetail && m.packDetailIdx >= len(m.packs) {

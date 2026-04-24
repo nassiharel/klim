@@ -84,6 +84,9 @@ Install entire toolchains in one shot. Cloud Essentials, K8s Starter, Python Dev
 ### 🎒 Create Your Own Pack
 Hand-pick tools from the marketplace, give your pack a name, and save it. Share it with teammates or use it to set up your next machine.
 
+### 📋 Team Manifests (`.clim.yaml`)
+Drop a `.clim.yaml` in your repo to define required tools and minimum versions. `clim check` validates every developer's environment — in the terminal or CI. `clim init` scans your project files (Dockerfile, go.mod, package.json, CI workflows, Helm charts, Terraform, and more) and generates one automatically.
+
 ### 🔄 Keep Everything Up to Date
 See which tools have updates at a glance. Batch-upgrade everything with one keystroke, or pick and choose. clim queries native package managers — no custom registries.
 

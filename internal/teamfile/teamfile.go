@@ -1,0 +1,237 @@
+// Package teamfile handles .clim.yaml team manifest files — parsing,
+// discovery (walking parent dirs), and checking installed tools against
+// version constraints.
+package teamfile
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+
+	"github.com/nassiharel/clim/internal/registry"
+)
+
+const FileName = ".clim.yaml"
+
+// TeamFile is the top-level .clim.yaml schema.
+type TeamFile struct {
+	Name  string         `yaml:"name,omitempty"`
+	Tools []RequiredTool `yaml:"tools"`
+}
+
+// RequiredTool defines a single tool requirement.
+type RequiredTool struct {
+	Name    string `yaml:"name"`
+	Version string `yaml:"version,omitempty"` // e.g. ">=1.28"
+}
+
+// CheckStatus indicates the result of checking one tool.
+type CheckStatus int
+
+const (
+	StatusOK       CheckStatus = iota // installed, version satisfied
+	StatusMissing                     // not installed at all
+	StatusOutdated                    // installed but version too old
+)
+
+// CheckResult holds the result of checking one required tool.
+type CheckResult struct {
+	Tool      RequiredTool
+	Status    CheckStatus
+	Version   string // installed version ("" if missing)
+	Message   string // human-readable status
+}
+
+// Find walks up from startDir looking for .clim.yaml. Returns the full path
+// or empty string if not found. Stops at filesystem root.
+func Find(startDir string) string {
+	dir, err := filepath.Abs(startDir)
+	if err != nil {
+		return ""
+	}
+	for {
+		candidate := filepath.Join(dir, FileName)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break // reached root
+		}
+		dir = parent
+	}
+	return ""
+}
+
+// Parse reads and parses a .clim.yaml file.
+func Parse(path string) (*TeamFile, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+	var tf TeamFile
+	if err := yaml.Unmarshal(data, &tf); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	if len(tf.Tools) == 0 {
+		return nil, fmt.Errorf("%s has no tools defined", path)
+	}
+	// Validate tool names.
+	for i, t := range tf.Tools {
+		if strings.TrimSpace(t.Name) == "" {
+			return nil, fmt.Errorf("tool at index %d has no name", i)
+		}
+	}
+	return &tf, nil
+}
+
+// Check validates installed tools against team file requirements.
+func Check(tf *TeamFile, tools []registry.Tool) []CheckResult {
+	toolMap := make(map[string]*registry.Tool, len(tools))
+	for i := range tools {
+		toolMap[tools[i].Name] = &tools[i]
+	}
+
+	results := make([]CheckResult, 0, len(tf.Tools))
+	for _, req := range tf.Tools {
+		rt, exists := toolMap[req.Name]
+
+		if !exists || !rt.IsInstalled() {
+			results = append(results, CheckResult{
+				Tool:    req,
+				Status:  StatusMissing,
+				Message: "NOT INSTALLED",
+			})
+			continue
+		}
+
+		ver := rt.InstalledVersion()
+		if req.Version == "" {
+			// No version constraint — just needs to be installed.
+			results = append(results, CheckResult{
+				Tool:    req,
+				Status:  StatusOK,
+				Version: ver,
+				Message: "OK",
+			})
+			continue
+		}
+
+		// Parse and check version constraint.
+		op, constraint := ParseConstraint(req.Version)
+		satisfied := checkConstraint(op, ver, constraint)
+
+		if satisfied {
+			results = append(results, CheckResult{
+				Tool:    req,
+				Status:  StatusOK,
+				Version: ver,
+				Message: fmt.Sprintf("OK (%s %s)", op, constraint),
+			})
+		} else {
+			results = append(results, CheckResult{
+				Tool:    req,
+				Status:  StatusOutdated,
+				Version: ver,
+				Message: fmt.Sprintf("%s %s required", op, constraint),
+			})
+		}
+	}
+	return results
+}
+
+// ParseConstraint splits a version constraint string into operator and version.
+// ">=1.28" → (">=", "1.28"), "1.28" → (">=", "1.28"), "" → ("", "")
+func ParseConstraint(s string) (op, ver string) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", ""
+	}
+	for _, prefix := range []string{">=", "<=", "!=", ">", "<", "="} {
+		if strings.HasPrefix(s, prefix) {
+			return prefix, strings.TrimSpace(s[len(prefix):])
+		}
+	}
+	// No operator — treat as minimum version.
+	return ">=", s
+}
+
+// checkConstraint evaluates a version constraint.
+func checkConstraint(op, installed, constraint string) bool {
+	if installed == "" || constraint == "" {
+		return installed != ""
+	}
+	cmp := registry.CompareVersions(installed, constraint)
+	switch op {
+	case ">=":
+		return cmp >= 0
+	case ">":
+		return cmp > 0
+	case "<=":
+		return cmp <= 0
+	case "<":
+		return cmp < 0
+	case "=", "==":
+		return cmp == 0
+	case "!=":
+		return cmp != 0
+	}
+	return cmp >= 0 // default: treat as >=
+}
+
+// Summary counts results by status.
+func Summary(results []CheckResult) (ok, missing, outdated int) {
+	for _, r := range results {
+		switch r.Status {
+		case StatusOK:
+			ok++
+		case StatusMissing:
+			missing++
+		case StatusOutdated:
+			outdated++
+		}
+	}
+	return
+}
+
+// AllSatisfied returns true if all tools pass checks.
+func AllSatisfied(results []CheckResult) bool {
+	for _, r := range results {
+		if r.Status != StatusOK {
+			return false
+		}
+	}
+	return true
+}
+
+// Generate creates a .clim.yaml from installed tools.
+func Generate(tools []registry.Tool, includeVersion bool) *TeamFile {
+	tf := &TeamFile{}
+	for _, t := range tools {
+		if !t.IsInstalled() {
+			continue
+		}
+		req := RequiredTool{Name: t.Name}
+		if includeVersion {
+			ver := t.InstalledVersion()
+			if ver != "" {
+				req.Version = ">=" + ver
+			}
+		}
+		tf.Tools = append(tf.Tools, req)
+	}
+	return tf
+}
+
+// Write serializes a TeamFile to YAML and writes it to path.
+func Write(tf *TeamFile, path string) error {
+	data, err := yaml.Marshal(tf)
+	if err != nil {
+		return fmt.Errorf("marshalling: %w", err)
+	}
+	header := "# .clim.yaml — Team tool requirements\n# Generated by clim init\n# See: https://github.com/nassiharel/clim\n\n"
+	return os.WriteFile(path, []byte(header+string(data)), 0o644)
+}
