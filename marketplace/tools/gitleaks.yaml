@@ -1,0 +1,16 @@
+name: gitleaks
+display_name: gitleaks
+category: Security
+tags:
+    - security
+    - git
+    - scanner
+    - cross-platform
+binary_names:
+    - gitleaks
+packages:
+    winget: Gitleaks.Gitleaks
+    scoop: gitleaks
+    choco: gitleaks
+    brew: gitleaks
+github: gitleaks/gitleaks

@@ -1,0 +1,11 @@
+name: llm
+display_name: llm
+category: AI
+tags:
+    - coding-assistant
+    - cli
+binary_names:
+    - llm
+packages:
+    brew: llm
+github: simonw/llm

@@ -683,8 +683,8 @@ func (m Model) renderForYouList() string {
 
 // Fixed column widths for recommendation card alignment.
 const (
-	colCatFY     = 14 // category column
-	colStarsFY   = 10 // stars badge column
+	colCatFY     = 16 // category column (chip style adds padding)
+	colStarsFY   = 11 // stars badge column
 	colGaugeFY   = 12 // match gauge width
 	colPctFY     = 5  // percentage column
 	colReasonFY  = 34 // "You use: ..." column
@@ -2455,6 +2455,9 @@ func fixedWidthANSI(s string, width int) string {
 	w := lipgloss.Width(s)
 	if w < width {
 		return s + strings.Repeat(" ", width-w)
+	}
+	if w > width {
+		return truncateANSI(s, width)
 	}
 	return s
 }

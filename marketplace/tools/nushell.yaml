@@ -1,0 +1,14 @@
+name: nushell
+display_name: Nushell
+category: Shell
+tags:
+    - cli
+    - cross-platform
+    - data-processing
+binary_names:
+    - nu
+packages:
+    winget: nushell
+    scoop: nu
+    brew: nushell
+github: nushell/nushell

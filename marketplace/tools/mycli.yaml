@@ -1,0 +1,12 @@
+name: mycli
+display_name: mycli
+category: Database
+tags:
+    - database
+    - cli
+    - python
+binary_names:
+    - mycli
+packages:
+    brew: mycli
+github: dbcli/mycli

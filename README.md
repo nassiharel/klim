@@ -173,28 +173,6 @@ clim
 
 Launches a full-screen interactive interface with 6 tabs. Tools are detected and version-checked concurrently -- results stream in as they arrive.
 
-| Key | Action |
-|-----|--------|
-| `j/k` or `↑/↓` | Navigate up/down |
-| `←/→` or `Tab` | Switch tabs |
-| `1`-`6` | Jump to tab directly |
-| `/` | Filter tools by name |
-| `Enter` | Open detail view / confirm action |
-| `r` | Refresh all tools |
-| `e/d` | Enable / disable a tool |
-| `q` or `Ctrl+C` | Quit |
-
-**TUI Tabs:**
-
-| Tab | Content |
-|-----|---------|
-| Installed | All installed tools with versions and status |
-| Updates | Tools with available updates |
-| Discover | Tools not yet installed that could be added |
-| Disabled | Tools you've hidden from the main view |
-| Backup | Export your toolchain or import from a manifest |
-| Config | Version info, paths, and package manager status |
-
 ### Non-interactive commands
 
 ```bash
@@ -211,35 +189,6 @@ clim export > my-tools.yaml
 clim import my-tools.yaml
 clim import my-tools.yaml --yes    # non-interactive
 ```
-
-<details>
-<summary>Example export output</summary>
-
-```yaml
-generated_by: clim v0.x.x
-os: windows
-arch: amd64
-tools:
-  - name: git
-    display_name: Git
-    version: "2.44.0"
-    source: winget
-    category: version-control
-    packages:
-      winget: Git.Git
-      brew: git
-      apt: git
-  - name: kubectl
-    display_name: Kubectl
-    version: "1.29.3"
-    source: brew
-    category: cloud
-    packages:
-      brew: kubernetes-cli
-      winget: Kubernetes.kubectl
-```
-
-</details>
 
 ```bash
 # Update clim itself to the latest version
@@ -263,31 +212,9 @@ clim version
 
 clim ships with a curated catalog of **80+ developer tools** defined in `marketplace/tools/`. The catalog is assembled by CI and published to the `marketplace` branch. The CLI fetches it on first run and caches locally. New tools from upstream appear automatically after a refresh.
 
-Tools include: `az`, `azd`, `gh`, `copilot`, `kubectl`, `docker`, `terraform`, `helm`, `go`, `node`, `python`, `git`, `jq`, `yq`, `ripgrep`, `fzf`, `bat`, `exa`, `fd`, `delta`, `zoxide`, `starship`, `tmux`, `neovim`, `curl`, `wget`, `make`, `cmake`, `rust/cargo`, `ruby`, `java`, `dotnet`, `aws`, `gcloud`, `pulumi`, `vault`, `consul`, `packer`, and many more.
-
-To add custom tools, edit the user catalog:
-
-```bash
-clim tools edit
-```
-
 ---
 
 ## Architecture
-
-clim is built for speed. The tool catalog is fetched from GitHub and cached locally, PATH is scanned concurrently, and version queries go through native package managers in parallel.
-
-```
-marketplace/ (GitHub) ──► catalog.LoadOrFetch() ──► cache locally
-                                      │
-                         registry.ToolsFromBytes()
-                                      │
-                                      ├──[parallel]──► finder.FindAll()           (exec.LookPath across PATH)
-                                      │
-                                      ├──[parallel]──► pkgmgr.ResolveVersions()  (winget/brew/apt/choco/snap/npm)
-                                      │
-                                      └──[fallback]──► detector.EnrichFallback() (Go buildinfo / PE version)
-```
 
 **Version sources** -- versions are queried from native package managers, not HTTP APIs:
 

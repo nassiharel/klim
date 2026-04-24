@@ -1,0 +1,13 @@
+name: bandwhich
+display_name: bandwhich
+category: Observability
+tags:
+    - networking
+    - process-monitoring
+    - cli
+binary_names:
+    - bandwhich
+packages:
+    scoop: bandwhich
+    brew: bandwhich
+github: imsnif/bandwhich

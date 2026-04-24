@@ -1,0 +1,15 @@
+name: gitui
+display_name: gitui
+category: VCS
+tags:
+    - git
+    - tui
+    - cross-platform
+binary_names:
+    - gitui
+packages:
+    winget: StephanDilly.gitui
+    scoop: gitui
+    choco: gitui
+    brew: gitui
+github: extrawurst/gitui
