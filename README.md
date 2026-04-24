@@ -75,18 +75,38 @@ All in a single command, with an interactive TUI or scriptable output.
 
 ## Features
 
-- Detects **80+ developer CLI tools** from a curated, extensible catalog (`marketplace/`)
-- Shows installed version, latest available version, install source, and binary path
-- Interactive full-screen TUI with 6 tabs: Installed, Updates, Discover, Disabled, Backup, Config
-- Detail view with rich metadata (description, publisher, license, homepage)
-- Keyboard-driven upgrade, install, and remove via native package managers
-- Non-interactive mode for scripting (`clim list`)
-- **Export/Import** -- save your toolchain to YAML and replicate it on another machine
-- **Self-update** -- `clim update` downloads and installs the latest release
-- Cross-platform: Windows, macOS, Linux
-- Version detection via local package managers (winget, brew, apt, choco, snap, npm)
-- Fallback binary detection via Go build info and PE version resources
-- Concurrent scanning -- all tools are detected and resolved in parallel
+### 🔍 Discover & Install Tools
+Browse 110+ curated developer tools from one place. Filter by category, tag, or platform. Install anything with one keypress — clim picks the right package manager for your OS.
+
+### 📦 Packs — Curated Tool Bundles
+Install entire toolchains in one shot. Cloud Essentials, K8s Starter, Python Developer — pick a pack and go. See which packs you've already completed with visual progress gauges.
+
+### 🎒 Create Your Own Pack
+Hand-pick tools from the marketplace, give your pack a name, and save it. Share it with teammates or use it to set up your next machine.
+
+### 🔄 Keep Everything Up to Date
+See which tools have updates at a glance. Batch-upgrade everything with one keystroke, or pick and choose. clim queries native package managers — no custom registries.
+
+### 💾 Backup & Restore Your Toolchain
+Export your installed tools to a portable manifest. Import it on a new machine — same tools, same setup, zero guesswork. Backups are saved automatically so you never lose your setup.
+
+### 🔗 Share Your Toolchain
+Generate a compact share token and paste it in Slack, Teams, or email. Recipients run `clim open <token>` to get your exact toolchain. No files to send.
+
+### 🖥️ Move Between OSes
+Installed everything on macOS? Export and import on your new Linux box. clim maps each tool to the best available package manager on the target OS — winget, brew, apt, choco, scoop, snap, or npm.
+
+### 📊 Dashboard
+See your entire dev environment at a glance: installed vs available, update status, package manager breakdown, category distribution, pack completion, and recent backups — all with visual gauges and charts.
+
+### ⚡ Smart Recommendations
+clim analyzes your installed tools and suggests related ones you might like, ranked by tag overlap. Discover tools you didn't know existed.
+
+### ⚙️ Built-in Config Editor
+Tune clim from inside the TUI — log level, refresh interval, concurrency, default tab, sidebar position. Toggle, cycle, type, save. No need to find and edit a YAML file.
+
+### 🔒 Native Package Managers Only
+clim never installs anything itself. It delegates to the package managers you already have — winget, brew, apt, choco, scoop, snap, npm. What you see is what your system runs.
 
 ---
 
