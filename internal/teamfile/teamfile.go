@@ -120,6 +120,17 @@ func Check(tf *TeamFile, tools []registry.Tool) []CheckResult {
 			continue
 		}
 
+		// Validate constraint syntax.
+		if !ValidConstraint(req.Version) {
+			results = append(results, CheckResult{
+				Tool:    req,
+				Status:  StatusOutdated,
+				Version: ver,
+				Message: fmt.Sprintf("invalid constraint: %q", req.Version),
+			})
+			continue
+		}
+
 		// Parse and check version constraint.
 		op, constraint := ParseConstraint(req.Version)
 		satisfied := checkConstraint(op, ver, constraint)
@@ -157,6 +168,20 @@ func ParseConstraint(s string) (op, ver string) {
 	}
 	// No operator — treat as minimum version.
 	return ">=", s
+}
+
+// ValidConstraint reports whether a version constraint string is valid
+// (has a non-empty numeric version after the operator).
+func ValidConstraint(s string) bool {
+	op, ver := ParseConstraint(s)
+	if op == "" && ver == "" {
+		return true // no constraint = valid (means "any version")
+	}
+	if ver == "" {
+		return false // operator with no version
+	}
+	// Must start with a digit.
+	return len(ver) > 0 && ver[0] >= '0' && ver[0] <= '9'
 }
 
 // checkConstraint evaluates a version constraint.

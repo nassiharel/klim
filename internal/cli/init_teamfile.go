@@ -51,9 +51,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%s already exists (delete it first or edit manually)", outPath)
 	}
 
-	// Scan installed tools.
+	// Scan installed tools (no version resolution needed for detection).
 	sp := progress.New("Scanning installed tools...")
-	tools, _, err := svc.LoadAndResolve(cmd.Context())
+	tools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
@@ -91,6 +91,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 				installedMap[tools[i].Name] = &tools[i]
 			}
 		}
+
+		// Sort detected tools for deterministic output.
+		sort.Slice(detected, func(i, j int) bool {
+			return strings.ToLower(detected[i].Name) < strings.ToLower(detected[j].Name)
+		})
 
 		// Split into installed (include) and not-installed (suggest).
 		tf = &teamfile.TeamFile{}
@@ -148,7 +153,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	abs, _ := filepath.Abs(outPath)
 	fmt.Fprintf(os.Stderr, "\n✓ Generated %s (%d tools)\n", abs, len(tf.Tools))
 	fmt.Fprintln(os.Stderr, "\nTeammates can now run:")
-	fmt.Fprintln(os.Stderr, "  clim check    # validate their environment")
-	fmt.Fprintln(os.Stderr, "  clim install  # install missing tools")
+	fmt.Fprintln(os.Stderr, "  clim check              # validate their environment")
+	fmt.Fprintln(os.Stderr, "  clim import .clim.yaml  # install missing tools")
 	return nil
 }

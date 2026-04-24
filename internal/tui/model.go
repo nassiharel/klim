@@ -469,12 +469,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.myBackupFiles = scanBackupsDir()
 
 		// Detect and check .clim.yaml for dashboard.
+		m.teamFilePath = ""
+		m.teamFile = nil
+		m.teamCheckResult = nil
 		if cwd, err := os.Getwd(); err == nil {
 			if path := teamfile.Find(cwd); path != "" {
 				m.teamFilePath = path
 				if tf, err := teamfile.Parse(path); err == nil {
 					m.teamFile = tf
 					m.teamCheckResult = teamfile.Check(tf, m.tools)
+				} else {
+					slog.Warn("failed to parse .clim.yaml", "path", path, "error", err)
 				}
 			}
 		}

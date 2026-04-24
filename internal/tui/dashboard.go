@@ -7,9 +7,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/nassiharel/clim/internal/teamfile"
-
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/teamfile"
 )
 
 // Dashboard color palette.
