@@ -75,18 +75,38 @@ All in a single command, with an interactive TUI or scriptable output.
 
 ## Features
 
-- Detects **80+ developer CLI tools** from a curated, extensible catalog (`marketplace/`)
-- Shows installed version, latest available version, install source, and binary path
-- Interactive full-screen TUI with 6 tabs: Installed, Updates, Discover, Disabled, Backup, Config
-- Detail view with rich metadata (description, publisher, license, homepage)
-- Keyboard-driven upgrade, install, and remove via native package managers
-- Non-interactive mode for scripting (`clim list`)
-- **Export/Import** -- save your toolchain to YAML and replicate it on another machine
-- **Self-update** -- `clim update` downloads and installs the latest release
-- Cross-platform: Windows, macOS, Linux
-- Version detection via local package managers (winget, brew, apt, choco, snap, npm)
-- Fallback binary detection via Go build info and PE version resources
-- Concurrent scanning -- all tools are detected and resolved in parallel
+### 🔍 Discover & Install Tools
+Browse 110+ curated developer tools from one place. Filter by category, tag, or platform. Install anything with one keypress — clim picks the right package manager for your OS.
+
+### 📦 Packs — Curated Tool Bundles
+Install entire toolchains in one shot. Cloud Essentials, K8s Starter, Python Developer — pick a pack and go. See which packs you've already completed with visual progress gauges.
+
+### 🎒 Create Your Own Pack
+Hand-pick tools from the marketplace, give your pack a name, and save it. Share it with teammates or use it to set up your next machine.
+
+### 🔄 Keep Everything Up to Date
+See which tools have updates at a glance. Batch-upgrade everything with one keystroke, or pick and choose. clim queries native package managers — no custom registries.
+
+### 💾 Backup & Restore Your Toolchain
+Export your installed tools to a portable manifest. Import it on a new machine — same tools, same setup, zero guesswork. Backups are saved automatically so you never lose your setup.
+
+### 🔗 Share Your Toolchain
+Generate a compact share token and paste it in Slack, Teams, or email. Recipients run `clim open <token>` to get your exact toolchain. No files to send.
+
+### 🖥️ Move Between OSes
+Installed everything on macOS? Export and import on your new Linux box. clim maps each tool to the best available package manager on the target OS — winget, brew, apt, choco, scoop, snap, or npm.
+
+### 📊 Dashboard
+See your entire dev environment at a glance: installed vs available, update status, package manager breakdown, category distribution, pack completion, and recent backups — all with visual gauges and charts.
+
+### ⚡ Smart Recommendations
+clim analyzes your installed tools and suggests related ones you might like, ranked by tag overlap. Discover tools you didn't know existed.
+
+### ⚙️ Built-in Config Editor
+Tune clim from inside the TUI — log level, refresh interval, concurrency, default tab, sidebar position. Toggle, cycle, type, save. No need to find and edit a YAML file.
+
+### 🔒 Native Package Managers Only
+clim never installs anything itself. It delegates to the package managers you already have — winget, brew, apt, choco, scoop, snap, npm. What you see is what your system runs.
 
 ---
 
@@ -173,28 +193,6 @@ clim
 
 Launches a full-screen interactive interface with 6 tabs. Tools are detected and version-checked concurrently -- results stream in as they arrive.
 
-| Key | Action |
-|-----|--------|
-| `j/k` or `↑/↓` | Navigate up/down |
-| `←/→` or `Tab` | Switch tabs |
-| `1`-`6` | Jump to tab directly |
-| `/` | Filter tools by name |
-| `Enter` | Open detail view / confirm action |
-| `r` | Refresh all tools |
-| `e/d` | Enable / disable a tool |
-| `q` or `Ctrl+C` | Quit |
-
-**TUI Tabs:**
-
-| Tab | Content |
-|-----|---------|
-| Installed | All installed tools with versions and status |
-| Updates | Tools with available updates |
-| Discover | Tools not yet installed that could be added |
-| Disabled | Tools you've hidden from the main view |
-| Backup | Export your toolchain or import from a manifest |
-| Config | Version info, paths, and package manager status |
-
 ### Non-interactive commands
 
 ```bash
@@ -211,35 +209,6 @@ clim export > my-tools.yaml
 clim import my-tools.yaml
 clim import my-tools.yaml --yes    # non-interactive
 ```
-
-<details>
-<summary>Example export output</summary>
-
-```yaml
-generated_by: clim v0.x.x
-os: windows
-arch: amd64
-tools:
-  - name: git
-    display_name: Git
-    version: "2.44.0"
-    source: winget
-    category: version-control
-    packages:
-      winget: Git.Git
-      brew: git
-      apt: git
-  - name: kubectl
-    display_name: Kubectl
-    version: "1.29.3"
-    source: brew
-    category: cloud
-    packages:
-      brew: kubernetes-cli
-      winget: Kubernetes.kubectl
-```
-
-</details>
 
 ```bash
 # Update clim itself to the latest version
@@ -263,31 +232,9 @@ clim version
 
 clim ships with a curated catalog of **80+ developer tools** defined in `marketplace/tools/`. The catalog is assembled by CI and published to the `marketplace` branch. The CLI fetches it on first run and caches locally. New tools from upstream appear automatically after a refresh.
 
-Tools include: `az`, `azd`, `gh`, `copilot`, `kubectl`, `docker`, `terraform`, `helm`, `go`, `node`, `python`, `git`, `jq`, `yq`, `ripgrep`, `fzf`, `bat`, `exa`, `fd`, `delta`, `zoxide`, `starship`, `tmux`, `neovim`, `curl`, `wget`, `make`, `cmake`, `rust/cargo`, `ruby`, `java`, `dotnet`, `aws`, `gcloud`, `pulumi`, `vault`, `consul`, `packer`, and many more.
-
-To add custom tools, edit the user catalog:
-
-```bash
-clim tools edit
-```
-
 ---
 
 ## Architecture
-
-clim is built for speed. The tool catalog is fetched from GitHub and cached locally, PATH is scanned concurrently, and version queries go through native package managers in parallel.
-
-```
-marketplace/ (GitHub) ──► catalog.LoadOrFetch() ──► cache locally
-                                      │
-                         registry.ToolsFromBytes()
-                                      │
-                                      ├──[parallel]──► finder.FindAll()           (exec.LookPath across PATH)
-                                      │
-                                      ├──[parallel]──► pkgmgr.ResolveVersions()  (winget/brew/apt/choco/snap/npm)
-                                      │
-                                      └──[fallback]──► detector.EnrichFallback() (Go buildinfo / PE version)
-```
 
 **Version sources** -- versions are queried from native package managers, not HTTP APIs:
 

@@ -436,13 +436,76 @@ func (m Model) renderPacksList() string {
 		return b.String()
 	}
 
-	// Header.
+	toolMap := registry.InstalledSet(m.tools)
+
+	// Build sorted index based on packSortMode.
+	packOrder := make([]int, len(m.packs))
+	for i := range packOrder {
+		packOrder[i] = i
+	}
+
+	// Compute install counts for sorting.
+	packInstalled := make([]int, len(m.packs))
+	for i, pack := range m.packs {
+		for _, name := range pack.ToolNames {
+			if toolMap[name] {
+				packInstalled[i]++
+			}
+		}
+	}
+
+	if m.packSortMode == 1 {
+		// Sort by name.
+		sort.SliceStable(packOrder, func(a, b int) bool {
+			return strings.ToLower(m.packs[packOrder[a]].DisplayName) < strings.ToLower(m.packs[packOrder[b]].DisplayName)
+		})
+	} else {
+		// Sort by status (default): complete first, then partial (desc %), then not installed, then name.
+		sort.SliceStable(packOrder, func(a, b int) bool {
+			ai, bi := packOrder[a], packOrder[b]
+			aTotal, bTotal := len(m.packs[ai].ToolNames), len(m.packs[bi].ToolNames)
+			aInst, bInst := packInstalled[ai], packInstalled[bi]
+			aComplete := aTotal > 0 && aInst == aTotal
+			bComplete := bTotal > 0 && bInst == bTotal
+			aPartial := aInst > 0 && !aComplete
+			bPartial := bInst > 0 && !bComplete
+
+			aRank := 2
+			if aComplete {
+				aRank = 0
+			} else if aPartial {
+				aRank = 1
+			}
+			bRank := 2
+			if bComplete {
+				bRank = 0
+			} else if bPartial {
+				bRank = 1
+			}
+			if aRank != bRank {
+				return aRank < bRank
+			}
+			if aPartial && bPartial && aTotal > 0 && bTotal > 0 {
+				aPct := aInst * 100 / aTotal
+				bPct := bInst * 100 / bTotal
+				if aPct != bPct {
+					return aPct > bPct
+				}
+			}
+			return strings.ToLower(m.packs[ai].DisplayName) < strings.ToLower(m.packs[bi].DisplayName)
+		})
+	}
+
+	// Header with sort indicator.
+	sortLabel := "status"
+	if m.packSortMode == 1 {
+		sortLabel = "name"
+	}
 	b.WriteString("  " +
 		headerStyle.Render(fixedWidth("PACK", colName)) + "  " +
 		headerStyle.Render(fixedWidth("TOOLS", colPackTools)) + "  " +
-		headerStyle.Render("STATUS") + "\n")
-
-	toolMap := registry.InstalledSet(m.tools)
+		headerStyle.Render("STATUS") +
+		"  " + dashDim.Render("[s: sort by "+sortLabel+"]") + "\n")
 
 	// Overhead: title(1) + tabs(1) + blank(1) + search(1) + sub-tabs(1) + header(1) + gap(1) + footer.
 	visibleRows := m.height - 7 - m.footerHeight()
@@ -454,8 +517,9 @@ func (m Model) renderPacksList() string {
 		start = m.cursor - visibleRows + 1
 	}
 
-	for vi := start; vi < len(m.packs) && vi < start+visibleRows; vi++ {
-		pack := m.packs[vi]
+	for vi := start; vi < len(packOrder) && vi < start+visibleRows; vi++ {
+		pi := packOrder[vi]
+		pack := m.packs[pi]
 		selected := vi == m.cursor
 
 		cursor := "  "
@@ -466,23 +530,23 @@ func (m Model) renderPacksList() string {
 		nameCell := nameStyle.Render(fixedWidth(pack.DisplayName, colName))
 		toolCount := fixedWidth(fmt.Sprintf("%d tools", len(pack.ToolNames)), colPackTools)
 
-		// Compute install status.
-		installed := 0
-		for _, name := range pack.ToolNames {
-			if toolMap[name] {
-				installed++
-			}
-		}
+		// Compute install status with gauge.
+		installed := packInstalled[pi]
 		var status string
 		switch {
 		case len(pack.ToolNames) == 0:
 			status = dimVersion.Render("empty pack")
 		case installed == len(pack.ToolNames):
-			status = upToDateStyle.Render("✓ installed")
+			status = upToDateStyle.Render("✓ COMPLETE") + "  " +
+				gauge(installed, len(pack.ToolNames), 10, dashGaugeFill, dashGaugeEmpty) +
+				"  " + dimVersion.Render(fmt.Sprintf("%d / %d", installed, len(pack.ToolNames)))
 		case installed > 0:
-			status = dimVersion.Render(fmt.Sprintf("%d/%d installed", installed, len(pack.ToolNames)))
+			pct := installed * 100 / len(pack.ToolNames)
+			status = dashGaugeWarn.Render("◐ PARTIAL ") + "  " +
+				gauge(installed, len(pack.ToolNames), 10, dashGaugeWarn, dashGaugeEmpty) +
+				"  " + dimVersion.Render(fmt.Sprintf("%d / %d  (%d%%)", installed, len(pack.ToolNames), pct))
 		default:
-			status = dimVersion.Render("not installed")
+			status = dashDim.Render("○ NOT INSTALLED")
 		}
 
 		line := cursor + nameCell + "  " + toolCount + "  " + status
@@ -505,7 +569,62 @@ func (m Model) renderPacksList() string {
 	return b.String()
 }
 
-// renderForYouList renders the smart recommendations for the For You sub-tab.
+// packDisplayIndex returns the real pack index for the given display position,
+// accounting for the current sort mode.
+func (m Model) packDisplayIndex(displayIdx int) int {
+	if m.packSortMode == 1 || len(m.packs) == 0 {
+		return displayIdx // name sort = natural order (already alpha from scan)
+	}
+	toolMap := registry.InstalledSet(m.tools)
+	packOrder := make([]int, len(m.packs))
+	for i := range packOrder {
+		packOrder[i] = i
+	}
+	packInstalled := make([]int, len(m.packs))
+	for i, pack := range m.packs {
+		for _, name := range pack.ToolNames {
+			if toolMap[name] {
+				packInstalled[i]++
+			}
+		}
+	}
+	sort.SliceStable(packOrder, func(a, b int) bool {
+		ai, bi := packOrder[a], packOrder[b]
+		aTotal, bTotal := len(m.packs[ai].ToolNames), len(m.packs[bi].ToolNames)
+		aInst, bInst := packInstalled[ai], packInstalled[bi]
+		aComplete := aTotal > 0 && aInst == aTotal
+		bComplete := bTotal > 0 && bInst == bTotal
+		aPartial := aInst > 0 && !aComplete
+		bPartial := bInst > 0 && !bComplete
+		aRank := 2
+		if aComplete {
+			aRank = 0
+		} else if aPartial {
+			aRank = 1
+		}
+		bRank := 2
+		if bComplete {
+			bRank = 0
+		} else if bPartial {
+			bRank = 1
+		}
+		if aRank != bRank {
+			return aRank < bRank
+		}
+		if aPartial && bPartial && aTotal > 0 && bTotal > 0 {
+			aPct := aInst * 100 / aTotal
+			bPct := bInst * 100 / bTotal
+			if aPct != bPct {
+				return aPct > bPct
+			}
+		}
+		return strings.ToLower(m.packs[ai].DisplayName) < strings.ToLower(m.packs[bi].DisplayName)
+	})
+	if displayIdx < len(packOrder) {
+		return packOrder[displayIdx]
+	}
+	return displayIdx
+}
 func (m Model) renderForYouList() string {
 	var b strings.Builder
 
@@ -564,8 +683,8 @@ func (m Model) renderForYouList() string {
 
 // Fixed column widths for recommendation card alignment.
 const (
-	colCatFY     = 14 // category column
-	colStarsFY   = 10 // stars badge column
+	colCatFY     = 16 // category column (chip style adds padding)
+	colStarsFY   = 11 // stars badge column
 	colGaugeFY   = 12 // match gauge width
 	colPctFY     = 5  // percentage column
 	colReasonFY  = 34 // "You use: ..." column
@@ -2336,6 +2455,9 @@ func fixedWidthANSI(s string, width int) string {
 	w := lipgloss.Width(s)
 	if w < width {
 		return s + strings.Repeat(" ", width-w)
+	}
+	if w > width {
+		return truncateANSI(s, width)
 	}
 	return s
 }

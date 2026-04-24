@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -104,8 +105,12 @@ func resolveOne(ctx context.Context, tool *registry.Tool) {
 		inst.Version = installedVersion(ctx, inst.Source, tool.Packages)
 	}
 
+	// Use a fresh timeout for latest version — installed version checks
+	// may have consumed most of the parent context's deadline.
+	latestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	if primary := tool.PrimaryInstance(); primary != nil {
-		latest, from := latestVersion(ctx, primary.Source, tool.Packages)
+		latest, from := latestVersion(latestCtx, primary.Source, tool.Packages)
 		tool.Latest = latest
 		tool.LatestFrom = from
 	}
@@ -253,6 +258,14 @@ func chocoLatestVersion(ctx context.Context, pkg string) string {
 // and return the second field.
 func scoopInstalledVersion(ctx context.Context, pkg string) string {
 	return parseScoopList(runCmd(ctx, "scoop", "list", pkg), pkg)
+}
+
+// ansiRe matches ANSI escape sequences (color codes, cursor moves, etc.).
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// stripANSI removes ANSI escape sequences from s.
+func stripANSI(s string) string {
+	return ansiRe.ReplaceAllString(s, "")
 }
 
 // parseScoopList extracts the version column for pkg from `scoop list` output.
@@ -498,15 +511,23 @@ func runCmd(ctx context.Context, name string, args ...string) string {
 		return ""
 	}
 	slog.Debug("subprocess ok", "cmd", name, "args", args, "bytes", stdout.Len())
-	return stdout.String()
+	// Strip ANSI escape sequences — some tools (scoop, winget) emit color codes
+	// that break field-based parsing.
+	return stripANSI(stdout.String())
 }
 
 func parseKeyValue(output, key string) string {
-	prefix := key + ":"
+	lowerKey := strings.ToLower(key)
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, prefix) {
-			return strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		// Match "Key : value" or "Key: value" (key may have trailing spaces before colon).
+		idx := strings.Index(line, ":")
+		if idx < 0 {
+			continue
+		}
+		lineKey := strings.TrimSpace(line[:idx])
+		if strings.EqualFold(lineKey, lowerKey) {
+			return strings.TrimSpace(line[idx+1:])
 		}
 	}
 	return ""

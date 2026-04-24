@@ -42,9 +42,11 @@ initArch() {
   case "$ARCH" in
     x86_64|amd64)   ARCH="amd64" ;;
     aarch64|arm64)   ARCH="arm64" ;;
+    armv7*)          ARCH="armv7" ;;
+    armv6*)          ARCH="armv6" ;;
     *)
-      error "Unsupported architecture: $ARCH"
-      exit 1
+      warn "Unknown architecture: $ARCH — will attempt go install fallback."
+      ARCH="$ARCH"
       ;;
   esac
 }
@@ -53,16 +55,16 @@ initArch() {
 initOS() {
   OS=$(uname -s | tr '[:upper:]' '[:lower:]')
   case "$OS" in
-    darwin) OS="darwin" ;;
-    linux)  OS="linux" ;;
+    darwin)  OS="darwin" ;;
+    linux)   OS="linux" ;;
+    freebsd) OS="freebsd" ;;
     mingw*|cygwin*|msys*)
       error "Windows detected. Please use the PowerShell installer instead:"
       error "  irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex"
       exit 1
       ;;
     *)
-      error "Unsupported operating system: $OS"
-      exit 1
+      warn "Unknown OS: $OS — will attempt go install fallback."
       ;;
   esac
 }
@@ -71,21 +73,55 @@ initOS() {
 # and that required tools are available.
 verifySupported() {
   local supported="darwin-amd64 darwin-arm64 linux-amd64 linux-arm64"
-  if ! echo "$supported" | grep -qw "${OS}-${ARCH}"; then
-    error "No prebuilt binary for ${OS}/${ARCH}."
-    error "To build from source: go install github.com/nassiharel/clim/cmd/clim@latest"
+  if echo "$supported" | grep -qw "${OS}-${ARCH}"; then
+    HAS_PREBUILT="true"
+  else
+    HAS_PREBUILT="false"
+    warn "No prebuilt binary for ${OS}/${ARCH}."
+  fi
+
+  if [ "$HAS_PREBUILT" = "true" ]; then
+    if [ "$HAS_CURL" != "true" ] && [ "$HAS_WGET" != "true" ]; then
+      error "Either curl or wget is required to download clim."
+      exit 1
+    fi
+
+    if [ "$HAS_TAR" != "true" ]; then
+      error "tar is required to extract the archive."
+      exit 1
+    fi
+  fi
+}
+
+# goInstallFallback builds from source using go install.
+goInstallFallback() {
+  if ! command -v go >/dev/null 2>&1; then
+    error "No prebuilt binary for ${OS}/${ARCH} and Go is not installed."
+    error "Install Go (https://go.dev/dl/) or use a supported platform."
     exit 1
   fi
 
-  if [ "$HAS_CURL" != "true" ] && [ "$HAS_WGET" != "true" ]; then
-    error "Either curl or wget is required to download clim."
+  info "Building from source via ${CYAN}go install${NC}..."
+  go install "github.com/nassiharel/clim/cmd/clim@${TAG}"
+
+  local gobin
+  gobin="$(go env GOPATH)/bin"
+  if [ ! -f "${gobin}/${BINARY_NAME}" ]; then
+    gobin="$(go env GOBIN)"
+  fi
+
+  if [ ! -f "${gobin}/${BINARY_NAME}" ]; then
+    error "go install succeeded but binary not found in GOPATH/bin or GOBIN."
     exit 1
   fi
 
-  if [ "$HAS_TAR" != "true" ]; then
-    error "tar is required to extract the archive."
-    exit 1
+  if [ ! -d "$INSTALL_DIR" ]; then
+    runAsRoot mkdir -p "$INSTALL_DIR"
   fi
+
+  runAsRoot cp "${gobin}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+  runAsRoot chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+  info "Installed ${GREEN}${BINARY_NAME}${NC} (built from source) to ${INSTALL_DIR}/${BINARY_NAME}"
 }
 
 # runAsRoot runs a command with sudo if needed.
@@ -128,7 +164,9 @@ getLatestVersion() {
 
   if [ -z "$TAG" ]; then
     error "Could not determine the latest version."
+    error "This may be caused by GitHub API rate limiting."
     error "Please specify a version with --version, e.g. --version v1.0.0"
+    error "Check releases at: https://github.com/${GITHUB_REPO}/releases"
     exit 1
   fi
 }
@@ -331,9 +369,13 @@ initOS
 verifySupported
 getLatestVersion
 if ! checkInstalledVersion; then
-  downloadFile
-  verifyChecksum
-  installFile
+  if [ "$HAS_PREBUILT" = "true" ]; then
+    downloadFile
+    verifyChecksum
+    installFile
+  else
+    goInstallFallback
+  fi
 fi
 testVersion
 cleanup

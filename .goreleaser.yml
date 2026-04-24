@@ -4,6 +4,8 @@ project_name: clim
 
 before:
   hooks:
+    - go mod download
+    - go generate ./...
     - go mod tidy
 
 builds:

@@ -1,0 +1,14 @@
+name: grype
+display_name: grype
+category: Security
+tags:
+    - security
+    - container
+    - scanner
+binary_names:
+    - grype
+packages:
+    winget: Anchore.Grype
+    scoop: grype
+    brew: grype
+github: anchore/grype

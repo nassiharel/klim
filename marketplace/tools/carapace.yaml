@@ -1,0 +1,14 @@
+name: carapace
+display_name: carapace
+category: Shell
+tags:
+    - cli
+    - cross-platform
+    - cross-shell
+binary_names:
+    - carapace
+packages:
+    winget: rsteube.Carapace
+    scoop: carapace-bin
+    brew: carapace
+github: carapace-sh/carapace-bin

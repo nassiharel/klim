@@ -125,6 +125,7 @@ type Model struct {
 
 	// Marketplace sub-tabs (Tools / Packs / For You).
 	discoverSubTab  int // 0=tools, 1=packs, 2=forYou
+	packSortMode    int // 0=status (default), 1=name
 	packs           []registry.Pack
 	recommendations []recommendation // tag-based, computed after scan
 	showPackDetail  bool
@@ -1584,6 +1585,16 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.statusMsg = "Sort: ★ stars"
 			}
 		}
+		// Toggle pack sort mode (Packs sub-tab).
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverPacks {
+			m.packSortMode = (m.packSortMode + 1) % 2
+			m.cursor = 0
+			if m.packSortMode == 0 {
+				m.statusMsg = "Sort: by status"
+			} else {
+				m.statusMsg = "Sort: by name"
+			}
+		}
 		return m, nil
 	case "up", "k":
 		if m.cursor > 0 {
@@ -1809,7 +1820,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.cursor < len(m.packs) {
-				m.packDetailIdx = m.cursor
+				m.packDetailIdx = m.packDisplayIndex(m.cursor)
 				m.showPackDetail = true
 				m.packItems = nil // clear any leftover progress from a previous pack
 				m.packDone = 0

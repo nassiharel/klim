@@ -488,6 +488,8 @@ func TestParseScoopList(t *testing.T) {
 		{"skip header row", "Name Version Source\n---- ------- ------\n", "Name", ""},
 		// Separator row starting with dashes should be skipped.
 		{"skip separator row", "---- ------- ------\n", "----", ""},
+		// ANSI color codes in scoop output should be stripped.
+		{"ansi color codes", "Installed apps matching 'jq':\n\n\x1b[32;1mName\x1b[0m \x1b[32;1mVersion\x1b[0m \x1b[32;1mSource\x1b[0m\n\x1b[32;1m----\x1b[0m \x1b[32;1m-------\x1b[0m \x1b[32;1m------\x1b[0m\njq   1.8.1   main\n", "jq", "1.8.1"},
 	}
 
 	for _, tt := range tests {

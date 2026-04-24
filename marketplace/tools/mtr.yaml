@@ -1,0 +1,11 @@
+name: mtr
+display_name: mtr
+category: Network
+tags:
+    - networking
+    - cli
+binary_names:
+    - mtr
+packages:
+    brew: mtr
+github: traviscross/mtr

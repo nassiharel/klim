@@ -460,7 +460,7 @@ func (m Model) renderDashboardView() string {
 
 	installedSet := registry.InstalledSet(m.tools)
 
-	fullPacks, partialPacks := 0, 0
+	fullMarket, partialMarket := 0, 0
 	for _, pack := range m.packs {
 		have := 0
 		for _, name := range pack.ToolNames {
@@ -469,9 +469,9 @@ func (m Model) renderDashboardView() string {
 			}
 		}
 		if have == len(pack.ToolNames) {
-			fullPacks++
+			fullMarket++
 		} else if have > 0 {
-			partialPacks++
+			partialMarket++
 		}
 	}
 
@@ -492,11 +492,11 @@ func (m Model) renderDashboardView() string {
 
 	b.WriteString(fmt.Sprintf("  %s  %s  %s\n",
 		dashLabel.Render(fixedWidth("Marketplace", 14)),
-		gauge(fullPacks, len(m.packs), 15, dashGaugeFill, dashGaugeEmpty),
+		gauge(fullMarket, len(m.packs), 15, dashGaugeFill, dashGaugeEmpty),
 		fmt.Sprintf("%s / %s complete  %s partial",
-			dashNumber.Render(fmt.Sprintf("%d", fullPacks)),
+			dashNumber.Render(fmt.Sprintf("%d", fullMarket)),
 			dashDim.Render(fmt.Sprintf("%d", len(m.packs))),
-			dashGaugeWarn.Render(fmt.Sprintf("%d", partialPacks)),
+			dashGaugeWarn.Render(fmt.Sprintf("%d", partialMarket)),
 		),
 	))
 

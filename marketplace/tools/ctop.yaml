@@ -1,0 +1,13 @@
+name: ctop
+display_name: ctop
+category: Observability
+tags:
+    - container
+    - process-monitoring
+    - tui
+binary_names:
+    - ctop
+packages:
+    scoop: ctop
+    brew: ctop
+github: bcicen/ctop
