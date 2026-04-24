@@ -34,15 +34,25 @@ type keyword struct {
 	tool    string
 }
 
+// DetectResult holds detection output including stats.
+type DetectResult struct {
+	Tools      []DetectedTool
+	Suggestions []DetectedTool // tools suggested based on ecosystem (not from files)
+	FilesScanned int
+	DirsScanned  int
+}
+
 // DetectFromProject scans a project directory for configuration files and
 // infers which CLI tools the project requires. Returns deduplicated tool names
 // sorted by name, with the source file that triggered each detection.
 //
 // Tool names MUST match the marketplace catalog (e.g. "go" not "golang",
 // "node" not "nodejs", "docker-compose" not "docker compose").
-func DetectFromProject(dir string) []DetectedTool {
+func DetectFromProject(dir string) DetectResult {
 	seen := make(map[string]string) // name → source
 	var results []DetectedTool
+	filesScanned := 0
+	dirsScanned := 0
 
 	add := func(name, source string) {
 		if _, ok := seen[name]; !ok {
@@ -98,6 +108,12 @@ func DetectFromProject(dir string) []DetectedTool {
 		{"Pipfile", []string{"python3"}},
 		{"setup.py", []string{"python3"}},
 		{".python-version", []string{"python3"}},
+		{"pip.conf", []string{"python3"}},
+		{"pip.ini", []string{"python3"}},
+		{"pytest.ini", []string{"python3"}},
+		{"setup.cfg", []string{"python3"}},
+		{"uv.lock", []string{"uv", "python3"}},
+		{"uv.toml", []string{"uv"}},
 		// Ruby
 		{"Gemfile", nil},           // ruby not in catalog
 		{".ruby-version", nil},
@@ -106,6 +122,7 @@ func DetectFromProject(dir string) []DetectedTool {
 		{"build.gradle", []string{"java"}},
 		{"build.gradle.kts", []string{"java"}},
 		// .NET
+		{"global.json", []string{"dotnet"}},
 		// C/C++
 		{"CMakeLists.txt", []string{"cmake"}},
 		// Terraform / IaC
@@ -153,22 +170,82 @@ func DetectFromProject(dir string) []DetectedTool {
 		}
 	}
 
-	// --- Recursive file search for specific patterns ---
-	walkPatterns := map[string][]string{
-		".tf": {"terraform"},
+	// --- Recursive file search (max depth 3) ---
+	// Catches Dockerfiles, pyproject.toml, Chart.yaml, *.bicep, *.tf, etc.
+	// in subdirectories like services/*/Dockerfile, helm-charts/*/Chart.yaml.
+	skipDirs := map[string]bool{
+		"node_modules": true, ".git": true, ".venv": true, "venv": true,
+		"__pycache__": true, ".terraform": true, "vendor": true, "dist": true,
+		"build": true, "bin": true, "obj": true, ".next": true, "target": true,
 	}
-	// Walk only top-level and one level deep to avoid scanning node_modules etc.
-	for _, depth := range []string{"", "*"} {
-		for ext, tools := range walkPatterns {
-			pattern := filepath.Join(dir, depth, "*"+ext)
-			matches, _ := filepath.Glob(pattern)
-			if len(matches) > 0 {
-				for _, t := range tools {
-					add(t, "*"+ext)
+
+	type walkRule struct {
+		filename string   // exact filename match (case-insensitive)
+		ext      string   // extension match (e.g. ".tf", ".bicep")
+		tools    []string // catalog tool names
+	}
+	walkRules := []walkRule{
+		{filename: "Dockerfile", tools: []string{"docker"}},
+		{filename: "pyproject.toml", tools: []string{"python3"}},
+		{filename: "requirements.txt", tools: []string{"python3"}},
+		{filename: "setup.py", tools: []string{"python3"}},
+		{filename: "Chart.yaml", tools: []string{"helm", "kubectl"}},
+		{filename: "values.yaml", tools: []string{"helm"}},
+		{filename: "Cargo.toml", tools: []string{"cargo"}},
+		{filename: "go.mod", tools: []string{"go"}},
+		{filename: "package.json", tools: []string{"node", "npm"}},
+		{filename: "global.json", tools: []string{"dotnet"}},
+		{filename: "pytest.ini", tools: []string{"python3"}},
+		{filename: "setup.cfg", tools: []string{"python3"}},
+		{ext: ".tf", tools: []string{"terraform"}},
+		{ext: ".bicep", tools: []string{"az"}},
+		{ext: ".csproj", tools: []string{"dotnet"}},
+		{ext: ".sln", tools: []string{"dotnet"}},
+		{ext: ".fsproj", tools: []string{"dotnet"}},
+	}
+
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip errors
+		}
+		// Compute depth relative to root.
+		rel, _ := filepath.Rel(dir, path)
+		depth := strings.Count(rel, string(filepath.Separator))
+		if depth > 3 {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// Skip junk directories.
+		if d.IsDir() {
+			if skipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			dirsScanned++
+			return nil
+		}
+		filesScanned++
+		name := d.Name()
+		lowerName := strings.ToLower(name)
+		for _, rule := range walkRules {
+			if rule.filename != "" && strings.EqualFold(name, rule.filename) {
+				for _, t := range rule.tools {
+					add(t, rel)
+				}
+			}
+			if rule.ext != "" && strings.HasSuffix(lowerName, rule.ext) {
+				for _, t := range rule.tools {
+					add(t, rel)
 				}
 			}
 		}
-	}
+		// Scan Dockerfile.* variants.
+		if strings.HasPrefix(lowerName, "dockerfile") {
+			add("docker", rel)
+		}
+		return nil
+	})
 
 	// --- CI/CD file scanning ---
 	ciPatterns := []string{
@@ -178,7 +255,16 @@ func DetectFromProject(dir string) []DetectedTool {
 	ciFiles := []string{
 		".gitlab-ci.yml",
 		"azure-pipelines.yml",
+		"azure-pipelines.yaml",
 		".circleci/config.yml",
+	}
+
+	// Also glob for azure-pipelines*.yml variants.
+	azPipeGlobs := []string{
+		"azure-pipelines*.yml",
+		"azure-pipelines*.yaml",
+		"azurepipelines*.yml",
+		"azurepipelines*.yaml",
 	}
 
 	for _, pattern := range ciPatterns {
@@ -191,6 +277,12 @@ func DetectFromProject(dir string) []DetectedTool {
 		fullPath := filepath.Join(dir, f)
 		if fileExists(fullPath) {
 			scanFileForTools(fullPath, f, add)
+		}
+	}
+	for _, pattern := range azPipeGlobs {
+		matches, _ := filepath.Glob(filepath.Join(dir, pattern))
+		for _, f := range matches {
+			scanFileForTools(f, filepath.Base(f), add)
 		}
 	}
 
@@ -212,7 +304,16 @@ func DetectFromProject(dir string) []DetectedTool {
 		return strings.ToLower(results[i].Name) < strings.ToLower(results[j].Name)
 	})
 
-	return results
+	// Ecosystem-based suggestions: if we detected certain languages/platforms,
+	// suggest commonly paired tools that weren't explicitly detected.
+	suggestions := suggestEcosystemTools(seen)
+
+	return DetectResult{
+		Tools:        results,
+		Suggestions:  suggestions,
+		FilesScanned: filesScanned,
+		DirsScanned:  dirsScanned,
+	}
 }
 
 // ciKeywords maps substrings found in CI config files to catalog tool names.
@@ -311,6 +412,74 @@ func scanDockerfile(path string, add func(string, string)) {
 	if err := scanner.Err(); err != nil {
 		slog.Debug("scanner error reading Dockerfile", "path", path, "error", err)
 	}
+}
+
+// suggestEcosystemTools returns additional tool suggestions based on
+// which ecosystems were detected. These are common companion tools that
+// weren't explicitly found in project files.
+func suggestEcosystemTools(detected map[string]string) []DetectedTool {
+	type suggestion struct {
+		ifDetected string // if this tool was detected...
+		suggest    string // ...suggest this companion
+		reason     string
+	}
+
+	rules := []suggestion{
+		// Python ecosystem
+		{"python3", "uv", "fast Python package manager"},
+		{"python3", "docker", "containerize Python services"},
+		{"python3", "jq", "process JSON output from APIs"},
+
+		// Go ecosystem
+		{"go", "golangci-lint", "lint Go code"},
+		{"go", "docker", "containerize Go binaries"},
+
+		// Node ecosystem
+		{"node", "docker", "containerize Node services"},
+
+		// Kubernetes ecosystem
+		{"kubectl", "k9s", "interactive Kubernetes dashboard"},
+		{"kubectl", "helm", "manage Kubernetes packages"},
+		{"helm", "kubectl", "deploy Helm charts"},
+
+		// Docker ecosystem
+		{"docker", "docker-compose", "multi-container orchestration"},
+
+		// Azure ecosystem
+		{"az", "kubectl", "manage AKS clusters"},
+		{"az", "terraform", "infrastructure as code"},
+		{"az", "helm", "deploy to AKS"},
+
+		// Terraform ecosystem
+		{"terraform", "az", "provision Azure resources"},
+
+		// Git ecosystem
+		{"git", "gh", "GitHub CLI for PRs and issues"},
+
+		// .NET ecosystem
+		{"dotnet", "docker", "containerize .NET services"},
+		{"dotnet", "az", "deploy to Azure"},
+	}
+
+	var suggestions []DetectedTool
+	seen := make(map[string]bool)
+	for _, r := range rules {
+		if _, ok := detected[r.ifDetected]; !ok {
+			continue // prerequisite not detected
+		}
+		if _, ok := detected[r.suggest]; ok {
+			continue // already detected
+		}
+		if seen[r.suggest] {
+			continue // already suggested
+		}
+		seen[r.suggest] = true
+		suggestions = append(suggestions, DetectedTool{
+			Name:   r.suggest,
+			Source: "suggested: " + r.reason,
+		})
+	}
+	return suggestions
 }
 
 func fileExists(path string) bool {

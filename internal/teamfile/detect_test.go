@@ -98,28 +98,34 @@ func TestDetectFromProject(t *testing.T) {
 
 			// Create directories.
 			for _, d := range tt.dirs {
-				os.MkdirAll(filepath.Join(dir, d), 0o755)
+				if err := os.MkdirAll(filepath.Join(dir, d), 0o755); err != nil {
+					t.Fatalf("MkdirAll(%s): %v", d, err)
+				}
 			}
 
 			// Create files.
 			for path, content := range tt.files {
 				full := filepath.Join(dir, path)
-				os.MkdirAll(filepath.Dir(full), 0o755)
-				os.WriteFile(full, []byte(content), 0o644)
+				if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+					t.Fatalf("MkdirAll(%s): %v", filepath.Dir(path), err)
+				}
+				if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+					t.Fatalf("WriteFile(%s): %v", path, err)
+				}
 			}
 
-			results := DetectFromProject(dir)
+			result := DetectFromProject(dir)
 
 			found := false
-			for _, r := range results {
+			for _, r := range result.Tools {
 				if r.Name == tt.wantTool {
 					found = true
 					break
 				}
 			}
 			if !found {
-				names := make([]string, len(results))
-				for i, r := range results {
+				names := make([]string, len(result.Tools))
+				for i, r := range result.Tools {
 					names[i] = r.Name
 				}
 				t.Errorf("expected tool %q in results, got %v", tt.wantTool, names)
@@ -130,20 +136,26 @@ func TestDetectFromProject(t *testing.T) {
 
 func TestDetectDeterministic(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module x\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0o644)
-	os.MkdirAll(filepath.Join(dir, ".github"), 0o755)
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".github"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	// Run detection multiple times and verify order is stable.
 	first := DetectFromProject(dir)
 	for i := 0; i < 10; i++ {
 		again := DetectFromProject(dir)
-		if len(again) != len(first) {
-			t.Fatalf("run %d: length changed %d → %d", i, len(first), len(again))
+		if len(again.Tools) != len(first.Tools) {
+			t.Fatalf("run %d: length changed %d → %d", i, len(first.Tools), len(again.Tools))
 		}
-		for j := range first {
-			if first[j].Name != again[j].Name {
-				t.Fatalf("run %d: order changed at %d: %q → %q", i, j, first[j].Name, again[j].Name)
+		for j := range first.Tools {
+			if first.Tools[j].Name != again.Tools[j].Name {
+				t.Fatalf("run %d: order changed at %d: %q → %q", i, j, first.Tools[j].Name, again.Tools[j].Name)
 			}
 		}
 	}
@@ -151,8 +163,8 @@ func TestDetectDeterministic(t *testing.T) {
 
 func TestDetectEmpty(t *testing.T) {
 	dir := t.TempDir()
-	results := DetectFromProject(dir)
-	if len(results) != 0 {
-		t.Errorf("expected 0 results for empty dir, got %d", len(results))
+	result := DetectFromProject(dir)
+	if len(result.Tools) != 0 {
+		t.Errorf("expected 0 results for empty dir, got %d", len(result.Tools))
 	}
 }

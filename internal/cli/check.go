@@ -81,9 +81,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Scan installed tools (no version resolution needed — just PATH detection).
+	// Scan installed tools and resolve versions (needed for version constraints).
 	sp := progress.New("Scanning installed tools...")
-	tools, _, err := svc.ScanOnly(cmd.Context())
+	tools, _, err := svc.LoadAndResolve(cmd.Context())
 	if err != nil {
 		sp.Fail(err.Error())
 		return err

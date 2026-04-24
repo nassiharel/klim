@@ -51,12 +51,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%s already exists (delete it first or edit manually)", outPath)
 	}
 
-	// Scan installed tools (no version resolution needed for detection).
+	// Scan installed tools. Use full resolution when --min-version needs versions.
 	sp := progress.New("Scanning installed tools...")
-	tools, _, err := svc.ScanOnly(cmd.Context())
-	if err != nil {
-		sp.Fail(err.Error())
-		return err
+	var tools []registry.Tool
+	var scanErr error
+	if initMinVersionFlag {
+		tools, _, scanErr = svc.LoadAndResolve(cmd.Context())
+	} else {
+		tools, _, scanErr = svc.ScanOnly(cmd.Context())
+	}
+	if scanErr != nil {
+		sp.Fail(scanErr.Error())
+		return scanErr
 	}
 	sp.Done("Tools scanned")
 
@@ -77,7 +83,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 
 		fmt.Fprintln(os.Stderr, "Detecting tools from project files...")
-		detected := teamfile.DetectFromProject(cwd)
+		result := teamfile.DetectFromProject(cwd)
+		detected := result.Tools
+
+		fmt.Fprintf(os.Stderr, "  Scanned %d files in %d directories\n", result.FilesScanned, result.DirsScanned)
 
 		if len(detected) == 0 {
 			fmt.Fprintln(os.Stderr, "No project files detected. Use --all to include all installed tools.")
@@ -91,11 +100,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 				installedMap[tools[i].Name] = &tools[i]
 			}
 		}
-
-		// Sort detected tools for deterministic output.
-		sort.Slice(detected, func(i, j int) bool {
-			return strings.ToLower(detected[i].Name) < strings.ToLower(detected[j].Name)
-		})
 
 		// Split into installed (include) and not-installed (suggest).
 		tf = &teamfile.TeamFile{}
@@ -134,6 +138,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 			}
 			fmt.Fprintln(os.Stderr, "  Install them first, then re-run clim init to pin versions.")
 		}
+
+		// Ecosystem suggestions.
+		if len(result.Suggestions) > 0 {
+			fmt.Fprintf(os.Stderr, "\n💡 Suggested tools for this project:\n")
+			for _, s := range result.Suggestions {
+				icon := "○"
+				if _, ok := installedMap[s.Name]; ok {
+					icon = "●"
+				}
+				fmt.Fprintf(os.Stderr, "  %s %-20s  (%s)\n", icon, s.Name, s.Source)
+			}
+		}
 	}
 
 	if initNameFlag != "" {
@@ -153,7 +169,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	abs, _ := filepath.Abs(outPath)
 	fmt.Fprintf(os.Stderr, "\n✓ Generated %s (%d tools)\n", abs, len(tf.Tools))
 	fmt.Fprintln(os.Stderr, "\nTeammates can now run:")
-	fmt.Fprintln(os.Stderr, "  clim check              # validate their environment")
-	fmt.Fprintln(os.Stderr, "  clim import .clim.yaml  # install missing tools")
+	fmt.Fprintln(os.Stderr, "  clim check    # validate their environment")
 	return nil
 }

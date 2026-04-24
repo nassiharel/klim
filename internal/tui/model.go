@@ -468,21 +468,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Cache backup file list for dashboard.
 		m.myBackupFiles = scanBackupsDir()
 
-		// Detect and check .clim.yaml for dashboard.
+		// Clear stale teamfile state — will be checked after version resolution.
 		m.teamFilePath = ""
 		m.teamFile = nil
 		m.teamCheckResult = nil
-		if cwd, err := os.Getwd(); err == nil {
-			if path := teamfile.Find(cwd); path != "" {
-				m.teamFilePath = path
-				if tf, err := teamfile.Parse(path); err == nil {
-					m.teamFile = tf
-					m.teamCheckResult = teamfile.Check(tf, m.tools)
-				} else {
-					slog.Warn("failed to parse .clim.yaml", "path", path, "error", err)
-				}
-			}
-		}
 
 		// Clamp pack-related indices to the new list size.
 		if m.showPackDetail && m.packDetailIdx >= len(m.packs) {
@@ -550,6 +539,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.scanOK {
 				_ = m.svc.SaveScanCache(m.tools)
 			}
+			m.detectTeamFile()
 		}
 		return m, tea.Batch(cmds...)
 
@@ -580,6 +570,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.scanOK {
 				_ = m.svc.SaveScanCache(m.tools)
 			}
+			// Check .clim.yaml now that versions are resolved.
+			m.detectTeamFile()
 		}
 		return m, nil
 
@@ -2124,6 +2116,31 @@ func (m Model) stats() (installed, updates, notInstalled int) {
 		}
 	}
 	return
+}
+
+// detectTeamFile looks for .clim.yaml in CWD/parents and runs checks
+// against the current tool list. Called after version resolution completes.
+func (m *Model) detectTeamFile() {
+	m.teamFilePath = ""
+	m.teamFile = nil
+	m.teamCheckResult = nil
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	path := teamfile.Find(cwd)
+	if path == "" {
+		return
+	}
+	m.teamFilePath = path
+	tf, err := teamfile.Parse(path)
+	if err != nil {
+		slog.Warn("failed to parse .clim.yaml", "path", path, "error", err)
+		return
+	}
+	m.teamFile = tf
+	m.teamCheckResult = teamfile.Check(tf, m.tools)
 }
 
 // --- Actions ---

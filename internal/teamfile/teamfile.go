@@ -4,6 +4,7 @@
 package teamfile
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,7 +55,7 @@ func Find(startDir string) string {
 	}
 	for {
 		candidate := filepath.Join(dir, FileName)
-		if _, err := os.Stat(candidate); err == nil {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 			return candidate
 		}
 		parent := filepath.Dir(dir)
@@ -73,7 +74,9 @@ func Parse(path string) (*TeamFile, error) {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 	var tf TeamFile
-	if err := yaml.Unmarshal(data, &tf); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&tf); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	if len(tf.Tools) == 0 {
@@ -171,7 +174,9 @@ func ParseConstraint(s string) (op, ver string) {
 }
 
 // ValidConstraint reports whether a version constraint string is valid
-// (has a non-empty numeric version after the operator).
+// (has a non-empty numeric version after the operator). Allows optional
+// leading "v" prefix (e.g. ">=v1.28") since registry.CompareVersions
+// strips it.
 func ValidConstraint(s string) bool {
 	op, ver := ParseConstraint(s)
 	if op == "" && ver == "" {
@@ -180,8 +185,9 @@ func ValidConstraint(s string) bool {
 	if ver == "" {
 		return false // operator with no version
 	}
-	// Must start with a digit.
-	return len(ver) > 0 && ver[0] >= '0' && ver[0] <= '9'
+	// Strip optional "v" prefix.
+	v := strings.TrimPrefix(ver, "v")
+	return len(v) > 0 && v[0] >= '0' && v[0] <= '9'
 }
 
 // checkConstraint evaluates a version constraint.

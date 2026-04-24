@@ -95,7 +95,9 @@ func TestParse(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		data := "name: test-project\ntools:\n  - name: git\n  - name: kubectl\n    version: \">=1.28\"\n"
-		os.WriteFile(path, []byte(data), 0o644)
+		if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		tf, err := Parse(path)
 		if err != nil {
 			t.Fatal(err)
@@ -112,7 +114,9 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("no tools", func(t *testing.T) {
-		os.WriteFile(path, []byte("name: empty\ntools: []\n"), 0o644)
+		if err := os.WriteFile(path, []byte("name: empty\ntools: []\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		_, err := Parse(path)
 		if err == nil {
 			t.Error("expected error for empty tools")
@@ -120,7 +124,9 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("empty name", func(t *testing.T) {
-		os.WriteFile(path, []byte("tools:\n  - name: \"\"\n"), 0o644)
+		if err := os.WriteFile(path, []byte("tools:\n  - name: \"\"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		_, err := Parse(path)
 		if err == nil {
 			t.Error("expected error for empty tool name")
