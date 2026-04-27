@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -344,6 +345,10 @@ func (m Model) handleKeyProjectConfirmReinit(msg tea.KeyMsg) (tea.Model, tea.Cmd
 	switch msg.String() {
 	case "enter", "y", "Y":
 		m.projectConfirmReinit = false
+		if m.projectInitResult == nil || len(m.projectInitResult.Tools) == 0 {
+			m.statusMsg = "No tools detected."
+			return m, nil
+		}
 		// Delete existing and write new.
 		if m.teamFilePath != "" {
 			_ = os.Remove(m.teamFilePath)
@@ -485,9 +490,17 @@ func (m Model) renderProjectList() string {
 	// Sync-load projects if not loaded yet (file read, fast).
 	if !m.projectsLoaded {
 		if entries, err := teamfile.LoadProjects(); err == nil {
-			// Can't mutate m (value receiver), but we can use entries locally.
-			// The lazy-load in handleKeyProject will populate m.projectEntries
-			// on first keypress. For now, render from fresh data.
+			// Sort: CWD project first.
+			cwd, _ := os.Getwd()
+			cwdAbs, _ := filepath.Abs(cwd)
+			sort.SliceStable(entries, func(i, j int) bool {
+				iCurrent := entries[i].Path == cwdAbs
+				jCurrent := entries[j].Path == cwdAbs
+				if iCurrent != jCurrent {
+					return iCurrent
+				}
+				return entries[i].Name < entries[j].Name
+			})
 			return m.renderProjectListWithEntries(&b, entries)
 		}
 	}
