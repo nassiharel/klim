@@ -107,7 +107,10 @@ func RemoveProject(projectPath string) error {
 		return err
 	}
 
-	abs, _ := filepath.Abs(projectPath)
+	abs, err := filepath.Abs(projectPath)
+	if err != nil {
+		abs = projectPath
+	}
 	filtered := projects[:0]
 	for _, p := range projects {
 		if p.Path != abs {

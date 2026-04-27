@@ -48,7 +48,7 @@ type jsonCheckResult struct {
 	Name       string `json:"name"`
 	Required   string `json:"required,omitempty"`
 	Installed  string `json:"installed,omitempty"`
-	Status     string `json:"status"` // "ok", "missing", "outdated"
+	Status     string `json:"status"` // "ok", "missing", "outdated", "unknown"
 	Message    string `json:"message"`
 }
 

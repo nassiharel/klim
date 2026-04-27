@@ -165,7 +165,10 @@ func projectEditCmd(path string) tea.Cmd {
 			return projectCheckMsg{err: fmt.Errorf("no $EDITOR set")}
 		}
 	}
-	cmd := exec.Command(editor, path)
+	// Parse editor into argv (handles "code --wait", "vim -u NONE", etc.).
+	parts := strings.Fields(editor)
+	args := append(parts[1:], path)
+	cmd := exec.Command(parts[0], args...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return projectCheckMsg{err: err}
 	})

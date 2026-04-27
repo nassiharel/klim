@@ -239,18 +239,19 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.applyFilter()
 		return m, nil
 	case "2":
-		m.activeTab = tabUpdates
+		m.activeTab = tabFavorites
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
 	case "3":
-		m.activeTab = tabDiscover
+		m.activeTab = tabUpdates
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
 	case "4":
-		m.activeTab = tabBackup
+		m.activeTab = tabDiscover
 		m.cursor = 0
+		m.applyFilter()
 		return m, nil
 	case "5":
 		m.activeTab = tabBackup

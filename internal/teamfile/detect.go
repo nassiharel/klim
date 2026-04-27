@@ -49,7 +49,7 @@ type DetectResult struct {
 // Tool names MUST match the marketplace catalog (e.g. "go" not "golang",
 // "node" not "nodejs", "docker-compose" not "docker compose").
 func DetectFromProject(dir string) DetectResult {
-	// Guard: refuse to scan filesystem roots or dirs with too many entries.
+	// Guard: refuse to scan filesystem roots. Also cap total files scanned.
 	absDir, _ := filepath.Abs(dir)
 	if isFilesystemRoot(absDir) {
 		return DetectResult{}
