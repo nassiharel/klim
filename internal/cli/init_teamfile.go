@@ -168,6 +168,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	abs, _ := filepath.Abs(outPath)
 	fmt.Fprintf(os.Stderr, "\n✓ Generated %s (%d tools)\n", abs, len(tf.Tools))
+
+	// Auto-register project.
+	name := tf.Name
+	if name == "" {
+		name = filepath.Base(filepath.Dir(abs))
+	}
+	_ = teamfile.AddProject(filepath.Dir(abs), name, len(tf.Tools))
+
 	fmt.Fprintln(os.Stderr, "\nTeammates can now run:")
 	fmt.Fprintln(os.Stderr, "  clim check    # validate their environment")
 	return nil

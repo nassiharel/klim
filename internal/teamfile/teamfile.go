@@ -19,8 +19,9 @@ const FileName = ".clim.yaml"
 
 // TeamFile is the top-level .clim.yaml schema.
 type TeamFile struct {
-	Name  string         `yaml:"name,omitempty"`
-	Tools []RequiredTool `yaml:"tools"`
+	Name     string         `yaml:"name,omitempty"`
+	Tools    []RequiredTool `yaml:"tools"`
+	Optional []RequiredTool `yaml:"optional,omitempty"`
 }
 
 // RequiredTool defines a single tool requirement.
@@ -34,8 +35,9 @@ type CheckStatus int
 
 const (
 	StatusOK       CheckStatus = iota // installed, version satisfied
-	StatusMissing                     // not installed at all
+	StatusMissing                     // in catalog but not installed
 	StatusOutdated                    // installed but version too old
+	StatusUnknown                     // not in catalog at all
 )
 
 // CheckResult holds the result of checking one required tool.
@@ -44,6 +46,7 @@ type CheckResult struct {
 	Status    CheckStatus
 	Version   string // installed version ("" if missing)
 	Message   string // human-readable status
+	Optional  bool   // true if this is an optional tool
 }
 
 // Find walks up from startDir looking for .clim.yaml. Returns the full path
@@ -92,69 +95,89 @@ func Parse(path string) (*TeamFile, error) {
 }
 
 // Check validates installed tools against team file requirements.
+// Returns results for both required and optional tools (Optional field set accordingly).
 func Check(tf *TeamFile, tools []registry.Tool) []CheckResult {
 	toolMap := make(map[string]*registry.Tool, len(tools))
 	for i := range tools {
 		toolMap[tools[i].Name] = &tools[i]
 	}
 
-	results := make([]CheckResult, 0, len(tf.Tools))
+	results := make([]CheckResult, 0, len(tf.Tools)+len(tf.Optional))
+
+	// Check required tools.
 	for _, req := range tf.Tools {
-		rt, exists := toolMap[req.Name]
+		r := checkOneTool(req, toolMap)
+		results = append(results, r)
+	}
 
-		if !exists || !rt.IsInstalled() {
-			results = append(results, CheckResult{
-				Tool:    req,
-				Status:  StatusMissing,
-				Message: "NOT INSTALLED",
-			})
-			continue
-		}
+	// Check optional tools.
+	for _, req := range tf.Optional {
+		r := checkOneTool(req, toolMap)
+		r.Optional = true
+		results = append(results, r)
+	}
 
-		ver := rt.InstalledVersion()
-		if req.Version == "" {
-			// No version constraint — just needs to be installed.
-			results = append(results, CheckResult{
-				Tool:    req,
-				Status:  StatusOK,
-				Version: ver,
-				Message: "OK",
-			})
-			continue
-		}
+	return results
+}
 
-		// Validate constraint syntax.
-		if !ValidConstraint(req.Version) {
-			results = append(results, CheckResult{
-				Tool:    req,
-				Status:  StatusOutdated,
-				Version: ver,
-				Message: fmt.Sprintf("invalid constraint: %q", req.Version),
-			})
-			continue
-		}
+// checkOneTool checks a single required tool against the tool map.
+func checkOneTool(req RequiredTool, toolMap map[string]*registry.Tool) CheckResult {
+	rt, exists := toolMap[req.Name]
 
-		// Parse and check version constraint.
-		op, constraint := ParseConstraint(req.Version)
-		satisfied := checkConstraint(op, ver, constraint)
-
-		if satisfied {
-			results = append(results, CheckResult{
-				Tool:    req,
-				Status:  StatusOK,
-				Version: ver,
-				Message: fmt.Sprintf("OK (%s %s)", op, constraint),
-			})
-		} else {
-			results = append(results, CheckResult{
-				Tool:    req,
-				Status:  StatusOutdated,
-				Version: ver,
-				Message: fmt.Sprintf("%s %s required", op, constraint),
-			})
+	if !exists {
+		return CheckResult{
+			Tool:    req,
+			Status:  StatusUnknown,
+			Message: "UNKNOWN TOOL (not in marketplace)",
 		}
 	}
-	return results
+
+	if !rt.IsInstalled() {
+		return CheckResult{
+			Tool:    req,
+			Status:  StatusMissing,
+			Message: "NOT INSTALLED",
+		}
+	}
+
+	ver := rt.InstalledVersion()
+	if req.Version == "" {
+		return CheckResult{
+			Tool:    req,
+			Status:  StatusOK,
+			Version: ver,
+			Message: "OK",
+		}
+	}
+
+	// Validate constraint syntax.
+	if !ValidConstraint(req.Version) {
+		return CheckResult{
+			Tool:    req,
+			Status:  StatusOutdated,
+			Version: ver,
+			Message: fmt.Sprintf("invalid constraint: %q", req.Version),
+		}
+	}
+
+	// Parse and check version constraint.
+	op, constraint := ParseConstraint(req.Version)
+	satisfied := checkConstraint(op, ver, constraint)
+
+	if satisfied {
+		return CheckResult{
+			Tool:    req,
+			Status:  StatusOK,
+			Version: ver,
+			Message: fmt.Sprintf("OK (%s %s)", op, constraint),
+		}
+	}
+	return CheckResult{
+		Tool:    req,
+		Status:  StatusOutdated,
+		Version: ver,
+		Message: fmt.Sprintf("%s %s required", op, constraint),
+	}
 }
 
 // ParseConstraint splits a version constraint string into operator and version.
@@ -164,7 +187,7 @@ func ParseConstraint(s string) (op, ver string) {
 	if s == "" {
 		return "", ""
 	}
-	for _, prefix := range []string{">=", "<=", "!=", ">", "<", "="} {
+	for _, prefix := range []string{">=", "<=", "!=", "==", ">", "<", "="} {
 		if strings.HasPrefix(s, prefix) {
 			return prefix, strings.TrimSpace(s[len(prefix):])
 		}
@@ -214,7 +237,7 @@ func checkConstraint(op, installed, constraint string) bool {
 }
 
 // Summary counts results by status.
-func Summary(results []CheckResult) (ok, missing, outdated int) {
+func Summary(results []CheckResult) (ok, missing, outdated, unknown int) {
 	for _, r := range results {
 		switch r.Status {
 		case StatusOK:
@@ -223,14 +246,20 @@ func Summary(results []CheckResult) (ok, missing, outdated int) {
 			missing++
 		case StatusOutdated:
 			outdated++
+		case StatusUnknown:
+			unknown++
 		}
 	}
 	return
 }
 
-// AllSatisfied returns true if all tools pass checks.
+// AllSatisfied returns true if all required tools pass checks.
+// Optional tool failures do not affect the result.
 func AllSatisfied(results []CheckResult) bool {
 	for _, r := range results {
+		if r.Optional {
+			continue
+		}
 		if r.Status != StatusOK {
 			return false
 		}
@@ -265,4 +294,33 @@ func Write(tf *TeamFile, path string) error {
 	}
 	header := "# .clim.yaml — Team tool requirements\n# Generated by clim init\n# See: https://github.com/nassiharel/clim\n\n"
 	return os.WriteFile(path, []byte(header+string(data)), 0o644)
+}
+
+// AddToolToFile adds a tool to the required or optional list in an existing .clim.yaml.
+func AddToolToFile(path, toolName string, optional bool) error {
+	tf, err := Parse(path)
+	if err != nil {
+		return err
+	}
+
+	req := RequiredTool{Name: toolName}
+	if optional {
+		// Check not already in optional.
+		for _, t := range tf.Optional {
+			if t.Name == toolName {
+				return fmt.Errorf("%s already in optional tools", toolName)
+			}
+		}
+		tf.Optional = append(tf.Optional, req)
+	} else {
+		// Check not already in required.
+		for _, t := range tf.Tools {
+			if t.Name == toolName {
+				return fmt.Errorf("%s already in required tools", toolName)
+			}
+		}
+		tf.Tools = append(tf.Tools, req)
+	}
+
+	return Write(tf, path)
 }

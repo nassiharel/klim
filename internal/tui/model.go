@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -30,6 +31,7 @@ const (
 	tabUpdates
 	tabDiscover
 	tabBackup
+	tabProject
 	tabDashboard
 	tabConfig
 	tabCount // total number of tabs, used for modular cycling
@@ -132,6 +134,7 @@ type Model struct {
 	recommendations []recommendation // tag-based, computed after scan
 	showPackDetail  bool
 	packDetailIdx   int // index into m.packs
+	packToolCursor  int // cursor within pack tool list (for navigating to tool detail)
 
 	// Pack install/remove state (inline in pack detail view).
 	packItems      []packItem // per-tool status during pack install/remove
@@ -240,6 +243,20 @@ type Model struct {
 	teamFilePath    string                  // path to detected .clim.yaml ("" = not found)
 	teamFile        *teamfile.TeamFile      // parsed team file (nil = not found)
 	teamCheckResult []teamfile.CheckResult  // check results (nil = not checked yet)
+
+	// Project tab state.
+	projectView       int // projectViewList, projectViewDetail, projectViewAddTool
+	projectCursor     int
+	projectInitResult *teamfile.DetectResult
+	projectScroll     int
+	projectEntries    []teamfile.ProjectEntry
+	projectsLoaded    bool // true after first load
+	projectAddCursor  int
+	projectAddFilter  string
+	projectAddFiltered []int
+	projectAddOptional bool   // true = adding to optional, false = required
+	projectConfirmReinit bool // true = showing detection results, waiting for confirm
+	projectReinitDir string   // directory for pending reinit
 }
 
 // NewModel creates a new TUI model.
@@ -327,6 +344,8 @@ func tabFromName(name string) int {
 		return tabDiscover
 	case "backup":
 		return tabBackup
+	case "project":
+		return tabProject
 	case "dashboard":
 		return tabDashboard
 	case "config":
@@ -516,6 +535,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.phase = phaseDone
 			m.loading = false
+			m.detectTeamFile()
 			return m, nil
 		}
 
@@ -858,6 +878,78 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("✗ Save failed: %s", msg.err)
 		} else {
 			m.statusMsg = "✓ Config saved"
+		}
+		return m, nil
+
+	case projectCheckMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ %s", msg.err)
+			// If re-check after editor, refresh teamfile state.
+			m.detectTeamFile()
+			return m, nil
+		}
+		m.teamFile = msg.tf
+		m.teamFilePath = msg.path
+		m.teamCheckResult = msg.results
+		m.projectCursor = 0
+		m.statusMsg = "✓ Check complete"
+		return m, nil
+
+	case projectInitMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ Detection failed: %s", msg.err)
+			return m, nil
+		}
+		m.projectInitResult = msg.result
+		if len(msg.result.Tools) == 0 {
+			m.statusMsg = "No project files detected."
+			return m, nil
+		}
+		// Show detection results and ask for confirmation.
+		m.projectConfirmReinit = true
+		m.statusMsg = fmt.Sprintf("Detected %d tools — Enter to confirm, Esc to cancel", len(msg.result.Tools))
+
+	case projectInitDoneMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ Init failed: %s", msg.err)
+			return m, nil
+		}
+		m.statusMsg = fmt.Sprintf("✓ Generated .clim.yaml (%d tools)", msg.tools)
+		// Re-detect and check.
+		m.detectTeamFile()
+		m.projectView = projectViewDetail
+		m.projectCursor = 0
+		return m, nil
+
+	case projectListLoadedMsg:
+		m.projectEntries = msg.entries
+		m.projectsLoaded = true
+		// Sort: current CWD project first.
+		cwd, _ := os.Getwd()
+		cwdAbs, _ := filepath.Abs(cwd)
+		sort.SliceStable(m.projectEntries, func(i, j int) bool {
+			iCurrent := m.projectEntries[i].Path == cwdAbs
+			jCurrent := m.projectEntries[j].Path == cwdAbs
+			if iCurrent != jCurrent {
+				return iCurrent
+			}
+			return m.projectEntries[i].Name < m.projectEntries[j].Name
+		})
+		return m, nil
+
+	case projectAddToolMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ %s", msg.err)
+			return m, nil
+		}
+		label := "required"
+		if msg.optional {
+			label = "optional"
+		}
+		m.statusMsg = fmt.Sprintf("✓ Added %s to %s tools", msg.toolName, label)
+		// Re-check to reflect changes.
+		if m.teamFilePath != "" {
+			return m, projectCheckCmd(m.teamFilePath, m.tools)
 		}
 		return m, nil
 
@@ -1303,7 +1395,35 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.packInstalling = false
 		m.packDone = 0
 		return m, nil
-	case "enter", "i":
+	case "up", "k":
+		if m.packToolCursor > 0 {
+			m.packToolCursor--
+		}
+	case "down", "j":
+		if m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
+			maxIdx := len(m.packs[m.packDetailIdx].ToolNames) - 1
+			if m.packToolCursor < maxIdx {
+				m.packToolCursor++
+			}
+		}
+	case "enter":
+		// Open tool detail for selected tool in pack.
+		if m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
+			pack := m.packs[m.packDetailIdx]
+			if m.packToolCursor < len(pack.ToolNames) {
+				toolName := pack.ToolNames[m.packToolCursor]
+				for i, t := range m.tools {
+					if t.Name == toolName {
+						m.detailIdx = i
+						m.showDetail = true
+						m.showPackDetail = false
+						m.buildToolMenu()
+						return m, nil
+					}
+				}
+			}
+		}
+	case "i":
 		// Install missing tools.
 		if m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
 			pack := m.packs[m.packDetailIdx]
@@ -1398,6 +1518,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 	}
 
+	// Project tab has its own key handler.
+	if m.activeTab == tabProject {
+		return m.handleKeyProject(msg)
+	}
+
 	// Dashboard tab is static — swallow navigation keys.
 	// Only allow quit, tab switching, scroll, and refresh.
 	if m.activeTab == tabDashboard {
@@ -1460,12 +1585,19 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor = 0
 			return m, nil
 		case "6":
+			m.activeTab = tabProject
+			m.cursor = 0
+			m.projectCursor = 0
+			m.projectScroll = 0
+			m.projectView = projectViewList
+			return m, projectLoadListCmd(m.tools)
+		case "7":
 			m.activeTab = tabDashboard
 			m.cursor = 0
 			m.dashboardScroll = 0
 			m.myBackupFiles = scanBackupsDir()
 			return m, nil
-		case "7":
+		case "8":
 			m.activeTab = tabConfig
 			m.cursor = 0
 			m.configScroll = 0
@@ -1577,12 +1709,19 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		return m, nil
 	case "6":
+		m.activeTab = tabProject
+		m.cursor = 0
+		m.projectCursor = 0
+		m.projectScroll = 0
+		m.projectView = projectViewList
+		return m, projectLoadListCmd(m.tools)
+	case "7":
 		m.activeTab = tabDashboard
 		m.cursor = 0
 		m.dashboardScroll = 0
 		m.myBackupFiles = scanBackupsDir()
 		return m, nil
-	case "7":
+	case "8":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0
@@ -1837,6 +1976,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.cursor < len(m.packs) {
 				m.packDetailIdx = m.packDisplayIndex(m.cursor)
 				m.showPackDetail = true
+				m.packToolCursor = 0
 				m.packItems = nil // clear any leftover progress from a previous pack
 				m.packDone = 0
 			}
@@ -1979,6 +2119,8 @@ func (m *Model) matchesTab(tool registry.Tool) bool {
 		return !tool.IsInstalled()
 	case tabBackup:
 		return false // Backup tab renders from backupItems, not tools
+	case tabProject:
+		return false // Project tab renders check results, not tools
 	case tabDashboard:
 		return false // Dashboard tab renders aggregate stats, not tools
 	case tabConfig:
@@ -2520,6 +2662,8 @@ func (m Model) rowCount() int {
 			return backupMenuCount
 		}
 		return len(m.backupItems)
+	case tabProject:
+		return 0
 	case tabDashboard:
 		return 0
 	case tabConfig:

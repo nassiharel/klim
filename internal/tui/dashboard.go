@@ -8,7 +8,6 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/teamfile"
 )
 
 // Dashboard color palette.
@@ -540,67 +539,6 @@ func (m Model) renderDashboardView() string {
 		if backupCount > 3 {
 			b.WriteString(fmt.Sprintf("    %s\n",
 				dashDim.Render(fmt.Sprintf("… and %d more", backupCount-3)),
-			))
-		}
-	}
-
-	// ═══════════════════════════════════════════════════
-	// PROJECT REQUIREMENTS (.clim.yaml)
-	// ═══════════════════════════════════════════════════
-	if m.teamFile != nil && len(m.teamCheckResult) > 0 {
-		projectLabel := ".clim.yaml"
-		if m.teamFile.Name != "" {
-			projectLabel = m.teamFile.Name
-		}
-		b.WriteString("\n  " + dashSection.Render("Project: "+projectLabel) + "\n\n")
-
-		ok, missing, outdated := teamfile.Summary(m.teamCheckResult)
-		total := len(m.teamCheckResult)
-
-		// Summary gauge.
-		b.WriteString(fmt.Sprintf("  %s  %s\n",
-			gauge(ok, total, 20, dashGaugeFill, dashGaugeEmpty),
-			fmt.Sprintf("%s / %s requirements met",
-				dashNumber.Render(fmt.Sprintf("%d", ok)),
-				dashDim.Render(fmt.Sprintf("%d", total)),
-			),
-		))
-		if missing > 0 {
-			b.WriteString(fmt.Sprintf("  %s %s missing\n",
-				dashGaugeWarn.Render("✗"),
-				dashNumber.Render(fmt.Sprintf("%d", missing)),
-			))
-		}
-		if outdated > 0 {
-			b.WriteString(fmt.Sprintf("  %s %s outdated\n",
-				dashGaugeWarn.Render("⚠"),
-				dashNumber.Render(fmt.Sprintf("%d", outdated)),
-			))
-		}
-
-		// Per-tool results.
-		b.WriteString("\n")
-		for _, r := range m.teamCheckResult {
-			var icon, ver, constraint string
-			switch r.Status {
-			case teamfile.StatusOK:
-				icon = upToDateStyle.Render("✓")
-				ver = r.Version
-			case teamfile.StatusMissing:
-				icon = dashGaugeWarn.Render("✗")
-				ver = "—"
-			case teamfile.StatusOutdated:
-				icon = dashGaugeWarn.Render("⚠")
-				ver = r.Version
-			}
-			if r.Tool.Version != "" {
-				constraint = dashDim.Render("(" + r.Tool.Version + ")")
-			}
-			b.WriteString(fmt.Sprintf("  %s  %s  %s  %s\n",
-				icon,
-				nameStyle.Render(fixedWidth(r.Tool.Name, 20)),
-				dashLabel.Render(fixedWidth(ver, 12)),
-				constraint,
 			))
 		}
 	}

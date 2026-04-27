@@ -164,18 +164,18 @@ func TestCheck(t *testing.T) {
 	if results[1].Status != StatusOK {
 		t.Errorf("kubectl: status = %d, want OK", results[1].Status)
 	}
-	// docker: missing
-	if results[2].Status != StatusMissing {
-		t.Errorf("docker: status = %d, want Missing", results[2].Status)
+	// docker: not in catalog → unknown
+	if results[2].Status != StatusUnknown {
+		t.Errorf("docker: status = %d, want Unknown", results[2].Status)
 	}
 	// terraform: outdated (1.5.7 < 1.7)
 	if results[3].Status != StatusOutdated {
 		t.Errorf("terraform: status = %d, want Outdated", results[3].Status)
 	}
 
-	ok, missing, outdated := Summary(results)
-	if ok != 2 || missing != 1 || outdated != 1 {
-		t.Errorf("summary = %d/%d/%d, want 2/1/1", ok, missing, outdated)
+	ok, missing, outdated, unknown := Summary(results)
+	if ok != 2 || missing != 0 || outdated != 1 || unknown != 1 {
+		t.Errorf("summary = %d/%d/%d/%d, want 2/0/1/1", ok, missing, outdated, unknown)
 	}
 
 	if AllSatisfied(results) {

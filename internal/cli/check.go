@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -13,6 +14,7 @@ import (
 
 var checkFileFlag string
 var checkJSONFlag bool
+var checkRefreshFlag bool
 
 var checkCmd = &cobra.Command{
 	Use:   "check",
@@ -37,6 +39,7 @@ Usage:
 func init() {
 	checkCmd.Flags().StringVarP(&checkFileFlag, "file", "f", "", "Path to .clim.yaml (default: auto-detect)")
 	checkCmd.Flags().BoolVar(&checkJSONFlag, "json", false, "Output results as JSON")
+	checkCmd.Flags().BoolVar(&checkRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	rootCmd.AddCommand(checkCmd)
 }
 
@@ -57,6 +60,7 @@ type jsonCheckOutput struct {
 		OK       int `json:"ok"`
 		Missing  int `json:"missing"`
 		Outdated int `json:"outdated"`
+		Unknown  int `json:"unknown"`
 	} `json:"summary"`
 	AllSatisfied bool `json:"all_satisfied"`
 }
@@ -81,9 +85,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Scan installed tools and resolve versions (needed for version constraints).
+	// Scan installed tools and resolve versions (cached by default for speed).
 	sp := progress.New("Scanning installed tools...")
-	tools, _, err := svc.LoadAndResolve(cmd.Context())
+	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), checkRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
@@ -92,10 +96,17 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 	// Check.
 	results := teamfile.Check(tf, tools)
-	ok, missing, outdated := teamfile.Summary(results)
+	ok, missing, outdated, unknown := teamfile.Summary(results)
+
+	// Auto-register project.
+	name := tf.Name
+	if name == "" {
+		name = filepath.Base(filepath.Dir(path))
+	}
+	_ = teamfile.AddProject(filepath.Dir(path), name, len(tf.Tools)+len(tf.Optional))
 
 	if checkJSONFlag {
-		return printCheckJSON(tf, path, results, ok, missing, outdated)
+		return printCheckJSON(tf, path, results, ok, missing, outdated, unknown)
 	}
 
 	// Human output.
@@ -103,37 +114,70 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	if tf.Name != "" {
 		projectLabel = fmt.Sprintf(" (%s)", tf.Name)
 	}
-	fmt.Fprintf(os.Stderr, "\nChecking %s%s — %d tools\n\n", path, projectLabel, len(tf.Tools))
+	totalTools := len(tf.Tools)
+	if len(tf.Optional) > 0 {
+		totalTools += len(tf.Optional)
+	}
+	fmt.Fprintf(os.Stderr, "\nChecking %s%s — %d required, %d optional\n\n", path, projectLabel, len(tf.Tools), len(tf.Optional))
 
+	// Print required.
+	hasRequired := false
 	for _, r := range results {
-		var icon, ver, constraint string
-		switch r.Status {
-		case teamfile.StatusOK:
-			icon = "✓"
-			ver = r.Version
-		case teamfile.StatusMissing:
-			icon = "✗"
-			ver = "—"
-		case teamfile.StatusOutdated:
-			icon = "⚠"
-			ver = r.Version
+		if r.Optional {
+			continue
 		}
-		if r.Tool.Version != "" {
-			constraint = fmt.Sprintf("(%s)", r.Tool.Version)
+		if !hasRequired {
+			fmt.Fprintln(os.Stderr, "  Required:")
+			hasRequired = true
 		}
-		fmt.Fprintf(os.Stderr, "  %s %-20s %-12s %s\n", icon, r.Tool.Name, ver, constraint)
+		printCheckLine(r)
 	}
 
-	fmt.Fprintf(os.Stderr, "\nResult: %d OK, %d missing, %d outdated\n", ok, missing, outdated)
+	// Print optional.
+	hasOptional := false
+	for _, r := range results {
+		if !r.Optional {
+			continue
+		}
+		if !hasOptional {
+			fmt.Fprintln(os.Stderr, "\n  Optional:")
+			hasOptional = true
+		}
+		printCheckLine(r)
+	}
+
+	fmt.Fprintf(os.Stderr, "\nResult: %d OK, %d missing, %d outdated, %d unknown\n", ok, missing, outdated, unknown)
 
 	if !teamfile.AllSatisfied(results) {
-		return fmt.Errorf("%d tool(s) missing or outdated", missing+outdated)
+		return fmt.Errorf("%d tool(s) missing, outdated, or unknown", missing+outdated+unknown)
 	}
 	fmt.Fprintln(os.Stderr, "All requirements satisfied!")
 	return nil
 }
 
-func printCheckJSON(tf *teamfile.TeamFile, path string, results []teamfile.CheckResult, ok, missing, outdated int) error {
+func printCheckLine(r teamfile.CheckResult) {
+	var icon, ver, constraint string
+	switch r.Status {
+	case teamfile.StatusOK:
+		icon = "✓"
+		ver = r.Version
+	case teamfile.StatusMissing:
+		icon = "✗"
+		ver = "—"
+	case teamfile.StatusOutdated:
+		icon = "⚠"
+		ver = r.Version
+	case teamfile.StatusUnknown:
+		icon = "?"
+		ver = "—"
+	}
+	if r.Tool.Version != "" {
+		constraint = fmt.Sprintf("(%s)", r.Tool.Version)
+	}
+	fmt.Fprintf(os.Stderr, "    %s %-20s %-12s %s\n", icon, r.Tool.Name, ver, constraint)
+}
+
+func printCheckJSON(tf *teamfile.TeamFile, path string, results []teamfile.CheckResult, ok, missing, outdated, unknown int) error {
 	out := jsonCheckOutput{
 		Project:      tf.Name,
 		File:         path,
@@ -142,6 +186,7 @@ func printCheckJSON(tf *teamfile.TeamFile, path string, results []teamfile.Check
 	out.Summary.OK = ok
 	out.Summary.Missing = missing
 	out.Summary.Outdated = outdated
+	out.Summary.Unknown = unknown
 
 	for _, r := range results {
 		status := "ok"

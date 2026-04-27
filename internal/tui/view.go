@@ -69,6 +69,12 @@ func (m Model) renderView() string {
 		return m.layoutWithFooter(body.String(), footer)
 	}
 
+	// Project tab.
+	if m.activeTab == tabProject {
+		body.WriteString(m.renderProjectView())
+		return m.layoutWithFooter(body.String(), m.renderHelp())
+	}
+
 	// Favorites tab — custom rendering for share token / empty state.
 	if m.activeTab == tabFavorites {
 		if custom := m.renderFavoritesView(); custom != "" {
@@ -352,6 +358,7 @@ func (m Model) renderTabBar() string {
 		{"Updates", tabUpdates},
 		{"Marketplace", tabDiscover},
 		{"Backup", tabBackup},
+		{"Project", tabProject},
 		{"Dashboard", tabDashboard},
 		{"Config", tabConfig},
 	}
@@ -855,53 +862,61 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 	}
 
 	installed := 0
-	for _, name := range pack.ToolNames {
+	for i, name := range pack.ToolNames {
 		isInstalled := toolMap[name]
 		if isInstalled {
 			installed++
 		}
+		selected := i == m.packToolCursor
 		icon := dim("○")
 		status := dim("not installed")
 		if isInstalled {
 			icon = upToDateStyle.Render("✓")
 			status = upToDateStyle.Render("installed")
 		}
+		cursor := "    "
+		if selected {
+			cursor = "  ▸ "
+		}
 		nameCell := fixedWidth(name, colPackName)
 		statusCell := fixedWidthANSI(status, colPackStat)
-		line := "    " + icon + "  " + nameCell + "  " + statusCell
+		line := cursor + icon + "  " + nameCell + "  " + statusCell
 		if t, ok := toolByName[name]; ok {
 			if badge := githubStarsBadge(t); badge != "" {
 				line += "  " + fixedWidthANSI(dim(badge), colStars)
 			}
+		}
+		if selected {
+			w := lipgloss.Width(line)
+			if w < m.width {
+				line += strings.Repeat(" ", m.width-w)
+			}
+			line = selectedRowStyle.Render(line)
 		}
 		b.WriteString(line + "\n")
 	}
 
 	// Actions.
 	if len(pack.ToolNames) == 0 {
-		b.WriteString("  " + dim("This pack has no tools defined.") + "\n\n")
-		hints := dim("Esc") + " back"
-		b.WriteString("  " + helpStyle.Render(hints))
-		return b.String()
+		b.WriteString("  " + dim("This pack has no tools defined.") + "\n")
+		footer := "  " + dim("Esc") + " back"
+		return m.layoutWithFooter(b.String(), footer)
 	}
 
-	fmt.Fprintf(&b, "\n  %s  %d/%d installed\n\n", label("Status:"), installed, len(pack.ToolNames))
+	fmt.Fprintf(&b, "\n  %s  %d/%d installed\n", label("Status:"), installed, len(pack.ToolNames))
 
 	if installed < len(pack.ToolNames) {
-		b.WriteString("  " + nameStyle.Render("Press Enter or i to install missing tools") + "\n")
+		b.WriteString("  " + nameStyle.Render("i to install missing tools") + "\n")
 	} else {
 		b.WriteString("  " + upToDateStyle.Render("All tools in this pack are installed! ✓") + "\n")
 	}
 	if installed > 0 {
-		b.WriteString("  " + dim("Press x to remove installed tools") + "\n")
+		b.WriteString("  " + dim("x to remove installed tools") + "\n")
 	}
-	b.WriteString("\n")
 
-	// Help.
-	hints := dim("Enter/i") + " install   " + dim("x") + " remove   " + dim("Esc") + " back"
-	b.WriteString("  " + helpStyle.Render(hints))
-
-	return b.String()
+	// Footer.
+	footer := "  " + dim("↑↓") + " navigate   " + dim("Enter") + " tool detail   " + dim("i") + " install   " + dim("x") + " remove   " + dim("Esc") + " back"
+	return m.layoutWithFooter(b.String(), footer)
 }
 
 // --- Header ---
@@ -2222,6 +2237,13 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("←→") + " tab",
 				dimVersion.Render("q") + " quit",
 			}
+		}
+	case tabProject:
+		parts = []string{
+			dimVersion.Render("↑↓") + " navigate",
+			dimVersion.Render("Enter") + " select",
+			dimVersion.Render("←→") + " tab",
+			dimVersion.Render("q") + " quit",
 		}
 	case tabDashboard:
 		parts = []string{
