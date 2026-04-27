@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/nassiharel/clim/internal/paths"
 )
 
 // ProjectEntry represents a registered project.
@@ -23,11 +25,7 @@ type projectsFile struct {
 
 // ProjectsPath returns the path to the projects registry file.
 func ProjectsPath() (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "clim", "projects.yaml"), nil
+	return paths.Join("projects", "projects.yaml")
 }
 
 // LoadProjects reads all registered projects from disk.

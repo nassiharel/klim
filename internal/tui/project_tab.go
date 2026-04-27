@@ -447,11 +447,6 @@ func (m Model) projectInstallMissing() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	toolMap := make(map[string]*registry.Tool, len(m.tools))
-	for i := range m.tools {
-		toolMap[m.tools[i].Name] = &m.tools[i]
-	}
-
 	rp := registry.Pack{Name: "project-requirements", ToolNames: missing}
 	m.packItems = buildPackInstallItems(m.tools, rp)
 	m.packDone = countPackSkipped(m.packItems)

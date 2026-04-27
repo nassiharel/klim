@@ -82,14 +82,31 @@ func Parse(path string) (*TeamFile, error) {
 	if err := dec.Decode(&tf); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
-	if len(tf.Tools) == 0 {
+	if len(tf.Tools) == 0 && len(tf.Optional) == 0 {
 		return nil, fmt.Errorf("%s has no tools defined", path)
 	}
-	// Validate tool names.
+	// Validate tool names (required).
+	seen := make(map[string]bool)
 	for i, t := range tf.Tools {
-		if strings.TrimSpace(t.Name) == "" {
-			return nil, fmt.Errorf("tool at index %d has no name", i)
+		name := strings.TrimSpace(t.Name)
+		if name == "" {
+			return nil, fmt.Errorf("required tool at index %d has no name", i)
 		}
+		if seen[name] {
+			return nil, fmt.Errorf("duplicate tool %q", name)
+		}
+		seen[name] = true
+	}
+	// Validate tool names (optional).
+	for i, t := range tf.Optional {
+		name := strings.TrimSpace(t.Name)
+		if name == "" {
+			return nil, fmt.Errorf("optional tool at index %d has no name", i)
+		}
+		if seen[name] {
+			return nil, fmt.Errorf("duplicate tool %q (in both required and optional)", name)
+		}
+		seen[name] = true
 	}
 	return &tf, nil
 }
@@ -303,22 +320,22 @@ func AddToolToFile(path, toolName string, optional bool) error {
 		return err
 	}
 
+	// Check not already in either list.
+	for _, t := range tf.Tools {
+		if t.Name == toolName {
+			return fmt.Errorf("%s already in required tools", toolName)
+		}
+	}
+	for _, t := range tf.Optional {
+		if t.Name == toolName {
+			return fmt.Errorf("%s already in optional tools", toolName)
+		}
+	}
+
 	req := RequiredTool{Name: toolName}
 	if optional {
-		// Check not already in optional.
-		for _, t := range tf.Optional {
-			if t.Name == toolName {
-				return fmt.Errorf("%s already in optional tools", toolName)
-			}
-		}
 		tf.Optional = append(tf.Optional, req)
 	} else {
-		// Check not already in required.
-		for _, t := range tf.Tools {
-			if t.Name == toolName {
-				return fmt.Errorf("%s already in required tools", toolName)
-			}
-		}
 		tf.Tools = append(tf.Tools, req)
 	}
 

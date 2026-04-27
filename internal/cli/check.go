@@ -114,11 +114,8 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	if tf.Name != "" {
 		projectLabel = fmt.Sprintf(" (%s)", tf.Name)
 	}
-	totalTools := len(tf.Tools)
-	if len(tf.Optional) > 0 {
-		totalTools += len(tf.Optional)
-	}
-	fmt.Fprintf(os.Stderr, "\nChecking %s%s — %d required, %d optional\n\n", path, projectLabel, len(tf.Tools), len(tf.Optional))
+	totalTools := len(tf.Tools) + len(tf.Optional)
+	fmt.Fprintf(os.Stderr, "\nChecking %s%s — %d tools (%d required, %d optional)\n\n", path, projectLabel, totalTools, len(tf.Tools), len(tf.Optional))
 
 	// Print required.
 	hasRequired := false
@@ -195,6 +192,8 @@ func printCheckJSON(tf *teamfile.TeamFile, path string, results []teamfile.Check
 			status = "missing"
 		case teamfile.StatusOutdated:
 			status = "outdated"
+		case teamfile.StatusUnknown:
+			status = "unknown"
 		}
 		out.Results = append(out.Results, jsonCheckResult{
 			Name:      r.Tool.Name,
@@ -212,7 +211,7 @@ func printCheckJSON(tf *teamfile.TeamFile, path string, results []teamfile.Check
 	fmt.Println(string(data))
 
 	if !out.AllSatisfied {
-		return fmt.Errorf("%d tool(s) missing or outdated", missing+outdated)
+		return fmt.Errorf("%d tool(s) missing, outdated, or unknown", missing+outdated+unknown)
 	}
 	return nil
 }
