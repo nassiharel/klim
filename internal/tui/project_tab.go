@@ -54,6 +54,11 @@ type projectInitDoneMsg struct {
 	err   error
 }
 
+type projectEditorDoneMsg struct {
+	path string // .clim.yaml path to re-check
+	err  error
+}
+
 type projectAddToolMsg struct {
 	toolName string
 	optional bool
@@ -140,9 +145,9 @@ func projectInitWriteCmd(dir string, tools []registry.Tool, detected []teamfile.
 	}
 }
 
-func projectAddToolCmd(climeFilePath, toolName string, optional bool) tea.Cmd {
+func projectAddToolCmd(climFilePath, toolName string, optional bool) tea.Cmd {
 	return func() tea.Msg {
-		err := teamfile.AddToolToFile(climeFilePath, toolName, optional)
+		err := teamfile.AddToolToFile(climFilePath, toolName, optional)
 		return projectAddToolMsg{toolName: toolName, optional: optional, err: err}
 	}
 }
@@ -170,7 +175,7 @@ func projectEditCmd(path string) tea.Cmd {
 	args := append(parts[1:], path)
 	cmd := exec.Command(parts[0], args...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
-		return projectCheckMsg{err: err}
+		return projectEditorDoneMsg{path: path, err: err}
 	})
 }
 

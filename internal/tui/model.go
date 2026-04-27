@@ -937,6 +937,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 		return m, nil
 
+	case projectEditorDoneMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ Editor: %s", msg.err)
+			return m, nil
+		}
+		// Re-check after editor closes.
+		if msg.path != "" {
+			m.statusMsg = "Re-checking..."
+			return m, projectCheckCmd(msg.path, m.tools)
+		}
+		m.detectTeamFile()
+		return m, nil
+
 	case projectAddToolMsg:
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("✗ %s", msg.err)

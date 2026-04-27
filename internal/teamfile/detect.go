@@ -259,9 +259,11 @@ func DetectFromProject(dir string) DetectResult {
 	})
 
 	// --- CI/CD file scanning ---
-	ciPatterns := []string{
-		".github/workflows/*.yml",
-		".github/workflows/*.yaml",
+	// CI workflow patterns — use filepath.Join for cross-platform separators.
+	ghWorkflowDir := filepath.Join(dir, ".github", "workflows")
+	ciGlobs := []string{
+		filepath.Join(ghWorkflowDir, "*.yml"),
+		filepath.Join(ghWorkflowDir, "*.yaml"),
 	}
 	ciFiles := []string{
 		".gitlab-ci.yml",
@@ -278,8 +280,8 @@ func DetectFromProject(dir string) DetectResult {
 		"azurepipelines*.yaml",
 	}
 
-	for _, pattern := range ciPatterns {
-		matches, _ := filepath.Glob(filepath.Join(dir, pattern))
+	for _, pattern := range ciGlobs {
+		matches, _ := filepath.Glob(pattern)
 		for _, f := range matches {
 			scanFileForTools(f, filepath.Base(f), add)
 		}
@@ -398,7 +400,8 @@ func scanDockerfile(path string, add func(string, string)) {
 	}
 	defer f.Close()
 
-	add("docker", "Dockerfile")
+	source := filepath.Base(path)
+	add("docker", source)
 
 	// Map Docker image base names to catalog tool names.
 	imageTools := map[string]string{
@@ -416,7 +419,7 @@ func scanDockerfile(path string, add func(string, string)) {
 			image := strings.Split(m[1], ":")[0]                                   // strip tag
 			image = strings.Split(image, "/")[len(strings.Split(image, "/"))-1]    // strip registry
 			if tool, ok := imageTools[strings.ToLower(image)]; ok {
-				add(tool, "Dockerfile (FROM)")
+				add(tool, source+" (FROM)")
 			}
 		}
 	}
