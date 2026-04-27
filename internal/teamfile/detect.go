@@ -49,10 +49,17 @@ type DetectResult struct {
 // Tool names MUST match the marketplace catalog (e.g. "go" not "golang",
 // "node" not "nodejs", "docker-compose" not "docker compose").
 func DetectFromProject(dir string) DetectResult {
+	// Guard: refuse to scan filesystem roots or dirs with too many entries.
+	absDir, _ := filepath.Abs(dir)
+	if isFilesystemRoot(absDir) {
+		return DetectResult{}
+	}
+
 	seen := make(map[string]string) // name → source
 	var results []DetectedTool
 	filesScanned := 0
 	dirsScanned := 0
+	const maxFiles = 10000 // safety cap
 
 	add := func(name, source string) {
 		if _, ok := seen[name]; !ok {
@@ -207,6 +214,10 @@ func DetectFromProject(dir string) DetectResult {
 	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil // skip errors
+		}
+		// Safety cap — abort scan if project is too large.
+		if filesScanned >= maxFiles {
+			return filepath.SkipAll
 		}
 		// Compute depth relative to root.
 		rel, _ := filepath.Rel(dir, path)
@@ -490,4 +501,13 @@ func fileExists(path string) bool {
 func dirExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// isFilesystemRoot checks if a path is a filesystem root (/, C:\, etc.).
+func isFilesystemRoot(path string) bool {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	return abs == filepath.Dir(abs)
 }

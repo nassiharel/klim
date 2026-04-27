@@ -2239,11 +2239,28 @@ func (m Model) renderHelp() string {
 			}
 		}
 	case tabProject:
-		parts = []string{
-			dimVersion.Render("↑↓") + " navigate",
-			dimVersion.Render("Enter") + " select",
-			dimVersion.Render("←→") + " tab",
-			dimVersion.Render("q") + " quit",
+		switch m.projectView {
+		case projectViewList:
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Enter") + " open",
+				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("q") + " quit",
+			}
+		case projectViewAddTool:
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Enter") + " add",
+				dimVersion.Render("Esc") + " cancel",
+				dimVersion.Render("type") + " filter",
+			}
+		default:
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Enter") + " select",
+				dimVersion.Render("Esc") + " back",
+				dimVersion.Render("q") + " quit",
+			}
 		}
 	case tabDashboard:
 		parts = []string{

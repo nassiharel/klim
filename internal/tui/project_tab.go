@@ -29,7 +29,8 @@ const (
 	projectActionAddOptional    = 3
 	projectActionEdit           = 4
 	projectActionReinit         = 5
-	projectActionCount          = 6
+	projectActionDelete         = 6
+	projectActionCount          = 7
 )
 
 // --- Messages ---
@@ -217,7 +218,7 @@ func (m Model) handleKeyProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKeyProjectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	totalRows := len(m.projectEntries) + 1 // +1 for "Init new project" row
+	totalRows := len(m.projectEntries) + 1 // +1 for "Init new project" row (first)
 	switch msg.String() {
 	case "up", "k":
 		if m.projectCursor > 0 {
@@ -228,9 +229,17 @@ func (m Model) handleKeyProjectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.projectCursor++
 		}
 	case "enter":
-		if m.projectCursor < len(m.projectEntries) {
-			// Open existing project.
-			entry := m.projectEntries[m.projectCursor]
+		if m.projectCursor == 0 {
+			// "Init new project" row.
+			cwd, _ := os.Getwd()
+			m.projectReinitDir = cwd
+			m.statusMsg = "Detecting project tools..."
+			return m, projectInitDetectCmd(cwd)
+		}
+		// Open existing project (offset by 1).
+		entryIdx := m.projectCursor - 1
+		if entryIdx < len(m.projectEntries) {
+			entry := m.projectEntries[entryIdx]
 			climPath := filepath.Join(entry.Path, teamfile.FileName)
 			m.projectView = projectViewDetail
 			m.projectCursor = 0
@@ -238,22 +247,24 @@ func (m Model) handleKeyProjectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "Checking..."
 			return m, projectCheckCmd(climPath, m.tools)
 		}
-		// "Init new project" row — init in CWD.
-		m.statusMsg = "Detecting project tools..."
-		cwd, _ := os.Getwd()
-		return m, projectInitDetectCmd(cwd)
 	case "d":
-		// Delete project from registry.
-		if m.projectCursor < len(m.projectEntries) {
-			entry := m.projectEntries[m.projectCursor]
+		// Delete project from registry (not for init row).
+		entryIdx := m.projectCursor - 1
+		if entryIdx >= 0 && entryIdx < len(m.projectEntries) {
+			entry := m.projectEntries[entryIdx]
 			_ = teamfile.RemoveProject(entry.Path)
-			// Reload.
+			m.statusMsg = fmt.Sprintf("✓ Removed %s", entry.Name)
+			// Clamp cursor.
+			if m.projectCursor >= totalRows-1 && m.projectCursor > 0 {
+				m.projectCursor--
+			}
 			return m, projectLoadListCmd(m.tools)
 		}
 	case "n":
 		// Init new project in CWD.
-		m.statusMsg = "Detecting project tools..."
 		cwd, _ := os.Getwd()
+		m.projectReinitDir = cwd
+		m.statusMsg = "Detecting project tools..."
 		return m, projectInitDetectCmd(cwd)
 	}
 	return m, nil
@@ -311,6 +322,19 @@ func (m Model) handleKeyProjectDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.projectInitResult = nil
 			m.statusMsg = "Detecting project tools..."
 			return m, projectInitDetectCmd(dir)
+		case projectActionDelete:
+			// Remove project from registry and go back to list.
+			if m.teamFilePath != "" {
+				dir := filepath.Dir(m.teamFilePath)
+				_ = teamfile.RemoveProject(dir)
+				m.teamFile = nil
+				m.teamFilePath = ""
+				m.teamCheckResult = nil
+				m.projectView = projectViewList
+				m.projectCursor = 0
+				m.statusMsg = "✓ Project removed from list"
+				return m, projectLoadListCmd(m.tools)
+			}
 		}
 	}
 	return m, nil
@@ -463,22 +487,50 @@ func (m Model) renderProjectView() string {
 func (m Model) renderProjectList() string {
 	var b strings.Builder
 
-	b.WriteString("\n  " + detailTitleStyle.Render("Projects") + "\n\n")
-
-	if len(m.projectEntries) == 0 {
-		b.WriteString("  " + dimVersion.Render("No projects registered yet.") + "\n\n")
+	// Sync-load projects if not loaded yet (file read, fast).
+	if !m.projectsLoaded {
+		if entries, err := teamfile.LoadProjects(); err == nil {
+			// Can't mutate m (value receiver), but we can use entries locally.
+			// The lazy-load in handleKeyProject will populate m.projectEntries
+			// on first keypress. For now, render from fresh data.
+			return m.renderProjectListWithEntries(&b, entries)
+		}
 	}
+	return m.renderProjectListWithEntries(&b, m.projectEntries)
+}
+
+func (m Model) renderProjectListWithEntries(b *strings.Builder, entries []teamfile.ProjectEntry) string {
+	b.WriteString("\n  " + detailTitleStyle.Render("Projects") + "\n\n")
 
 	cwd, _ := os.Getwd()
 	cwdAbs, _ := filepath.Abs(cwd)
 
-	for i, entry := range m.projectEntries {
+	// "Init new project" row — always first.
+	cursor := "  "
+	if m.projectCursor == 0 {
+		cursor = "▸ "
+	}
+	initLine := cursor + "+" + " " + nameStyle.Render("Init new project") + "  " + dashDim.Render(cwdAbs)
+	if m.projectCursor == 0 {
+		w := lipgloss.Width(initLine)
+		if w < m.width {
+			initLine += strings.Repeat(" ", m.width-w)
+		}
+		initLine = selectedRowStyle.Render(initLine)
+	}
+	b.WriteString(initLine + "\n")
+
+	if len(entries) == 0 {
+		b.WriteString("\n  " + dimVersion.Render("No projects registered yet. Press Enter to init.") + "\n")
+	}
+
+	for i, entry := range entries {
+		displayIdx := i + 1 // offset by 1 because init row is first
 		cursor := "  "
-		if i == m.projectCursor {
+		if displayIdx == m.projectCursor {
 			cursor = "▸ "
 		}
 
-		// Current project indicator.
 		indicator := "○"
 		if entry.Path == cwdAbs {
 			indicator = "●"
@@ -487,7 +539,6 @@ func (m Model) renderProjectList() string {
 		nameCell := nameStyle.Render(fixedWidth(entry.Name, 22))
 		toolsCell := dimVersion.Render(fixedWidth(fmt.Sprintf("%d tools", entry.ToolCount), 10))
 
-		// Truncate path.
 		pathDisplay := entry.Path
 		maxPath := m.width - 50
 		if maxPath > 10 && len(pathDisplay) > maxPath {
@@ -496,7 +547,7 @@ func (m Model) renderProjectList() string {
 		pathCell := dashDim.Render(pathDisplay)
 
 		line := cursor + indicator + " " + nameCell + "  " + toolsCell + "  " + pathCell
-		if i == m.projectCursor {
+		if displayIdx == m.projectCursor {
 			w := lipgloss.Width(line)
 			if w < m.width {
 				line += strings.Repeat(" ", m.width-w)
@@ -505,22 +556,6 @@ func (m Model) renderProjectList() string {
 		}
 		b.WriteString(line + "\n")
 	}
-
-	// "Init new project" row.
-	i := len(m.projectEntries)
-	cursor := "  "
-	if i == m.projectCursor {
-		cursor = "▸ "
-	}
-	line := cursor + "+" + " " + nameStyle.Render("Init new project")
-	if i == m.projectCursor {
-		w := lipgloss.Width(line)
-		if w < m.width {
-			line += strings.Repeat(" ", m.width-w)
-		}
-		line = selectedRowStyle.Render(line)
-	}
-	b.WriteString(line + "\n")
 
 	return b.String()
 }
@@ -669,6 +704,7 @@ func (m Model) renderProjectDetail() string {
 		{"Add optional tool", "Add a tool to optional list"},
 		{"Edit .clim.yaml", "Open in $EDITOR"},
 		{"Re-init", "Scan project files and regenerate"},
+		{"Delete project", "Remove from project list"},
 	}
 
 	for i, action := range actions {
@@ -778,10 +814,6 @@ func (m Model) renderProjectAddTool() string {
 	for range max(visibleRows-rendered, 0) {
 		b.WriteString("\n")
 	}
-
-	b.WriteString("\n  " + dimVersion.Render("Enter") + " add   " +
-		dimVersion.Render("Esc") + " cancel   " +
-		dimVersion.Render("type to filter") + "\n")
 
 	return b.String()
 }
