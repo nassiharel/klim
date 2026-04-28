@@ -1411,12 +1411,16 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if m.packToolCursor > 0 {
 			m.packToolCursor--
+		} else if m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) && len(m.packs[m.packDetailIdx].ToolNames) > 0 {
+			m.packToolCursor = len(m.packs[m.packDetailIdx].ToolNames) - 1
 		}
 	case "down", "j":
 		if m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
 			maxIdx := len(m.packs[m.packDetailIdx].ToolNames) - 1
 			if m.packToolCursor < maxIdx {
 				m.packToolCursor++
+			} else {
+				m.packToolCursor = 0
 			}
 		}
 	case "enter":
@@ -1565,6 +1569,9 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.dashboardScroll = 0
 			m.discoverSubTab = discoverTools
 			m.applyFilter()
+			if m.activeTab == tabProject {
+				return m, projectLoadListCmd(m.tools)
+			}
 			return m, nil
 		case "left", "shift+tab":
 			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
@@ -1572,6 +1579,9 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.dashboardScroll = 0
 			m.discoverSubTab = discoverTools
 			m.applyFilter()
+			if m.activeTab == tabProject {
+				return m, projectLoadListCmd(m.tools)
+			}
 			return m, nil
 		case "1":
 			m.activeTab = tabInstalled
@@ -1682,6 +1692,9 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		m.discoverSubTab = discoverTools
 		m.applyFilter()
+		if m.activeTab == tabProject {
+			return m, projectLoadListCmd(m.tools)
+		}
 		return m, nil
 	case "left", "shift+tab":
 		if m.activeTab == tabDiscover && m.discoverSubTab > discoverTools {
@@ -1696,6 +1709,9 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		m.discoverSubTab = discoverTools
 		m.applyFilter()
+		if m.activeTab == tabProject {
+			return m, projectLoadListCmd(m.tools)
+		}
 		return m, nil
 	case "1":
 		m.activeTab = tabInstalled
@@ -1766,10 +1782,14 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
+		} else if m.rowCount() > 0 {
+			m.cursor = m.rowCount() - 1 // wrap to bottom
 		}
 	case "down", "j":
 		if m.cursor < m.rowCount()-1 {
 			m.cursor++
+		} else {
+			m.cursor = 0 // wrap to top
 		}
 	case "home", "g":
 		m.cursor = 0
@@ -2288,12 +2308,14 @@ func (m *Model) detectTeamFile() {
 	if path == "" {
 		return
 	}
-	m.teamFilePath = path
 	tf, err := teamfile.Parse(path)
 	if err != nil {
 		slog.Warn("failed to parse .clim.yaml", "path", path, "error", err)
+		m.statusMsg = fmt.Sprintf("⚠ .clim.yaml parse error: %s", err)
+		// Don't set teamFilePath — leave state clean.
 		return
 	}
+	m.teamFilePath = path
 	m.teamFile = tf
 	m.teamCheckResult = teamfile.Check(tf, m.tools)
 }

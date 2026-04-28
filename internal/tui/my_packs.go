@@ -67,10 +67,14 @@ func (m Model) handleKeyMyPacks(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if m.myPacksCursor > 0 {
 			m.myPacksCursor--
+		} else if len(m.customPacks) > 0 {
+			m.myPacksCursor = len(m.customPacks) - 1
 		}
 	case "down", "j":
 		if m.myPacksCursor < len(m.customPacks)-1 {
 			m.myPacksCursor++
+		} else {
+			m.myPacksCursor = 0
 		}
 	case "enter":
 		if m.myPacksCursor < len(m.customPacks) {
@@ -102,10 +106,14 @@ func (m Model) handleKeyMyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if m.myPackMenuCursor > 0 {
 			m.myPackMenuCursor--
+		} else {
+			m.myPackMenuCursor = myPackActionCount - 1
 		}
 	case "down", "j":
 		if m.myPackMenuCursor < myPackActionCount-1 {
 			m.myPackMenuCursor++
+		} else {
+			m.myPackMenuCursor = 0
 		}
 	case "enter":
 		if m.myPackDetailIdx >= len(m.customPacks) {

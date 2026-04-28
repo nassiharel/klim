@@ -225,6 +225,9 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.dashboardScroll = 0
 		m.discoverSubTab = discoverTools
 		m.applyFilter()
+		if m.activeTab == tabProject {
+			return m, projectLoadListCmd(m.tools)
+		}
 		return m, nil
 	case "left", "shift+tab":
 		m.activeTab = (m.activeTab + tabCount - 1) % tabCount
@@ -232,6 +235,9 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.dashboardScroll = 0
 		m.discoverSubTab = discoverTools
 		m.applyFilter()
+		if m.activeTab == tabProject {
+			return m, projectLoadListCmd(m.tools)
+		}
 		return m, nil
 	case "1":
 		m.activeTab = tabInstalled

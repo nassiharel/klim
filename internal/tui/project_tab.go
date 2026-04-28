@@ -170,10 +170,25 @@ func projectEditCmd(path string) tea.Cmd {
 			return projectEditorDoneMsg{path: path, err: fmt.Errorf("no $EDITOR set")}
 		}
 	}
-	// Parse editor into argv (handles "code --wait", "vim -u NONE", etc.).
-	parts := strings.Fields(editor)
-	args := append(parts[1:], path)
-	cmd := exec.Command(parts[0], args...)
+	// Parse editor command. Handle quoted paths (e.g. "C:\Program Files\Code.exe" --wait).
+	var editorArgs []string
+	if strings.HasPrefix(editor, "\"") {
+		// Quoted executable path.
+		end := strings.Index(editor[1:], "\"")
+		if end > 0 {
+			editorArgs = append(editorArgs, editor[1:end+1])
+			rest := strings.TrimSpace(editor[end+2:])
+			if rest != "" {
+				editorArgs = append(editorArgs, strings.Fields(rest)...)
+			}
+		} else {
+			editorArgs = strings.Fields(editor)
+		}
+	} else {
+		editorArgs = strings.Fields(editor)
+	}
+	editorArgs = append(editorArgs, path)
+	cmd := exec.Command(editorArgs[0], editorArgs[1:]...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return projectEditorDoneMsg{path: path, err: err}
 	})
@@ -226,10 +241,14 @@ func (m Model) handleKeyProjectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if m.projectCursor > 0 {
 			m.projectCursor--
+		} else if totalRows > 0 {
+			m.projectCursor = totalRows - 1
 		}
 	case "down", "j":
 		if m.projectCursor < totalRows-1 {
 			m.projectCursor++
+		} else {
+			m.projectCursor = 0
 		}
 	case "enter":
 		if m.projectCursor == 0 {
@@ -255,7 +274,10 @@ func (m Model) handleKeyProjectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		entryIdx := m.projectCursor - 1
 		if entryIdx >= 0 && entryIdx < len(m.projectEntries) {
 			entry := m.projectEntries[entryIdx]
-			_ = teamfile.RemoveProject(entry.Path)
+			if err := teamfile.RemoveProject(entry.Path); err != nil {
+				m.statusMsg = fmt.Sprintf("✗ Remove failed: %s", err)
+				return m, nil
+			}
 			m.statusMsg = fmt.Sprintf("✓ Removed %s", entry.Name)
 			// Clamp cursor.
 			if m.projectCursor >= totalRows-1 && m.projectCursor > 0 {
@@ -283,10 +305,14 @@ func (m Model) handleKeyProjectDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if m.projectCursor > 0 {
 			m.projectCursor--
+		} else {
+			m.projectCursor = projectActionCount - 1
 		}
 	case "down", "j":
 		if m.projectCursor < projectActionCount-1 {
 			m.projectCursor++
+		} else {
+			m.projectCursor = 0
 		}
 	case "enter":
 		switch m.projectCursor {
