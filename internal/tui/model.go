@@ -916,11 +916,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.statusMsg = fmt.Sprintf("✓ Generated .clim.yaml (%d tools)", msg.tools)
-		// Re-detect and check.
-		m.detectTeamFile()
+		// Check the newly written file directly (not CWD-based detection).
 		m.projectView = projectViewDetail
 		m.projectCursor = 0
-		return m, nil
+		return m, projectCheckCmd(msg.path, m.tools)
 
 	case projectListLoadedMsg:
 		m.projectEntries = msg.entries
