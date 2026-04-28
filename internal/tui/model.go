@@ -908,6 +908,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Show detection results and ask for confirmation.
 		m.projectConfirmReinit = true
 		m.statusMsg = fmt.Sprintf("Detected %d tools — Enter to confirm, Esc to cancel", len(msg.result.Tools))
+		return m, nil
 
 	case projectInitDoneMsg:
 		if msg.err != nil {

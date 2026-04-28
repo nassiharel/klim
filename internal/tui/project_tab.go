@@ -167,7 +167,7 @@ func projectEditCmd(path string) tea.Cmd {
 	}
 	if editor == "" {
 		return func() tea.Msg {
-			return projectCheckMsg{err: fmt.Errorf("no $EDITOR set")}
+			return projectEditorDoneMsg{path: path, err: fmt.Errorf("no $EDITOR set")}
 		}
 	}
 	// Parse editor into argv (handles "code --wait", "vim -u NONE", etc.).
@@ -182,12 +182,6 @@ func projectEditCmd(path string) tea.Cmd {
 // --- Key Handling ---
 
 func (m Model) handleKeyProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Lazy-load project list on first interaction.
-	if !m.projectsLoaded {
-		m.projectsLoaded = true
-		return m, projectLoadListCmd(m.tools)
-	}
-
 	// Global keys.
 	switch msg.String() {
 	case "q", "ctrl+c":
