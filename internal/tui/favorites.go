@@ -205,11 +205,18 @@ func (m Model) handleKeyFavorites(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		return m, nil
 	case "6":
+		m.activeTab = tabProject
+		m.cursor = 0
+		m.projectCursor = 0
+		m.projectView = projectViewList
+		return m, projectLoadListCmd(m.tools)
+	case "7":
 		m.activeTab = tabDashboard
 		m.cursor = 0
 		m.dashboardScroll = 0
+		m.myBackupFiles = scanBackupsDir()
 		return m, nil
-	case "7":
+	case "8":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0

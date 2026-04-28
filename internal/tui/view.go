@@ -2244,6 +2244,8 @@ func (m Model) renderHelp() string {
 			parts = []string{
 				dimVersion.Render("↑↓") + " navigate",
 				dimVersion.Render("Enter") + " open",
+				dimVersion.Render("n") + " new",
+				dimVersion.Render("d") + " delete",
 				dimVersion.Render("←→") + " tab",
 				dimVersion.Render("q") + " quit",
 			}
