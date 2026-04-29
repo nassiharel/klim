@@ -225,6 +225,9 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.dashboardScroll = 0
 		m.discoverSubTab = discoverTools
 		m.applyFilter()
+		if m.activeTab == tabProject {
+			return m, projectLoadListCmd(m.tools)
+		}
 		return m, nil
 	case "left", "shift+tab":
 		m.activeTab = (m.activeTab + tabCount - 1) % tabCount
@@ -232,6 +235,9 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.dashboardScroll = 0
 		m.discoverSubTab = discoverTools
 		m.applyFilter()
+		if m.activeTab == tabProject {
+			return m, projectLoadListCmd(m.tools)
+		}
 		return m, nil
 	case "1":
 		m.activeTab = tabInstalled
@@ -239,26 +245,37 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.applyFilter()
 		return m, nil
 	case "2":
-		m.activeTab = tabUpdates
+		m.activeTab = tabFavorites
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
 	case "3":
-		m.activeTab = tabDiscover
+		m.activeTab = tabUpdates
 		m.cursor = 0
 		m.applyFilter()
 		return m, nil
 	case "4":
+		m.activeTab = tabDiscover
+		m.cursor = 0
+		m.applyFilter()
+		return m, nil
+	case "5":
 		m.activeTab = tabBackup
 		m.cursor = 0
 		return m, nil
-	case "5":
+	case "6":
+		m.activeTab = tabProject
+		m.cursor = 0
+		m.projectCursor = 0
+		m.projectView = projectViewList
+		return m, projectLoadListCmd(m.tools)
+	case "7":
 		m.activeTab = tabDashboard
 		m.cursor = 0
 		m.dashboardScroll = 0
 		m.myBackupFiles = scanBackupsDir()
 		return m, nil
-	case "6":
+	case "8":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		return m, nil

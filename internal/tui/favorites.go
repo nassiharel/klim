@@ -174,11 +174,17 @@ func (m Model) handleKeyFavorites(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.activeTab = (m.activeTab + 1) % tabCount
 		m.cursor = 0
 		m.applyFilter()
+		if m.activeTab == tabProject {
+			return m, projectLoadListCmd(m.tools)
+		}
 		return m, nil
 	case "left", "shift+tab":
 		m.activeTab = (m.activeTab + tabCount - 1) % tabCount
 		m.cursor = 0
 		m.applyFilter()
+		if m.activeTab == tabProject {
+			return m, projectLoadListCmd(m.tools)
+		}
 		return m, nil
 	case "1":
 		m.activeTab = tabInstalled
@@ -205,11 +211,18 @@ func (m Model) handleKeyFavorites(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		return m, nil
 	case "6":
+		m.activeTab = tabProject
+		m.cursor = 0
+		m.projectCursor = 0
+		m.projectView = projectViewList
+		return m, projectLoadListCmd(m.tools)
+	case "7":
 		m.activeTab = tabDashboard
 		m.cursor = 0
 		m.dashboardScroll = 0
+		m.myBackupFiles = scanBackupsDir()
 		return m, nil
-	case "7":
+	case "8":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0

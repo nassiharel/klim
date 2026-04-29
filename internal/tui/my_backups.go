@@ -98,10 +98,14 @@ func (m Model) handleKeyMyBackups(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if m.myBackupsCursor > 0 {
 			m.myBackupsCursor--
+		} else if len(m.myBackupFiles) > 0 {
+			m.myBackupsCursor = len(m.myBackupFiles) - 1
 		}
 	case "down", "j":
 		if m.myBackupsCursor < len(m.myBackupFiles)-1 {
 			m.myBackupsCursor++
+		} else {
+			m.myBackupsCursor = 0
 		}
 	case "enter":
 		// Import selected backup.
