@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -197,6 +196,27 @@ func projectEditCmd(path string) tea.Cmd {
 // --- Key Handling ---
 
 func (m Model) handleKeyProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Trigger load if not loaded yet. Don't consume the keypress —
+	// allow quit/tab-switch through, queue load for next render.
+	if !m.projectsLoaded {
+		switch msg.String() {
+		case "q", "ctrl+c":
+			m.quitting = true
+			return m, tea.Quit
+		case "right", "tab":
+			m.activeTab = (m.activeTab + 1) % tabCount
+			m.cursor = 0
+			return m, nil
+		case "left", "shift+tab":
+			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
+			m.cursor = 0
+			return m, nil
+		default:
+			// Any other key — trigger load, don't consume.
+			return m, projectLoadListCmd(m.tools)
+		}
+	}
+
 	// Global keys.
 	switch msg.String() {
 	case "q", "ctrl+c":
@@ -355,7 +375,10 @@ func (m Model) handleKeyProjectDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Remove project from registry and go back to list.
 			if m.teamFilePath != "" {
 				dir := filepath.Dir(m.teamFilePath)
-				_ = teamfile.RemoveProject(dir)
+				if err := teamfile.RemoveProject(dir); err != nil {
+					m.statusMsg = fmt.Sprintf("✗ Remove failed: %s", err)
+					return m, nil
+				}
 				m.teamFile = nil
 				m.teamFilePath = ""
 				m.teamCheckResult = nil
@@ -515,22 +538,11 @@ func (m Model) renderProjectView() string {
 func (m Model) renderProjectList() string {
 	var b strings.Builder
 
-	// Sync-load projects if not loaded yet (file read, fast).
+	// Show loading state until projectListLoadedMsg arrives.
 	if !m.projectsLoaded {
-		if entries, err := teamfile.LoadProjects(); err == nil {
-			// Sort: CWD project first.
-			cwd, _ := os.Getwd()
-			cwdAbs, _ := filepath.Abs(cwd)
-			sort.SliceStable(entries, func(i, j int) bool {
-				iCurrent := entries[i].Path == cwdAbs
-				jCurrent := entries[j].Path == cwdAbs
-				if iCurrent != jCurrent {
-					return iCurrent
-				}
-				return entries[i].Name < entries[j].Name
-			})
-			return m.renderProjectListWithEntries(&b, entries)
-		}
+		b.WriteString("\n  " + detailTitleStyle.Render("Projects") + "\n\n")
+		b.WriteString("  " + dimVersion.Render("Loading projects...") + "\n")
+		return b.String()
 	}
 	return m.renderProjectListWithEntries(&b, m.projectEntries)
 }

@@ -845,11 +845,14 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 		}
 		fmt.Fprintf(&b, "\n  %d/%d complete\n", m.packDone, len(m.packItems))
 
+		var progressFooter string
 		if pending == 0 && !m.packInstalling {
-			b.WriteString("\n  " + dim("Esc") + " back")
+			progressFooter = "  " + dim("Esc") + " back"
+		} else {
+			progressFooter = "  " + dim("Installing...")
 		}
 
-		return b.String()
+		return m.layoutWithFooter(b.String(), progressFooter)
 	}
 
 	// Static view — show tool list with install status.

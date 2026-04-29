@@ -377,6 +377,7 @@ func scanFileForTools(path, source string, add func(string, string)) {
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024) // 256KB for large YAML/JSON lines
 	for scanner.Scan() {
 		line := strings.ToLower(scanner.Text())
 		for _, kw := range ciKeywords {
@@ -413,6 +414,7 @@ func scanDockerfile(path string, add func(string, string)) {
 	}
 
 	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if m := dockerFromRe.FindStringSubmatch(line); len(m) > 1 {
