@@ -87,6 +87,8 @@ func init() {
 	rootCmd.AddCommand(generateCmd)
 
 	// Tool discovery & management.
+	searchCmd.GroupID = "tools"
+	rootCmd.AddCommand(searchCmd)
 	onboardCmd.GroupID = "tools"
 	rootCmd.AddCommand(onboardCmd)
 	whyCmd.GroupID = "tools"

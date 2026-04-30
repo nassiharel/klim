@@ -72,6 +72,7 @@ export default defineConfig({
             {
               label: 'Tools',
               items: [
+                { label: 'search', slug: 'reference/commands/search' },
                 { label: 'diff', slug: 'reference/commands/diff' },
                 { label: 'onboard', slug: 'reference/commands/onboard' },
                 { label: 'try', slug: 'reference/commands/try' },

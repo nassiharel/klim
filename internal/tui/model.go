@@ -25,6 +25,7 @@ import (
 	"github.com/nassiharel/clim/internal/favorites"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/score"
+	"github.com/nassiharel/clim/internal/search"
 	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/teamfile"
 )
@@ -2145,12 +2146,12 @@ func (m *Model) applyFilter() {
 		if m.platformFilter != "" && !hasPlatform(tool.Packages, m.platformFilter) {
 			continue
 		}
-		if filter != "" &&
-			!strings.Contains(strings.ToLower(tool.DisplayName), filter) &&
-			!strings.Contains(strings.ToLower(tool.Name), filter) &&
-			!strings.Contains(strings.ToLower(tool.Category), filter) &&
-			!matchesTags(tool.Tags, filter) {
-			continue
+		if filter != "" {
+			// Use the search package for richer matching (names, descriptions, tags, topics).
+			score := searchScoreTool(&tool, filter)
+			if score <= 0 {
+				continue
+			}
 		}
 		m.filteredIndex = append(m.filteredIndex, i)
 	}
@@ -2182,6 +2183,15 @@ func matchesTags(tags []string, filter string) bool {
 		}
 	}
 	return false
+}
+
+// searchScoreTool uses the search package to score a tool against a query.
+func searchScoreTool(t *registry.Tool, query string) int {
+	results := search.Search([]registry.Tool{*t}, query)
+	if len(results) > 0 {
+		return results[0].Score
+	}
+	return 0
 }
 
 // hasTag reports whether the tool has an exact tag match (case-insensitive).
