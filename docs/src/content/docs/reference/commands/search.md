@@ -3,7 +3,7 @@ title: "clim search"
 description: Search the tool marketplace
 ---
 
-Search across 130+ developer tools by name, description, category, tags, or GitHub topics. Results are ranked by relevance and GitHub stars.
+Search the tool marketplace by name, description, category, tags, or GitHub topics. Results are ranked by relevance and GitHub stars.
 
 ## Usage
 

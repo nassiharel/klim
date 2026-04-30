@@ -103,7 +103,10 @@ func runScore(cmd *cobra.Command, args []string) error {
 
 	// Score box.
 	barWidth := 20
-	filled := result.Total * barWidth / result.MaxTotal
+	filled := 0
+	if result.MaxTotal > 0 {
+		filled = result.Total * barWidth / result.MaxTotal
+	}
 	if filled > barWidth {
 		filled = barWidth
 	}

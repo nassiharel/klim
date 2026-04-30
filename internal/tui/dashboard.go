@@ -165,7 +165,7 @@ func (m Model) renderDashboardView() string {
 			scoreGaugeW = 40
 		}
 		scoreStyle := dashGaugeFill
-		if scoreResult.Total*100/scoreResult.MaxTotal < 70 {
+		if scoreResult.MaxTotal > 0 && scoreResult.Total*100/scoreResult.MaxTotal < 70 {
 			scoreStyle = dashGaugeWarn
 		}
 		b.WriteString("\n  " + dashSection.Render("Environment Score") + "\n\n")

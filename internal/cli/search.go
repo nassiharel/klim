@@ -17,7 +17,7 @@ var searchLimitFlag int
 var searchCmd = &cobra.Command{
 	Use:   "search <query>",
 	Short: "Search the tool marketplace",
-	Long: `Search across 130+ developer tools by name, description, category, or tags.
+	Long: `Search the tool marketplace by name, description, category, or tags.
 
 Results are ranked by relevance and GitHub stars, with platform badges
 showing which package managers support each tool.
@@ -90,8 +90,9 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		desc := ""
 		if t.GitHubInfo != nil && t.GitHubInfo.Description != "" {
 			desc = t.GitHubInfo.Description
-			if len(desc) > 55 {
-				desc = desc[:52] + "..."
+			runes := []rune(desc)
+			if len(runes) > 55 {
+				desc = string(runes[:52]) + "..."
 			}
 		}
 
