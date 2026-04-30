@@ -1,0 +1,22 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description = 'One command to discover, inspect, and upgrade every CLI on your system.' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+  </head>
+  <body class="bg-gray-950 text-gray-100 antialiased">
+    <slot />
+  </body>
+</html>

@@ -1,0 +1,46 @@
+---
+title: "clim import"
+description: Install tools from an exported manifest
+---
+
+Install tools listed in a YAML manifest created by `clim export`.
+
+## Usage
+
+```bash
+clim import <file> [flags]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<file>` | Path to the YAML manifest file |
+
+## Flags
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--yes` | `-y` | Install all tools without prompting |
+
+## Examples
+
+```bash
+# Interactive — confirm before installing each tool
+clim import my-tools.yaml
+
+# Non-interactive — install everything
+clim import my-tools.yaml --yes
+```
+
+## How It Works
+
+1. Reads the YAML manifest
+2. For each tool, determines the best package manager for the current OS
+3. Runs the native install command (e.g., `brew install`, `winget install`)
+4. Invalidates the scan cache so subsequent commands reflect the changes
+
+## See Also
+
+- [`clim export`](/reference/commands/export) — Export tools to a manifest
+- [`clim open`](/reference/commands/open) — Install from a share token
