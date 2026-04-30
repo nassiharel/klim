@@ -113,6 +113,8 @@ func init() {
 	rootCmd.AddCommand(doctorCmd)
 	auditCmd.GroupID = "health"
 	rootCmd.AddCommand(auditCmd)
+	complianceCmd.GroupID = "health"
+	rootCmd.AddCommand(complianceCmd)
 
 	// Shell integration.
 	shellCmd.GroupID = "shell"

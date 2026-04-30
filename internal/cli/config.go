@@ -105,6 +105,10 @@ var configShowCmd = &cobra.Command{
 		fmt.Printf("  default_tab: %s\n", c.UI.DefaultTab)
 		fmt.Printf("  show_path: %v\n", c.UI.ShowPath)
 		fmt.Printf("  sidebar_right: %v\n", c.UI.SidebarRight)
+		if c.Compliance.Policy != "" {
+			fmt.Printf("\ncompliance:\n")
+			fmt.Printf("  policy: %s\n", c.Compliance.Policy)
+		}
 
 		if len(warnings) > 0 {
 			fmt.Fprintf(os.Stderr, "\nWarnings:\n")

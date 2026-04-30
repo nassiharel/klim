@@ -26,6 +26,7 @@ type Config struct {
 	Marketplace MarketplaceConfig `yaml:"marketplace"`
 	Performance PerformanceConfig `yaml:"performance"`
 	UI          UIConfig          `yaml:"ui"`
+	Compliance  ComplianceConfig  `yaml:"compliance,omitempty"`
 }
 
 // LoggingConfig controls log output.
@@ -54,6 +55,11 @@ type UIConfig struct {
 	DefaultTab   string `yaml:"default_tab"`
 	ShowPath     bool   `yaml:"show_path"`
 	SidebarRight bool   `yaml:"sidebar_right"` // true = filter sidebar on right side
+}
+
+// ComplianceConfig controls compliance policy checking.
+type ComplianceConfig struct {
+	Policy string `yaml:"policy,omitempty"` // path to .clim-policy.yaml (or URL)
 }
 
 // Duration wraps time.Duration for YAML marshaling as a human-readable string
