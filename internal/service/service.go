@@ -342,30 +342,31 @@ func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error)
 		return nil, err
 	}
 
-	// Merge packs from extra marketplaces.
-	for i, fetcher := range c.ExtraFetchers {
-		data, fetchErr := fetchExtraCached(ctx, fetcher, i, c.MaxAge)
-		if fetchErr != nil {
-			slog.Warn("extra marketplace packs fetch failed", "index", i, "error", fetchErr)
-			continue
-		}
-		extraPacks, parseErr := registry.ParsePacksFromBytes(data)
-		if parseErr != nil {
-			slog.Warn("extra marketplace packs parse failed", "index", i, "error", parseErr)
-			continue
-		}
-		packMap := make(map[string]registry.Pack)
+	// Merge packs from extra marketplaces — build map once.
+	if len(c.ExtraFetchers) > 0 {
+		packMap := make(map[string]registry.Pack, len(packs))
 		for _, p := range packs {
 			packMap[p.Name] = p
 		}
-		for _, p := range extraPacks {
-			packMap[p.Name] = p
+		for i, fetcher := range c.ExtraFetchers {
+			data, fetchErr := fetchExtraCached(ctx, fetcher, i, c.MaxAge)
+			if fetchErr != nil {
+				slog.Warn("extra marketplace packs fetch failed", "index", i, "error", fetchErr)
+				continue
+			}
+			extraPacks, parseErr := registry.ParsePacksFromBytes(data)
+			if parseErr != nil {
+				slog.Warn("extra marketplace packs parse failed", "index", i, "error", parseErr)
+				continue
+			}
+			for _, p := range extraPacks {
+				packMap[p.Name] = p
+			}
 		}
-		merged := make([]registry.Pack, 0, len(packMap))
+		packs = make([]registry.Pack, 0, len(packMap))
 		for _, p := range packMap {
-			merged = append(merged, p)
+			packs = append(packs, p)
 		}
-		packs = merged
 	}
 
 	sort.Slice(packs, func(i, j int) bool { return packs[i].Name < packs[j].Name })
@@ -422,8 +423,10 @@ func fetchExtraCached(ctx context.Context, fetcher catalog.MarketplaceFetcher, i
 	}
 
 	// Write cache.
-	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr == nil {
-		_ = fileutil.AtomicWrite(cachePath, data, 0o644)
+	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr != nil {
+		slog.Warn("failed to create extra marketplace cache dir", "path", cachePath, "error", mkErr)
+	} else if writeErr := fileutil.AtomicWrite(cachePath, data, 0o644); writeErr != nil {
+		slog.Warn("failed to write extra marketplace cache", "path", cachePath, "error", writeErr)
 	}
 
 	return data, nil

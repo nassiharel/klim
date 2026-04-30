@@ -108,7 +108,13 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println(string(data))
 		if !result.Compliant {
-			return fmt.Errorf("compliance check failed")
+			var errorCount int
+			for _, v := range result.Violations {
+				if v.Severity == "error" {
+					errorCount++
+				}
+			}
+			return fmt.Errorf("compliance check failed: %d error(s)", errorCount)
 		}
 		return nil
 	}

@@ -44,15 +44,25 @@ type Result struct {
 	Compliant  bool        `json:"compliant"`
 }
 
+// maxPolicySize limits the policy file to prevent memory exhaustion.
+const maxPolicySize = 1 << 20 // 1 MB
+
 // LoadPolicy reads and parses a policy file.
 func LoadPolicy(path string) (*Policy, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading policy %s: %w", path, err)
+	}
+	if info.Size() > maxPolicySize {
+		return nil, fmt.Errorf("policy file %s too large (%d bytes, max %d)", path, info.Size(), maxPolicySize)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading policy: %w", err)
+		return nil, fmt.Errorf("reading policy %s: %w", path, err)
 	}
 	var p Policy
 	if err := yaml.Unmarshal(data, &p); err != nil {
-		return nil, fmt.Errorf("parsing policy: %w", err)
+		return nil, fmt.Errorf("parsing policy %s: %w", path, err)
 	}
 	if p.Name == "" {
 		p.Name = "Unnamed Policy"

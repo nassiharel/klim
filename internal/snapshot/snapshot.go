@@ -184,14 +184,24 @@ func writeSnapshot(path string, snap Snapshot) error {
 	return fileutil.AtomicWrite(path, data, 0o644)
 }
 
+// maxSnapshotSize limits snapshot files to prevent memory exhaustion.
+const maxSnapshotSize = 10 << 20 // 10 MB
+
 func readSnapshot(path string) (*Snapshot, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading snapshot %s: %w", path, err)
+	}
+	if info.Size() > maxSnapshotSize {
+		return nil, fmt.Errorf("snapshot %s too large (%d bytes, max %d)", path, info.Size(), maxSnapshotSize)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading snapshot: %w", err)
+		return nil, fmt.Errorf("reading snapshot %s: %w", path, err)
 	}
 	var snap Snapshot
 	if err := yaml.Unmarshal(data, &snap); err != nil {
-		return nil, fmt.Errorf("parsing snapshot: %w", err)
+		return nil, fmt.Errorf("parsing snapshot %s: %w", path, err)
 	}
 	return &snap, nil
 }
@@ -220,7 +230,7 @@ func listDir(dir string) ([]Entry, error) {
 		snap, readErr := readSnapshot(path)
 		toolCount := 0
 		name := strings.TrimSuffix(e.Name(), ".yaml")
-		if readErr == nil {
+		if readErr == nil && snap != nil {
 			toolCount = len(snap.Tools)
 			if snap.Name != "" {
 				name = snap.Name
@@ -242,8 +252,8 @@ func listDir(dir string) ([]Entry, error) {
 }
 
 func resolveSnapshotPath(nameOrPath string) (string, error) {
-	// Reject path traversal attempts.
-	if strings.Contains(nameOrPath, "..") || strings.ContainsAny(nameOrPath, `/\`) {
+	// Reject path traversal and dangerous characters.
+	if strings.Contains(nameOrPath, "..") || strings.ContainsAny(nameOrPath, "/\\\x00") {
 		return "", fmt.Errorf("invalid snapshot name: %q", nameOrPath)
 	}
 
