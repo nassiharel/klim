@@ -2,7 +2,7 @@ name: Deploy Docs
 
 on:
   push:
-    branches: [main, marketplace]
+    branches: [main]
     paths: ['docs/**', 'marketplace/**']
   workflow_dispatch:
 

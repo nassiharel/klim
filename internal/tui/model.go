@@ -2411,8 +2411,16 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 	}
 	m.complianceResult, m.complianceError = runComplianceForTUI(m.tools, policyPath)
 
-	// Compute environment health score.
-	m.cachedScore = score.Compute(m.tools, m.doctorIssues, m.complianceResult)
+	// Compute environment health score using precomputed data.
+	auditW, auditI := audit.CountBySeverity(m.auditFindings)
+	m.cachedScore = score.Compute(score.ScoreInput{
+		Tools:         m.tools,
+		DoctorIssues:  m.doctorIssues,
+		AuditWarnings: auditW,
+		AuditInfos:    auditI,
+		CompResult:    m.complianceResult,
+		ComplianceErr: m.complianceError,
+	})
 
 	m.doctorChecked = true
 	m.doctorScroll = 0

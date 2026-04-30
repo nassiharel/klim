@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/compliance"
 	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/registry"
@@ -30,15 +29,25 @@ type Result struct {
 	Categories []Category `json:"categories"`
 }
 
+// ScoreInput holds all inputs for score computation.
+type ScoreInput struct {
+	Tools         []registry.Tool
+	DoctorIssues  []doctor.Issue
+	AuditWarnings int
+	AuditInfos    int
+	CompResult    *compliance.Result
+	ComplianceErr string
+}
+
 // Compute calculates the environment health score.
-func Compute(tools []registry.Tool, doctorIssues []doctor.Issue, compResult *compliance.Result) Result {
+func Compute(input ScoreInput) Result {
 	var cats []Category
 
-	cats = append(cats, scoreToolFreshness(tools))
-	cats = append(cats, scoreDoctorHealth(doctorIssues))
-	cats = append(cats, scoreAuditFindings(tools))
-	cats = append(cats, scoreCompliance(compResult))
-	cats = append(cats, scoreManagedSources(tools))
+	cats = append(cats, scoreToolFreshness(input.Tools))
+	cats = append(cats, scoreDoctorHealth(input.DoctorIssues))
+	cats = append(cats, scoreAuditClean(input.AuditWarnings, input.AuditInfos))
+	cats = append(cats, scoreCompliance(input.CompResult, input.ComplianceErr))
+	cats = append(cats, scoreManagedSources(input.Tools))
 
 	total, maxTotal := 0, 0
 	for _, c := range cats {
@@ -145,10 +154,8 @@ func scoreDoctorHealth(issues []doctor.Issue) Category {
 }
 
 // Audit findings: 20 points. Warnings cost 3, infos cost 1.
-func scoreAuditFindings(tools []registry.Tool) Category {
+func scoreAuditClean(warns, infos int) Category {
 	const maxPts = 20
-	findings, _ := audit.Analyze(tools)
-	warns, infos := audit.CountBySeverity(findings)
 	penalty := warns*3 + infos*1
 	points := maxPts - penalty
 	if points < 0 {
@@ -166,9 +173,13 @@ func scoreAuditFindings(tools []registry.Tool) Category {
 }
 
 // Compliance: 15 points. Full marks if compliant or no policy.
-func scoreCompliance(result *compliance.Result) Category {
+// Zero points if policy exists but failed to load.
+func scoreCompliance(result *compliance.Result, loadErr string) Category {
 	const maxPts = 15
 	if result == nil {
+		if loadErr != "" {
+			return Category{Name: "Compliance", Points: 0, MaxPts: maxPts, Status: "error", Details: "Policy load failed: " + loadErr}
+		}
 		return Category{Name: "Compliance", Points: maxPts, MaxPts: maxPts, Status: "ok", Details: "No policy configured"}
 	}
 	if result.Compliant && len(result.Violations) == 0 {

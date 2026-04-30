@@ -283,10 +283,11 @@ func formatStars(n int) string {
 
 func truncate(s string, max int) string {
 	s = strings.ReplaceAll(s, "|", "\\|")
-	if len(s) <= max {
+	runes := []rune(s)
+	if len(runes) <= max {
 		return s
 	}
-	return s[:max-3] + "..."
+	return string(runes[:max-3]) + "..."
 }
 
 // fetchMarketplace fetches the assembled marketplace from the remote URL.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/compliance"
 	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/progress"
@@ -59,17 +60,29 @@ func runScore(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
+	var compErrStr string
 	if policyPath != "" {
 		policy, loadErr := compliance.LoadPolicy(policyPath)
 		if loadErr != nil {
 			fmt.Fprintf(os.Stderr, "  ⚠ Compliance policy error: %v\n", loadErr)
+			compErrStr = loadErr.Error()
 		} else {
 			r := compliance.Check(policy, tools)
 			compResult = &r
 		}
 	}
 
-	result := score.Compute(tools, doctorIssues, compResult)
+	findings, _ := audit.Analyze(tools)
+	auditWarns, auditInfos := audit.CountBySeverity(findings)
+
+	result := score.Compute(score.ScoreInput{
+		Tools:         tools,
+		DoctorIssues:  doctorIssues,
+		AuditWarnings: auditWarns,
+		AuditInfos:    auditInfos,
+		CompResult:    compResult,
+		ComplianceErr: compErrStr,
+	})
 
 	if scoreBadgeFlag {
 		fmt.Println(score.BadgeURL(result))
