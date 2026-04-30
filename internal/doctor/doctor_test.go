@@ -60,8 +60,8 @@ func TestCheckMultipleInstallations_differentVersions(t *testing.T) {
 	if len(issues) != 1 {
 		t.Fatalf("expected 1 issue, got %d", len(issues))
 	}
-	if issues[0].Severity != SeverityWarning {
-		t.Errorf("expected warning, got %s", issues[0].Severity)
+	if issues[0].Severity != SeverityError {
+		t.Errorf("expected error, got %s", issues[0].Severity)
 	}
 	if !strings.Contains(issues[0].Title, "Node.js") {
 		t.Errorf("expected title to contain 'Node.js', got %q", issues[0].Title)

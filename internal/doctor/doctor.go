@@ -212,7 +212,7 @@ func checkMultipleInstallations(tools []registry.Tool) []Issue {
 		}
 
 		issues = append(issues, Issue{
-			Severity: SeverityWarning,
+			Severity: SeverityError,
 			Category: CategoryTools,
 			Title:    fmt.Sprintf("%s has %d installations with different versions", t.DisplayName, len(t.Instances)),
 			Detail:   strings.Join(parts, "\n"),
