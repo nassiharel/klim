@@ -1238,6 +1238,12 @@ func (m Model) renderDetailBody(tool registry.Tool) string {
 		b.WriteString(community)
 	}
 
+	refs := m.renderReferencesSection(tool)
+	if refs != "" {
+		b.WriteString(divider("Referenced By"))
+		b.WriteString(refs)
+	}
+
 	if len(m.detailRelated) > 0 {
 		b.WriteString(divider("You might also like"))
 		for i, r := range m.detailRelated {

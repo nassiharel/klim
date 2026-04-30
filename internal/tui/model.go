@@ -241,10 +241,13 @@ type Model struct {
 	configEditInput textinput.Model // text input for string/int/duration settings
 	configScroll    int             // scroll offset for config tab
 
-	// Doctor tab state.
-	doctorIssues  []doctor.Issue // diagnostic results (nil = not yet checked)
-	doctorScroll  int            // scroll offset for doctor tab
-	doctorChecked bool           // true after first doctor check completed
+	// Doctor tab state (includes audit findings).
+	doctorIssues    []doctor.Issue  // diagnostic results (nil = not yet checked)
+	auditFindings   []auditFinding  // security audit findings
+	auditLicenses   map[string]int  // license counts
+	doctorScroll    int             // scroll offset for doctor tab
+	doctorChecked   bool            // true after first doctor check completed
+	doctorSubTab    int             // 0=doctor, 1=audit
 
 	// Team file (.clim.yaml) state.
 	teamFilePath    string                  // path to detected .clim.yaml ("" = not found)
@@ -397,8 +400,11 @@ func (m *Model) startScan() tea.Cmd {
 	m.batchUpdating = false
 	m.batchQueue = nil
 	m.doctorIssues = nil
+	m.auditFindings = nil
+	m.auditLicenses = nil
 	m.doctorChecked = false
 	m.doctorScroll = 0
+	m.doctorSubTab = doctorSubDoctor
 	return tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg { return findToolsCmd(m.svc, true, gen)() },
@@ -1589,10 +1595,17 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "right", "tab":
+			// On Doctor tab, cycle sub-tabs before switching main tabs.
+			if m.activeTab == tabDoctor && m.doctorSubTab < doctorSubAudit {
+				m.doctorSubTab++
+				m.doctorScroll = 0
+				return m, nil
+			}
 			m.activeTab = (m.activeTab + 1) % tabCount
 			m.cursor = 0
 			m.dashboardScroll = 0
 			m.doctorScroll = 0
+			m.doctorSubTab = doctorSubDoctor
 			m.discoverSubTab = discoverTools
 			m.applyFilter()
 			if m.activeTab == tabProject {
@@ -1600,10 +1613,16 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "left", "shift+tab":
+			if m.activeTab == tabDoctor && m.doctorSubTab > doctorSubDoctor {
+				m.doctorSubTab--
+				m.doctorScroll = 0
+				return m, nil
+			}
 			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
 			m.cursor = 0
 			m.dashboardScroll = 0
 			m.doctorScroll = 0
+			m.doctorSubTab = doctorSubDoctor
 			m.discoverSubTab = discoverTools
 			m.applyFilter()
 			if m.activeTab == tabProject {
@@ -2365,6 +2384,7 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 		scanMeta = meta[0]
 	}
 	m.doctorIssues = doctor.Diagnose(m.tools, scanMeta)
+	m.auditFindings, m.auditLicenses = computeAuditFindings(m.tools)
 	m.doctorChecked = true
 	m.doctorScroll = 0
 }
