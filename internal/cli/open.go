@@ -21,8 +21,8 @@ The token encodes a list of tool names. Tools are resolved from your local
 catalog and installed via native package managers.
 
 Usage:
-  clim open clim:v1:H4sIAAAA...          # interactive: confirm before installing
-  clim open clim:v1:H4sIAAAA... --yes    # non-interactive: install all`,
+  clim share open clim:v1:H4sIAAAA...          # interactive
+  clim share open clim:v1:H4sIAAAA... --yes    # non-interactive`,
 	Args: requireArgs(1, "clim share open <token>"),
 	RunE: runOpen,
 }
@@ -30,11 +30,15 @@ Usage:
 func init() {
 	openCmd.Flags().BoolVarP(&openYesFlag, "yes", "y", false, "Install all tools without prompting")
 	// Registered under shareCmd in share.go.
-	// Also keep a deprecated root-level alias for backward compatibility.
-	openDeprecated := *openCmd
-	openDeprecated.Deprecated = "use 'clim share open' instead"
-	openDeprecated.Hidden = true
-	rootCmd.AddCommand(&openDeprecated)
+	// Deprecated root-level alias for backward compatibility.
+	rootCmd.AddCommand(&cobra.Command{
+		Use:        "open <token>",
+		Short:      "Install tools from a share token",
+		Args:       requireArgs(1, "clim share open <token>"),
+		RunE:       runOpen,
+		Deprecated: "use 'clim share open' instead",
+		Hidden:     true,
+	})
 }
 
 func runOpen(cmd *cobra.Command, args []string) error {

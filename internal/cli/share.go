@@ -15,13 +15,9 @@ var shareCmd = &cobra.Command{
 	Long: `Share your installed tools as a compact token, or install tools from
 a token shared by a teammate.
 
-Subcommands:
-  generate   Generate a share token of your installed tools
-  open       Install tools from a share token
-
-Legacy usage (still works):
-  clim share             # same as clim share generate
-  clim share open <token>`,
+Usage:
+  clim share                 # generate a share token
+  clim share open <token>    # install from a share token`,
 	RunE: runShare,
 }
 

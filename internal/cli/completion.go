@@ -14,24 +14,24 @@ var completionCmd = &cobra.Command{
 To load completions:
 
   bash:
-    source <(clim completion bash)
+    source <(clim shell completion bash)
     # To load on every session, add to your ~/.bashrc:
-    echo 'source <(clim completion bash)' >> ~/.bashrc
+    echo 'source <(clim shell completion bash)' >> ~/.bashrc
 
   zsh:
-    source <(clim completion zsh)
+    source <(clim shell completion zsh)
     # To load on every session, add to your ~/.zshrc:
-    echo 'source <(clim completion zsh)' >> ~/.zshrc
+    echo 'source <(clim shell completion zsh)' >> ~/.zshrc
 
   fish:
-    clim completion fish | source
+    clim shell completion fish | source
     # To load on every session:
-    clim completion fish > ~/.config/fish/completions/clim.fish
+    clim shell completion fish > ~/.config/fish/completions/clim.fish
 
   powershell:
-    clim completion powershell | Out-String | Invoke-Expression
+    clim shell completion powershell | Out-String | Invoke-Expression
     # To load on every session, add to your $PROFILE:
-    Add-Content $PROFILE 'clim completion powershell | Out-String | Invoke-Expression'`,
+    Add-Content $PROFILE 'clim shell completion powershell | Out-String | Invoke-Expression'`,
 	DisableFlagsInUseLine: true,
 	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
 	Args:                  cobra.MatchAll(requireArgs(1, "clim shell completion <bash|zsh|fish|powershell>"), cobra.OnlyValidArgs),

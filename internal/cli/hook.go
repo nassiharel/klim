@@ -15,24 +15,24 @@ cd into a directory with a .clim.yaml file.
 Usage:
 
   bash:
-    eval "$(clim hook bash)"
+    eval "$(clim shell hook bash)"
     # To load on every session:
-    echo 'eval "$(clim hook bash)"' >> ~/.bashrc
+    echo 'eval "$(clim shell hook bash)"' >> ~/.bashrc
 
   zsh:
-    eval "$(clim hook zsh)"
+    eval "$(clim shell hook zsh)"
     # To load on every session:
-    echo 'eval "$(clim hook zsh)"' >> ~/.zshrc
+    echo 'eval "$(clim shell hook zsh)"' >> ~/.zshrc
 
   fish:
-    clim hook fish | source
+    clim shell hook fish | source
     # To load on every session:
-    clim hook fish > ~/.config/fish/conf.d/clim-hook.fish
+    clim shell hook fish > ~/.config/fish/conf.d/clim-hook.fish
 
   powershell:
-    clim hook powershell | Out-String | Invoke-Expression
+    clim shell hook powershell | Out-String | Invoke-Expression
     # To load on every session, add to your $PROFILE:
-    Add-Content $PROFILE 'clim hook powershell | Out-String | Invoke-Expression'`,
+    Add-Content $PROFILE 'clim shell hook powershell | Out-String | Invoke-Expression'`,
 	DisableFlagsInUseLine: true,
 	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
 	Args:                  cobra.MatchAll(requireArgs(1, "clim shell hook <bash|zsh|fish|powershell>"), cobra.OnlyValidArgs),

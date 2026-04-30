@@ -6,7 +6,7 @@ import (
 
 var shellCmd = &cobra.Command{
 	Use:   "shell",
-	Short: "Shell integration — completions, hooks, and proxies",
+	Short: "Shell integration — completions and hooks",
 	Long: `Configure shell integration for clim.
 
 Subcommands:
