@@ -97,7 +97,7 @@ func checkDuplicatePATH() []Issue {
 		return nil
 	}
 	dirs := filepath.SplitList(raw)
-	seen := make(map[string]int) // normalized path → first occurrence index
+	seen := make(map[string]pathEntry) // normalized path → first occurrence
 	var issues []Issue
 
 	for i, dir := range dirs {
@@ -105,19 +105,25 @@ func checkDuplicatePATH() []Issue {
 		if norm == "" {
 			continue
 		}
-		if firstIdx, ok := seen[norm]; ok {
+		if first, ok := seen[norm]; ok {
+			detail := fmt.Sprintf("%q (position %d) duplicates %q (position %d)", dir, i+1, first.raw, first.index+1)
 			issues = append(issues, Issue{
 				Severity: SeverityWarning,
 				Category: CategoryPATH,
 				Title:    "Duplicate PATH entry",
-				Detail:   fmt.Sprintf("%q appears at positions %d and %d", dir, firstIdx+1, i+1),
+				Detail:   detail,
 				Fix:      "Remove the duplicate entry from your PATH",
 			})
 		} else {
-			seen[norm] = i
+			seen[norm] = pathEntry{raw: dir, index: i}
 		}
 	}
 	return issues
+}
+
+type pathEntry struct {
+	raw   string
+	index int
 }
 
 // checkBrokenPATH detects PATH entries that don't exist or aren't directories.
@@ -242,11 +248,18 @@ func checkMissingPMs(tools []registry.Tool) []Issue {
 		}
 	}
 
-	var issues []Issue
-	for pm, count := range neededCount {
-		if count == 0 {
-			continue
+	// Sort PM keys for stable output ordering.
+	pmKeys := make([]registry.InstallSource, 0, len(neededCount))
+	for pm := range neededCount {
+		if neededCount[pm] > 0 {
+			pmKeys = append(pmKeys, pm)
 		}
+	}
+	sort.Slice(pmKeys, func(i, j int) bool { return pmKeys[i] < pmKeys[j] })
+
+	var issues []Issue
+	for _, pm := range pmKeys {
+		count := neededCount[pm]
 		issues = append(issues, Issue{
 			Severity: SeverityInfo,
 			Category: CategoryPM,

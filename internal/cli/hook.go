@@ -8,7 +8,7 @@ import (
 )
 
 var hookCmd = &cobra.Command{
-	Use:   "hook [bash|zsh|fish|powershell]",
+	Use:   "hook <bash|zsh|fish|powershell>",
 	Short: "Generate shell hook for automatic .clim.yaml checking",
 	Long: `Generate a shell hook that automatically runs 'clim check' when you
 cd into a directory with a .clim.yaml file.

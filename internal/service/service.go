@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/nassiharel/clim/internal/catalog"
@@ -76,6 +77,7 @@ func NewWithConfig(cfg *config.Config) *ToolService {
 
 	var extraFetchers []catalog.MarketplaceFetcher
 	for _, url := range cfg.Marketplace.ExtraURLs {
+		url = strings.TrimSpace(url)
 		if url != "" {
 			extraFetchers = append(extraFetchers, &catalog.GitHubFetcher{URL: url})
 		}

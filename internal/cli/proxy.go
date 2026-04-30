@@ -177,6 +177,10 @@ func runProxyRemove(cmd *cobra.Command, args []string) error {
 
 	var removed int
 	for _, name := range args {
+		if !isValidShimName(name) {
+			fmt.Fprintf(os.Stderr, "⚠ %s: invalid name, skipping\n", name)
+			continue
+		}
 		shimPath := shimFilePath(dir, name)
 		if err := os.Remove(shimPath); err != nil {
 			if os.IsNotExist(err) {

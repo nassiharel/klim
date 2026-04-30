@@ -120,26 +120,45 @@ func runTry(cmd *cobra.Command, args []string) error {
 			}
 		}()
 
-		_ = c.Run()
+		var runErr error
+		runErr = c.Run()
 		fmt.Fprintln(os.Stderr)
-	} else {
-		fmt.Fprintf(os.Stderr, "%s is ready. Run it manually, then come back here.\n", t.DisplayName)
-		fmt.Fprintf(os.Stderr, "Press Enter when done...")
-		fmt.Fscanln(os.Stdin)
+
+		// Cleanup prompt (unless --keep or was already installed).
+		if !alreadyInstalled && !tryKeepFlag {
+			doCleanup(t, installSource)
+		}
+
+		if runErr != nil {
+			if exitErr, ok := runErr.(*exec.ExitError); ok {
+				os.Exit(exitErr.ExitCode())
+			}
+			return runErr
+		}
+		return nil
 	}
+
+	fmt.Fprintf(os.Stderr, "%s is ready. Run it manually, then come back here.\n", t.DisplayName)
+	fmt.Fprintf(os.Stderr, "Press Enter when done...")
+	fmt.Fscanln(os.Stdin)
 
 	// Cleanup prompt (unless --keep or was already installed).
 	if alreadyInstalled || tryKeepFlag {
 		return nil
 	}
 
+	doCleanup(t, installSource)
+	return nil
+}
+
+func doCleanup(t *registry.Tool, installSource registry.InstallSource) {
 	fmt.Fprint(os.Stderr, "Keep "+t.DisplayName+"? [Y/n]: ")
 	var answer string
 	fmt.Fscan(os.Stdin, &answer)
 	answer = strings.TrimSpace(strings.ToLower(answer))
 	if answer == "" || answer == "y" || answer == "yes" {
 		fmt.Fprintf(os.Stderr, "✓ Keeping %s.\n", t.DisplayName)
-		return nil
+		return
 	}
 
 	// Remove.
@@ -150,7 +169,7 @@ func runTry(cmd *cobra.Command, args []string) error {
 	removeArgs := t.Packages.RemoveArgs(src)
 	if removeArgs == nil {
 		fmt.Fprintf(os.Stderr, "⚠ Cannot auto-remove %s — remove manually.\n", t.DisplayName)
-		return nil
+		return
 	}
 
 	fmt.Fprintf(os.Stderr, "Removing %s...\n", t.DisplayName)
@@ -165,5 +184,4 @@ func runTry(cmd *cobra.Command, args []string) error {
 	}
 
 	_ = svc.InvalidateScanCache()
-	return nil
 }

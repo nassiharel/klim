@@ -1589,6 +1589,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.activeTab = (m.activeTab + 1) % tabCount
 			m.cursor = 0
 			m.dashboardScroll = 0
+			m.doctorScroll = 0
 			m.discoverSubTab = discoverTools
 			m.applyFilter()
 			if m.activeTab == tabProject {
@@ -1599,6 +1600,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
 			m.cursor = 0
 			m.dashboardScroll = 0
+			m.doctorScroll = 0
 			m.discoverSubTab = discoverTools
 			m.applyFilter()
 			if m.activeTab == tabProject {
