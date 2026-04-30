@@ -1,21 +1,25 @@
 //go:build ignore
 
-// Generates the marketplace catalog page for the docs site.
-// Reads marketplace/tools/*.yaml and marketplace/packs/*.yaml locally,
-// then generates a rich MDX page with platform badges, descriptions, etc.
+// Generates the marketplace catalog page for the docs site by fetching
+// the assembled marketplace.yaml from the published marketplace branch.
+// Includes GitHub-enriched metadata (stars, descriptions, licenses).
 //
 // Run: go run docs/scripts/gen-marketplace-page.go
 package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+const marketplaceURL = "https://raw.githubusercontent.com/nassiharel/clim/marketplace/marketplace.yaml"
 
 type githubInfo struct {
 	Stars       int    `yaml:"stars"`
@@ -49,14 +53,38 @@ type packDef struct {
 }
 
 func main() {
-	// Try assembled marketplace.yaml first (has GitHub enrichment).
-	tools, packs := loadAssembled("marketplace.yaml")
-	if len(tools) == 0 {
-		// Fall back to individual files.
-		fmt.Fprintln(os.Stderr, "No assembled marketplace.yaml found, reading individual files...")
-		tools = loadToolFiles("marketplace/tools")
-		packs = loadPackFiles("marketplace/packs")
+	fmt.Fprintf(os.Stderr, "Fetching marketplace from %s...\n", marketplaceURL)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(marketplaceURL)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error fetching marketplace: %v\n", err)
+		os.Exit(1)
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		fmt.Fprintf(os.Stderr, "marketplace returned %s\n", resp.Status)
+		os.Exit(1)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading response: %v\n", err)
+		os.Exit(1)
+	}
+
+	var mp struct {
+		Tools []toolDef `yaml:"tools"`
+		Packs []packDef `yaml:"packs"`
+	}
+	if err := yaml.Unmarshal(data, &mp); err != nil {
+		fmt.Fprintf(os.Stderr, "error parsing marketplace: %v\n", err)
+		os.Exit(1)
+	}
+
+	tools := mp.Tools
+	packs := mp.Packs
 
 	for i := range tools {
 		if tools[i].DisplayName == "" {
@@ -278,57 +306,4 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
-}
-
-// --- loaders ---
-
-type assembledFile struct {
-	Tools []toolDef `yaml:"tools"`
-	Packs []packDef `yaml:"packs"`
-}
-
-func loadAssembled(path string) ([]toolDef, []packDef) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, nil
-	}
-	var f assembledFile
-	if err := yaml.Unmarshal(data, &f); err != nil {
-		return nil, nil
-	}
-	return f.Tools, f.Packs
-}
-
-func loadToolFiles(dir string) []toolDef {
-	files, _ := filepath.Glob(filepath.Join(dir, "*.yaml"))
-	var tools []toolDef
-	for _, f := range files {
-		data, err := os.ReadFile(f)
-		if err != nil {
-			continue
-		}
-		var t toolDef
-		if err := yaml.Unmarshal(data, &t); err != nil {
-			continue
-		}
-		tools = append(tools, t)
-	}
-	return tools
-}
-
-func loadPackFiles(dir string) []packDef {
-	files, _ := filepath.Glob(filepath.Join(dir, "*.yaml"))
-	var packs []packDef
-	for _, f := range files {
-		data, err := os.ReadFile(f)
-		if err != nil {
-			continue
-		}
-		var p packDef
-		if err := yaml.Unmarshal(data, &p); err != nil {
-			continue
-		}
-		packs = append(packs, p)
-	}
-	return packs
 }
