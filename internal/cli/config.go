@@ -74,8 +74,11 @@ var configShowCmd = &cobra.Command{
 			return fmt.Errorf("loading config: %w", err)
 		}
 
-		path, _ := config.Path()
-		fmt.Fprintf(os.Stderr, "Config: %s\n\n", path)
+		if path, pathErr := config.Path(); pathErr == nil {
+			fmt.Fprintf(os.Stderr, "Config: %s\n\n", path)
+		} else {
+			fmt.Fprintf(os.Stderr, "Config: (unknown: %v)\n\n", pathErr)
+		}
 
 		fmt.Printf("logging:\n")
 		fmt.Printf("  level: %s\n", c.Logging.Level)

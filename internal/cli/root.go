@@ -57,7 +57,7 @@ for non-interactive operation.`,
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "enable verbose logging to stderr")
-	rootCmd.CompletionOptions.HiddenDefaultCmd = true
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
 	// Command groups for organized help output.
 	rootCmd.AddGroup(
@@ -140,7 +140,7 @@ func requireArgs(n int, example string) cobra.PositionalArgs {
 			return fmt.Errorf("requires %d argument(s)\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, example, cmd.CommandPath())
 		}
 		if len(args) > n {
-			return fmt.Errorf("accepts at most %d argument(s), received %d\n\nUsage:\n  %s", n, len(args), example)
+			return fmt.Errorf("accepts at most %d argument(s), received %d\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, len(args), example, cmd.CommandPath())
 		}
 		return nil
 	}
