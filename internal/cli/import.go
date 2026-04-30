@@ -26,13 +26,13 @@ and clim picks the best one for your current OS.
 Usage:
   clim import my-tools.yaml          # interactive: confirm before installing
   clim import my-tools.yaml --yes    # non-interactive: install all without prompting`,
-	Args: cobra.ExactArgs(1),
+	Args: requireArgs(1, "clim import <manifest.yaml>"),
 	RunE: runImport,
 }
 
 func init() {
 	importCmd.Flags().BoolVarP(&yesFlag, "yes", "y", false, "Install all tools without prompting")
-	rootCmd.AddCommand(importCmd)
+	// Registered in root.go with command group.
 }
 
 func runImport(cmd *cobra.Command, args []string) error {

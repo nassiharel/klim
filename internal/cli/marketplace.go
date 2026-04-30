@@ -27,14 +27,14 @@ Configure in config.yaml:
 var marketplaceAddCmd = &cobra.Command{
 	Use:   "add <url>",
 	Short: "Add an extra marketplace URL",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireArgs(1, "clim config marketplace add <url>"),
 	RunE:  runMarketplaceAdd,
 }
 
 var marketplaceRemoveCmd = &cobra.Command{
 	Use:   "remove <url>",
 	Short: "Remove an extra marketplace URL",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireArgs(1, "clim config marketplace remove <url>"),
 	RunE:  runMarketplaceRemove,
 }
 
@@ -48,7 +48,7 @@ func init() {
 	marketplaceCmd.AddCommand(marketplaceAddCmd)
 	marketplaceCmd.AddCommand(marketplaceRemoveCmd)
 	marketplaceCmd.AddCommand(marketplaceListCmd)
-	rootCmd.AddCommand(marketplaceCmd)
+	// Registered under configCmd in config.go.
 }
 
 func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
@@ -142,7 +142,7 @@ func runMarketplaceList(cmd *cobra.Command, args []string) error {
 
 	if len(c.Marketplace.ExtraURLs) == 0 {
 		fmt.Fprintln(os.Stderr, "\nNo extra marketplaces configured.")
-		fmt.Fprintln(os.Stderr, "Add one with: clim marketplace add <url>")
+		fmt.Fprintln(os.Stderr, "Add one with: clim config marketplace add <url>")
 	} else {
 		fmt.Fprintf(os.Stderr, "\nExtra (%d):\n", len(c.Marketplace.ExtraURLs))
 		for i, url := range c.Marketplace.ExtraURLs {

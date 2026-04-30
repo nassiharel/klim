@@ -26,7 +26,7 @@ Examples:
   clim try bat                       # install bat, open a shell, then offer cleanup
   clim try bat -- README.md          # install bat, run 'bat README.md', then offer cleanup
   clim try ripgrep -- -i "TODO" .    # install ripgrep, search, then offer cleanup`,
-	Args: cobra.MinimumNArgs(1),
+	Args: requireMinArgs(1, "clim try <tool> [-- args...]"),
 	RunE: runTry,
 }
 
@@ -34,7 +34,7 @@ var tryKeepFlag bool
 
 func init() {
 	tryCmd.Flags().BoolVar(&tryKeepFlag, "keep", false, "Keep the tool after trying (skip removal prompt)")
-	rootCmd.AddCommand(tryCmd)
+	// Registered in root.go with command group.
 }
 
 func runTry(cmd *cobra.Command, args []string) error {

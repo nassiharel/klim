@@ -21,15 +21,15 @@ The token encodes a list of tool names. Tools are resolved from your local
 catalog and installed via native package managers.
 
 Usage:
-  clim open clim:v1:H4sIAAAA...          # interactive: confirm before installing
-  clim open clim:v1:H4sIAAAA... --yes    # non-interactive: install all`,
-	Args: cobra.ExactArgs(1),
+  clim share open clim:v1:H4sIAAAA...          # interactive
+  clim share open clim:v1:H4sIAAAA... --yes    # non-interactive`,
+	Args: requireArgs(1, "clim share open <token>"),
 	RunE: runOpen,
 }
 
 func init() {
 	openCmd.Flags().BoolVarP(&openYesFlag, "yes", "y", false, "Install all tools without prompting")
-	rootCmd.AddCommand(openCmd)
+	// Registered under shareCmd in share.go.
 }
 
 func runOpen(cmd *cobra.Command, args []string) error {

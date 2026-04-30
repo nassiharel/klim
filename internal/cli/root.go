@@ -57,9 +57,74 @@ for non-interactive operation.`,
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "enable verbose logging to stderr")
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+
+	// Command groups for organized help output.
+	rootCmd.AddGroup(
+		&cobra.Group{ID: "core", Title: "Core Commands:"},
+		&cobra.Group{ID: "project", Title: "Project Commands:"},
+		&cobra.Group{ID: "tools", Title: "Tool Discovery & Management:"},
+		&cobra.Group{ID: "data", Title: "Backup & Sharing:"},
+		&cobra.Group{ID: "health", Title: "Health & Security:"},
+		&cobra.Group{ID: "shell", Title: "Shell Integration:"},
+		&cobra.Group{ID: "config", Title: "Configuration:"},
+	)
+
+	// Core commands.
+	listCmd.GroupID = "core"
 	rootCmd.AddCommand(listCmd)
+	versionCmd.GroupID = "core"
 	rootCmd.AddCommand(versionCmd)
+	updateCmd.GroupID = "core"
+	rootCmd.AddCommand(updateCmd)
+
+	// Project commands.
+	initCmd.GroupID = "project"
+	rootCmd.AddCommand(initCmd)
+	checkCmd.GroupID = "project"
+	rootCmd.AddCommand(checkCmd)
+
+	// Tool discovery & management.
+	onboardCmd.GroupID = "tools"
+	rootCmd.AddCommand(onboardCmd)
+	whyCmd.GroupID = "tools"
+	rootCmd.AddCommand(whyCmd)
+	tryCmd.GroupID = "tools"
+	rootCmd.AddCommand(tryCmd)
+	watchCmd.GroupID = "tools"
+	rootCmd.AddCommand(watchCmd)
+	diffCmd.GroupID = "tools"
+	rootCmd.AddCommand(diffCmd)
+	toolsCmd.GroupID = "tools"
 	rootCmd.AddCommand(toolsCmd)
+
+	// Backup & sharing.
+	exportCmd.GroupID = "data"
+	rootCmd.AddCommand(exportCmd)
+	importCmd.GroupID = "data"
+	rootCmd.AddCommand(importCmd)
+	shareCmd.GroupID = "data"
+	rootCmd.AddCommand(shareCmd)
+	snapshotCmd.GroupID = "data"
+	rootCmd.AddCommand(snapshotCmd)
+
+	// Health & security.
+	doctorCmd.GroupID = "health"
+	rootCmd.AddCommand(doctorCmd)
+	auditCmd.GroupID = "health"
+	rootCmd.AddCommand(auditCmd)
+	complianceCmd.GroupID = "health"
+	rootCmd.AddCommand(complianceCmd)
+
+	// Shell integration.
+	shellCmd.GroupID = "shell"
+	rootCmd.AddCommand(shellCmd)
+	proxyCmd.GroupID = "shell"
+	rootCmd.AddCommand(proxyCmd)
+
+	// Configuration.
+	configCmd.GroupID = "config"
+	rootCmd.AddCommand(configCmd)
 }
 
 // Execute runs the root command.
@@ -69,4 +134,28 @@ func Execute() error {
 		return err
 	}
 	return nil
+}
+
+// requireArgs returns a Cobra Args validator that requires exactly n arguments
+// and prints a helpful error message with usage hint when they're missing.
+func requireArgs(n int, example string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) < n {
+			return fmt.Errorf("requires %d argument(s)\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, example, cmd.CommandPath())
+		}
+		if len(args) > n {
+			return fmt.Errorf("accepts at most %d argument(s), received %d\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, len(args), example, cmd.CommandPath())
+		}
+		return nil
+	}
+}
+
+// requireMinArgs returns a Cobra Args validator that requires at least n arguments.
+func requireMinArgs(n int, example string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) < n {
+			return fmt.Errorf("requires at least %d argument(s)\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, example, cmd.CommandPath())
+		}
+		return nil
+	}
 }

@@ -85,7 +85,7 @@ var onboardListFlag bool
 
 func init() {
 	onboardCmd.Flags().BoolVar(&onboardListFlag, "list", false, "List recommended tools without installing")
-	rootCmd.AddCommand(onboardCmd)
+	// Registered in root.go with command group.
 }
 
 func runOnboard(cmd *cobra.Command, args []string) error {

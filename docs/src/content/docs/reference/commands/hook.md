@@ -1,5 +1,5 @@
 ---
-title: "clim hook"
+title: "clim shell hook"
 description: Generate shell hook for automatic .clim.yaml checking
 ---
 
@@ -8,7 +8,7 @@ Generate a shell hook that automatically runs `clim check` when you `cd` into a 
 ## Usage
 
 ```bash
-clim hook <bash|zsh|fish|powershell>
+clim shell hook <bash|zsh|fish|powershell>
 ```
 
 ## How It Works
@@ -22,16 +22,16 @@ clim hook <bash|zsh|fish|powershell>
 
 ```bash
 # bash — add to ~/.bashrc
-eval "$(clim hook bash)"
+eval "$(clim shell hook bash)"
 
 # zsh — add to ~/.zshrc
-eval "$(clim hook zsh)"
+eval "$(clim shell hook zsh)"
 
 # fish — save to conf.d
-clim hook fish > ~/.config/fish/conf.d/clim-hook.fish
+clim shell hook fish > ~/.config/fish/conf.d/clim-hook.fish
 
 # powershell — add to $PROFILE
-clim hook powershell | Out-String | Invoke-Expression
+clim shell hook powershell | Out-String | Invoke-Expression
 ```
 
 ## Example Output
