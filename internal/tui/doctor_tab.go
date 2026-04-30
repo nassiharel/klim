@@ -260,6 +260,10 @@ func (m Model) renderComplianceView() string {
 	var b strings.Builder
 
 	if m.complianceResult == nil {
+		if m.complianceError != "" {
+			b.WriteString("  " + doctorError.Render("✗ "+m.complianceError) + "\n")
+			return b.String()
+		}
 		b.WriteString("  " + dashDim.Render("No compliance policy configured.") + "\n\n")
 		b.WriteString("  " + dashDim.Render("Create one with: clim compliance init") + "\n")
 		b.WriteString("  " + dashDim.Render("Configure in config.yaml:") + "\n")
@@ -307,10 +311,10 @@ func (m Model) renderComplianceView() string {
 	return b.String()
 }
 
-// runCompliance loads the compliance policy and checks tools against it.
-func runComplianceCheck(tools []registry.Tool, policyPath string) *compliance.Result {
+// runComplianceForTUI loads the compliance policy and checks tools against it.
+// Returns (result, error string). Error is non-empty when policy exists but can't be loaded.
+func runComplianceForTUI(tools []registry.Tool, policyPath string) (*compliance.Result, string) {
 	if policyPath == "" {
-		// Try default locations.
 		for _, candidate := range []string{".clim-policy.yaml", ".clim-policy.yml"} {
 			if _, err := os.Stat(candidate); err == nil {
 				policyPath = candidate
@@ -319,12 +323,12 @@ func runComplianceCheck(tools []registry.Tool, policyPath string) *compliance.Re
 		}
 	}
 	if policyPath == "" {
-		return nil
+		return nil, ""
 	}
 	policy, err := compliance.LoadPolicy(policyPath)
 	if err != nil {
-		return nil
+		return nil, fmt.Sprintf("Failed to load policy %s: %v", policyPath, err)
 	}
 	result := compliance.Check(policy, tools)
-	return &result
+	return &result, ""
 }

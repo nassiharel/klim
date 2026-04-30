@@ -97,6 +97,9 @@ func SaveProfile(tools []registry.Tool, name string) (string, error) {
 
 	snap := buildSnapshot(tools, name)
 	safe := sanitizeName(name)
+	if safe == "" {
+		return "", fmt.Errorf("invalid profile name: %q", name)
+	}
 	path := filepath.Join(dir, safe+".yaml")
 
 	if err := writeSnapshot(path, snap); err != nil {
@@ -259,13 +262,21 @@ func resolveSnapshotPath(nameOrPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("snapshot %q not found", nameOrPath)
 	}
+	var matches []string
 	for _, e := range entries {
 		base := strings.TrimSuffix(e.Name(), ".yaml")
 		if strings.HasPrefix(base, nameOrPath) || strings.HasSuffix(base, nameOrPath) || strings.Contains(base, nameOrPath) {
-			return filepath.Join(dir, e.Name()), nil
+			matches = append(matches, e.Name())
 		}
 	}
-	return "", fmt.Errorf("snapshot %q not found", nameOrPath)
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("snapshot %q not found", nameOrPath)
+	case 1:
+		return filepath.Join(dir, matches[0]), nil
+	default:
+		return "", fmt.Errorf("ambiguous snapshot %q — matches %d files: %s", nameOrPath, len(matches), strings.Join(matches, ", "))
+	}
 }
 
 func sanitizeName(name string) string {

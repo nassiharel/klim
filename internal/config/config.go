@@ -59,7 +59,7 @@ type UIConfig struct {
 
 // ComplianceConfig controls compliance policy checking.
 type ComplianceConfig struct {
-	Policy string `yaml:"policy,omitempty"` // path to .clim-policy.yaml (or URL)
+	Policy string `yaml:"policy,omitempty"` // path to .clim-policy.yaml
 }
 
 // Duration wraps time.Duration for YAML marshaling as a human-readable string

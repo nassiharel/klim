@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -251,5 +252,5 @@ required_tools:
 }
 
 func join(items []string) string {
-	return fmt.Sprintf("%s", items)
+	return strings.Join(items, ", ")
 }

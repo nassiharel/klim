@@ -248,6 +248,7 @@ type Model struct {
 	auditFindings    []audit.Finding      // security audit findings
 	auditLicenses    map[string]int       // license counts
 	complianceResult *compliance.Result   // compliance check result (nil = no policy)
+	complianceError  string               // non-empty when policy failed to load
 	doctorScroll     int                  // scroll offset for doctor tab
 	doctorChecked    bool                 // true after first doctor check completed
 	doctorSubTab     int                  // 0=doctor, 1=audit, 2=compliance
@@ -406,6 +407,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.auditFindings = nil
 	m.auditLicenses = nil
 	m.complianceResult = nil
+	m.complianceError = ""
 	m.doctorChecked = false
 	m.doctorScroll = 0
 	m.doctorSubTab = doctorSubDoctor
@@ -2395,7 +2397,7 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 	if m.cfg != nil {
 		policyPath = m.cfg.Compliance.Policy
 	}
-	m.complianceResult = runComplianceCheck(m.tools, policyPath)
+	m.complianceResult, m.complianceError = runComplianceForTUI(m.tools, policyPath)
 
 	m.doctorChecked = true
 	m.doctorScroll = 0

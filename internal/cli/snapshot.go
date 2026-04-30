@@ -19,7 +19,7 @@ var snapshotCmd = &cobra.Command{
 Subcommands:
   save      Save current tool state as a snapshot
   list      List saved snapshots
-  restore   Show tools from a snapshot (use with clim import)
+  show      Show tools from a snapshot (use with clim diff/import)
   delete    Delete a snapshot
 
 Profiles (named snapshots):

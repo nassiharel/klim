@@ -76,8 +76,8 @@ clim compliance show
 
 | Code | Meaning |
 |------|---------|
-| 0 | All tools comply |
-| 1 | One or more violations found |
+| 0 | All tools comply, or only warning-level findings |
+| 1 | One or more error-level violations found |
 
 ## Violation Rules
 

@@ -166,7 +166,7 @@ func toSet(items []string) map[string]bool {
 }
 
 // versionSatisfies checks if an installed version meets a constraint.
-// Supports >=X.Y.Z format. Falls back to string comparison.
+// Supports >=X.Y.Z format. Otherwise performs exact match (ignoring leading 'v').
 func versionSatisfies(installed, constraint string) bool {
 	constraint = strings.TrimSpace(constraint)
 	if strings.HasPrefix(constraint, ">=") {

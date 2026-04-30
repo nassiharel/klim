@@ -18,6 +18,7 @@ a token shared by a teammate.
 Usage:
   clim share                 # generate a share token
   clim share open <token>    # install from a share token`,
+	Args: cobra.NoArgs,
 	RunE: runShare,
 }
 
