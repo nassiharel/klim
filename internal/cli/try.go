@@ -108,14 +108,19 @@ func runTry(cmd *cobra.Command, args []string) error {
 
 		// Handle Ctrl+C gracefully.
 		sigCh := make(chan os.Signal, 1)
+		done := make(chan struct{})
 		signal.Notify(sigCh, os.Interrupt)
+		defer signal.Stop(sigCh)
+		defer close(done)
 		go func() {
-			<-sigCh
-			// Let the child process handle it.
+			select {
+			case <-sigCh:
+				// Let the child process handle it.
+			case <-done:
+			}
 		}()
 
 		_ = c.Run()
-		signal.Stop(sigCh)
 		fmt.Fprintln(os.Stderr)
 	} else {
 		fmt.Fprintf(os.Stderr, "%s is ready. Run it manually, then come back here.\n", t.DisplayName)

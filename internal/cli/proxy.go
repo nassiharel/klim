@@ -120,8 +120,8 @@ func runProxyAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating shims directory: %w", err)
 	}
 
-	// Load catalog to validate tool names.
-	tools, _, err := svc.ScanOnly(cmd.Context())
+	// Load catalog metadata to validate tool names (no PATH scan needed).
+	tools, _, err := svc.Catalog.LoadTools(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("loading catalog: %w", err)
 	}
@@ -249,7 +249,10 @@ func runProxyRun(cmd *cobra.Command, args []string) error {
 		toolArgs = args[1:]
 	}
 
-	dir, _ := shimsDir()
+	dir, err := shimsDir()
+	if err != nil {
+		return fmt.Errorf("resolving shims directory: %w", err)
+	}
 
 	// Look for the real binary in PATH, excluding the shims directory.
 	realPath := findRealBinary(toolName, dir)
@@ -257,12 +260,12 @@ func runProxyRun(cmd *cobra.Command, args []string) error {
 		return execBinary(realPath, toolArgs)
 	}
 
-	// Not installed — find in catalog and install.
+	// Not installed — load catalog definitions and install.
 	fmt.Fprintf(os.Stderr, "[clim] %s is not installed. Installing...\n", toolName)
 
-	tools, _, err := svc.ScanOnly(cmd.Context())
-	if err != nil {
-		return fmt.Errorf("loading catalog: %w", err)
+	tools, _, catErr := svc.Catalog.LoadTools(cmd.Context())
+	if catErr != nil {
+		return fmt.Errorf("loading catalog: %w", catErr)
 	}
 	toolMap := registry.ToolMap(tools)
 
@@ -325,13 +328,10 @@ func findRealBinary(name, excludeDir string) string {
 	pathEnv := os.Getenv("PATH")
 	dirs := filepath.SplitList(pathEnv)
 
-	excludeNorm := ""
-	if excludeDir != "" {
-		excludeNorm = strings.ToLower(filepath.Clean(excludeDir))
-	}
+	excludeNorm := normalizeDirPath(excludeDir)
 
 	for _, dir := range dirs {
-		dirNorm := strings.ToLower(filepath.Clean(dir))
+		dirNorm := normalizeDirPath(dir)
 		if excludeNorm != "" && dirNorm == excludeNorm {
 			continue
 		}
@@ -344,6 +344,19 @@ func findRealBinary(name, excludeDir string) string {
 		}
 	}
 	return ""
+}
+
+// normalizeDirPath cleans a directory path for comparison.
+// On Windows, paths are lowercased for case-insensitive matching.
+func normalizeDirPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	p = filepath.Clean(p)
+	if runtime.GOOS == "windows" {
+		p = strings.ToLower(p)
+	}
+	return p
 }
 
 // candidatePaths returns possible executable paths for a binary name in a directory.

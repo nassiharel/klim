@@ -300,7 +300,9 @@ func (c *DefaultCatalog) mergeExtraTools(ctx context.Context, primary []registry
 		}
 		extraTools := registry.ToolsFromBytes(data)
 		if extraTools == nil {
-			slog.Warn("extra marketplace invalid", "index", i)
+			// nil means no tools section — could be a packs-only marketplace.
+			// Treat as empty rather than invalid.
+			slog.Debug("extra marketplace has no tools section", "index", i)
 			continue
 		}
 		slog.Info("extra marketplace loaded", "index", i, "tools", len(extraTools))

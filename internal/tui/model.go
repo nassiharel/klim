@@ -1555,8 +1555,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyProject(msg)
 	}
 
-	// Dashboard tab is static — swallow navigation keys.
-	// Only allow quit, tab switching, scroll, and refresh.
+	// Dashboard and Doctor tabs use static/scroll-only key handling.
 	if m.activeTab == tabDashboard || m.activeTab == tabDoctor {
 		switch msg.String() {
 		case "q", "ctrl+c":
