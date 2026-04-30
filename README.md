@@ -108,8 +108,38 @@ clim analyzes your installed tools and suggests related ones you might like, ran
 ### ⚙️ Built-in Config Editor
 Tune clim from inside the TUI — log level, refresh interval, concurrency, default tab, sidebar position. Toggle, cycle, type, save. No need to find and edit a YAML file.
 
+### 🩺 Environment Doctor
+Run `clim doctor` to diagnose your environment — detects duplicate and broken PATH entries, conflicting tool versions (multiple installations), missing package managers, stale caches, and unresolved versions. JSON output for CI with `--json`. TUI Doctor tab shows color-coded issues with fix suggestions.
+
+### 🐚 Shell Integration
+Native tab completion for bash, zsh, fish, and PowerShell via `clim completion`. Shell hooks via `clim hook` that auto-check `.clim.yaml` when you `cd` into a project — like nvm/direnv for your entire toolchain.
+
+### 🔀 Environment Diff
+Compare your local tools against a colleague's manifest or share token with `clim diff`. See which tools match, differ in version, or are missing on either side — the "works on my machine" killer.
+
+### 🔐 Security Audit & SBOM
+Run `clim audit` to flag unmanaged installs, archived projects, stale repos, and missing versions. Get a license inventory across your toolchain. Generate a CycloneDX SBOM with `clim audit --sbom` for compliance pipelines.
+
+### ⚡ Auto-Install Shims
+Create lightweight shims with `clim proxy add kubectl terraform` that auto-install tools on first use. Run a shimmed tool that isn't installed — clim installs it transparently via the best available package manager, then runs it. Like `npx` but for any CLI tool.
+
+### 🎓 Onboarding Wizard
+Run `clim onboard` to get role-based tool recommendations. Pick your role (web, devops, data, mobile, systems, security) and get a curated list of tools ranked by relevance, with one-click batch install.
+
+### 🔍 Tool Provenance
+Run `clim why kubectl` to see where a tool is referenced — which projects require it, which packs include it, related tools, and all available package managers.
+
+### 🔔 Update Watch
+Run `clim watch` to check all tools for updates. Designed for cron or Task Scheduler — use `--json` for scripted notifications.
+
+### 🧪 Tool Playground
+Run `clim try bat -- README.md` to install a tool temporarily, run it, then choose whether to keep or remove it. Try before you commit.
+
 ### 🔒 Native Package Managers Only
 clim never installs anything itself. It delegates to the package managers you already have — winget, brew, apt, choco, scoop, snap, npm. What you see is what your system runs.
+
+### 📡 Custom Marketplaces
+Add extra marketplace URLs to extend the tool catalog with your own or community tool definitions. Tools from extra sources are merged with the default catalog. Manage with `clim marketplace add/remove/list` or configure `extra_urls` in config.yaml.
 
 ---
 
@@ -194,7 +224,7 @@ make build
 clim
 ```
 
-Launches a full-screen interactive interface with 6 tabs. Tools are detected and version-checked concurrently -- results stream in as they arrive.
+Launches a full-screen interactive interface with 9 tabs. Tools are detected and version-checked concurrently -- results stream in as they arrive.
 
 ### Non-interactive commands
 
@@ -217,6 +247,49 @@ clim import my-tools.yaml --yes    # non-interactive
 # Update clim itself to the latest version
 clim update
 clim update --check                # check only, don't install
+
+# Diagnose environment health
+clim doctor                        # human-readable output
+clim doctor --json                 # machine-readable for CI
+clim doctor --refresh              # force fresh scan
+
+# Compare environments
+clim diff my-tools.yaml            # diff against a manifest file
+clim diff clim:v1:abc123...        # diff against a share token
+
+# Security audit & SBOM
+clim audit                         # audit installed tools
+clim audit --json                  # machine-readable for CI
+clim audit --sbom                  # generate CycloneDX SBOM
+
+# Auto-install shims
+clim proxy setup                   # create shims directory + PATH instructions
+clim proxy add kubectl terraform   # create shims for tools
+clim proxy remove kubectl          # remove a shim
+clim proxy list                    # list active shims
+
+# Onboarding & discovery
+clim onboard                       # interactive role-based setup wizard
+clim onboard devops --list         # list recommendations without installing
+clim why kubectl                   # show where a tool is referenced
+clim try bat -- README.md          # temp install, run, then offer cleanup
+
+# Update monitoring
+clim watch                         # check for updates (fresh scan)
+clim watch --json                  # JSON output for cron/scripts
+
+# Custom marketplaces
+clim marketplace list              # show all marketplace URLs
+clim marketplace add <url>         # add an extra marketplace
+clim marketplace remove <url>      # remove an extra marketplace
+
+# Shell integration
+clim completion bash               # generate bash completions
+clim completion zsh                # generate zsh completions
+clim completion fish               # generate fish completions
+clim completion powershell         # generate PowerShell completions
+clim hook bash                     # generate shell hook for bash
+clim hook zsh                      # generate shell hook for zsh
 
 # Manage the tool catalog
 clim tools path                    # show local catalog cache location
@@ -308,7 +381,7 @@ clim config edit   # open config.yaml in $EDITOR
 | `clim: command not found` | Ensure install directory is in `$PATH`. Run `which clim` (macOS/Linux) or `where clim` (Windows) to check. |
 | Tool not detected | Verify binary is in `$PATH` with `which <tool>` / `where <tool>`. Run `clim` then press `r` to refresh. |
 | Permission denied on upgrade | Package manager may need elevated privileges. Use `sudo` (Linux/macOS) or run as Administrator (Windows). |
-| Stale version info | Delete local cache (`clim tools path` shows location) and relaunch to re-fetch from GitHub. |
+| Stale version info | Run `clim doctor` to diagnose, or delete local cache (`clim tools path` shows location) and relaunch to re-fetch from GitHub. |
 | Self-update fails | Download manually from [Releases](https://github.com/nassiharel/clim/releases/latest) and replace binary. |
 
 ---
@@ -321,10 +394,9 @@ See [AGENTS.md](./AGENTS.md) for detailed architecture documentation.
 
 ## Roadmap
 
-- SBOM export for installed CLI tools
-- CVE / vulnerability scanning integration
-- Background update-available notifications
-- Team policy enforcement (require minimum versions)
+- Environment snapshots & profiles
+- Interactive onboarding wizard (`clim onboard`)
+- Background update notifications
 - Add more package managers (pip, gem, cargo, asdf, etc)
 
 ## License

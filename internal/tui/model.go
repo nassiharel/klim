@@ -16,9 +16,11 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/custompacks"
+	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/favorites"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
@@ -34,6 +36,7 @@ const (
 	tabProject
 	tabDashboard
 	tabConfig
+	tabDoctor
 	tabCount // total number of tabs, used for modular cycling
 )
 
@@ -239,6 +242,14 @@ type Model struct {
 	configEditInput textinput.Model // text input for string/int/duration settings
 	configScroll    int             // scroll offset for config tab
 
+	// Doctor tab state (includes audit findings).
+	doctorIssues    []doctor.Issue    // diagnostic results (nil = not yet checked)
+	auditFindings   []audit.Finding   // security audit findings
+	auditLicenses   map[string]int    // license counts
+	doctorScroll    int             // scroll offset for doctor tab
+	doctorChecked   bool            // true after first doctor check completed
+	doctorSubTab    int             // 0=doctor, 1=audit
+
 	// Team file (.clim.yaml) state.
 	teamFilePath    string                  // path to detected .clim.yaml ("" = not found)
 	teamFile        *teamfile.TeamFile      // parsed team file (nil = not found)
@@ -350,6 +361,8 @@ func tabFromName(name string) int {
 		return tabDashboard
 	case "config":
 		return tabConfig
+	case "doctor":
+		return tabDoctor
 	default:
 		return tabInstalled
 	}
@@ -387,6 +400,12 @@ func (m *Model) startScan() tea.Cmd {
 	m.updateSelected = make(map[int]bool)
 	m.batchUpdating = false
 	m.batchQueue = nil
+	m.doctorIssues = nil
+	m.auditFindings = nil
+	m.auditLicenses = nil
+	m.doctorChecked = false
+	m.doctorScroll = 0
+	m.doctorSubTab = doctorSubDoctor
 	return tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg { return findToolsCmd(m.svc, true, gen)() },
@@ -536,6 +555,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			m.loading = false
 			m.detectTeamFile()
+			m.runDoctor(doctor.ScanMeta{FromCache: true})
 			return m, nil
 		}
 
@@ -560,6 +580,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.svc.SaveScanCache(m.tools)
 			}
 			m.detectTeamFile()
+			m.runDoctor()
 		}
 		return m, tea.Batch(cmds...)
 
@@ -592,6 +613,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Check .clim.yaml now that versions are resolved.
 			m.detectTeamFile()
+			m.runDoctor()
 		}
 		return m, nil
 
@@ -975,6 +997,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.configScroll > 0 {
 			m.configScroll = max(0, min(m.configScroll, m.height))
+		}
+		if m.doctorScroll > 0 {
+			m.doctorScroll = max(0, min(m.doctorScroll, m.height))
 		}
 		if m.showDetail {
 			m.computeDetailMaxScroll()
@@ -1540,9 +1565,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyProject(msg)
 	}
 
-	// Dashboard tab is static — swallow navigation keys.
-	// Only allow quit, tab switching, scroll, and refresh.
-	if m.activeTab == tabDashboard {
+	// Dashboard and Doctor tabs use static/scroll-only key handling.
+	if m.activeTab == tabDashboard || m.activeTab == tabDoctor {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
@@ -1551,22 +1575,38 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.activeTab == tabDashboard && m.dashboardScroll > 0 {
 				m.dashboardScroll--
 			}
+			if m.activeTab == tabDoctor && m.doctorScroll > 0 {
+				m.doctorScroll--
+			}
 			return m, nil
 		case "down", "j":
 			if m.activeTab == tabDashboard {
 				m.dashboardScroll++
-				// Render-side clamp in renderView ensures this never overscrolls.
+			}
+			if m.activeTab == tabDoctor {
+				m.doctorScroll++
 			}
 			return m, nil
 		case "home", "g":
 			if m.activeTab == tabDashboard {
 				m.dashboardScroll = 0
 			}
+			if m.activeTab == tabDoctor {
+				m.doctorScroll = 0
+			}
 			return m, nil
 		case "right", "tab":
+			// On Doctor tab, cycle sub-tabs before switching main tabs.
+			if m.activeTab == tabDoctor && m.doctorSubTab < doctorSubAudit {
+				m.doctorSubTab++
+				m.doctorScroll = 0
+				return m, nil
+			}
 			m.activeTab = (m.activeTab + 1) % tabCount
 			m.cursor = 0
 			m.dashboardScroll = 0
+			m.doctorScroll = 0
+			m.doctorSubTab = doctorSubDoctor
 			m.discoverSubTab = discoverTools
 			m.applyFilter()
 			if m.activeTab == tabProject {
@@ -1574,9 +1614,16 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "left", "shift+tab":
+			if m.activeTab == tabDoctor && m.doctorSubTab > doctorSubDoctor {
+				m.doctorSubTab--
+				m.doctorScroll = 0
+				return m, nil
+			}
 			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
 			m.cursor = 0
 			m.dashboardScroll = 0
+			m.doctorScroll = 0
+			m.doctorSubTab = doctorSubDoctor
 			m.discoverSubTab = discoverTools
 			m.applyFilter()
 			if m.activeTab == tabProject {
@@ -1624,6 +1671,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.activeTab = tabConfig
 			m.cursor = 0
 			m.configScroll = 0
+			return m, nil
+		case "9":
+			m.activeTab = tabDoctor
+			m.cursor = 0
+			m.doctorScroll = 0
 			return m, nil
 		case "r":
 			cmd := m.startScan()
@@ -1754,6 +1806,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0
+		return m, nil
+	case "9":
+		m.activeTab = tabDoctor
+		m.cursor = 0
+		m.doctorScroll = 0
 		return m, nil
 	case "s":
 		// Cycle sort mode on tool-list tabs (not Backup/Dashboard/Config).
@@ -2318,6 +2375,19 @@ func (m *Model) detectTeamFile() {
 	m.teamFilePath = path
 	m.teamFile = tf
 	m.teamCheckResult = teamfile.Check(tf, m.tools)
+}
+
+// runDoctor computes environment diagnostics and stores results.
+// Callers may optionally provide scan metadata (e.g. cache/fresh state).
+func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
+	scanMeta := doctor.ScanMeta{}
+	if len(meta) > 0 {
+		scanMeta = meta[0]
+	}
+	m.doctorIssues = doctor.Diagnose(m.tools, scanMeta)
+	m.auditFindings, m.auditLicenses = audit.Analyze(m.tools)
+	m.doctorChecked = true
+	m.doctorScroll = 0
 }
 
 // --- Actions ---

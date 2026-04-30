@@ -160,6 +160,42 @@ func (m Model) renderView() string {
 		return m.layoutWithFooter(body.String(), footer)
 	}
 
+	// Doctor tab — scrollable like dashboard.
+	if m.activeTab == tabDoctor {
+		content := m.renderDoctorView()
+		lines := strings.Split(content, "\n")
+
+		footer := m.renderHelp()
+		footerRows := visualRows(footer, m.width)
+		const headerRows = 3
+		const minGap = 1
+		visibleRows := m.height - headerRows - footerRows - minGap
+		if visibleRows < 5 {
+			visibleRows = 5
+		}
+
+		maxScroll := len(lines) - visibleRows
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		scroll := m.doctorScroll
+		if scroll > maxScroll {
+			scroll = maxScroll
+		}
+
+		if scroll > 0 && scroll < len(lines) {
+			lines = lines[scroll:]
+		}
+
+		body.WriteString(strings.Join(lines, "\n"))
+		if scroll > 0 {
+			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
+		} else if len(strings.Split(content, "\n")) > visibleRows {
+			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
+		}
+		return m.layoutWithFooter(body.String(), footer)
+	}
+
 	// Search bar.
 	body.WriteString(m.renderSearchBar() + "\n\n")
 
@@ -361,6 +397,7 @@ func (m Model) renderTabBar() string {
 		{"Project", tabProject},
 		{"Dashboard", tabDashboard},
 		{"Config", tabConfig},
+		{"Doctor", tabDoctor},
 	}
 
 	var parts []string
@@ -1199,6 +1236,12 @@ func (m Model) renderDetailBody(tool registry.Tool) string {
 	if community != "" {
 		b.WriteString(divider("Community"))
 		b.WriteString(community)
+	}
+
+	refs := m.renderReferencesSection(tool)
+	if refs != "" {
+		b.WriteString(divider("Referenced By"))
+		b.WriteString(refs)
 	}
 
 	if len(m.detailRelated) > 0 {
@@ -2272,6 +2315,14 @@ func (m Model) renderHelp() string {
 			dimVersion.Render("↑↓") + " scroll",
 			dimVersion.Render("Home") + " top",
 			dimVersion.Render("←→") + " tab",
+			dimVersion.Render("r") + " refresh",
+			dimVersion.Render("q") + " quit",
+		}
+	case tabDoctor:
+		parts = []string{
+			dimVersion.Render("↑↓") + " scroll",
+			dimVersion.Render("Home") + " top",
+			dimVersion.Render("←→") + " sub-tab / tab",
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
 		}
