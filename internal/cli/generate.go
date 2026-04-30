@@ -32,11 +32,13 @@ to produce install commands for each tool.`,
 var generateFileFlag string
 var generateOutputFlag string
 var generateBaseFlag string
+var generateOSFlag string
 
 func init() {
 	generateCmd.Flags().StringVarP(&generateFileFlag, "file", "f", "", "Path to .clim.yaml (default: auto-detect)")
 	generateCmd.Flags().StringVarP(&generateOutputFlag, "output", "o", "", "Write to file instead of stdout")
 	generateCmd.Flags().StringVar(&generateBaseFlag, "base", "", "Base image for Dockerfile (default: ubuntu:24.04)")
+	generateCmd.Flags().StringVar(&generateOSFlag, "os", "ubuntu", "Target OS: ubuntu, debian, alpine, fedora, macos, windows")
 	// Registered in root.go with command group.
 }
 
@@ -79,14 +81,20 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Generate.
+	opts := generate.Options{
+		OS:          generateOSFlag,
+		BaseImage:   generateBaseFlag,
+		ProjectName: projectName,
+	}
+
 	var output string
 	switch format {
 	case "github-action":
-		output = generate.GitHubAction(installs, projectName)
+		output = generate.GitHubAction(installs, opts)
 	case "dockerfile":
-		output = generate.Dockerfile(installs, generateBaseFlag)
+		output = generate.Dockerfile(installs, opts)
 	case "devcontainer":
-		output = generate.DevContainer(installs, projectName)
+		output = generate.DevContainer(installs, opts)
 	default:
 		return fmt.Errorf("unknown format %q — use github-action, dockerfile, or devcontainer", format)
 	}
