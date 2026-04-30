@@ -65,9 +65,58 @@ var configEditCmd = &cobra.Command{
 	},
 }
 
+var configShowCmd = &cobra.Command{
+	Use:   "show",
+	Short: "Print current configuration",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c, warnings, err := config.LoadWithWarnings()
+		if err != nil {
+			return fmt.Errorf("loading config: %w", err)
+		}
+
+		path, _ := config.Path()
+		fmt.Fprintf(os.Stderr, "Config: %s\n\n", path)
+
+		fmt.Printf("logging:\n")
+		fmt.Printf("  level: %s\n", c.Logging.Level)
+		fmt.Printf("  file: %v\n", c.Logging.File)
+		fmt.Printf("  verbose: %v\n", c.Logging.Verbose)
+		fmt.Printf("\nmarketplace:\n")
+		url := c.Marketplace.URL
+		if url == "" {
+			url = config.DefaultMarketplaceURL
+		}
+		fmt.Printf("  url: %s\n", url)
+		fmt.Printf("  auto_refresh: %v\n", c.Marketplace.AutoRefresh)
+		fmt.Printf("  refresh_interval: %s\n", c.Marketplace.RefreshInterval.Duration)
+		if len(c.Marketplace.ExtraURLs) > 0 {
+			fmt.Printf("  extra_urls:\n")
+			for _, u := range c.Marketplace.ExtraURLs {
+				fmt.Printf("    - %s\n", u)
+			}
+		}
+		fmt.Printf("\nperformance:\n")
+		fmt.Printf("  concurrency: %d\n", c.Performance.Concurrency)
+		fmt.Printf("  command_timeout: %s\n", c.Performance.CommandTimeout.Duration)
+		fmt.Printf("\nui:\n")
+		fmt.Printf("  default_tab: %s\n", c.UI.DefaultTab)
+		fmt.Printf("  show_path: %v\n", c.UI.ShowPath)
+		fmt.Printf("  sidebar_right: %v\n", c.UI.SidebarRight)
+
+		if len(warnings) > 0 {
+			fmt.Fprintf(os.Stderr, "\nWarnings:\n")
+			for _, w := range warnings {
+				fmt.Fprintf(os.Stderr, "  ⚠ %s\n", w)
+			}
+		}
+		return nil
+	},
+}
+
 func init() {
 	configCmd.AddCommand(configPathCmd)
 	configCmd.AddCommand(configEditCmd)
+	configCmd.AddCommand(configShowCmd)
 	configCmd.AddCommand(marketplaceCmd)
 	// rootCmd.AddCommand done in root.go via group assignment.
 }
