@@ -20,49 +20,6 @@
 
 ---
 
-## Table of Contents
-
-- [The Problem](#the-problem)
-- [The Solution](#the-solution)
-- [Screenshots](#screenshots)
-- [Install](#install)
-- [Usage](#usage)
-- [Tool Catalog](#tool-catalog)
-- [Architecture](#architecture)
-- [Configuration](#configuration)
-- [Contributing](#contributing)
-
----
-
-## The Problem
-
-Modern developer environments rely on dozens of CLI tools -- `az`, `kubectl`, `docker`, `node`, `terraform`, and many more. Keeping track of them is harder than it should be:
-
-- **No visibility** -- There is no standard way to list all installed CLI tools across a system. They come from brew, apt, npm, winget, manual installs, and more.
-- **Version fragmentation** -- Every tool exposes its version differently (`--version`, `version`, `-v`, JSON output). There is no consistent way to aggregate this.
-- **Unknown install locations** -- Understanding whether you're running `/usr/bin/python3` or `/usr/local/bin/python3` requires manual inspection.
-- **No centralized upgrade awareness** -- `brew outdated`, `apt list --upgradable`, and `npm outdated` are all siloed. None give you a single cross-tool view.
-- **Security & maintenance risk** -- Outdated CLI tools can contain vulnerabilities, break API compatibility, and cause inconsistent behavior across environments.
-
----
-
-## The Solution
-
-**clim** gives you a unified interface to manage your CLI tools:
-
-| Capability | What clim does |
-|---|---|
-| **Discover** | Scans `$PATH` to detect 80+ popular developer CLI tools |
-| **Inspect** | Shows installed version, binary location, and install source |
-| **Compare** | Checks latest available versions via native package managers |
-| **Upgrade** | Runs the right native package manager command (`brew`, `winget`, `apt`, `choco`, `snap`, `npm`) |
-| **Export / Import** | Saves your toolchain to a YAML manifest and reinstalls it on a new machine |
-| **Self-update** | Updates clim itself to the latest version from GitHub Releases |
-
-All in a single command, with an interactive TUI or scriptable output.
-
----
-
 ## Screenshots
 
 <p align="center">
@@ -143,78 +100,6 @@ Add extra marketplace URLs to extend the tool catalog with your own or community
 
 ---
 
-## How It Compares
-
-| Capability | Package Managers | Version Managers (asdf, mise) | Ad-hoc Scripts | **clim** |
-|---|---|---|---|---|
-| List all installed CLIs | Only their own packages | Only managed tools | Fragile | **All detected tools** |
-| Show versions | Per-manager | Per-manager | Partial | **Unified view** |
-| Show install paths | No | No | Manual | **Automatic** |
-| Cross-manager support | No | Limited plugins | No | **Yes** |
-| Upgrade suggestions | Per-manager | Per-manager | No | **Single view** |
-| Export/Import toolchain | No | Partial | No | **YAML manifest** |
-| Interactive UI | No | No | No | **Full TUI** |
-
----
-
-## Install
-
-### Quick Install
-
-> **Note:** Always review scripts before piping to your shell. You can inspect
-> [install.sh](https://github.com/nassiharel/clim/blob/main/install.sh) and
-> [install.ps1](https://github.com/nassiharel/clim/blob/main/install.ps1) first.
-
-**macOS / Linux:**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash
-```
-
-**Windows (PowerShell):**
-
-```powershell
-irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
-```
-
-### Homebrew (macOS/Linux)
-
-```bash
-brew install nassiharel/tap/clim
-```
-
-### Go install
-
-```bash
-go install github.com/nassiharel/clim/cmd/clim@latest
-```
-
-### Download binary
-
-Download from [GitHub Releases](https://github.com/nassiharel/clim/releases/latest).
-
-Binaries are available for **macOS**, **Linux**, and **Windows** on both `amd64` and `arm64`.
-
-### Linux packages
-
-```bash
-# Debian/Ubuntu
-sudo dpkg -i clim_<version>_linux_amd64.deb
-
-# RPM-based
-sudo rpm -i clim_<version>_linux_amd64.rpm
-```
-
-### Build from source
-
-```bash
-git clone https://github.com/nassiharel/clim.git
-cd clim
-make build
-./bin/clim
-```
-
----
 
 ## Usage
 
@@ -225,97 +110,6 @@ clim
 ```
 
 Launches a full-screen interactive interface with 9 tabs. Tools are detected and version-checked concurrently -- results stream in as they arrive.
-
-### Non-interactive commands
-
-```bash
-# Show help
-clim --help
-
-# List all tools in a table
-clim list
-
-# Export installed tools to a YAML manifest
-clim export > my-tools.yaml
-
-# Import and install tools from a manifest
-clim import my-tools.yaml
-clim import my-tools.yaml --yes    # non-interactive
-```
-
-```bash
-# Update clim itself to the latest version
-clim update
-clim update --check                # check only, don't install
-
-# Diagnose environment health
-clim doctor                        # human-readable output
-clim doctor --json                 # machine-readable for CI
-clim doctor --refresh              # force fresh scan
-
-# Compare environments
-clim diff my-tools.yaml            # diff against a manifest file
-clim diff clim:v1:abc123...        # diff against a share token
-
-# Security audit & SBOM
-clim audit                         # audit installed tools
-clim audit --json                  # machine-readable for CI
-clim audit --sbom                  # generate CycloneDX SBOM
-
-# Auto-install shims
-clim proxy setup                   # create shims directory + PATH instructions
-clim proxy add kubectl terraform   # create shims for tools
-clim proxy remove kubectl          # remove a shim
-clim proxy list                    # list active shims
-
-# Snapshots & profiles
-clim snapshot save "before-upgrade"  # save current state
-clim snapshot list                 # list snapshots
-clim snapshot show before-upgrade  # view snapshot tools
-clim snapshot profile save work    # save a named profile
-clim snapshot profile list         # list profiles
-
-# Onboarding & discovery
-clim onboard                       # interactive role-based setup wizard
-clim onboard devops --list         # list recommendations without installing
-clim why kubectl                   # show where a tool is referenced
-clim try bat -- README.md          # temp install, run, then offer cleanup
-
-# Update monitoring
-clim watch                         # check for updates (fresh scan)
-clim watch --json                  # JSON output for cron/scripts
-
-# Custom marketplaces
-clim config marketplace list       # show all marketplace URLs
-clim config marketplace add <url>  # add an extra marketplace
-clim config marketplace remove <url> # remove an extra marketplace
-
-# Shell integration
-clim shell completion bash          # generate bash completions
-clim shell completion zsh           # generate zsh completions
-clim shell completion fish          # generate fish completions
-clim shell completion powershell    # generate PowerShell completions
-clim shell hook bash                # generate shell hook for bash
-clim shell hook zsh                 # generate shell hook for zsh
-
-# Manage the tool catalog
-clim tools path                    # show local catalog cache location
-
-# Manage configuration
-clim config path                   # show config.yaml location
-clim config edit                   # open config in $EDITOR
-
-# Show clim version
-clim version
-```
-
----
-
-## Tool Catalog
-
-clim ships with a curated catalog of **80+ developer tools** defined in `marketplace/tools/`. The catalog is assembled by CI and published to the `marketplace` branch. The CLI fetches it on first run and caches locally. New tools from upstream appear automatically after a refresh.
-
----
 
 ## Architecture
 
@@ -401,9 +195,6 @@ See [AGENTS.md](./AGENTS.md) for detailed architecture documentation.
 
 ## Roadmap
 
-- Environment snapshots & profiles
-- Interactive onboarding wizard (`clim onboard`)
-- Background update notifications
 - Add more package managers (pip, gem, cargo, asdf, etc)
 
 ## License
