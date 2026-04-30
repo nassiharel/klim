@@ -60,7 +60,10 @@ func runScore(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if policyPath != "" {
-		if policy, loadErr := compliance.LoadPolicy(policyPath); loadErr == nil {
+		policy, loadErr := compliance.LoadPolicy(policyPath)
+		if loadErr != nil {
+			fmt.Fprintf(os.Stderr, "  ⚠ Compliance policy error: %v\n", loadErr)
+		} else {
 			r := compliance.Check(policy, tools)
 			compResult = &r
 		}

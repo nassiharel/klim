@@ -24,6 +24,7 @@ import (
 	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/favorites"
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/score"
 	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/teamfile"
 )
@@ -249,6 +250,7 @@ type Model struct {
 	auditLicenses    map[string]int       // license counts
 	complianceResult *compliance.Result   // compliance check result (nil = no policy)
 	complianceError  string               // non-empty when policy failed to load
+	cachedScore      score.Result         // computed once in runDoctor
 	doctorScroll     int                  // scroll offset for doctor tab
 	doctorChecked    bool                 // true after first doctor check completed
 	doctorSubTab     int                  // 0=doctor, 1=audit, 2=compliance
@@ -2398,6 +2400,9 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 		policyPath = m.cfg.Compliance.Policy
 	}
 	m.complianceResult, m.complianceError = runComplianceForTUI(m.tools, policyPath)
+
+	// Compute environment health score.
+	m.cachedScore = score.Compute(m.tools, m.doctorIssues, m.complianceResult)
 
 	m.doctorChecked = true
 	m.doctorScroll = 0

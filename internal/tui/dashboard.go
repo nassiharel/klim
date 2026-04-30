@@ -11,9 +11,10 @@ import (
 	"github.com/nassiharel/clim/internal/score"
 )
 
-// computeScore calculates the environment health score using cached data.
+// computeScore returns the cached environment health score.
+// Computed once in runDoctor(), not per render.
 func (m Model) computeScore() score.Result {
-	return score.Compute(m.tools, m.doctorIssues, m.complianceResult)
+	return m.cachedScore
 }
 
 // Dashboard color palette.

@@ -1,6 +1,6 @@
 // Package score computes a 0–100 environment health score by combining
 // tool freshness, doctor diagnostics, audit findings, compliance status,
-// and cache health into a single metric.
+// and source management into a single metric.
 package score
 
 import (
@@ -144,7 +144,7 @@ func scoreDoctorHealth(issues []doctor.Issue) Category {
 	return Category{Name: "Doctor health", Points: points, MaxPts: maxPts, Status: status, Details: details}
 }
 
-// Audit findings: 20 points. Warnings cost 2, based on audit.Analyze.
+// Audit findings: 20 points. Warnings cost 3, infos cost 1.
 func scoreAuditFindings(tools []registry.Tool) Category {
 	const maxPts = 20
 	findings, _ := audit.Analyze(tools)
