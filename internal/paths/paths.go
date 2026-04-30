@@ -62,3 +62,8 @@ func BackupsDir() (string, error) {
 func LogFile() (string, error) {
 	return Join("logs", "clim.log")
 }
+
+// ShimsDir returns the path to the proxy shims directory.
+func ShimsDir() (string, error) {
+	return Join("shims")
+}

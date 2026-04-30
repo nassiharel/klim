@@ -73,13 +73,20 @@ func NewWithConfig(cfg *config.Config) *ToolService {
 		URL: cfg.Marketplace.URL,
 	}
 
+	var extraFetchers []catalog.MarketplaceFetcher
+	for _, url := range cfg.Marketplace.ExtraURLs {
+		if url != "" {
+			extraFetchers = append(extraFetchers, &catalog.GitHubFetcher{URL: url})
+		}
+	}
+
 	var maxAge time.Duration
 	if cfg.Marketplace.AutoRefresh {
 		maxAge = cfg.Marketplace.RefreshInterval.Duration
 	}
 
 	return &ToolService{
-		Catalog:     &DefaultCatalog{Fetcher: fetcher, MaxAge: maxAge},
+		Catalog:     &DefaultCatalog{Fetcher: fetcher, ExtraFetchers: extraFetchers, MaxAge: maxAge},
 		Finder:      finder.NewFinder(),
 		Resolver:    pkgmgr.NewResolverWithTimeout(cfg.Performance.CommandTimeout.Duration),
 		Concurrency: cfg.Performance.Concurrency,
@@ -240,6 +247,10 @@ func sortToolsByName(tools []registry.Tool) {
 // DefaultCatalog loads tools by fetching/caching the marketplace from GitHub.
 type DefaultCatalog struct {
 	Fetcher catalog.MarketplaceFetcher
+	// ExtraFetchers holds additional marketplace fetchers. Tools from extra
+	// sources are merged into the primary catalog; extra tools take priority
+	// over primary ones with the same name.
+	ExtraFetchers []catalog.MarketplaceFetcher
 	// MaxAge, if > 0, enables cache freshness checks: when the cache mtime
 	// exceeds MaxAge the catalog is refetched so new/updated/deleted tools
 	// land in the local cache. Zero disables auto-refresh.
@@ -261,7 +272,48 @@ func (c *DefaultCatalog) LoadTools(ctx context.Context) ([]registry.Tool, *Catal
 		Tools:  result.Tools,
 		Diff:   result.Diff,
 	}
+
+	// Merge tools from extra marketplaces.
+	if len(c.ExtraFetchers) > 0 {
+		tools = c.mergeExtraTools(ctx, tools)
+		info.Tools = len(tools)
+	}
+
 	return tools, info, nil
+}
+
+// mergeExtraTools fetches tools from extra marketplace URLs and merges them
+// into the primary tool list. Extra tools with the same name as primary
+// tools take priority (override).
+func (c *DefaultCatalog) mergeExtraTools(ctx context.Context, primary []registry.Tool) []registry.Tool {
+	toolMap := make(map[string]registry.Tool, len(primary))
+	for _, t := range primary {
+		toolMap[t.Name] = t
+	}
+
+	for i, fetcher := range c.ExtraFetchers {
+		data, err := fetcher.Fetch(ctx)
+		if err != nil {
+			slog.Warn("extra marketplace fetch failed", "index", i, "error", err)
+			continue
+		}
+		extraTools := registry.ToolsFromBytes(data)
+		if extraTools == nil {
+			slog.Warn("extra marketplace invalid", "index", i)
+			continue
+		}
+		slog.Info("extra marketplace loaded", "index", i, "tools", len(extraTools))
+		for _, t := range extraTools {
+			toolMap[t.Name] = t // override or add
+		}
+	}
+
+	merged := make([]registry.Tool, 0, len(toolMap))
+	for _, t := range toolMap {
+		merged = append(merged, t)
+	}
+	registry.SortByName(merged)
+	return merged
 }
 
 // LoadPacks returns the curated packs from the catalog.
@@ -270,5 +322,36 @@ func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error)
 	if err != nil {
 		return nil, err
 	}
-	return registry.ParsePacksFromBytes(result.Data)
+	packs, err := registry.ParsePacksFromBytes(result.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	// Merge packs from extra marketplaces.
+	for i, fetcher := range c.ExtraFetchers {
+		data, fetchErr := fetcher.Fetch(ctx)
+		if fetchErr != nil {
+			slog.Warn("extra marketplace packs fetch failed", "index", i, "error", fetchErr)
+			continue
+		}
+		extraPacks, parseErr := registry.ParsePacksFromBytes(data)
+		if parseErr != nil {
+			continue
+		}
+		// Merge: extra packs with same name override primary.
+		packMap := make(map[string]registry.Pack)
+		for _, p := range packs {
+			packMap[p.Name] = p
+		}
+		for _, p := range extraPacks {
+			packMap[p.Name] = p
+		}
+		merged := make([]registry.Pack, 0, len(packMap))
+		for _, p := range packMap {
+			merged = append(merged, p)
+		}
+		packs = merged
+	}
+
+	return packs, nil
 }

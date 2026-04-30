@@ -38,6 +38,7 @@ type LoggingConfig struct {
 // MarketplaceConfig controls marketplace catalog behavior.
 type MarketplaceConfig struct {
 	URL             string   `yaml:"url"`
+	ExtraURLs       []string `yaml:"extra_urls,omitempty"`
 	AutoRefresh     bool     `yaml:"auto_refresh"`
 	RefreshInterval Duration `yaml:"refresh_interval"`
 }

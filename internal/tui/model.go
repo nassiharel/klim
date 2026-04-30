@@ -19,6 +19,7 @@ import (
 	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/custompacks"
+	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/favorites"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
@@ -34,6 +35,7 @@ const (
 	tabProject
 	tabDashboard
 	tabConfig
+	tabDoctor
 	tabCount // total number of tabs, used for modular cycling
 )
 
@@ -239,6 +241,11 @@ type Model struct {
 	configEditInput textinput.Model // text input for string/int/duration settings
 	configScroll    int             // scroll offset for config tab
 
+	// Doctor tab state.
+	doctorIssues  []doctor.Issue // diagnostic results (nil = not yet checked)
+	doctorScroll  int            // scroll offset for doctor tab
+	doctorChecked bool           // true after first doctor check completed
+
 	// Team file (.clim.yaml) state.
 	teamFilePath    string                  // path to detected .clim.yaml ("" = not found)
 	teamFile        *teamfile.TeamFile      // parsed team file (nil = not found)
@@ -350,6 +357,8 @@ func tabFromName(name string) int {
 		return tabDashboard
 	case "config":
 		return tabConfig
+	case "doctor":
+		return tabDoctor
 	default:
 		return tabInstalled
 	}
@@ -387,6 +396,9 @@ func (m *Model) startScan() tea.Cmd {
 	m.updateSelected = make(map[int]bool)
 	m.batchUpdating = false
 	m.batchQueue = nil
+	m.doctorIssues = nil
+	m.doctorChecked = false
+	m.doctorScroll = 0
 	return tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg { return findToolsCmd(m.svc, true, gen)() },
@@ -536,6 +548,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			m.loading = false
 			m.detectTeamFile()
+			m.runDoctor()
 			return m, nil
 		}
 
@@ -560,6 +573,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.svc.SaveScanCache(m.tools)
 			}
 			m.detectTeamFile()
+			m.runDoctor()
 		}
 		return m, tea.Batch(cmds...)
 
@@ -592,6 +606,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Check .clim.yaml now that versions are resolved.
 			m.detectTeamFile()
+			m.runDoctor()
 		}
 		return m, nil
 
@@ -1542,7 +1557,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Dashboard tab is static — swallow navigation keys.
 	// Only allow quit, tab switching, scroll, and refresh.
-	if m.activeTab == tabDashboard {
+	if m.activeTab == tabDashboard || m.activeTab == tabDoctor {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
@@ -1551,16 +1566,24 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.activeTab == tabDashboard && m.dashboardScroll > 0 {
 				m.dashboardScroll--
 			}
+			if m.activeTab == tabDoctor && m.doctorScroll > 0 {
+				m.doctorScroll--
+			}
 			return m, nil
 		case "down", "j":
 			if m.activeTab == tabDashboard {
 				m.dashboardScroll++
-				// Render-side clamp in renderView ensures this never overscrolls.
+			}
+			if m.activeTab == tabDoctor {
+				m.doctorScroll++
 			}
 			return m, nil
 		case "home", "g":
 			if m.activeTab == tabDashboard {
 				m.dashboardScroll = 0
+			}
+			if m.activeTab == tabDoctor {
+				m.doctorScroll = 0
 			}
 			return m, nil
 		case "right", "tab":
@@ -1624,6 +1647,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.activeTab = tabConfig
 			m.cursor = 0
 			m.configScroll = 0
+			return m, nil
+		case "9":
+			m.activeTab = tabDoctor
+			m.cursor = 0
+			m.doctorScroll = 0
 			return m, nil
 		case "r":
 			cmd := m.startScan()
@@ -1754,6 +1782,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0
+		return m, nil
+	case "9":
+		m.activeTab = tabDoctor
+		m.cursor = 0
+		m.doctorScroll = 0
 		return m, nil
 	case "s":
 		// Cycle sort mode on tool-list tabs (not Backup/Dashboard/Config).
@@ -2318,6 +2351,14 @@ func (m *Model) detectTeamFile() {
 	m.teamFilePath = path
 	m.teamFile = tf
 	m.teamCheckResult = teamfile.Check(tf, m.tools)
+}
+
+// runDoctor computes environment diagnostics and stores results.
+func (m *Model) runDoctor() {
+	meta := doctor.ScanMeta{}
+	m.doctorIssues = doctor.Diagnose(m.tools, meta)
+	m.doctorChecked = true
+	m.doctorScroll = 0
 }
 
 // --- Actions ---
