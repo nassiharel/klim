@@ -7,17 +7,22 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/clim/internal/fileutil"
 	"github.com/nassiharel/clim/internal/finder"
+	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/pkgmgr"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/scancache"
@@ -76,11 +81,14 @@ func NewWithConfig(cfg *config.Config) *ToolService {
 	}
 
 	var extraFetchers []catalog.MarketplaceFetcher
+	seen := make(map[string]bool)
 	for _, url := range cfg.Marketplace.ExtraURLs {
 		url = strings.TrimSpace(url)
-		if url != "" {
-			extraFetchers = append(extraFetchers, &catalog.GitHubFetcher{URL: url})
+		if url == "" || seen[url] {
+			continue
 		}
+		seen[url] = true
+		extraFetchers = append(extraFetchers, &catalog.GitHubFetcher{URL: url})
 	}
 
 	var maxAge time.Duration
@@ -287,7 +295,7 @@ func (c *DefaultCatalog) LoadTools(ctx context.Context) ([]registry.Tool, *Catal
 
 // mergeExtraTools fetches tools from extra marketplace URLs and merges them
 // into the primary tool list. Extra tools with the same name as primary
-// tools take priority (override).
+// tools take priority (override). Uses per-URL caching for performance.
 func (c *DefaultCatalog) mergeExtraTools(ctx context.Context, primary []registry.Tool) []registry.Tool {
 	toolMap := make(map[string]registry.Tool, len(primary))
 	for _, t := range primary {
@@ -295,21 +303,19 @@ func (c *DefaultCatalog) mergeExtraTools(ctx context.Context, primary []registry
 	}
 
 	for i, fetcher := range c.ExtraFetchers {
-		data, err := fetcher.Fetch(ctx)
+		data, err := fetchExtraCached(ctx, fetcher, i, c.MaxAge)
 		if err != nil {
 			slog.Warn("extra marketplace fetch failed", "index", i, "error", err)
 			continue
 		}
 		extraTools := registry.ToolsFromBytes(data)
 		if extraTools == nil {
-			// nil means no tools section — could be a packs-only marketplace.
-			// Treat as empty rather than invalid.
 			slog.Debug("extra marketplace has no tools section", "index", i)
 			continue
 		}
 		slog.Info("extra marketplace loaded", "index", i, "tools", len(extraTools))
 		for _, t := range extraTools {
-			toolMap[t.Name] = t // override or add
+			toolMap[t.Name] = t
 		}
 	}
 
@@ -334,7 +340,7 @@ func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error)
 
 	// Merge packs from extra marketplaces.
 	for i, fetcher := range c.ExtraFetchers {
-		data, fetchErr := fetcher.Fetch(ctx)
+		data, fetchErr := fetchExtraCached(ctx, fetcher, i, c.MaxAge)
 		if fetchErr != nil {
 			slog.Warn("extra marketplace packs fetch failed", "index", i, "error", fetchErr)
 			continue
@@ -344,7 +350,6 @@ func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error)
 			slog.Warn("extra marketplace packs parse failed", "index", i, "error", parseErr)
 			continue
 		}
-		// Merge: extra packs with same name override primary.
 		packMap := make(map[string]registry.Pack)
 		for _, p := range packs {
 			packMap[p.Name] = p
@@ -359,8 +364,66 @@ func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error)
 		packs = merged
 	}
 
-	// Sort packs by name for stable ordering.
 	sort.Slice(packs, func(i, j int) bool { return packs[i].Name < packs[j].Name })
-
 	return packs, nil
+}
+
+// fetchExtraCached fetches an extra marketplace with local file caching.
+// Cache files are stored under ~/.config/clim/marketplace/extra-<hash>.yaml.
+func fetchExtraCached(ctx context.Context, fetcher catalog.MarketplaceFetcher, index int, maxAge time.Duration) ([]byte, error) {
+	// Determine the URL for cache key.
+	url := ""
+	if gf, ok := fetcher.(*catalog.GitHubFetcher); ok {
+		url = gf.URL
+	}
+	if url == "" {
+		url = fmt.Sprintf("extra-%d", index)
+	}
+
+	cachePath, err := extraCachePath(url)
+	if err != nil {
+		// Fall back to direct fetch if cache path fails.
+		return fetcher.Fetch(ctx)
+	}
+
+	// Try cache.
+	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
+		if maxAge <= 0 || !cacheFileStale(cachePath, maxAge) {
+			return data, nil
+		}
+	}
+
+	// Fetch fresh.
+	data, err := fetcher.Fetch(ctx)
+	if err != nil {
+		// Try stale cache on fetch failure.
+		if cached, readErr := os.ReadFile(cachePath); readErr == nil && len(cached) > 0 {
+			slog.Warn("extra marketplace fetch failed, using stale cache", "index", index, "error", err)
+			return cached, nil
+		}
+		return nil, err
+	}
+
+	// Write cache.
+	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr == nil {
+		_ = fileutil.AtomicWrite(cachePath, data, 0o644)
+	}
+
+	return data, nil
+}
+
+// extraCachePath returns a cache file path for an extra marketplace URL.
+func extraCachePath(url string) (string, error) {
+	hash := sha256.Sum256([]byte(url))
+	name := "extra-" + hex.EncodeToString(hash[:8]) + ".yaml"
+	return paths.Join("marketplace", name)
+}
+
+// cacheFileStale reports whether a file's mtime exceeds maxAge.
+func cacheFileStale(path string, maxAge time.Duration) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return true
+	}
+	return time.Since(info.ModTime()) > maxAge
 }

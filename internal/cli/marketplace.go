@@ -83,7 +83,10 @@ func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
 }
 
 func runMarketplaceRemove(cmd *cobra.Command, args []string) error {
-	url := args[0]
+	url := strings.TrimSpace(args[0])
+	if url == "" {
+		return fmt.Errorf("URL cannot be empty")
+	}
 
 	c, _, err := config.LoadWithWarnings()
 	if err != nil {

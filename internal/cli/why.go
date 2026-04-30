@@ -98,7 +98,10 @@ func runWhy(cmd *cobra.Command, args []string) error {
 	}
 
 	// 2. Check all registered projects.
-	projects, _ := teamfile.LoadProjects()
+	projects, projErr := teamfile.LoadProjects()
+	if projErr != nil {
+		fmt.Fprintf(os.Stderr, "  ⚠ Could not load project registry: %v\n", projErr)
+	}
 	for _, proj := range projects {
 		climPath := filepath.Join(proj.Path, ".clim.yaml")
 		if cwd != "" && filepath.Clean(climPath) == filepath.Clean(teamfile.Find(cwd)) {
@@ -121,7 +124,10 @@ func runWhy(cmd *cobra.Command, args []string) error {
 	}
 
 	// 3. Check packs.
-	packs, _ := svc.LoadPacks(cmd.Context())
+	packs, packErr := svc.LoadPacks(cmd.Context())
+	if packErr != nil {
+		fmt.Fprintf(os.Stderr, "  ⚠ Could not load packs: %v\n", packErr)
+	}
 	for _, pack := range packs {
 		for _, pToolName := range pack.ToolNames {
 			if pToolName == toolName {

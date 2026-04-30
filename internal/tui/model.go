@@ -991,6 +991,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.configScroll > 0 {
 			m.configScroll = max(0, min(m.configScroll, m.height))
 		}
+		if m.doctorScroll > 0 {
+			m.doctorScroll = max(0, min(m.doctorScroll, m.height))
+		}
 		if m.showDetail {
 			m.computeDetailMaxScroll()
 			m.clampDetailScroll()

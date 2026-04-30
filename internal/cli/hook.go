@@ -132,7 +132,7 @@ const hookPowerShell = "# clim shell hook \u2014 auto-check .clim.yaml on cd\n" 
 	"    while ($dir -and $dir -ne [System.IO.Path]::GetPathRoot($dir)) {\n" +
 	"        $candidate = Join-Path $dir \".clim.yaml\"\n" +
 	"        if (Test-Path $candidate -PathType Leaf) {\n" +
-	"            $output = clim check --file $candidate 2>&1 | Out-String\n" +
+	"            $output = clim check --file \"$candidate\" 2>&1 | Out-String\n" +
 	"            if ($LASTEXITCODE -ne 0) {\n" +
 	"                $output -split \"`n\" | Select-String -Pattern '^\\s+[\\u2717\\u26A0]' | Select-Object -First 5 | ForEach-Object { $_.Line }\n" +
 	"                Write-Host \"  Run 'clim check' for details or 'clim import' to install missing tools.\"\n" +

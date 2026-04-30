@@ -98,10 +98,16 @@ func runTry(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "✓ %s installed\n\n", t.DisplayName)
 	}
 
+	// Determine the executable name (may differ from tool name).
+	execName := toolName
+	if len(t.BinaryNames) > 0 {
+		execName = t.BinaryNames[0]
+	}
+
 	// Run the tool.
 	if len(toolArgs) > 0 {
-		fmt.Fprintf(os.Stderr, "Running: %s %s\n\n", toolName, strings.Join(toolArgs, " "))
-		c := exec.Command(toolName, toolArgs...)
+		fmt.Fprintf(os.Stderr, "Running: %s %s\n\n", execName, strings.Join(toolArgs, " "))
+		c := exec.Command(execName, toolArgs...)
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
 		c.Stdin = os.Stdin
