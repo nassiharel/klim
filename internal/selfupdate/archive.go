@@ -103,11 +103,11 @@ func extractFromZip(r io.Reader, goos string) ([]byte, error) {
 			if err != nil {
 				return nil, fmt.Errorf("opening zip entry: %w", err)
 			}
+			defer func() { _ = rc.Close() }()
 
 			// Read up to maxBinarySize + 1 so we can detect truncation even
 			// if the zip header size is untrustworthy.
 			data, err := io.ReadAll(io.LimitReader(rc, maxBinarySize+1))
-			_ = rc.Close()
 			if err != nil {
 				return nil, fmt.Errorf("reading binary from zip: %w", err)
 			}

@@ -88,7 +88,7 @@ func runTry(cmd *cobra.Command, args []string) error {
 		}
 
 		fmt.Fprintf(os.Stderr, "Installing %s via %s...\n", t.DisplayName, installSource)
-		c := exec.Command(installArgs[0], installArgs[1:]...)
+		c := exec.CommandContext(cmd.Context(), installArgs[0], installArgs[1:]...)
 		c.Stdout = os.Stderr
 		c.Stderr = os.Stderr
 		c.Stdin = os.Stdin
@@ -139,9 +139,6 @@ func runTry(cmd *cobra.Command, args []string) error {
 	}
 
 	if runErr != nil {
-		if exitErr, ok := runErr.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
-		}
 		return runErr
 	}
 	return nil

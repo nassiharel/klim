@@ -54,7 +54,7 @@ func init() {
 func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
 	url := strings.TrimSpace(args[0])
 	if url == "" {
-		return fmt.Errorf("URL cannot be empty")
+		return fmt.Errorf("url cannot be empty")
 	}
 
 	// Reload config fresh.
@@ -91,7 +91,7 @@ func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
 func runMarketplaceRemove(cmd *cobra.Command, args []string) error {
 	url := strings.TrimSpace(args[0])
 	if url == "" {
-		return fmt.Errorf("URL cannot be empty")
+		return fmt.Errorf("url cannot be empty")
 	}
 
 	c, _, err := config.LoadWithWarnings()

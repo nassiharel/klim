@@ -322,7 +322,7 @@ func runProxyRun(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "[clim] Installing via %s: %s\n", installSource, strings.Join(installArgs, " "))
 
-	installCmd := exec.Command(installArgs[0], installArgs[1:]...)
+	installCmd := exec.CommandContext(cmd.Context(), installArgs[0], installArgs[1:]...)
 	installCmd.Stdout = os.Stderr
 	installCmd.Stderr = os.Stderr
 	installCmd.Stdin = os.Stdin
@@ -414,13 +414,7 @@ func execBinary(path string, args []string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
-		}
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
 // shimFilePath returns the full path for a shim file.

@@ -241,7 +241,7 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "  Installing %s...\n", s.tool.DisplayName)
-		c := exec.Command(installArgs[0], installArgs[1:]...)
+		c := exec.CommandContext(cmd.Context(), installArgs[0], installArgs[1:]...)
 		c.Stdin = os.Stdin
 		c.Stdout = os.Stderr
 		c.Stderr = os.Stderr
