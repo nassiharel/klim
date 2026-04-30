@@ -13,8 +13,8 @@ import (
 
 var snapshotCmd = &cobra.Command{
 	Use:   "snapshot",
-	Short: "Save and restore environment snapshots",
-	Long: `Manage timestamped snapshots of your installed tools.
+	Short: "Manage saved environment snapshots",
+	Long: `Manage timestamped snapshots of your installed tools and named profiles.
 
 Subcommands:
   save      Save current tool state as a snapshot

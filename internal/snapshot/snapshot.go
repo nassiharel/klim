@@ -115,6 +115,9 @@ func LoadProfile(name string) (*Snapshot, error) {
 		return nil, err
 	}
 	safe := sanitizeName(name)
+	if safe == "" {
+		return nil, fmt.Errorf("invalid profile name: %q", name)
+	}
 	path := filepath.Join(dir, safe+".yaml")
 	return readSnapshot(path)
 }
@@ -135,6 +138,9 @@ func DeleteProfile(name string) error {
 		return err
 	}
 	safe := sanitizeName(name)
+	if safe == "" {
+		return fmt.Errorf("invalid profile name: %q", name)
+	}
 	return os.Remove(filepath.Join(dir, safe+".yaml"))
 }
 
@@ -236,24 +242,22 @@ func listDir(dir string) ([]Entry, error) {
 }
 
 func resolveSnapshotPath(nameOrPath string) (string, error) {
-	// If it's already a full path, use it.
-	if filepath.IsAbs(nameOrPath) {
-		return nameOrPath, nil
+	// Reject path traversal attempts.
+	if strings.Contains(nameOrPath, "..") || strings.ContainsAny(nameOrPath, `/\`) {
+		return "", fmt.Errorf("invalid snapshot name: %q", nameOrPath)
 	}
-	// If it has an extension, treat as relative path.
-	if strings.HasSuffix(nameOrPath, ".yaml") {
-		dir, err := snapshotsDir()
-		if err != nil {
-			return "", err
-		}
-		return filepath.Join(dir, nameOrPath), nil
-	}
-	// Try as snapshot name (with .yaml).
+
 	dir, err := snapshotsDir()
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, nameOrPath+".yaml")
+
+	// Try exact match (with .yaml).
+	name := nameOrPath
+	if !strings.HasSuffix(name, ".yaml") {
+		name += ".yaml"
+	}
+	path := filepath.Join(dir, name)
 	if _, err := os.Stat(path); err == nil {
 		return path, nil
 	}

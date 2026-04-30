@@ -74,7 +74,7 @@ func Check(policy *Policy, tools []registry.Tool) Result {
 
 	toolMap := make(map[string]*registry.Tool)
 	for i := range tools {
-		toolMap[tools[i].Name] = &tools[i]
+		toolMap[strings.ToLower(tools[i].Name)] = &tools[i]
 	}
 
 	// Check each installed tool.
@@ -118,7 +118,7 @@ func Check(policy *Policy, tools []registry.Tool) Result {
 
 	// Check required tools.
 	for _, req := range policy.RequiredTools {
-		t, ok := toolMap[req.Name]
+		t, ok := toolMap[strings.ToLower(req.Name)]
 		if !ok || !t.IsInstalled() {
 			result.addError(req.Name, "required_missing",
 				fmt.Sprintf("%s is required but not installed", req.Name))
