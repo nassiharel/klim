@@ -28,7 +28,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(whyCmd)
+	// Registered in root.go with command group.
 }
 
 func runWhy(cmd *cobra.Command, args []string) error {

@@ -34,7 +34,7 @@ Examples:
 
 func init() {
 	watchCmd.Flags().BoolVar(&watchJSONFlag, "json", false, "Output results as JSON")
-	rootCmd.AddCommand(watchCmd)
+	// Registered in root.go with command group.
 }
 
 type watchResult struct {

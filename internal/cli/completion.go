@@ -51,5 +51,5 @@ To load completions:
 }
 
 func init() {
-	rootCmd.AddCommand(completionCmd)
+	// Registered under shellCmd in shell.go.
 }

@@ -17,37 +17,37 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 <TabItem label="bash">
 ```bash
 # Current session
-source <(clim completion bash)
+source <(clim shell completion bash)
 
 # Persistent — add to ~/.bashrc
-echo 'source <(clim completion bash)' >> ~/.bashrc
+echo 'source <(clim shell completion bash)' >> ~/.bashrc
 ```
 </TabItem>
 <TabItem label="zsh">
 ```bash
 # Current session
-source <(clim completion zsh)
+source <(clim shell completion zsh)
 
 # Persistent — add to ~/.zshrc
-echo 'source <(clim completion zsh)' >> ~/.zshrc
+echo 'source <(clim shell completion zsh)' >> ~/.zshrc
 ```
 </TabItem>
 <TabItem label="fish">
 ```bash
 # Current session
-clim completion fish | source
+clim shell completion fish | source
 
 # Persistent
-clim completion fish > ~/.config/fish/completions/clim.fish
+clim shell completion fish > ~/.config/fish/completions/clim.fish
 ```
 </TabItem>
 <TabItem label="PowerShell">
 ```powershell
 # Current session
-clim completion powershell | Out-String | Invoke-Expression
+clim shell completion powershell | Out-String | Invoke-Expression
 
 # Persistent — add to $PROFILE
-Add-Content $PROFILE 'clim completion powershell | Out-String | Invoke-Expression'
+Add-Content $PROFILE 'clim shell completion powershell | Out-String | Invoke-Expression'
 ```
 </TabItem>
 </Tabs>
@@ -68,34 +68,34 @@ The shell hook automatically checks `.clim.yaml` requirements when you `cd` into
 <Tabs>
 <TabItem label="bash">
 ```bash
-eval "$(clim hook bash)"
+eval "$(clim shell hook bash)"
 
 # Persistent — add to ~/.bashrc
-echo 'eval "$(clim hook bash)"' >> ~/.bashrc
+echo 'eval "$(clim shell hook bash)"' >> ~/.bashrc
 ```
 </TabItem>
 <TabItem label="zsh">
 ```bash
-eval "$(clim hook zsh)"
+eval "$(clim shell hook zsh)"
 
 # Persistent — add to ~/.zshrc
-echo 'eval "$(clim hook zsh)"' >> ~/.zshrc
+echo 'eval "$(clim shell hook zsh)"' >> ~/.zshrc
 ```
 </TabItem>
 <TabItem label="fish">
 ```bash
-clim hook fish | source
+clim shell hook fish | source
 
 # Persistent
-clim hook fish > ~/.config/fish/conf.d/clim-hook.fish
+clim shell hook fish > ~/.config/fish/conf.d/clim-hook.fish
 ```
 </TabItem>
 <TabItem label="PowerShell">
 ```powershell
-clim hook powershell | Out-String | Invoke-Expression
+clim shell hook powershell | Out-String | Invoke-Expression
 
 # Persistent — add to $PROFILE
-Add-Content $PROFILE 'clim hook powershell | Out-String | Invoke-Expression'
+Add-Content $PROFILE 'clim shell hook powershell | Out-String | Invoke-Expression'
 ```
 </TabItem>
 </Tabs>
@@ -117,6 +117,6 @@ For the best experience, set up both completion and hook:
 
 ```bash
 # bash
-echo 'source <(clim completion bash)' >> ~/.bashrc
-echo 'eval "$(clim hook bash)"' >> ~/.bashrc
+echo 'source <(clim shell completion bash)' >> ~/.bashrc
+echo 'eval "$(clim shell hook bash)"' >> ~/.bashrc
 ```

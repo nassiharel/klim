@@ -72,7 +72,7 @@ func init() {
 	proxyCmd.AddCommand(proxyRemoveCmd)
 	proxyCmd.AddCommand(proxyListCmd)
 	proxyCmd.AddCommand(proxyRunCmd)
-	rootCmd.AddCommand(proxyCmd)
+	// Registered in root.go with command group.
 }
 
 // shimsDir returns the path to the shims directory.

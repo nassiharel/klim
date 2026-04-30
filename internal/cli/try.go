@@ -34,7 +34,7 @@ var tryKeepFlag bool
 
 func init() {
 	tryCmd.Flags().BoolVar(&tryKeepFlag, "keep", false, "Keep the tool after trying (skip removal prompt)")
-	rootCmd.AddCommand(tryCmd)
+	// Registered in root.go with command group.
 }
 
 func runTry(cmd *cobra.Command, args []string) error {

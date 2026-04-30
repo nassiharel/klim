@@ -52,7 +52,7 @@ Usage:
 }
 
 func init() {
-	rootCmd.AddCommand(hookCmd)
+	// Registered under shellCmd in shell.go.
 }
 
 const hookBash = `# clim shell hook — auto-check .clim.yaml on cd

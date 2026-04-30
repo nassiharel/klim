@@ -45,7 +45,7 @@ func init() {
 	auditCmd.Flags().BoolVar(&auditJSONFlag, "json", false, "Output results as JSON")
 	auditCmd.Flags().BoolVar(&auditRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	auditCmd.Flags().BoolVar(&auditSBOMFlag, "sbom", false, "Generate CycloneDX SBOM instead of audit report")
-	rootCmd.AddCommand(auditCmd)
+	// Registered in root.go with command group.
 }
 
 // auditFinding is an alias for the shared audit.Finding type (used in JSON output).

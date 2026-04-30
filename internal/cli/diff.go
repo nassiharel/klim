@@ -38,7 +38,7 @@ Exit codes:
 
 func init() {
 	diffCmd.Flags().BoolVar(&diffRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
-	rootCmd.AddCommand(diffCmd)
+	// Registered in root.go with command group.
 }
 
 // diffEntry holds the comparison data for a single tool.

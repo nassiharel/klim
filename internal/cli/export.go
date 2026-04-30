@@ -32,7 +32,7 @@ On the new machine, install them with:
 
 func init() {
 	exportCmd.Flags().BoolVar(&exportRefreshFlag, "refresh", false, "Force a fresh scan, ignoring the on-disk cache")
-	rootCmd.AddCommand(exportCmd)
+	// Registered in root.go with command group.
 }
 
 func runExport(cmd *cobra.Command, args []string) error {

@@ -48,7 +48,7 @@ func init() {
 	marketplaceCmd.AddCommand(marketplaceAddCmd)
 	marketplaceCmd.AddCommand(marketplaceRemoveCmd)
 	marketplaceCmd.AddCommand(marketplaceListCmd)
-	rootCmd.AddCommand(marketplaceCmd)
+	// Registered under configCmd in config.go.
 }
 
 func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
@@ -142,7 +142,7 @@ func runMarketplaceList(cmd *cobra.Command, args []string) error {
 
 	if len(c.Marketplace.ExtraURLs) == 0 {
 		fmt.Fprintln(os.Stderr, "\nNo extra marketplaces configured.")
-		fmt.Fprintln(os.Stderr, "Add one with: clim marketplace add <url>")
+		fmt.Fprintln(os.Stderr, "Add one with: clim config marketplace add <url>")
 	} else {
 		fmt.Fprintf(os.Stderr, "\nExtra (%d):\n", len(c.Marketplace.ExtraURLs))
 		for i, url := range c.Marketplace.ExtraURLs {

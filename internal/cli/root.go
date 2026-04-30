@@ -57,9 +57,70 @@ for non-interactive operation.`,
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "enable verbose logging to stderr")
+	rootCmd.CompletionOptions.HiddenDefaultCmd = true
+
+	// Command groups for organized help output.
+	rootCmd.AddGroup(
+		&cobra.Group{ID: "core", Title: "Core Commands:"},
+		&cobra.Group{ID: "project", Title: "Project Commands:"},
+		&cobra.Group{ID: "tools", Title: "Tool Discovery & Management:"},
+		&cobra.Group{ID: "data", Title: "Backup & Sharing:"},
+		&cobra.Group{ID: "health", Title: "Health & Security:"},
+		&cobra.Group{ID: "shell", Title: "Shell Integration:"},
+		&cobra.Group{ID: "config", Title: "Configuration:"},
+	)
+
+	// Core commands.
+	listCmd.GroupID = "core"
 	rootCmd.AddCommand(listCmd)
+	versionCmd.GroupID = "core"
 	rootCmd.AddCommand(versionCmd)
+	updateCmd.GroupID = "core"
+	rootCmd.AddCommand(updateCmd)
+
+	// Project commands.
+	initCmd.GroupID = "project"
+	rootCmd.AddCommand(initCmd)
+	checkCmd.GroupID = "project"
+	rootCmd.AddCommand(checkCmd)
+
+	// Tool discovery & management.
+	onboardCmd.GroupID = "tools"
+	rootCmd.AddCommand(onboardCmd)
+	whyCmd.GroupID = "tools"
+	rootCmd.AddCommand(whyCmd)
+	tryCmd.GroupID = "tools"
+	rootCmd.AddCommand(tryCmd)
+	watchCmd.GroupID = "tools"
+	rootCmd.AddCommand(watchCmd)
+	diffCmd.GroupID = "tools"
+	rootCmd.AddCommand(diffCmd)
+	toolsCmd.GroupID = "tools"
 	rootCmd.AddCommand(toolsCmd)
+
+	// Backup & sharing.
+	exportCmd.GroupID = "data"
+	rootCmd.AddCommand(exportCmd)
+	importCmd.GroupID = "data"
+	rootCmd.AddCommand(importCmd)
+	shareCmd.GroupID = "data"
+	rootCmd.AddCommand(shareCmd)
+
+	// Health & security.
+	doctorCmd.GroupID = "health"
+	rootCmd.AddCommand(doctorCmd)
+	auditCmd.GroupID = "health"
+	rootCmd.AddCommand(auditCmd)
+
+	// Shell integration.
+	shellCmd.GroupID = "shell"
+	rootCmd.AddCommand(shellCmd)
+	proxyCmd.GroupID = "shell"
+	rootCmd.AddCommand(proxyCmd)
+
+	// Configuration.
+	configCmd.GroupID = "config"
+	rootCmd.AddCommand(configCmd)
 }
 
 // Execute runs the root command.

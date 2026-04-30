@@ -68,5 +68,6 @@ var configEditCmd = &cobra.Command{
 func init() {
 	configCmd.AddCommand(configPathCmd)
 	configCmd.AddCommand(configEditCmd)
-	rootCmd.AddCommand(configCmd)
+	configCmd.AddCommand(marketplaceCmd)
+	// rootCmd.AddCommand done in root.go via group assignment.
 }

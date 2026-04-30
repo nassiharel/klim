@@ -40,7 +40,7 @@ func init() {
 	initCmd.Flags().BoolVar(&initMinVersionFlag, "min-version", false, "Include minimum version constraints (>=X.Y)")
 	initCmd.Flags().StringVar(&initNameFlag, "name", "", "Project name for the manifest")
 	initCmd.Flags().BoolVar(&initAllFlag, "all", false, "Include all installed tools (skip project detection)")
-	rootCmd.AddCommand(initCmd)
+	// Registered in root.go with command group.
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
