@@ -1,0 +1,107 @@
+---
+title: Quick Start
+description: Get up and running with clim in minutes
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+This guide walks you through using clim for the first time.
+
+## Launch the TUI
+
+Simply run `clim` with no arguments to launch the interactive terminal UI:
+
+```bash
+clim
+```
+
+clim will scan your `$PATH` to discover installed developer tools, then display them in an interactive interface with version information and update status.
+
+## What You'll See
+
+The TUI opens on the **Installed** tab showing all detected tools:
+
+```
+┌─ Installed ─ ★ Favorites ─ Updates ─ Discover ─ Backup ─ Project ─ Dashboard ─ Config ─┐
+│                                                                                          │
+│  ✓ az          2.67.0    (brew)     Azure CLI                                            │
+│  ⬆ docker      24.0.7    (manual)   Docker CLI             → 27.1.0                     │
+│  ✓ git         2.47.0    (brew)     Git version control                                  │
+│  ✓ go          1.25.0    (brew)     Go programming language                              │
+│  ⬆ kubectl     1.28.4    (brew)     Kubernetes CLI          → 1.31.0                     │
+│  ✓ node        22.11.0   (brew)     Node.js runtime                                     │
+│                                                                                          │
+│  ↑↓ navigate  ←→ tab  * favorite  s sort  Enter detail  f filter  r refresh  q quit     │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **✓** — Tool is up to date
+- **⬆** — An update is available (latest version shown on the right)
+
+## Navigate the Tabs
+
+Use **←/→** arrow keys, **Tab/Shift+Tab**, or number keys **1–8** to switch tabs:
+
+| Tab | Key | What it shows |
+|-----|-----|---------------|
+| Installed | 1 | All detected tools with versions |
+| ★ Favorites | 2 | Your favorited tools |
+| Updates | 3 | Tools with available upgrades |
+| Discover | 4 | Browse 110+ tools from the marketplace |
+| Backup | 5 | Export, import, and share your toolchain |
+| Project | 6 | Multi-project `.clim.yaml` management |
+| Dashboard | 7 | Stats and breakdowns |
+| Config | 8 | Edit settings |
+
+## CLI Mode
+
+For non-interactive usage (scripts, CI), use subcommands directly:
+
+<Steps>
+1. **List installed tools:**
+   ```bash
+   clim list
+   ```
+
+2. **Export your toolchain:**
+   ```bash
+   clim export > my-tools.yaml
+   ```
+
+3. **Import on another machine:**
+   ```bash
+   clim import my-tools.yaml
+   ```
+
+4. **Check for clim updates:**
+   ```bash
+   clim update --check
+   ```
+</Steps>
+
+## Common Workflows
+
+### Favorite and Share Your Tools
+
+1. In the TUI, press **\*** on any tool to favorite it
+2. Switch to the **★ Favorites** tab (press **2**)
+3. Press **s** to generate a share token
+4. Send the token to a colleague — they run `clim open <token>` to install the same tools
+
+### Batch Upgrade
+
+1. Switch to the **Updates** tab (press **3**)
+2. Press **a** to select all outdated tools
+3. Press **u** to upgrade them all at once
+
+### Team Standardization
+
+1. Export your toolchain: `clim export > .clim.yaml`
+2. Commit `.clim.yaml` to your repository
+3. Team members run: `clim check` to verify they have all required tools
+
+## Next Steps
+
+- Learn about all [TUI features](/guides/tui-overview)
+- Explore the [CLI command reference](/reference/commands/list)
+- Set up [team manifests](/guides/team-manifests) for your project

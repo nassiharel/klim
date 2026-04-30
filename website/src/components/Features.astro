@@ -1,0 +1,72 @@
+---
+const features = [
+  {
+    icon: '🔍',
+    title: 'Discover & Inspect',
+    description: 'Scans your PATH to detect 110+ developer tools, showing versions, install sources, and binary locations.',
+  },
+  {
+    icon: '⬆️',
+    title: 'Batch Updates',
+    description: 'See all outdated tools in one view. Select and upgrade them all with a single keystroke.',
+  },
+  {
+    icon: '📦',
+    title: 'Curated Packs',
+    description: 'Install tool bundles like "Cloud Essentials" or "K8s Starter" — or create your own custom packs.',
+  },
+  {
+    icon: '💾',
+    title: 'Export & Import',
+    description: 'Save your toolchain to a YAML manifest. Reinstall everything on a new machine with one command.',
+  },
+  {
+    icon: '🔗',
+    title: 'Share Tokens',
+    description: 'Generate compact tokens to share your toolchain via Slack, Teams, or email. Recipients install with one command.',
+  },
+  {
+    icon: '📋',
+    title: 'Team Manifests',
+    description: 'Drop a .clim.yaml in your repo to define required tools with version constraints. CI-ready.',
+  },
+  {
+    icon: '🖥️',
+    title: 'Cross-Platform',
+    description: 'Works on macOS, Linux, and Windows. Maps tools to the best native package manager for each OS.',
+  },
+  {
+    icon: '🔒',
+    title: 'Native Package Managers',
+    description: 'Delegates everything to brew, winget, apt, scoop, choco, snap, and npm. Nothing installed by clim itself.',
+  },
+  {
+    icon: '⚡',
+    title: 'Smart Recommendations',
+    description: 'Suggests related tools based on what you already have installed. Discover tools you didn\'t know you needed.',
+  },
+];
+---
+
+<section id="features" class="py-20 md:py-32">
+  <div class="mx-auto max-w-6xl px-6">
+    <div class="text-center">
+      <h2 class="text-3xl font-bold text-white sm:text-4xl">
+        Everything you need to manage your CLI tools
+      </h2>
+      <p class="mx-auto mt-4 max-w-2xl text-lg text-gray-400">
+        From discovery to upgrades, clim handles the entire lifecycle of your developer tools.
+      </p>
+    </div>
+
+    <div class="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+      {features.map((feature) => (
+        <div class="rounded-xl border border-gray-800 bg-gray-900/50 p-6 transition-colors hover:border-gray-700">
+          <div class="mb-4 text-3xl">{feature.icon}</div>
+          <h3 class="mb-2 text-lg font-semibold text-white">{feature.title}</h3>
+          <p class="text-sm leading-relaxed text-gray-400">{feature.description}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

@@ -1,0 +1,101 @@
+---
+title: Installation
+description: How to install clim on macOS, Linux, and Windows
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+clim supports macOS, Linux, and Windows across both amd64 and arm64 architectures.
+
+## Quick Install
+
+<Tabs>
+  <TabItem label="macOS / Linux">
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash
+    ```
+
+    The installer automatically detects your OS and architecture, downloads the latest release, verifies the SHA256 checksum, and installs to `/usr/local/bin`.
+
+    **Options:**
+    ```bash
+    # Install a specific version
+    curl -fsSL ... | bash -s -- --version v1.0.0
+
+    # Install without sudo (to ~/.local/bin)
+    curl -fsSL ... | bash -s -- --no-sudo --install-dir ~/.local/bin
+    ```
+  </TabItem>
+  <TabItem label="Windows">
+    ```powershell
+    irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+    ```
+
+    The installer detects your architecture, downloads the latest release, verifies the checksum, and adds clim to your PATH.
+
+    **Options:**
+    ```powershell
+    # Install a specific version
+    $env:CLIM_VERSION = "v1.0.0"
+    irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+
+    # Custom install directory
+    $env:CLIM_INSTALL_DIR = "C:\tools\clim"
+    irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+    ```
+  </TabItem>
+</Tabs>
+
+## Homebrew (macOS / Linux)
+
+```bash
+brew install nassiharel/tap/clim
+```
+
+## Go Install
+
+If you have Go 1.25+ installed:
+
+```bash
+go install github.com/nassiharel/clim/cmd/clim@latest
+```
+
+## Download Binary
+
+Download pre-built binaries from the [GitHub Releases](https://github.com/nassiharel/clim/releases/latest) page.
+
+Available platforms:
+- macOS (amd64, arm64)
+- Linux (amd64, arm64)
+- Windows (amd64, arm64)
+
+## Linux Packages
+
+```bash
+# Debian / Ubuntu
+sudo dpkg -i clim_<version>_linux_amd64.deb
+
+# RPM-based (Fedora, CentOS, RHEL)
+sudo rpm -i clim_<version>_linux_amd64.rpm
+```
+
+## Build from Source
+
+```bash
+git clone https://github.com/nassiharel/clim.git
+cd clim
+make build
+./bin/clim
+```
+
+## Verify Installation
+
+After installing, verify clim is working:
+
+```bash
+clim version
+```
+
+## Next Steps
+
+Head to the [Quick Start](/getting-started/quickstart) guide to start using clim.
