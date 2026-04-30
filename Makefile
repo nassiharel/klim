@@ -45,5 +45,8 @@ marketplace-validate: ## Validate marketplace tool YAML files
 marketplace-assemble: ## Assemble marketplace.yaml from individual tool files
 	go run ./internal/marketplace/assemble -fallback "$$(test -f marketplace.yaml && printf '%s' marketplace.yaml || printf '%s' /dev/null)" -o marketplace.yaml
 
+docs-marketplace: ## Generate marketplace catalog page for docs site
+	go run docs/scripts/gen-marketplace-page.go
+
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":[^:]*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'

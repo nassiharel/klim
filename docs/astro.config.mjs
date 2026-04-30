@@ -28,6 +28,12 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Marketplace',
+          items: [
+            { label: '📦 Tool Catalog', slug: 'marketplace/catalog' },
+          ],
+        },
+        {
           label: 'Guides',
           items: [
             { label: 'TUI Overview', slug: 'guides/tui-overview' },
