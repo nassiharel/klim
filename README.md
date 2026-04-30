@@ -268,6 +268,13 @@ clim proxy add kubectl terraform   # create shims for tools
 clim proxy remove kubectl          # remove a shim
 clim proxy list                    # list active shims
 
+# Snapshots & profiles
+clim snapshot save "before-upgrade"  # save current state
+clim snapshot list                 # list snapshots
+clim snapshot show before-upgrade  # view snapshot tools
+clim snapshot profile save work    # save a named profile
+clim snapshot profile list         # list profiles
+
 # Onboarding & discovery
 clim onboard                       # interactive role-based setup wizard
 clim onboard devops --list         # list recommendations without installing

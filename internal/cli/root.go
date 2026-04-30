@@ -105,6 +105,8 @@ func init() {
 	rootCmd.AddCommand(importCmd)
 	shareCmd.GroupID = "data"
 	rootCmd.AddCommand(shareCmd)
+	snapshotCmd.GroupID = "data"
+	rootCmd.AddCommand(snapshotCmd)
 
 	// Health & security.
 	doctorCmd.GroupID = "health"

@@ -14,7 +14,7 @@ Killer Features — Ranked by Impact
 
 🔐 **`clim audit` — Security, Compliance & SBOM** ✅ SHIPPED — Audits installed tools for: unmanaged installs (manual/unknown source), archived upstream repos, stale projects (no activity 12+ months), missing version info, outdated tools. Reports license inventory across your toolchain. `clim audit --sbom` generates CycloneDX 1.5 SBOM with tool metadata, licenses, source paths, and VCS references. `--json` for CI pipelines. Exit code 0 = clean, 1 = warnings found.
 
-📸 **Environment Snapshots & Profiles** — `clim snapshot save "before-k8s-upgrade"` / `clim snapshot list` / `clim snapshot restore "before-k8s-upgrade"`. Timestamped record of full tool state — if an upgrade breaks your workflow → instant rollback. Named profiles layer on top: `clim profile save work` / `clim profile switch personal` — like nvm but for your entire toolchain. Pairs with `clim diff --snapshot` for time-travel debugging.
+📸 **Environment Snapshots & Profiles** ✅ SHIPPED — `clim snapshot save/list/show/delete` for timestamped snapshots of installed tools. `clim snapshot profile save/list/show/delete` for named profiles ("work", "personal"). Snapshots stored under `~/.config/clim/snapshots/`, profiles under `~/.config/clim/profiles/`. Fuzzy name matching for show/delete. Built on the existing manifest format.
 
 ## 🥈 Tier 2 — Strong Differentiators
 
