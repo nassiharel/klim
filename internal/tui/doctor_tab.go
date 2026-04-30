@@ -2,20 +2,23 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/clim/internal/audit"
+	"github.com/nassiharel/clim/internal/compliance"
 	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
 // Doctor sub-tab indices.
 const (
-	doctorSubDoctor = 0
-	doctorSubAudit  = 1
+	doctorSubDoctor     = 0
+	doctorSubAudit      = 1
+	doctorSubCompliance = 2
 )
 
 // Doctor view color palette.
@@ -33,25 +36,35 @@ func (m Model) renderDoctorView() string {
 	var b strings.Builder
 
 	// Sub-tab bar.
-	doctorLabel := "Doctor"
-	auditLabel := "Audit"
-	if m.doctorSubTab == doctorSubDoctor {
-		doctorLabel = activeTabStyle.Render(doctorLabel)
-		auditLabel = inactiveTabStyle.Render(auditLabel)
-	} else {
-		doctorLabel = inactiveTabStyle.Render(doctorLabel)
-		auditLabel = activeTabStyle.Render(auditLabel)
+	labels := []struct {
+		text string
+		idx  int
+	}{
+		{"Doctor", doctorSubDoctor},
+		{"Audit", doctorSubAudit},
+		{"Compliance", doctorSubCompliance},
 	}
-	b.WriteString("  " + doctorLabel + " " + auditLabel + "\n\n")
+	var tabs []string
+	for _, l := range labels {
+		if m.doctorSubTab == l.idx {
+			tabs = append(tabs, activeTabStyle.Render(l.text))
+		} else {
+			tabs = append(tabs, inactiveTabStyle.Render(l.text))
+		}
+	}
+	b.WriteString("  " + strings.Join(tabs, " ") + "\n\n")
 
 	if !m.doctorChecked {
 		b.WriteString("  " + loadingStyle.Render("Waiting for scan to complete..."))
 		return b.String()
 	}
 
-	if m.doctorSubTab == doctorSubAudit {
+	switch m.doctorSubTab {
+	case doctorSubAudit:
 		b.WriteString(m.renderAuditView())
-	} else {
+	case doctorSubCompliance:
+		b.WriteString(m.renderComplianceView())
+	default:
 		b.WriteString(m.renderDoctorIssuesView())
 	}
 
@@ -240,4 +253,78 @@ func severityStyle(s doctor.Severity) string {
 		return doctorInfo.Render("ℹ")
 	}
 	return "?"
+}
+
+// renderComplianceView renders the compliance sub-view.
+func (m Model) renderComplianceView() string {
+	var b strings.Builder
+
+	if m.complianceResult == nil {
+		b.WriteString("  " + dashDim.Render("No compliance policy configured.") + "\n\n")
+		b.WriteString("  " + dashDim.Render("Create one with: clim compliance init") + "\n")
+		b.WriteString("  " + dashDim.Render("Configure in config.yaml:") + "\n")
+		b.WriteString("  " + dashDim.Render("  compliance:") + "\n")
+		b.WriteString("  " + dashDim.Render("    policy: /path/to/.clim-policy.yaml") + "\n")
+		return b.String()
+	}
+
+	result := m.complianceResult
+	b.WriteString("  " + doctorSection.Render("Policy: "+result.PolicyName) + "\n\n")
+
+	if result.Compliant && len(result.Violations) == 0 {
+		b.WriteString("  " + doctorOK.Render("✓ All tools comply with policy!") + "\n")
+		return b.String()
+	}
+
+	var errors, warnings int
+	for _, v := range result.Violations {
+		if v.Severity == "error" {
+			errors++
+		} else {
+			warnings++
+		}
+	}
+
+	var summaryParts []string
+	if errors > 0 {
+		summaryParts = append(summaryParts, doctorError.Render(fmt.Sprintf("%d error(s)", errors)))
+	}
+	if warnings > 0 {
+		summaryParts = append(summaryParts, doctorWarning.Render(fmt.Sprintf("%d warning(s)", warnings)))
+	}
+	b.WriteString("  " + strings.Join(summaryParts, "  ") + "\n\n")
+
+	for _, v := range result.Violations {
+		icon := doctorWarning.Render("⚠")
+		if v.Severity == "error" {
+			icon = doctorError.Render("✗")
+		}
+		b.WriteString("    " + icon + " " + nameStyle.Render(v.Tool) + "  " + dashDim.Render(v.Rule) + "\n")
+		b.WriteString("      " + dashDim.Render(v.Message) + "\n")
+	}
+	b.WriteString("\n")
+
+	return b.String()
+}
+
+// runCompliance loads the compliance policy and checks tools against it.
+func runComplianceCheck(tools []registry.Tool, policyPath string) *compliance.Result {
+	if policyPath == "" {
+		// Try default locations.
+		for _, candidate := range []string{".clim-policy.yaml", ".clim-policy.yml"} {
+			if _, err := os.Stat(candidate); err == nil {
+				policyPath = candidate
+				break
+			}
+		}
+	}
+	if policyPath == "" {
+		return nil
+	}
+	policy, err := compliance.LoadPolicy(policyPath)
+	if err != nil {
+		return nil
+	}
+	result := compliance.Check(policy, tools)
+	return &result
 }

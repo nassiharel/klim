@@ -18,6 +18,7 @@ import (
 
 	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/catalog"
+	"github.com/nassiharel/clim/internal/compliance"
 	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/custompacks"
 	"github.com/nassiharel/clim/internal/doctor"
@@ -242,13 +243,14 @@ type Model struct {
 	configEditInput textinput.Model // text input for string/int/duration settings
 	configScroll    int             // scroll offset for config tab
 
-	// Doctor tab state (includes audit findings).
-	doctorIssues    []doctor.Issue    // diagnostic results (nil = not yet checked)
-	auditFindings   []audit.Finding   // security audit findings
-	auditLicenses   map[string]int    // license counts
-	doctorScroll    int             // scroll offset for doctor tab
-	doctorChecked   bool            // true after first doctor check completed
-	doctorSubTab    int             // 0=doctor, 1=audit
+	// Doctor tab state (includes audit + compliance findings).
+	doctorIssues     []doctor.Issue       // diagnostic results (nil = not yet checked)
+	auditFindings    []audit.Finding      // security audit findings
+	auditLicenses    map[string]int       // license counts
+	complianceResult *compliance.Result   // compliance check result (nil = no policy)
+	doctorScroll     int                  // scroll offset for doctor tab
+	doctorChecked    bool                 // true after first doctor check completed
+	doctorSubTab     int                  // 0=doctor, 1=audit, 2=compliance
 
 	// Team file (.clim.yaml) state.
 	teamFilePath    string                  // path to detected .clim.yaml ("" = not found)
@@ -403,6 +405,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.doctorIssues = nil
 	m.auditFindings = nil
 	m.auditLicenses = nil
+	m.complianceResult = nil
 	m.doctorChecked = false
 	m.doctorScroll = 0
 	m.doctorSubTab = doctorSubDoctor
@@ -1597,7 +1600,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "right", "tab":
 			// On Doctor tab, cycle sub-tabs before switching main tabs.
-			if m.activeTab == tabDoctor && m.doctorSubTab < doctorSubAudit {
+			if m.activeTab == tabDoctor && m.doctorSubTab < doctorSubCompliance {
 				m.doctorSubTab++
 				m.doctorScroll = 0
 				return m, nil
@@ -2386,6 +2389,14 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 	}
 	m.doctorIssues = doctor.Diagnose(m.tools, scanMeta)
 	m.auditFindings, m.auditLicenses = audit.Analyze(m.tools)
+
+	// Run compliance check if a policy is configured.
+	policyPath := ""
+	if m.cfg != nil {
+		policyPath = m.cfg.Compliance.Policy
+	}
+	m.complianceResult = runComplianceCheck(m.tools, policyPath)
+
 	m.doctorChecked = true
 	m.doctorScroll = 0
 }
