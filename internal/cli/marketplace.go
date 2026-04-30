@@ -63,15 +63,21 @@ func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	// Check for duplicates.
+	// Normalize existing URLs and check for duplicates.
+	var normalized []string
 	for _, existing := range c.Marketplace.ExtraURLs {
-		if existing == url {
+		e := strings.TrimSpace(existing)
+		if e == "" {
+			continue
+		}
+		if e == url {
 			fmt.Fprintf(os.Stderr, "URL already configured: %s\n", url)
 			return nil
 		}
+		normalized = append(normalized, e)
 	}
 
-	c.Marketplace.ExtraURLs = append(c.Marketplace.ExtraURLs, url)
+	c.Marketplace.ExtraURLs = append(normalized, url)
 
 	if err := config.Save(c); err != nil {
 		return fmt.Errorf("saving config: %w", err)
@@ -96,11 +102,14 @@ func runMarketplaceRemove(cmd *cobra.Command, args []string) error {
 	found := false
 	var filtered []string
 	for _, existing := range c.Marketplace.ExtraURLs {
-		if existing == url {
+		e := strings.TrimSpace(existing)
+		if e == url {
 			found = true
 			continue
 		}
-		filtered = append(filtered, existing)
+		if e != "" {
+			filtered = append(filtered, e)
+		}
 	}
 
 	if !found {

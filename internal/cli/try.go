@@ -107,53 +107,43 @@ func runTry(cmd *cobra.Command, args []string) error {
 	// Run the tool.
 	if len(toolArgs) > 0 {
 		fmt.Fprintf(os.Stderr, "Running: %s %s\n\n", execName, strings.Join(toolArgs, " "))
-		c := exec.Command(execName, toolArgs...)
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
-		c.Stdin = os.Stdin
-
-		// Handle Ctrl+C gracefully.
-		sigCh := make(chan os.Signal, 1)
-		done := make(chan struct{})
-		signal.Notify(sigCh, os.Interrupt)
-		defer signal.Stop(sigCh)
-		defer close(done)
-		go func() {
-			select {
-			case <-sigCh:
-				// Let the child process handle it.
-			case <-done:
-			}
-		}()
-
-		var runErr error
-		runErr = c.Run()
-		fmt.Fprintln(os.Stderr)
-
-		// Cleanup prompt (unless --keep or was already installed).
-		if !alreadyInstalled && !tryKeepFlag {
-			doCleanup(*t, installSource)
-		}
-
-		if runErr != nil {
-			if exitErr, ok := runErr.(*exec.ExitError); ok {
-				os.Exit(exitErr.ExitCode())
-			}
-			return runErr
-		}
-		return nil
+	} else {
+		fmt.Fprintf(os.Stderr, "Running: %s\n\n", execName)
 	}
+	c := exec.Command(execName, toolArgs...)
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	c.Stdin = os.Stdin
 
-	fmt.Fprintf(os.Stderr, "%s is ready. Run it manually, then come back here.\n", t.DisplayName)
-	fmt.Fprintf(os.Stderr, "Press Enter when done...")
-	fmt.Fscanln(os.Stdin)
+	// Handle Ctrl+C gracefully.
+	sigCh := make(chan os.Signal, 1)
+	done := make(chan struct{})
+	signal.Notify(sigCh, os.Interrupt)
+	defer signal.Stop(sigCh)
+	defer close(done)
+	go func() {
+		select {
+		case <-sigCh:
+			// Let the child process handle it.
+		case <-done:
+		}
+	}()
+
+	var runErr error
+	runErr = c.Run()
+	fmt.Fprintln(os.Stderr)
 
 	// Cleanup prompt (unless --keep or was already installed).
-	if alreadyInstalled || tryKeepFlag {
-		return nil
+	if !alreadyInstalled && !tryKeepFlag {
+		doCleanup(*t, installSource)
 	}
 
-	doCleanup(*t, installSource)
+	if runErr != nil {
+		if exitErr, ok := runErr.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		}
+		return runErr
+	}
 	return nil
 }
 

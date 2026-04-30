@@ -215,13 +215,18 @@ func loadDiffTarget(target string) (string, []manifest.Tool, error) {
 	return label, m.Tools, nil
 }
 
-// versionsEqual compares two version strings. Empty versions are treated
-// as unknown and considered a match (share tokens don't carry versions).
-func versionsEqual(a, b string) bool {
-	if a == "" || b == "" {
+// versionsEqual compares a local version against a remote/reference version.
+// An empty remote version is treated as unknown and considered a match
+// (for example, share tokens only carry tool names). An empty local
+// version does not match a non-empty remote version.
+func versionsEqual(localVersion, remoteVersion string) bool {
+	if remoteVersion == "" {
 		return true
 	}
-	a = strings.TrimPrefix(a, "v")
-	b = strings.TrimPrefix(b, "v")
-	return a == b
+	if localVersion == "" {
+		return false
+	}
+	localVersion = strings.TrimPrefix(localVersion, "v")
+	remoteVersion = strings.TrimPrefix(remoteVersion, "v")
+	return localVersion == remoteVersion
 }

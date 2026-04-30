@@ -7,7 +7,7 @@ The clim TUI (Terminal User Interface) provides a rich interactive experience fo
 
 ## Tabs
 
-The TUI has 8 tabs, accessible via arrow keys or number keys:
+The TUI has 9 tabs, accessible via arrow keys or number keys:
 
 | Tab | Key | Purpose |
 |-----|-----|---------|
@@ -19,6 +19,7 @@ The TUI has 8 tabs, accessible via arrow keys or number keys:
 | **Project** | 6 | Multi-project `.clim.yaml` management |
 | **Dashboard** | 7 | Stats, gauges, category breakdowns |
 | **Config** | 8 | View and edit settings |
+| **Doctor** | 9 | Environment diagnostics and security audit (sub-tabs: Doctor / Audit) |
 
 ## Global Keybindings
 
@@ -26,8 +27,8 @@ These work on every tab:
 
 | Key | Action |
 |-----|--------|
-| `←` / `→` or `Tab` / `Shift+Tab` | Switch tabs |
-| `1`–`8` | Jump to specific tab |
+| `←` / `→` or `Tab` / `Shift+Tab` | Switch tabs (and sub-tabs on Discover/Doctor) |
+| `1`–`9` | Jump to specific tab |
 | `r` | Refresh — rescan tools |
 | `q` or `Ctrl+C` | Quit |
 

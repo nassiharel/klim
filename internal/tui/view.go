@@ -2322,7 +2322,7 @@ func (m Model) renderHelp() string {
 		parts = []string{
 			dimVersion.Render("↑↓") + " scroll",
 			dimVersion.Render("Home") + " top",
-			dimVersion.Render("←→") + " tab",
+			dimVersion.Render("←→") + " sub-tab / tab",
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
 		}

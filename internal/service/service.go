@@ -409,12 +409,16 @@ func fetchExtraCached(ctx context.Context, fetcher catalog.MarketplaceFetcher, i
 	}
 
 	// Validate before caching — don't poison cache with HTML/garbage.
-	if _, parseErr := registry.ToolsFromBytesWithError(data); parseErr != nil {
-		// Also try packs — a packs-only marketplace is still valid.
-		if _, packErr := registry.ParsePacksFromBytes(data); packErr != nil {
-			slog.Warn("extra marketplace fetched invalid data, not caching", "index", index, "error", parseErr)
-			return nil, parseErr
-		}
+	// Must have at least one tool or pack to be considered valid.
+	tools, toolErr := registry.ToolsFromBytesWithError(data)
+	packs, packErr := registry.ParsePacksFromBytes(data)
+	if toolErr != nil && packErr != nil {
+		slog.Warn("extra marketplace fetched invalid data, not caching", "index", index, "error", toolErr)
+		return nil, toolErr
+	}
+	if len(tools) == 0 && len(packs) == 0 {
+		slog.Warn("extra marketplace has no tools or packs, not caching", "index", index)
+		return nil, fmt.Errorf("extra marketplace contains no tools or packs")
 	}
 
 	// Write cache.

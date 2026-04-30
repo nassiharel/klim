@@ -175,23 +175,38 @@ func runProxyRemove(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Load catalog to resolve tool names → binary names.
+	resolveNames := func(name string) []string { return []string{name} }
+	if tools, _, loadErr := svc.Catalog.LoadTools(cmd.Context()); loadErr == nil {
+		toolMap := registry.ToolMap(tools)
+		resolveNames = func(name string) []string {
+			if t, ok := toolMap[name]; ok && len(t.BinaryNames) > 0 {
+				return t.BinaryNames
+			}
+			return []string{name}
+		}
+	}
+
 	var removed int
 	for _, name := range args {
-		if !isValidShimName(name) {
-			fmt.Fprintf(os.Stderr, "⚠ %s: invalid name, skipping\n", name)
-			continue
-		}
-		shimPath := shimFilePath(dir, name)
-		if err := os.Remove(shimPath); err != nil {
-			if os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "  %s: no shim found\n", name)
-			} else {
-				fmt.Fprintf(os.Stderr, "⚠ %s: %v\n", name, err)
+		shimNames := resolveNames(name)
+		for _, shimName := range shimNames {
+			if !isValidShimName(shimName) {
+				fmt.Fprintf(os.Stderr, "⚠ %s: invalid name, skipping\n", shimName)
+				continue
 			}
-			continue
+			shimPath := shimFilePath(dir, shimName)
+			if err := os.Remove(shimPath); err != nil {
+				if os.IsNotExist(err) {
+					fmt.Fprintf(os.Stderr, "  %s: no shim found\n", shimName)
+				} else {
+					fmt.Fprintf(os.Stderr, "⚠ %s: %v\n", shimName, err)
+				}
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "✓ %s shim removed\n", shimName)
+			removed++
 		}
-		fmt.Fprintf(os.Stderr, "✓ %s shim removed\n", name)
-		removed++
 	}
 	fmt.Fprintf(os.Stderr, "%d shim(s) removed\n", removed)
 	return nil
@@ -259,14 +274,13 @@ func runProxyRun(cmd *cobra.Command, args []string) error {
 	}
 
 	// Look for the real binary in PATH, excluding the shims directory.
+	// Also check the catalog's binary names for this tool.
 	realPath := findRealBinary(toolName, dir)
 	if realPath != "" {
 		return execBinary(realPath, toolArgs)
 	}
 
-	// Not installed — load catalog definitions and install.
-	fmt.Fprintf(os.Stderr, "[clim] %s is not installed. Installing...\n", toolName)
-
+	// Load catalog to check binary names and install if needed.
 	tools, _, catErr := svc.Catalog.LoadTools(cmd.Context())
 	if catErr != nil {
 		return fmt.Errorf("loading catalog: %w", catErr)
@@ -277,6 +291,18 @@ func runProxyRun(cmd *cobra.Command, args []string) error {
 	if !ok {
 		return fmt.Errorf("[clim] %s not found in catalog", toolName)
 	}
+
+	// Check if a different binary name is already installed.
+	for _, bin := range t.BinaryNames {
+		if bin != toolName {
+			if p := findRealBinary(bin, dir); p != "" {
+				return execBinary(p, toolArgs)
+			}
+		}
+	}
+
+	// Not installed — install it.
+	fmt.Fprintf(os.Stderr, "[clim] %s is not installed. Installing...\n", toolName)
 
 	// Find best available PM with a package ID.
 	sources := registry.SourcesForOS()
