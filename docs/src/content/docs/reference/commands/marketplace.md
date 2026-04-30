@@ -1,5 +1,5 @@
 ---
-title: "clim marketplace"
+title: "clim config marketplace"
 description: Manage extra marketplace URLs
 ---
 
@@ -9,9 +9,9 @@ Add, remove, and list extra marketplace URLs. Extra marketplaces extend the defa
 
 | Command | Description |
 |---------|-------------|
-| `clim marketplace list` | Show primary and extra marketplace URLs |
-| `clim marketplace add <url>` | Add an extra marketplace URL |
-| `clim marketplace remove <url>` | Remove an extra marketplace URL |
+| `clim config marketplace list` | Show primary and extra marketplace URLs |
+| `clim config marketplace add <url>` | Add an extra marketplace URL |
+| `clim config marketplace remove <url>` | Remove an extra marketplace URL |
 
 ## How It Works
 
@@ -23,13 +23,13 @@ Extra marketplaces are cached locally (per-URL) and respect the same `auto_refre
 
 ```bash
 # List all marketplace sources
-clim marketplace list
+clim config marketplace list
 
 # Add a team-internal marketplace
-clim marketplace add https://raw.githubusercontent.com/myorg/tools/main/marketplace.yaml
+clim config marketplace add https://raw.githubusercontent.com/myorg/tools/main/marketplace.yaml
 
 # Remove a marketplace
-clim marketplace remove https://example.com/old-tools.yaml
+clim config marketplace remove https://example.com/old-tools.yaml
 ```
 
 ## Configuration

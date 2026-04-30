@@ -31,7 +31,7 @@ If you installed clim via Homebrew, you may prefer 'brew upgrade clim'.`,
 
 func init() {
 	updateCmd.Flags().BoolVar(&checkFlag, "check", false, "Check for updates without installing")
-	rootCmd.AddCommand(updateCmd)
+	// Registered in root.go with command group.
 }
 
 func runUpdate(cmd *cobra.Command, args []string) error {

@@ -40,7 +40,7 @@ func init() {
 	checkCmd.Flags().StringVarP(&checkFileFlag, "file", "f", "", "Path to .clim.yaml (default: auto-detect)")
 	checkCmd.Flags().BoolVar(&checkJSONFlag, "json", false, "Output results as JSON")
 	checkCmd.Flags().BoolVar(&checkRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
-	rootCmd.AddCommand(checkCmd)
+	// Registered in root.go with command group.
 }
 
 // jsonCheckResult is the JSON output schema.

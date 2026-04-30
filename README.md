@@ -51,7 +51,7 @@ See which tools have updates at a glance. Batch-upgrade everything with one keys
 Export your installed tools to a portable manifest. Import it on a new machine — same tools, same setup, zero guesswork. Backups are saved automatically so you never lose your setup.
 
 ### 🔗 Share Your Toolchain
-Generate a compact share token and paste it in Slack, Teams, or email. Recipients run `clim open <token>` to get your exact toolchain. No files to send.
+Generate a compact share token and paste it in Slack, Teams, or email. Recipients run `clim share open <token>` to get your exact toolchain. No files to send.
 
 ### 🖥️ Move Between OSes
 Installed everything on macOS? Export and import on your new Linux box. clim maps each tool to the best available package manager on the target OS — winget, brew, apt, choco, scoop, snap, or npm.
@@ -69,7 +69,7 @@ Tune clim from inside the TUI — log level, refresh interval, concurrency, defa
 Run `clim doctor` to diagnose your environment — detects duplicate and broken PATH entries, conflicting tool versions (multiple installations), missing package managers, stale caches, and unresolved versions. JSON output for CI with `--json`. TUI Doctor tab shows color-coded issues with fix suggestions.
 
 ### 🐚 Shell Integration
-Native tab completion for bash, zsh, fish, and PowerShell via `clim completion`. Shell hooks via `clim hook` that auto-check `.clim.yaml` when you `cd` into a project — like nvm/direnv for your entire toolchain.
+Native tab completion for bash, zsh, fish, and PowerShell via `clim shell completion`. Shell hooks via `clim shell hook` that auto-check `.clim.yaml` when you `cd` into a project — like nvm/direnv for your entire toolchain.
 
 ### 🔀 Environment Diff
 Compare your local tools against a colleague's manifest or share token with `clim diff`. See which tools match, differ in version, or are missing on either side — the "works on my machine" killer.

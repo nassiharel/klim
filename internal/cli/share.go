@@ -11,26 +11,28 @@ import (
 
 var shareCmd = &cobra.Command{
 	Use:   "share",
-	Short: "Generate a share token of your installed tools",
-	Long: `Generate a compact token that encodes your installed tools. The token can
-be pasted in Slack, Teams, or any chat to share your toolchain with others.
+	Short: "Share your toolchain — generate tokens, install from tokens",
+	Long: `Share your installed tools as a compact token, or install tools from
+a token shared by a teammate.
 
-Recipients install the tools with:
-  clim open <token>
-
-Example:
-  clim share
-  # → Share token (21 tools):
-  # → clim:v1:H4sIAAAA...
-  # → Recipients can install with: clim open <token>`,
+Usage:
+  clim share                 # generate a share token
+  clim share open <token>    # install from a share token`,
+	Args: cobra.NoArgs,
 	RunE: runShare,
 }
 
 func init() {
-	rootCmd.AddCommand(shareCmd)
+	shareCmd.AddCommand(openCmd)
+	// rootCmd.AddCommand done in root.go via group assignment.
 }
 
 func runShare(cmd *cobra.Command, args []string) error {
+	// If called with no subcommand, behave as "generate".
+	return runShareGenerate(cmd, args)
+}
+
+func runShareGenerate(cmd *cobra.Command, args []string) error {
 	fmt.Fprintln(os.Stderr, "Scanning installed tools...")
 	tools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
@@ -57,6 +59,6 @@ func runShare(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "\nShare token (%d tools):\n\n", len(names))
 	fmt.Println(token)
-	fmt.Fprintf(os.Stderr, "\nRecipients can install with: clim open <token>\n")
+	fmt.Fprintf(os.Stderr, "\nRecipients can install with: clim share open <token>\n")
 	return nil
 }

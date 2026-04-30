@@ -32,7 +32,7 @@ Exit codes:
 func init() {
 	doctorCmd.Flags().BoolVar(&doctorJSONFlag, "json", false, "Output results as JSON")
 	doctorCmd.Flags().BoolVar(&doctorRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
-	rootCmd.AddCommand(doctorCmd)
+	// Registered in root.go with command group.
 }
 
 // jsonDoctorOutput is the JSON output schema for doctor results.

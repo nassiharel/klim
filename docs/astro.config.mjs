@@ -47,27 +47,63 @@ export default defineConfig({
         {
           label: 'CLI Reference',
           items: [
-            { label: 'list', slug: 'reference/commands/list' },
-            { label: 'export', slug: 'reference/commands/export' },
-            { label: 'import', slug: 'reference/commands/import' },
-            { label: 'check', slug: 'reference/commands/check' },
-            { label: 'doctor', slug: 'reference/commands/doctor' },
-            { label: 'audit', slug: 'reference/commands/audit' },
-            { label: 'diff', slug: 'reference/commands/diff' },
-            { label: 'watch', slug: 'reference/commands/watch' },
-            { label: 'why', slug: 'reference/commands/why' },
-            { label: 'onboard', slug: 'reference/commands/onboard' },
-            { label: 'try', slug: 'reference/commands/try' },
-            { label: 'proxy', slug: 'reference/commands/proxy' },
-            { label: 'marketplace', slug: 'reference/commands/marketplace' },
-            { label: 'completion', slug: 'reference/commands/completion' },
-            { label: 'hook', slug: 'reference/commands/hook' },
-            { label: 'update', slug: 'reference/commands/update' },
-            { label: 'share', slug: 'reference/commands/share' },
-            { label: 'open', slug: 'reference/commands/open' },
-            { label: 'config', slug: 'reference/commands/config' },
-            { label: 'tools', slug: 'reference/commands/tools' },
-            { label: 'version', slug: 'reference/commands/version' },
+            {
+              label: 'Core',
+              items: [
+                { label: 'list', slug: 'reference/commands/list' },
+                { label: 'update', slug: 'reference/commands/update' },
+                { label: 'version', slug: 'reference/commands/version' },
+              ],
+            },
+            {
+              label: 'Project',
+              items: [
+                { label: 'check', slug: 'reference/commands/check' },
+                { label: 'init', slug: 'reference/commands/init' },
+              ],
+            },
+            {
+              label: 'Tools',
+              items: [
+                { label: 'diff', slug: 'reference/commands/diff' },
+                { label: 'onboard', slug: 'reference/commands/onboard' },
+                { label: 'try', slug: 'reference/commands/try' },
+                { label: 'watch', slug: 'reference/commands/watch' },
+                { label: 'why', slug: 'reference/commands/why' },
+              ],
+            },
+            {
+              label: 'Backup & Sharing',
+              items: [
+                { label: 'export', slug: 'reference/commands/export' },
+                { label: 'import', slug: 'reference/commands/import' },
+                { label: 'share', slug: 'reference/commands/share' },
+                { label: 'snapshot', slug: 'reference/commands/snapshot' },
+              ],
+            },
+            {
+              label: 'Health & Security',
+              items: [
+                { label: 'doctor', slug: 'reference/commands/doctor' },
+                { label: 'audit', slug: 'reference/commands/audit' },
+                { label: 'compliance', slug: 'reference/commands/compliance' },
+              ],
+            },
+            {
+              label: 'Shell Integration',
+              items: [
+                { label: 'shell completion', slug: 'reference/commands/completion' },
+                { label: 'shell hook', slug: 'reference/commands/hook' },
+                { label: 'proxy', slug: 'reference/commands/proxy' },
+              ],
+            },
+            {
+              label: 'Configuration',
+              items: [
+                { label: 'config', slug: 'reference/commands/config' },
+                { label: 'config marketplace', slug: 'reference/commands/marketplace' },
+              ],
+            },
           ],
         },
         {

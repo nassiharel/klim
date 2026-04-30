@@ -1,30 +1,39 @@
 ---
 title: "clim share"
-description: Generate a share token of your installed tools
+description: Share your toolchain — generate and install from tokens
 ---
 
-Generate a compact token that encodes your installed tools. Recipients can install the same tools with `clim open`.
+Share your installed tools as a compact token, or install tools from a token shared by a teammate.
 
 ## Usage
+
+```bash
+clim share                    # generate a share token
+clim share open <token>       # install from a share token
+clim share open <token> --yes # non-interactive install
+```
+
+## Generate a Token
 
 ```bash
 clim share
 ```
 
-## Output
+Outputs a compact `clim:v1:...` token that encodes your installed tool names. Share it via Slack, Teams, email, or any chat.
 
-```
-clim:v1:H4sIAAAA...
+## Install from a Token
+
+```bash
+clim share open "clim:v1:H4sIAAAA..."
 ```
 
-The token is a base64-encoded, gzip-compressed representation of your tool list. It's designed to be compact enough to share via Slack, Teams, email, or any messaging platform.
+Decodes the token, resolves tools from your local catalog, and installs via native package managers.
 
 ## How It Works
 
-1. Scans for all installed tools (or uses cached results)
-2. Encodes the tool list into a compact binary format
-3. Compresses with gzip
-4. Outputs as a `clim:v1:` prefixed base64 string
+1. Scans for all installed tools
+2. Encodes tool names into gzip-compressed, base64-encoded token
+3. Recipients decode and install via their local catalog + package managers
 
 ## TUI Alternative
 
@@ -32,5 +41,5 @@ In the TUI, switch to the **★ Favorites** tab and press `s` to share just your
 
 ## See Also
 
-- [`clim open`](/reference/commands/open) — Install tools from a share token
 - [`clim export`](/reference/commands/export) — Export to a YAML file (more detailed)
+- [`clim diff`](/reference/commands/diff) — Compare against a token or manifest
