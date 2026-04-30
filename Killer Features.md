@@ -36,4 +36,4 @@ Killer Features — Ranked by Impact
 
 🤖 **AI Tool Discovery** — "I need to process JSON" → suggests jq, gron, fx, jless. Natural language search over the marketplace. Could use embeddings on tool descriptions + tags.
 
-🏗️ **`clim ci generate`** — Auto-generate CI steps from `.clim.yaml`. Pre-built GitHub Action: `uses: nassiharel/clim-action@v1`. Dockerfile generation from manifest. Bridge the gap between local dev and CI environments.
+🏗️ **`clim generate`** ✅ SHIPPED — Auto-generate CI/container configs from `.clim.yaml`: `clim generate github-action` (workflow with install + verify steps), `clim generate dockerfile` (apt/brew/npm installs), `clim generate devcontainer` (VS Code / GitHub Codespaces with Dev Container Features mapping). Resolves tool names to package IDs from the marketplace. Supports `--output` for file writing and `--base` for custom Docker images.

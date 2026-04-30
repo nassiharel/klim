@@ -60,6 +60,7 @@ export default defineConfig({
               items: [
                 { label: 'check', slug: 'reference/commands/check' },
                 { label: 'init', slug: 'reference/commands/init' },
+                { label: 'generate', slug: 'reference/commands/generate' },
               ],
             },
             {

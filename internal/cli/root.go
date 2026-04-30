@@ -83,6 +83,8 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	checkCmd.GroupID = "project"
 	rootCmd.AddCommand(checkCmd)
+	generateCmd.GroupID = "project"
+	rootCmd.AddCommand(generateCmd)
 
 	// Tool discovery & management.
 	onboardCmd.GroupID = "tools"

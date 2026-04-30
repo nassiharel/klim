@@ -42,7 +42,7 @@ Install entire toolchains in one shot. Cloud Essentials, K8s Starter, Python Dev
 Hand-pick tools from the marketplace, give your pack a name, and save it. Share it with teammates or use it to set up your next machine.
 
 ### 📋 Team Manifests (`.clim.yaml`)
-Drop a `.clim.yaml` in your repo to define required and optional tools with version constraints. `clim check` validates every developer's environment — in the terminal or CI. `clim init` scans your project files (Dockerfile, go.mod, package.json, CI workflows, Helm charts, Terraform, Bicep, and 30+ more) and generates one automatically. Manage multiple projects from the TUI's Project tab — add tools, install missing dependencies, and keep everyone in sync.
+Drop a `.clim.yaml` in your repo to define required and optional tools with version constraints. `clim check` validates every developer's environment — in the terminal or CI. `clim init` scans your project files (Dockerfile, go.mod, package.json, CI workflows, Helm charts, Terraform, Bicep, and 30+ more) and generates one automatically. `clim generate` produces GitHub Actions workflows, Dockerfiles, and devcontainer.json from your manifest. Manage multiple projects from the TUI's Project tab — add tools, install missing dependencies, and keep everyone in sync.
 
 ### 🔄 Keep Everything Up to Date
 See which tools have updates at a glance. Batch-upgrade everything with one keystroke, or pick and choose. clim queries native package managers — no custom registries.
