@@ -119,6 +119,9 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			e.localVersion = local.Version
 			e.localSource = local.Source
 			e.remoteVersion = remote.Version
+			if e.remoteVersion == "" {
+				e.remoteVersion = "—"
+			}
 			e.remoteSource = remote.Source
 			if versionsEqual(e.localVersion, e.remoteVersion) {
 				e.status = "✓ match"

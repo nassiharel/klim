@@ -105,6 +105,21 @@ func ToolsFromBytes(data []byte) []Tool {
 	return defsToTools(defs)
 }
 
+// ToolsFromBytesWithError parses catalog YAML bytes into a slice of Tools,
+// distinguishing parse errors from an empty/missing tools section.
+// Returns (nil, error) on YAML parse failure.
+// Returns (empty slice, nil) when YAML is valid but has no tools.
+func ToolsFromBytesWithError(data []byte) ([]Tool, error) {
+	var f toolsFile
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return nil, fmt.Errorf("parsing marketplace YAML: %w", err)
+	}
+	if len(f.Tools) == 0 {
+		return []Tool{}, nil
+	}
+	return defsToTools(f.Tools), nil
+}
+
 func parseToolDefs(data []byte) []ToolDef {
 	var f toolsFile
 	if err := yaml.Unmarshal(data, &f); err != nil {

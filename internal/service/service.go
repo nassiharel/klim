@@ -308,8 +308,12 @@ func (c *DefaultCatalog) mergeExtraTools(ctx context.Context, primary []registry
 			slog.Warn("extra marketplace fetch failed", "index", i, "error", err)
 			continue
 		}
-		extraTools := registry.ToolsFromBytes(data)
-		if extraTools == nil {
+		extraTools, parseErr := registry.ToolsFromBytesWithError(data)
+		if parseErr != nil {
+			slog.Warn("extra marketplace YAML invalid", "index", i, "error", parseErr)
+			continue
+		}
+		if len(extraTools) == 0 {
 			slog.Debug("extra marketplace has no tools section", "index", i)
 			continue
 		}
@@ -402,6 +406,15 @@ func fetchExtraCached(ctx context.Context, fetcher catalog.MarketplaceFetcher, i
 			return cached, nil
 		}
 		return nil, err
+	}
+
+	// Validate before caching — don't poison cache with HTML/garbage.
+	if _, parseErr := registry.ToolsFromBytesWithError(data); parseErr != nil {
+		// Also try packs — a packs-only marketplace is still valid.
+		if _, packErr := registry.ParsePacksFromBytes(data); packErr != nil {
+			slog.Warn("extra marketplace fetched invalid data, not caching", "index", index, "error", parseErr)
+			return nil, parseErr
+		}
 	}
 
 	// Write cache.
