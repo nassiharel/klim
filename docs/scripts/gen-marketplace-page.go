@@ -12,7 +12,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -290,37 +289,25 @@ func truncate(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-// fetchMarketplace tries the remote URL first, then falls back to the
-// local clim marketplace cache file.
+// fetchMarketplace fetches the assembled marketplace from the remote URL.
 func fetchMarketplace() []byte {
-	// Try remote.
 	fmt.Fprintf(os.Stderr, "Fetching marketplace from %s...\n", marketplaceURL)
-	client := &http.Client{Timeout: 15 * time.Second}
-	if resp, err := client.Get(marketplaceURL); err == nil {
-		defer resp.Body.Close()
-		if resp.StatusCode == 200 {
-			if data, err := io.ReadAll(resp.Body); err == nil {
-				fmt.Fprintln(os.Stderr, "✓ Fetched from remote")
-				return data
-			}
-		}
-		fmt.Fprintf(os.Stderr, "Remote returned %s, trying local cache...\n", resp.Status)
-	} else {
-		fmt.Fprintf(os.Stderr, "Remote fetch failed: %v, trying local cache...\n", err)
-	}
-
-	// Fall back to local cache.
-	home, err := os.UserConfigDir()
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(marketplaceURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: cannot find config dir: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error fetching marketplace: %v\n", err)
 		os.Exit(1)
 	}
-	cachePath := filepath.Join(home, "clim", "marketplace", "marketplace-cache.yaml")
-	data, err := os.ReadFile(cachePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: no local cache at %s: %v\n", cachePath, err)
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		fmt.Fprintf(os.Stderr, "marketplace returned %s\n", resp.Status)
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "✓ Loaded from local cache: %s\n", cachePath)
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading response: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Fprintln(os.Stderr, "✓ Fetched from remote")
 	return data
 }
