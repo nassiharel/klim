@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/progress"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
@@ -47,16 +48,11 @@ func init() {
 	rootCmd.AddCommand(auditCmd)
 }
 
-// auditFinding represents a single audit issue.
-type auditFinding struct {
-	Severity string `json:"severity"` // "warning", "info"
-	Tool     string `json:"tool"`
-	Category string `json:"category"`
-	Message  string `json:"message"`
-}
+// auditFinding is an alias for the shared audit.Finding type (used in JSON output).
+type auditFinding = audit.Finding
 
 type auditReport struct {
-	Findings []auditFinding `json:"findings"`
+	Findings []audit.Finding `json:"findings"`
 	Summary  struct {
 		TotalInstalled int            `json:"total_installed"`
 		Warnings       int            `json:"warnings"`
@@ -82,111 +78,24 @@ func runAudit(cmd *cobra.Command, args []string) error {
 		return generateSBOM(tools)
 	}
 
-	// Collect only installed tools.
-	var installed []registry.Tool
+	// Count installed.
+	var installedCount int
 	for _, t := range tools {
 		if t.IsInstalled() {
-			installed = append(installed, t)
+			installedCount++
 		}
 	}
 
-	var findings []auditFinding
-	licenses := make(map[string]int)
-
-	for _, t := range installed {
-		primary := t.PrimaryInstance()
-		if primary == nil {
-			continue
-		}
-
-		// Unmanaged installs.
-		if primary.Source == registry.SourceManual {
-			findings = append(findings, auditFinding{
-				Severity: "warning",
-				Tool:     t.Name,
-				Category: "Unmanaged",
-				Message:  fmt.Sprintf("Installed from unknown source at %s — not tracked by any package manager", primary.Path),
-			})
-		}
-
-		// Missing version.
-		if primary.Version == "" && primary.Source != registry.SourceManual {
-			findings = append(findings, auditFinding{
-				Severity: "warning",
-				Tool:     t.Name,
-				Category: "No Version",
-				Message:  "Version could not be determined — cannot verify security status",
-			})
-		}
-
-		// Archived project.
-		if t.GitHubInfo != nil && t.GitHubInfo.Archived {
-			findings = append(findings, auditFinding{
-				Severity: "warning",
-				Tool:     t.Name,
-				Category: "Archived",
-				Message:  "Upstream repository is archived — no longer receiving security updates",
-			})
-		}
-
-		// Stale project (no push in 12+ months).
-		if t.GitHubInfo != nil && t.GitHubInfo.PushedAt != "" {
-			if pushed, err := time.Parse(time.RFC3339, t.GitHubInfo.PushedAt); err == nil {
-				age := time.Since(pushed)
-				if age > 365*24*time.Hour {
-					months := int(age.Hours() / 24 / 30)
-					findings = append(findings, auditFinding{
-						Severity: "info",
-						Tool:     t.Name,
-						Category: "Stale",
-						Message:  fmt.Sprintf("Last upstream activity was %d months ago", months),
-					})
-				}
-			}
-		}
-
-		// Outdated.
-		if t.HasUpdate() {
-			findings = append(findings, auditFinding{
-				Severity: "info",
-				Tool:     t.Name,
-				Category: "Outdated",
-				Message:  fmt.Sprintf("Update available: %s → %s", primary.Version, t.Latest),
-			})
-		}
-
-		// Collect license.
-		if t.GitHubInfo != nil && t.GitHubInfo.License != "" {
-			licenses[t.GitHubInfo.License]++
-		} else {
-			licenses["Unknown"]++
-		}
-	}
-
-	// Sort findings by severity then tool name.
-	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Severity != findings[j].Severity {
-			return findings[i].Severity < findings[j].Severity // "info" < "warning"
-		}
-		return findings[i].Tool < findings[j].Tool
-	})
-
-	var warnings, infos int
-	for _, f := range findings {
-		switch f.Severity {
-		case "warning":
-			warnings++
-		case "info":
-			infos++
-		}
-	}
+	// Use shared audit logic.
+	findings, licenses := audit.Analyze(tools)
+	warnings, infos := audit.CountBySeverity(findings)
 
 	if auditJSONFlag {
-		return printAuditJSON(findings, len(installed), warnings, infos, licenses)
+		return printAuditJSON(findings, installedCount, warnings, infos, licenses)
 	}
 
 	// Human output.
-	fmt.Fprintf(os.Stderr, "\nAuditing %d installed tools\n\n", len(installed))
+	fmt.Fprintf(os.Stderr, "\nAuditing %d installed tools\n\n", installedCount)
 
 	if len(findings) == 0 {
 		fmt.Fprintln(os.Stderr, "  ✓ No issues found — your toolchain looks clean!")
@@ -211,7 +120,7 @@ func runAudit(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "    %-20s %d tool(s)\n", lc.name, lc.count)
 	}
 
-	fmt.Fprintf(os.Stderr, "\nResult: %d warning(s), %d info(s) across %d tools\n", warnings, infos, len(installed))
+	fmt.Fprintf(os.Stderr, "\nResult: %d warning(s), %d info(s) across %d tools\n", warnings, infos, installedCount)
 
 	if warnings > 0 {
 		return fmt.Errorf("%d warning(s) found", warnings)

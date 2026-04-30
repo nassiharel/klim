@@ -16,6 +16,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/catalog"
 	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/custompacks"
@@ -242,9 +243,9 @@ type Model struct {
 	configScroll    int             // scroll offset for config tab
 
 	// Doctor tab state (includes audit findings).
-	doctorIssues    []doctor.Issue  // diagnostic results (nil = not yet checked)
-	auditFindings   []auditFinding  // security audit findings
-	auditLicenses   map[string]int  // license counts
+	doctorIssues    []doctor.Issue    // diagnostic results (nil = not yet checked)
+	auditFindings   []audit.Finding   // security audit findings
+	auditLicenses   map[string]int    // license counts
 	doctorScroll    int             // scroll offset for doctor tab
 	doctorChecked   bool            // true after first doctor check completed
 	doctorSubTab    int             // 0=doctor, 1=audit
@@ -2384,7 +2385,7 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 		scanMeta = meta[0]
 	}
 	m.doctorIssues = doctor.Diagnose(m.tools, scanMeta)
-	m.auditFindings, m.auditLicenses = computeAuditFindings(m.tools)
+	m.auditFindings, m.auditLicenses = audit.Analyze(m.tools)
 	m.doctorChecked = true
 	m.doctorScroll = 0
 }

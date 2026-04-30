@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/registry"
 )
@@ -17,14 +17,6 @@ const (
 	doctorSubDoctor = 0
 	doctorSubAudit  = 1
 )
-
-// auditFinding represents a single audit issue for TUI display.
-type auditFinding struct {
-	severity string // "warning", "info"
-	tool     string
-	category string
-	message  string
-}
 
 // Doctor view color palette.
 var (
@@ -131,16 +123,7 @@ func (m Model) renderAuditView() string {
 		return b.String()
 	}
 
-	// Count by severity.
-	var warns, infos int
-	for _, f := range m.auditFindings {
-		switch f.severity {
-		case "warning":
-			warns++
-		case "info":
-			infos++
-		}
-	}
+	warns, infos := audit.CountBySeverity(m.auditFindings)
 
 	if len(m.auditFindings) > 0 {
 		var summaryParts []string
@@ -155,12 +138,12 @@ func (m Model) renderAuditView() string {
 		for _, f := range m.auditFindings {
 			icon := "ℹ"
 			style := doctorInfo
-			if f.severity == "warning" {
+			if f.Severity == "warning" {
 				icon = "⚠"
 				style = doctorWarning
 			}
-			b.WriteString("    " + style.Render(icon) + " " + nameStyle.Render(f.tool) + "  " + dashDim.Render(f.category) + "\n")
-			b.WriteString("      " + dashDim.Render(f.message) + "\n")
+			b.WriteString("    " + style.Render(icon) + " " + nameStyle.Render(f.Tool) + "  " + dashDim.Render(f.Category) + "\n")
+			b.WriteString("      " + dashDim.Render(f.Message) + "\n")
 		}
 		b.WriteString("\n")
 	}
@@ -244,88 +227,6 @@ func (m Model) renderReferencesSection(tool registry.Tool) string {
 	}
 	b.WriteString("\n")
 	return b.String()
-}
-
-// computeAuditFindings computes security audit findings from the tool list.
-func computeAuditFindings(tools []registry.Tool) ([]auditFinding, map[string]int) {
-	var findings []auditFinding
-	licenses := make(map[string]int)
-
-	for _, t := range tools {
-		if !t.IsInstalled() {
-			continue
-		}
-		primary := t.PrimaryInstance()
-		if primary == nil {
-			continue
-		}
-
-		if primary.Source == registry.SourceManual {
-			findings = append(findings, auditFinding{
-				severity: "warning",
-				tool:     t.Name,
-				category: "Unmanaged",
-				message:  fmt.Sprintf("Installed from unknown source at %s", primary.Path),
-			})
-		}
-
-		if primary.Version == "" && primary.Source != registry.SourceManual {
-			findings = append(findings, auditFinding{
-				severity: "warning",
-				tool:     t.Name,
-				category: "No Version",
-				message:  "Version could not be determined",
-			})
-		}
-
-		if t.GitHubInfo != nil && t.GitHubInfo.Archived {
-			findings = append(findings, auditFinding{
-				severity: "warning",
-				tool:     t.Name,
-				category: "Archived",
-				message:  "Upstream repository is archived",
-			})
-		}
-
-		if t.GitHubInfo != nil && t.GitHubInfo.PushedAt != "" {
-			if pushed, err := time.Parse(time.RFC3339, t.GitHubInfo.PushedAt); err == nil {
-				age := time.Since(pushed)
-				if age > 365*24*time.Hour {
-					months := int(age.Hours() / 24 / 30)
-					findings = append(findings, auditFinding{
-						severity: "info",
-						tool:     t.Name,
-						category: "Stale",
-						message:  fmt.Sprintf("Last upstream activity %d months ago", months),
-					})
-				}
-			}
-		}
-
-		if t.HasUpdate() {
-			findings = append(findings, auditFinding{
-				severity: "info",
-				tool:     t.Name,
-				category: "Outdated",
-				message:  fmt.Sprintf("Update available: %s → %s", primary.Version, t.Latest),
-			})
-		}
-
-		if t.GitHubInfo != nil && t.GitHubInfo.License != "" {
-			licenses[t.GitHubInfo.License]++
-		} else {
-			licenses["Unknown"]++
-		}
-	}
-
-	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].severity != findings[j].severity {
-			return findings[i].severity < findings[j].severity
-		}
-		return findings[i].tool < findings[j].tool
-	})
-
-	return findings, licenses
 }
 
 // severityStyle returns a styled icon for the given severity.

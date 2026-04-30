@@ -132,7 +132,7 @@ func runTry(cmd *cobra.Command, args []string) error {
 
 		// Cleanup prompt (unless --keep or was already installed).
 		if !alreadyInstalled && !tryKeepFlag {
-			doCleanup(t, installSource)
+			doCleanup(*t, installSource)
 		}
 
 		if runErr != nil {
@@ -153,11 +153,11 @@ func runTry(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	doCleanup(t, installSource)
+	doCleanup(*t, installSource)
 	return nil
 }
 
-func doCleanup(t *registry.Tool, installSource registry.InstallSource) {
+func doCleanup(t registry.Tool, installSource registry.InstallSource) {
 	fmt.Fprint(os.Stderr, "Keep "+t.DisplayName+"? [Y/n]: ")
 	var answer string
 	fmt.Fscan(os.Stdin, &answer)

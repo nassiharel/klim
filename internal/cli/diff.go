@@ -118,17 +118,18 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		case hasLocal && hasRemote:
 			e.localVersion = local.Version
 			e.localSource = local.Source
-			e.remoteVersion = remote.Version
-			if e.remoteVersion == "" {
-				e.remoteVersion = "—"
-			}
 			e.remoteSource = remote.Source
-			if versionsEqual(e.localVersion, e.remoteVersion) {
+			// Compare using raw versions first, then format for display.
+			if versionsEqual(local.Version, remote.Version) {
 				e.status = "✓ match"
 				matches++
 			} else {
 				e.status = "≠ differs"
 				differs++
+			}
+			e.remoteVersion = remote.Version
+			if e.remoteVersion == "" {
+				e.remoteVersion = "—"
 			}
 		case hasLocal && !hasRemote:
 			e.localVersion = local.Version

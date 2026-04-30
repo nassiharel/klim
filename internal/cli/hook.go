@@ -73,7 +73,7 @@ __clim_check_dir() {
       output=$(clim check --file "$dir/.clim.yaml" 2>&1)
       local rc=$?
       if [ $rc -ne 0 ]; then
-        echo "$output" | grep -E '^\s+[✗⚠]' | head -5
+        echo "$output" | grep -E '^[[:space:]]+[✗⚠]' | head -5
         echo "  Run 'clim check' for details or 'clim import' to install missing tools."
       fi
       return
@@ -96,7 +96,7 @@ __clim_check_dir() {
       output=$(clim check --file "$dir/.clim.yaml" 2>&1)
       local rc=$?
       if (( rc != 0 )); then
-        echo "$output" | grep -E '^\s+[✗⚠]' | head -5
+        echo "$output" | grep -E '^[[:space:]]+[✗⚠]' | head -5
         echo "  Run 'clim check' for details or 'clim import' to install missing tools."
       fi
       return
@@ -116,7 +116,7 @@ function __clim_check_dir --on-variable PWD
       set -l output (clim check --file "$dir/.clim.yaml" 2>&1)
       set -l rc $status
       if test $rc -ne 0
-        echo $output | grep -E '^\s+[✗⚠]' | head -5
+        echo $output | grep -E '^[[:space:]]+[✗⚠]' | head -5
         echo "  Run 'clim check' for details or 'clim import' to install missing tools."
       end
       return
