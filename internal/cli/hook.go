@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -40,13 +39,13 @@ Usage:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		switch args[0] {
 		case "bash":
-			fmt.Fprint(os.Stdout, hookBash)
+			_, _ = os.Stdout.WriteString(hookBash)
 		case "zsh":
-			fmt.Fprint(os.Stdout, hookZsh)
+			_, _ = os.Stdout.WriteString(hookZsh)
 		case "fish":
-			fmt.Fprint(os.Stdout, hookFish)
+			_, _ = os.Stdout.WriteString(hookFish)
 		case "powershell":
-			fmt.Fprint(os.Stdout, hookPowerShell)
+			_, _ = os.Stdout.WriteString(hookPowerShell)
 		}
 		return nil
 	},
@@ -116,7 +115,7 @@ function __clim_check_dir --on-variable PWD
       set -l output (clim check --file "$dir/.clim.yaml" 2>&1)
       set -l rc $status
       if test $rc -ne 0
-        echo $output | grep -E '^[[:space:]]+[✗⚠]' | head -5
+        printf '%s\n' $output | grep -E '^[[:space:]]+[✗⚠]' | head -5
         echo "  Run 'clim check' for details or 'clim import' to install missing tools."
       end
       return

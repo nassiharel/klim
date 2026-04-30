@@ -136,10 +136,11 @@ func checkBrokenPATH() []Issue {
 	var issues []Issue
 
 	for _, dir := range dirs {
-		if strings.TrimSpace(dir) == "" {
+		cleaned := strings.TrimSpace(dir)
+		if cleaned == "" {
 			continue
 		}
-		info, err := os.Stat(dir)
+		info, err := os.Stat(cleaned)
 		switch {
 		case os.IsNotExist(err):
 			issues = append(issues, Issue{

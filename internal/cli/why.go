@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nassiharel/clim/internal/custompacks"
 	"github.com/nassiharel/clim/internal/progress"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/teamfile"
@@ -137,7 +138,17 @@ func runWhy(cmd *cobra.Command, args []string) error {
 	}
 
 	// 4. Check custom packs.
-	// Already included in packs if loaded correctly, but let's be safe.
+	if cp, cpErr := custompacks.Load(); cpErr != nil {
+		fmt.Fprintf(os.Stderr, "  ⚠ Could not load custom packs: %v\n", cpErr)
+	} else {
+		for _, pack := range cp {
+			for _, pToolName := range pack.ToolNames {
+				if pToolName == toolName {
+					refs = append(refs, fmt.Sprintf("Custom pack %q (%s)", pack.DisplayName, pack.Name))
+				}
+			}
+		}
+	}
 
 	if len(refs) > 0 {
 		fmt.Fprintf(os.Stderr, "  Referenced by:\n")

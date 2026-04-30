@@ -120,9 +120,9 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 		role = &roles[choice-1]
 	}
 
-	// Load catalog.
+	// Load catalog + scan PATH (no version resolution needed).
 	sp := progress.New("Loading catalog...")
-	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), false)
+	tools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
 		sp.Fail(err.Error())
 		return err

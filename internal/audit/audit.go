@@ -92,8 +92,9 @@ func Analyze(tools []registry.Tool) ([]Finding, map[string]int) {
 	}
 
 	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Severity != findings[j].Severity {
-			return findings[i].Severity < findings[j].Severity
+		ri, rj := severityRank(findings[i].Severity), severityRank(findings[j].Severity)
+		if ri != rj {
+			return ri < rj // warnings first
 		}
 		return findings[i].Tool < findings[j].Tool
 	})
@@ -113,4 +114,15 @@ func CountBySeverity(findings []Finding) (int, int) {
 		}
 	}
 	return w, i
+}
+
+// severityRank returns a sort order: warnings (0) before infos (1).
+func severityRank(s string) int {
+	switch s {
+	case "warning":
+		return 0
+	case "info":
+		return 1
+	}
+	return 2
 }
