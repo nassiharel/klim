@@ -30,15 +30,6 @@ Usage:
 func init() {
 	openCmd.Flags().BoolVarP(&openYesFlag, "yes", "y", false, "Install all tools without prompting")
 	// Registered under shareCmd in share.go.
-	// Deprecated root-level alias for backward compatibility.
-	rootCmd.AddCommand(&cobra.Command{
-		Use:        "open <token>",
-		Short:      "Install tools from a share token",
-		Args:       requireArgs(1, "clim share open <token>"),
-		RunE:       runOpen,
-		Deprecated: "use 'clim share open' instead",
-		Hidden:     true,
-	})
 }
 
 func runOpen(cmd *cobra.Command, args []string) error {
