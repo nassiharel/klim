@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -78,7 +77,7 @@ func init() {
 
 // shimsDir returns the path to the shims directory.
 func shimsDir() (string, error) {
-	return paths.Join("shims")
+	return paths.ShimsDir()
 }
 
 func runProxySetup(cmd *cobra.Command, args []string) error {
@@ -144,6 +143,10 @@ func runProxyAdd(cmd *cobra.Command, args []string) error {
 		}
 
 		for _, bin := range binNames {
+			if !isValidShimName(bin) {
+				fmt.Fprintf(os.Stderr, "⚠ %s: invalid binary name, skipping\n", bin)
+				continue
+			}
 			shimPath := shimFilePath(dir, bin)
 			if _, err := os.Stat(shimPath); err == nil {
 				fmt.Fprintf(os.Stderr, "  %s: shim already exists\n", bin)
@@ -257,7 +260,7 @@ func runProxyRun(cmd *cobra.Command, args []string) error {
 	// Not installed — find in catalog and install.
 	fmt.Fprintf(os.Stderr, "[clim] %s is not installed. Installing...\n", toolName)
 
-	tools, _, err := svc.ScanOnly(context.Background())
+	tools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("loading catalog: %w", err)
 	}
@@ -361,8 +364,8 @@ func candidatePaths(dir, name string) []string {
 	return []string{filepath.Join(dir, name)}
 }
 
-// execBinary runs a binary with the given args, replacing the current process
-// where possible, otherwise running as a subprocess.
+// execBinary runs a binary with the given args as a subprocess and
+// propagates its exit code when available.
 func execBinary(path string, args []string) error {
 	cmd := exec.Command(path, args...)
 	cmd.Stdout = os.Stdout
@@ -386,9 +389,25 @@ func shimFilePath(dir, name string) string {
 }
 
 // generateShim creates the shim content for a given binary/tool.
+// Tool names are validated before reaching here via isValidShimName.
 func generateShim(binaryName, toolName string) string {
 	if runtime.GOOS == "windows" {
-		return fmt.Sprintf("@echo off\r\nclim proxy run %s -- %%*\r\n", toolName)
+		return fmt.Sprintf("@echo off\r\nclim proxy run %q -- %%*\r\n", toolName)
 	}
-	return fmt.Sprintf("#!/bin/sh\nexec clim proxy run %s -- \"$@\"\n", toolName)
+	return fmt.Sprintf("#!/bin/sh\nexec clim proxy run %q -- \"$@\"\n", toolName)
+}
+
+// isValidShimName checks that a name is a plain base name without path
+// separators or traversal sequences.
+func isValidShimName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return false
+	}
+	if filepath.Base(name) != name {
+		return false
+	}
+	return true
 }

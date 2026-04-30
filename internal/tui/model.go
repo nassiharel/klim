@@ -548,7 +548,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			m.loading = false
 			m.detectTeamFile()
-			m.runDoctor()
+			m.runDoctor(doctor.ScanMeta{FromCache: true})
 			return m, nil
 		}
 
@@ -2354,9 +2354,13 @@ func (m *Model) detectTeamFile() {
 }
 
 // runDoctor computes environment diagnostics and stores results.
-func (m *Model) runDoctor() {
-	meta := doctor.ScanMeta{}
-	m.doctorIssues = doctor.Diagnose(m.tools, meta)
+// Callers may optionally provide scan metadata (e.g. cache/fresh state).
+func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
+	scanMeta := doctor.ScanMeta{}
+	if len(meta) > 0 {
+		scanMeta = meta[0]
+	}
+	m.doctorIssues = doctor.Diagnose(m.tools, scanMeta)
 	m.doctorChecked = true
 	m.doctorScroll = 0
 }

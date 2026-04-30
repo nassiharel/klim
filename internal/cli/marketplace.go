@@ -56,7 +56,7 @@ func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
 	// Reload config fresh.
 	c, _, err := config.LoadWithWarnings()
 	if err != nil {
-		c = config.Default()
+		return fmt.Errorf("loading config: %w", err)
 	}
 
 	// Check for duplicates.

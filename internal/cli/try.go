@@ -41,12 +41,13 @@ func runTry(cmd *cobra.Command, args []string) error {
 	toolName := args[0]
 	var toolArgs []string
 
-	// Parse args after "--".
-	for i, a := range args {
-		if a == "--" && i+1 < len(args) {
-			toolArgs = args[i+1:]
-			break
-		}
+	// Parse args after "--". Cobra does not include the literal "--" in args,
+	// so prefer its recorded split point and fall back to forwarding any
+	// remaining args after the tool name.
+	if dashAt := cmd.ArgsLenAtDash(); dashAt > 0 && dashAt < len(args) {
+		toolArgs = args[dashAt:]
+	} else if len(args) > 1 {
+		toolArgs = args[1:]
 	}
 
 	// Load catalog.

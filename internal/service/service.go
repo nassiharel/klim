@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/nassiharel/clim/internal/catalog"
@@ -336,6 +337,7 @@ func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error)
 		}
 		extraPacks, parseErr := registry.ParsePacksFromBytes(data)
 		if parseErr != nil {
+			slog.Warn("extra marketplace packs parse failed", "index", i, "error", parseErr)
 			continue
 		}
 		// Merge: extra packs with same name override primary.
@@ -352,6 +354,9 @@ func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error)
 		}
 		packs = merged
 	}
+
+	// Sort packs by name for stable ordering.
+	sort.Slice(packs, func(i, j int) bool { return packs[i].Name < packs[j].Name })
 
 	return packs, nil
 }

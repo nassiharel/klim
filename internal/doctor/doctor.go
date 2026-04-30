@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -173,24 +174,29 @@ func checkMultipleInstallations(tools []registry.Tool) []Issue {
 			continue
 		}
 
-		// Collect unique versions (ignoring empty/unresolved).
+		// Collect unique resolved versions (skip empty/unresolved).
 		versions := make(map[string][]string) // version → list of paths
 		for _, inst := range t.Instances {
-			v := inst.Version
-			if v == "" {
-				v = "(unknown)"
+			if inst.Version == "" {
+				continue
 			}
-			versions[v] = append(versions[v], inst.Path)
+			versions[inst.Version] = append(versions[inst.Version], inst.Path)
 		}
 
 		if len(versions) <= 1 {
 			continue
 		}
 
-		// Build detail showing version → paths.
+		// Build detail showing version → paths (sorted for stable output).
+		versionKeys := make([]string, 0, len(versions))
+		for v := range versions {
+			versionKeys = append(versionKeys, v)
+		}
+		sort.Strings(versionKeys)
+
 		var parts []string
-		for v, instPaths := range versions {
-			parts = append(parts, fmt.Sprintf("  %s: %s", v, strings.Join(instPaths, ", ")))
+		for _, v := range versionKeys {
+			parts = append(parts, fmt.Sprintf("  %s: %s", v, strings.Join(versions[v], ", ")))
 		}
 		primary := t.PrimaryInstance()
 		fix := ""
