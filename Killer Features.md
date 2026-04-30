@@ -30,6 +30,8 @@ Killer Features — Ranked by Impact
 
 ## 🧠 Tier 3 — Visionary / Long-term
 
+🏅 **`clim score` — Environment Health Score** ✅ SHIPPED — Single 0-100 metric combining tool freshness (30pts), doctor health (25pts), audit findings (20pts), compliance (15pts), and managed sources (10pts). Grade scale A+ to F. CLI with `--json` for CI and `--badge` for shields.io URL. TUI Dashboard shows score gauge. Gamifies environment management.
+
 📡 **Plugin System for Custom PMs** — Allow enterprises to add internal package managers (Artifactory, internal registries). Simple interface: `InstalledVersion()`, `LatestVersion()`, `InstallCmd()`. Custom marketplace URLs are ✅ SHIPPED via `clim marketplace add <url>` — multiple marketplace YAML sources are merged at load time. Full PM plugin interface is future work.
 
 📊 **Smart History Analysis** — Opt-in: analyze shell history. "You ran `jq` 47 times last month but it's not in your favorites." Suggest tools based on actual usage, not just what's installed. "You haven't used terraform in 45 days. Remove?"

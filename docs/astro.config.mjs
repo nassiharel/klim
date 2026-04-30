@@ -88,6 +88,7 @@ export default defineConfig({
                 { label: 'doctor', slug: 'reference/commands/doctor' },
                 { label: 'audit', slug: 'reference/commands/audit' },
                 { label: 'compliance', slug: 'reference/commands/compliance' },
+                { label: 'score', slug: 'reference/commands/score' },
               ],
             },
             {

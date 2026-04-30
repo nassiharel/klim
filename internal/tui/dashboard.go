@@ -8,7 +8,13 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/score"
 )
+
+// computeScore calculates the environment health score using cached data.
+func (m Model) computeScore() score.Result {
+	return score.Compute(m.tools, m.doctorIssues, m.complianceResult)
+}
 
 // Dashboard color palette.
 var (
@@ -144,6 +150,32 @@ func (m Model) renderDashboardView() string {
 		b.WriteString("  " + line)
 	}
 	b.WriteString("\n")
+
+	// ═══════════════════════════════════════════════════
+	// §1.5  ENVIRONMENT SCORE — overall health
+	// ═══════════════════════════════════════════════════
+	if m.doctorChecked {
+		scoreResult := m.computeScore()
+		scoreGaugeW := m.width - 40
+		if scoreGaugeW < 15 {
+			scoreGaugeW = 15
+		}
+		if scoreGaugeW > 40 {
+			scoreGaugeW = 40
+		}
+		scoreStyle := dashGaugeFill
+		if scoreResult.Total*100/scoreResult.MaxTotal < 70 {
+			scoreStyle = dashGaugeWarn
+		}
+		b.WriteString("\n  " + dashSection.Render("Environment Score") + "\n\n")
+		b.WriteString(fmt.Sprintf("  %s / %s  Grade: %s  ",
+			dashNumber.Render(fmt.Sprintf("%d", scoreResult.Total)),
+			dashDim.Render(fmt.Sprintf("%d", scoreResult.MaxTotal)),
+			dashNumber.Render(scoreResult.Grade),
+		))
+		b.WriteString(gauge(scoreResult.Total, scoreResult.MaxTotal, scoreGaugeW, scoreStyle, dashGaugeEmpty))
+		b.WriteString("\n")
+	}
 
 	// ═══════════════════════════════════════════════════
 	// §2  TOOL COVERAGE — gauges
