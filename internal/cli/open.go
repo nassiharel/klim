@@ -23,7 +23,7 @@ catalog and installed via native package managers.
 Usage:
   clim open clim:v1:H4sIAAAA...          # interactive: confirm before installing
   clim open clim:v1:H4sIAAAA... --yes    # non-interactive: install all`,
-	Args: cobra.ExactArgs(1),
+	Args: requireArgs(1, "clim share open <token>"),
 	RunE: runOpen,
 }
 

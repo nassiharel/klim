@@ -23,7 +23,7 @@ var whyCmd = &cobra.Command{
 Examples:
   clim why kubectl
   clim why terraform`,
-	Args: cobra.ExactArgs(1),
+	Args: requireArgs(1, "clim why <tool>"),
 	RunE: runWhy,
 }
 

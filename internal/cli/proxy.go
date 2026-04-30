@@ -41,14 +41,14 @@ var proxySetupCmd = &cobra.Command{
 var proxyAddCmd = &cobra.Command{
 	Use:   "add <tool> [tool...]",
 	Short: "Create a shim for one or more tools",
-	Args:  cobra.MinimumNArgs(1),
+	Args:  requireMinArgs(1, "clim proxy add <tool> [tool...]"),
 	RunE:  runProxyAdd,
 }
 
 var proxyRemoveCmd = &cobra.Command{
 	Use:   "remove <tool> [tool...]",
 	Short: "Remove a shim for one or more tools",
-	Args:  cobra.MinimumNArgs(1),
+	Args:  requireMinArgs(1, "clim proxy remove <tool> [tool...]"),
 	RunE:  runProxyRemove,
 }
 
@@ -61,8 +61,8 @@ var proxyListCmd = &cobra.Command{
 var proxyRunCmd = &cobra.Command{
 	Use:    "run <tool> [-- args...]",
 	Short:  "Find or install a tool, then execute it",
-	Hidden: true, // internal command used by shims
-	Args:   cobra.MinimumNArgs(1),
+	Hidden: true,
+	Args:   requireMinArgs(1, "clim proxy run <tool> [-- args...]"),
 	RunE:   runProxyRun,
 }
 

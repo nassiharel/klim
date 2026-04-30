@@ -27,14 +27,14 @@ Configure in config.yaml:
 var marketplaceAddCmd = &cobra.Command{
 	Use:   "add <url>",
 	Short: "Add an extra marketplace URL",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireArgs(1, "clim config marketplace add <url>"),
 	RunE:  runMarketplaceAdd,
 }
 
 var marketplaceRemoveCmd = &cobra.Command{
 	Use:   "remove <url>",
 	Short: "Remove an extra marketplace URL",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireArgs(1, "clim config marketplace remove <url>"),
 	RunE:  runMarketplaceRemove,
 }
 

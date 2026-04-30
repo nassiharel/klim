@@ -32,7 +32,7 @@ Shows which tools match, differ in version, or are missing on either side.
 Exit codes:
   0  Environments match
   1  Differences found`,
-	Args: cobra.ExactArgs(1),
+	Args: requireArgs(1, "clim diff <manifest.yaml | share-token>"),
 	RunE: runDiff,
 }
 

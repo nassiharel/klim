@@ -131,3 +131,27 @@ func Execute() error {
 	}
 	return nil
 }
+
+// requireArgs returns a Cobra Args validator that requires exactly n arguments
+// and prints a helpful error message with usage hint when they're missing.
+func requireArgs(n int, example string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) < n {
+			return fmt.Errorf("requires %d argument(s)\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, example, cmd.CommandPath())
+		}
+		if len(args) > n {
+			return fmt.Errorf("accepts at most %d argument(s), received %d\n\nUsage:\n  %s", n, len(args), example)
+		}
+		return nil
+	}
+}
+
+// requireMinArgs returns a Cobra Args validator that requires at least n arguments.
+func requireMinArgs(n int, example string) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) < n {
+			return fmt.Errorf("requires at least %d argument(s)\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, example, cmd.CommandPath())
+		}
+		return nil
+	}
+}

@@ -26,7 +26,7 @@ Examples:
   clim try bat                       # install bat, open a shell, then offer cleanup
   clim try bat -- README.md          # install bat, run 'bat README.md', then offer cleanup
   clim try ripgrep -- -i "TODO" .    # install ripgrep, search, then offer cleanup`,
-	Args: cobra.MinimumNArgs(1),
+	Args: requireMinArgs(1, "clim try <tool> [-- args...]"),
 	RunE: runTry,
 }
 
