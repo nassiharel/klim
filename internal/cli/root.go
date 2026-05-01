@@ -56,8 +56,14 @@ for non-interactive operation.`,
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "enable verbose logging to stderr")
+	rootCmd.PersistentFlags().BoolVar(&verboseFlag, "verbose", false, "enable verbose logging to stderr")
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
+
+	// Cobra auto-registers --version in Execute; trigger it early to add -v shorthand.
+	rootCmd.InitDefaultVersionFlag()
+	if f := rootCmd.Flags().Lookup("version"); f != nil {
+		f.Shorthand = "v"
+	}
 
 	// Command groups for organized help output.
 	rootCmd.AddGroup(
@@ -109,8 +115,6 @@ func init() {
 	rootCmd.AddCommand(importCmd)
 	shareCmd.GroupID = "data"
 	rootCmd.AddCommand(shareCmd)
-	snapshotCmd.GroupID = "data"
-	rootCmd.AddCommand(snapshotCmd)
 
 	// Health & security.
 	doctorCmd.GroupID = "health"

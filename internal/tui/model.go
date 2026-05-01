@@ -22,6 +22,7 @@ import (
 	"github.com/nassiharel/clim/internal/custompacks"
 	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/favorites"
+	"github.com/nassiharel/clim/internal/onboard"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/score"
 	"github.com/nassiharel/clim/internal/search"
@@ -47,7 +48,8 @@ const (
 	discoverTools       = 0
 	discoverPacks       = 1
 	discoverForYou      = 2
-	discoverSubTabCount = 3
+	discoverOnboard     = 3
+	discoverSubTabCount = 4
 )
 
 // Scan phases — the loading lifecycle.
@@ -255,6 +257,10 @@ type Model struct {
 	doctorChecked    bool               // true after first doctor check completed
 	doctorSubTab     int                // 0=doctor, 1=audit, 2=compliance
 
+	// Onboard state (Discover → Onboard sub-tab).
+	onboardRole  int              // selected role index (0 = first role)
+	onboardTools []recommendation // role-scored tools for current role
+
 	// Team file (.clim.yaml) state.
 	teamFilePath    string                 // path to detected .clim.yaml ("" = not found)
 	teamFile        *teamfile.TeamFile     // parsed team file (nil = not found)
@@ -413,6 +419,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.doctorChecked = false
 	m.doctorScroll = 0
 	m.doctorSubTab = doctorSubDoctor
+	m.onboardTools = nil // indices tied to old tools slice
 	return tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg { return findToolsCmd(m.svc, true, gen)() },
@@ -530,6 +537,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recommendations = computeRecommendations(m.tools)
 		if m.discoverSubTab == discoverForYou && m.cursor >= len(m.recommendations) {
 			m.cursor = max(0, len(m.recommendations)-1)
+		}
+
+		// Recompute onboard recommendations if on that sub-tab.
+		if m.discoverSubTab == discoverOnboard {
+			m.recomputeOnboardTools()
 		}
 
 		// Apply marketplace refresh badges if a diff is pending.
@@ -1747,6 +1759,9 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activeTab == tabDiscover && m.discoverSubTab < discoverSubTabCount-1 {
 			m.discoverSubTab++
 			m.cursor = 0
+			if m.discoverSubTab == discoverOnboard {
+				m.recomputeOnboardTools()
+			}
 			return m, nil
 		}
 		m.activeTab = (m.activeTab + 1) % tabCount
@@ -1911,6 +1926,27 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		// Toggle favorite — Onboard sub-tab uses onboardTools.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverOnboard {
+			if m.cursor < len(m.onboardTools) {
+				idx := m.onboardTools[m.cursor].toolIdx
+				if idx < len(m.tools) {
+					name := m.tools[idx].Name
+					added, err := favorites.Toggle(name)
+					switch {
+					case err != nil:
+						m.statusMsg = "⚠ " + err.Error()
+					case added:
+						m.favoriteNames[name] = true
+						m.statusMsg = "★ Added to favorites"
+					default:
+						delete(m.favoriteNames, name)
+						m.statusMsg = "☆ Removed from favorites"
+					}
+				}
+			}
+			return m, nil
+		}
 		// Toggle favorite on other tool-list tabs.
 		if m.activeTab <= tabDiscover && m.cursor < len(m.filteredIndex) {
 			idx := m.filteredIndex[m.cursor]
@@ -1930,11 +1966,58 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case "[":
+		// Cycle onboard role left.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverOnboard {
+			if m.onboardRole > 0 {
+				m.onboardRole--
+			} else {
+				m.onboardRole = len(onboard.Roles) - 1
+			}
+			m.recomputeOnboardTools()
+		}
+		return m, nil
+	case "]":
+		// Cycle onboard role right.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverOnboard {
+			if m.onboardRole < len(onboard.Roles)-1 {
+				m.onboardRole++
+			} else {
+				m.onboardRole = 0
+			}
+			m.recomputeOnboardTools()
+		}
+		return m, nil
 	case "i":
 		// Quick install from For You sub-tab.
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 			if m.cursor < len(m.recommendations) {
 				rec := m.recommendations[m.cursor]
+				if rec.toolIdx < len(m.tools) {
+					tool := m.tools[rec.toolIdx]
+					src := tool.Packages.BestInstallSource()
+					if src == "" {
+						m.statusMsg = "⚠ No package manager available for this tool"
+						return m, nil
+					}
+					args := tool.Packages.InstallArgs(src)
+					if args == nil {
+						m.statusMsg = "⚠ No install command available"
+						return m, nil
+					}
+					m.pendingAction = &pendingAction{
+						toolIdx: rec.toolIdx,
+						action:  actionInstall,
+						cmdArgs: args,
+					}
+				}
+			}
+			return m, nil
+		}
+		// Quick install from Onboard sub-tab.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverOnboard {
+			if m.cursor < len(m.onboardTools) {
+				rec := m.onboardTools[m.cursor]
 				if rec.toolIdx < len(m.tools) {
 					tool := m.tools[rec.toolIdx]
 					src := tool.Packages.BestInstallSource()
@@ -2085,6 +2168,13 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 			if m.cursor < len(m.recommendations) {
 				m.openDetailView(m.recommendations[m.cursor].toolIdx)
+			}
+			return m, nil
+		}
+		// On Marketplace Onboard sub-tab, open the recommended tool's detail.
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverOnboard {
+			if m.cursor < len(m.onboardTools) {
+				m.openDetailView(m.onboardTools[m.cursor].toolIdx)
 			}
 			return m, nil
 		}
@@ -2619,6 +2709,50 @@ func (m Model) currentToolIdx() int {
 	return -1
 }
 
+// recomputeOnboardTools recomputes role-based tool recommendations
+// for the currently selected onboard role.
+func (m *Model) recomputeOnboardTools() {
+	if m.onboardRole < 0 || m.onboardRole >= len(onboard.Roles) {
+		m.onboardTools = nil
+		return
+	}
+	role := &onboard.Roles[m.onboardRole]
+	scored := onboard.Recommend(role, m.tools, 20)
+	recs := make([]recommendation, 0, len(scored))
+	maxScore := 0
+	for _, s := range scored {
+		if s.Score > maxScore {
+			maxScore = s.Score
+		}
+	}
+	for _, s := range scored {
+		desc := ""
+		stars := 0
+		if s.Tool.GitHubInfo != nil {
+			desc = s.Tool.GitHubInfo.Description
+			stars = s.Tool.GitHubInfo.Stars
+		}
+		pct := 0
+		if maxScore > 0 {
+			pct = s.Score * 100 / maxScore
+			if pct < 1 {
+				pct = 1
+			}
+		}
+		recs = append(recs, recommendation{
+			toolIdx:     s.Index,
+			score:       s.Score,
+			reason:      "", // role description shown in header, not per-card
+			category:    s.Tool.Category,
+			description: desc,
+			stars:       stars,
+			matchPct:    pct,
+		})
+	}
+	m.onboardTools = recs
+	m.cursor = 0
+}
+
 // --- Backup ---
 
 // rowCount returns the number of navigable rows for the current tab.
@@ -2630,6 +2764,9 @@ func (m Model) rowCount() int {
 		}
 		if m.discoverSubTab == discoverForYou {
 			return len(m.recommendations)
+		}
+		if m.discoverSubTab == discoverOnboard {
+			return len(m.onboardTools)
 		}
 		return len(m.filteredIndex)
 	case tabBackup:

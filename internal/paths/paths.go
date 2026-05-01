@@ -67,3 +67,8 @@ func LogFile() (string, error) {
 func ShimsDir() (string, error) {
 	return Join("shims")
 }
+
+// CompliancePolicy returns the path to the compliance policy file.
+func CompliancePolicy() (string, error) {
+	return Join("compliance", "policy.yaml")
+}

@@ -78,6 +78,13 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 		return ErrEmptyPATH
 	}
 
+	// On Windows, update the process PATH so exec.LookPath (Phase 4) also
+	// sees directories added after launch (e.g. by winget/scoop installs
+	// that modify the registry PATH but not the inherited environment).
+	if runtime.GOOS == "windows" {
+		_ = os.Setenv("PATH", strings.Join(pathDirs, string(os.PathListSeparator)))
+	}
+
 	// Phase 1: Build a map of all binary names we're looking for.
 	// On Windows, file names are case-insensitive, so we normalise keys to
 	// lowercase. On Unix/macOS they are case-sensitive and kept as-is.

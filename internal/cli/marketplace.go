@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -53,9 +54,21 @@ func init() {
 }
 
 func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
-	url := strings.TrimSpace(args[0])
-	if url == "" {
+	rawURL := strings.TrimSpace(args[0])
+	if rawURL == "" {
 		return errors.New("url cannot be empty")
+	}
+
+	// Validate URL scheme.
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("invalid URL %q: scheme must be http or https", rawURL)
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("invalid URL %q: missing host", rawURL)
 	}
 
 	// Reload config fresh.
@@ -71,21 +84,21 @@ func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
 		if e == "" {
 			continue
 		}
-		if e == url {
-			fmt.Fprintf(os.Stderr, "URL already configured: %s\n", url)
+		if e == rawURL {
+			fmt.Fprintf(os.Stderr, "URL already configured: %s\n", rawURL)
 			return nil
 		}
 		normalized = append(normalized, e)
 	}
 
-	normalized = append(normalized, url)
+	normalized = append(normalized, rawURL)
 	c.Marketplace.ExtraURLs = normalized
 
 	if err := config.Save(c); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "✓ Added marketplace: %s\n", url)
+	fmt.Fprintf(os.Stderr, "✓ Added marketplace: %s\n", rawURL)
 	fmt.Fprintf(os.Stderr, "  %d extra marketplace(s) configured. Run 'clim' to see merged tools.\n", len(c.Marketplace.ExtraURLs))
 	return nil
 }

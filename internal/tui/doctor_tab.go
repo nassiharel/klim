@@ -11,6 +11,7 @@ import (
 	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/compliance"
 	"github.com/nassiharel/clim/internal/doctor"
+	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -266,9 +267,11 @@ func (m Model) renderComplianceView() string {
 		}
 		b.WriteString("  " + dashDim.Render("No compliance policy configured.") + "\n\n")
 		b.WriteString("  " + dashDim.Render("Create one with: clim compliance init") + "\n")
-		b.WriteString("  " + dashDim.Render("Configure in config.yaml:") + "\n")
-		b.WriteString("  " + dashDim.Render("  compliance:") + "\n")
-		b.WriteString("  " + dashDim.Render("    policy: /path/to/.clim-policy.yaml") + "\n")
+		policyHint := "Policy is stored in the clim config directory"
+		if p, pathErr := paths.CompliancePolicy(); pathErr == nil {
+			policyHint = "Policy location: " + p
+		}
+		b.WriteString("  " + dashDim.Render(policyHint) + "\n")
 		return b.String()
 	}
 
@@ -315,10 +318,10 @@ func (m Model) renderComplianceView() string {
 // Returns (result, error string). Error is non-empty when policy exists but can't be loaded.
 func runComplianceForTUI(tools []registry.Tool, policyPath string) (*compliance.Result, string) {
 	if policyPath == "" {
-		for _, candidate := range []string{".clim-policy.yaml", ".clim-policy.yml"} {
-			if _, err := os.Stat(candidate); err == nil {
-				policyPath = candidate
-				break
+		// Check default global location.
+		if p, err := paths.CompliancePolicy(); err == nil {
+			if _, statErr := os.Stat(p); statErr == nil {
+				policyPath = p
 			}
 		}
 	}

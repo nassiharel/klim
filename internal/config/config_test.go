@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -118,4 +119,40 @@ func TestConfig_RoundTrip(t *testing.T) {
 			restored.Performance.CommandTimeout.Duration,
 			original.Performance.CommandTimeout.Duration)
 	}
+}
+
+func TestValidate_ExtraURLs(t *testing.T) {
+	tests := []struct {
+		name    string
+		urls    []string
+		wantLen int // expected number of warnings from extra_urls
+	}{
+		{"valid https", []string{"https://example.com/marketplace.yaml"}, 0},
+		{"valid http", []string{"http://localhost:8080/m.yaml"}, 0},
+		{"invalid scheme", []string{"ftp://example.com/m.yaml"}, 1},
+		{"no scheme", []string{"just-a-string"}, 1},
+		{"empty string", []string{""}, 0},
+		{"missing host", []string{"https://"}, 1},
+		{"mixed valid and invalid", []string{"https://ok.com/m.yaml", "bad", "https://also-ok.com"}, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Marketplace.ExtraURLs = tt.urls
+			warnings := cfg.Validate()
+			count := 0
+			for _, w := range warnings {
+				if contains(w, "extra_urls") {
+					count++
+				}
+			}
+			if count != tt.wantLen {
+				t.Errorf("got %d extra_urls warnings, want %d: %v", count, tt.wantLen, warnings)
+			}
+		})
+	}
+}
+
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && strings.Contains(s, sub)
 }

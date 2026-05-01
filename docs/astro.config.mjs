@@ -86,7 +86,6 @@ export default defineConfig({
                 { label: 'export', slug: 'reference/commands/export' },
                 { label: 'import', slug: 'reference/commands/import' },
                 { label: 'share', slug: 'reference/commands/share' },
-                { label: 'snapshot', slug: 'reference/commands/snapshot' },
               ],
             },
             {

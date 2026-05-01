@@ -51,7 +51,7 @@ required_tools:
 The policy file is resolved in this order:
 1. `--policy` flag
 2. `compliance.policy` in config.yaml
-3. `.clim-policy.yaml` in current directory
+3. `~/.config/clim/compliance/policy.yaml` (default global location)
 
 ## Examples
 
