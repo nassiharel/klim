@@ -2129,6 +2129,21 @@ func (m *Model) applyFilter() {
 	m.platforms = collectPlatforms(tabTools)
 	m.sidebarItems = buildSidebarItems(m.categories, m.tags, m.platforms, tabTools)
 
+	// Pre-compute search scores for all tools when filter is active.
+	var searchScores map[int]int
+	if filter != "" {
+		searchScores = make(map[int]int)
+		results := search.Search(m.tools, filter)
+		for _, r := range results {
+			for i := range m.tools {
+				if &m.tools[i] == r.Tool {
+					searchScores[i] = r.Score
+					break
+				}
+			}
+		}
+	}
+
 	// Second pass: apply all filters (sidebar + text search).
 	for i, tool := range m.tools {
 		if !m.matchesTab(tool) {
@@ -2147,9 +2162,7 @@ func (m *Model) applyFilter() {
 			continue
 		}
 		if filter != "" {
-			// Use the search package for richer matching (names, descriptions, tags, topics).
-			score := searchScoreTool(&tool, filter)
-			if score <= 0 {
+			if searchScores[i] <= 0 {
 				continue
 			}
 		}
@@ -2185,16 +2198,7 @@ func matchesTags(tags []string, filter string) bool {
 	return false
 }
 
-// searchScoreTool uses the search package to score a tool against a query.
-func searchScoreTool(t *registry.Tool, query string) int {
-	results := search.Search([]registry.Tool{*t}, query)
-	if len(results) > 0 {
-		return results[0].Score
-	}
-	return 0
-}
-
-// hasTag reports whether the tool has an exact tag match (case-insensitive).
+// hasTag reportswhether the tool has an exact tag match (case-insensitive).
 func hasTag(tags []string, tag string) bool {
 	for _, t := range tags {
 		if strings.EqualFold(t, tag) {

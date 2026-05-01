@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
     paths: ['docs/**', 'marketplace/**']
+  workflow_run:
+    workflows: ["Marketplace"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -26,6 +30,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Fetch assembled marketplace from marketplace branch
+        working-directory: .
+        run: |
+          git fetch origin marketplace --depth=1 2>/dev/null || true
+          git show origin/marketplace:marketplace.yaml > marketplace.yaml 2>/dev/null || echo "marketplace branch not available"
       - name: Generate marketplace catalog page
         working-directory: .
         run: go run docs/scripts/gen-marketplace-page.go

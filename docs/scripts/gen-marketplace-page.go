@@ -290,8 +290,16 @@ func truncate(s string, max int) string {
 	return string(runes[:max-3]) + "..."
 }
 
-// fetchMarketplace fetches the assembled marketplace from the remote URL.
+// fetchMarketplace loads the marketplace data. Tries local assembled
+// marketplace.yaml first (for CI reproducibility), then remote URL.
 func fetchMarketplace() []byte {
+	// Try local assembled file first (CI assembles before this runs).
+	if data, err := os.ReadFile("marketplace.yaml"); err == nil && len(data) > 100 {
+		fmt.Fprintln(os.Stderr, "✓ Loaded from local marketplace.yaml")
+		return data
+	}
+
+	// Fall back to remote.
 	fmt.Fprintf(os.Stderr, "Fetching marketplace from %s...\n", marketplaceURL)
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(marketplaceURL)

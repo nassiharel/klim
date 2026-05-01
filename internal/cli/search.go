@@ -64,12 +64,17 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	// Limit results.
+	totalMatches := len(results)
 	if searchLimitFlag > 0 && len(results) > searchLimitFlag {
 		results = results[:searchLimitFlag]
 	}
 
 	// Display.
-	fmt.Fprintf(os.Stderr, "\n%d result(s) for %q:\n\n", len(results), query)
+	if totalMatches > len(results) {
+		fmt.Fprintf(os.Stderr, "\nShowing %d of %d result(s) for %q:\n\n", len(results), totalMatches, query)
+	} else {
+		fmt.Fprintf(os.Stderr, "\n%d result(s) for %q:\n\n", len(results), query)
+	}
 
 	for i, r := range results {
 		t := r.Tool

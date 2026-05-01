@@ -65,15 +65,19 @@ func Compute(input ScoreInput) Result {
 
 // BadgeURL returns a shields.io badge URL for the score.
 func BadgeURL(r Result) string {
+	pct := 0
+	if r.MaxTotal > 0 {
+		pct = r.Total * 100 / r.MaxTotal
+	}
 	color := "brightgreen"
 	switch {
-	case r.Total < 50:
+	case pct < 50:
 		color = "red"
-	case r.Total < 70:
+	case pct < 70:
 		color = "orange"
-	case r.Total < 85:
+	case pct < 85:
 		color = "yellow"
-	case r.Total < 95:
+	case pct < 95:
 		color = "yellowgreen"
 	}
 	label := url.PathEscape("clim score")
