@@ -1090,8 +1090,8 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 	}
 
 	if selected {
-		// Pad to tool column width (not full terminal width) so the selection
-		// highlight doesn't bleed into the sidebar column.
+		// Pad to tool column width so the selection highlight doesn't
+		// bleed into the sidebar column.
 		padWidth := m.width
 		hasSidebar := len(m.sidebarItems) > 0
 		if hasSidebar {
@@ -1101,6 +1101,8 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 		if w < padWidth {
 			line += strings.Repeat(" ", padWidth-w)
 		}
+		// Apply selection background to the full line. The cursor prefix
+		// uses Bold which survives the outer background application.
 		line = selectedRowStyle.Render(line)
 	}
 
@@ -1109,9 +1111,12 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 
 // rowCursor returns the 2-column cursor prefix for tool list rows.
 func rowCursor(selected, favorite bool) string {
-	// Explicitly set background on the bar so it stays visible when the row
-	// gets the selectedRowStyle background applied over it.
-	accentBar := lipgloss.NewStyle().Foreground(lipgloss.Color("49")).Bold(true) // bright teal
+	// Set both foreground AND background on the bar so lipgloss's
+	// selectedRowStyle background wrap doesn't swallow the color.
+	accentBar := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("49")).
+		Background(selectedBg).
+		Bold(true)
 	switch {
 	case selected && favorite:
 		return accentBar.Render("▎") + upgradableStyle.Render("★")
