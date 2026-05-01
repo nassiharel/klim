@@ -31,7 +31,7 @@ type batchItem struct {
 }
 
 // batchOp manages a sequential batch of tool operations (install/upgrade/remove).
-// Used by pack install, batch upgrade, and import flows.
+// Currently used by the batch upgrade flow on the Updates tab.
 type batchOp struct {
 	label     string      // operation label: "Installing", "Upgrading", "Importing"
 	items     []batchItem // all items in the batch
@@ -75,10 +75,16 @@ func (b *batchOp) next() tea.Cmd {
 	return nil
 }
 
-// complete marks an item as done or failed and increments the done counter.
+// complete marks an item as done or failed. Only transitions from
+// non-terminal states (pending/running) to avoid double-counting
+// when an item was already skipped.
 func (b *batchOp) complete(idx int, err error) {
 	if idx < 0 || idx >= len(b.items) {
 		return
+	}
+	prev := b.items[idx].status
+	if prev != batchPending && prev != batchRunning {
+		return // already terminal (skipped/done/failed)
 	}
 	if err != nil {
 		b.items[idx].status = batchFailed
@@ -101,8 +107,9 @@ func (b *batchOp) cancel() {
 	}
 }
 
-// skip marks the currently running item as skipped. The caller should
-// then call next() to advance to the next item.
+// skip marks the currently running item as skipped. The process may
+// still be running — complete() will be a no-op when it arrives since
+// the item is already in a terminal state.
 func (b *batchOp) skip() {
 	for i := range b.items {
 		if b.items[i].status == batchRunning {

@@ -206,7 +206,7 @@ type Model struct {
 	// Batch update state (Updates tab).
 	updateSelected map[int]bool // tool index → selected for batch upgrade
 
-	// Unified batch operation (used by batch upgrade, pack install, import).
+	// Active batch upgrade operation (Updates tab).
 	activeBatch *batchOp // nil = no active batch operation
 
 	// Pack creation state (Backup tab → Create Pack).
@@ -1937,7 +1937,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Skip current item during active batch operation.
 		if m.activeBatch != nil && m.activeBatch.isRunning() {
 			m.activeBatch.skip()
-			m.statusMsg = "⏭ Skipped — advancing..."
+			m.statusMsg = "⏭ Skipped"
 			return m, nil
 		}
 		// Skip current item during import.

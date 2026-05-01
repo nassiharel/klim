@@ -992,7 +992,12 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 					break
 				}
 			}
-			status := fmt.Sprintf("  Installing %s (%d/%d)", current, m.packDone, len(m.packItems))
+			var status string
+			if current == "" {
+				status = fmt.Sprintf("  Installing... (%d/%d)", m.packDone, len(m.packItems))
+			} else {
+				status = fmt.Sprintf("  Installing %s (%d/%d)", current, m.packDone, len(m.packItems))
+			}
 			progressFooter = upgradableStyle.Render(status) + "   " +
 				dim("s") + " skip   " + dim("Esc") + " cancel"
 		}
@@ -2498,14 +2503,6 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("q") + " quit",
 			}
 		}
-		// Override footer during active batch operation.
-		if m.activeBatch != nil && m.activeBatch.isRunning() {
-			parts = []string{
-				upgradableStyle.Render(m.activeBatch.statusLine()),
-				dimVersion.Render("s") + " skip",
-				dimVersion.Render("Esc") + " cancel",
-			}
-		}
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 			parts = []string{
 				dimVersion.Render("↑↓") + " navigate",
@@ -2525,6 +2522,14 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("*") + " favorite",
 				dimVersion.Render("←→") + " tab",
 				dimVersion.Render("q") + " quit",
+			}
+		}
+		// Override footer during active batch operation (applied last).
+		if m.activeBatch != nil && m.activeBatch.isRunning() {
+			parts = []string{
+				upgradableStyle.Render(m.activeBatch.statusLine()),
+				dimVersion.Render("s") + " skip",
+				dimVersion.Render("Esc") + " cancel",
 			}
 		}
 	}
