@@ -47,7 +47,7 @@ type batchOpDoneMsg struct {
 }
 
 // newBatchOp creates a new batch operation with the given label and items.
-// Items already marked as skipped are counted as done.
+// Items already in a terminal state (skipped or failed) are counted as done.
 func newBatchOp(label string, items []batchItem) *batchOp {
 	done := 0
 	for _, item := range items {

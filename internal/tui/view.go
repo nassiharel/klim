@@ -2527,7 +2527,7 @@ func (m Model) renderHelp() string {
 		// Override footer during active batch operation (applied last).
 		if m.activeBatch != nil && m.activeBatch.isRunning() {
 			parts = []string{
-				upgradableStyle.Render(m.activeBatch.statusLine()),
+				dimVersion.Render(m.activeBatch.progress()),
 				dimVersion.Render("s") + " skip",
 				dimVersion.Render("Esc") + " cancel",
 			}

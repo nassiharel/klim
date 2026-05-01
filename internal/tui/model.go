@@ -1464,8 +1464,7 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyPackDetail handles navigation in the pack detail view.
 func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// While a pack operation is running, allow dismissing the view
-	// but keep the operation running in the background.
+	// While a pack operation is running: Esc cancels, s skips, q dismisses view.
 	if m.packInstalling {
 		switch msg.String() {
 		case "esc":
@@ -1789,6 +1788,9 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.doctorScroll = 0
 			return m, nil
 		case "r":
+			if m.activeBatch != nil && m.activeBatch.isRunning() {
+				return m, nil // block rescan during batch
+			}
 			cmd := m.startScan()
 			return m, cmd
 		}
@@ -2299,6 +2301,10 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "r":
+		// Block rescan during active batch operation.
+		if m.activeBatch != nil && m.activeBatch.isRunning() {
+			return m, nil
+		}
 		// On the Marketplace tab, refresh the catalog from GitHub.
 		if m.activeTab == tabDiscover {
 			m.statusMsg = "Refreshing marketplace..."
