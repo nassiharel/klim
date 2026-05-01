@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -190,7 +191,7 @@ func projectEditCmd(path string) tea.Cmd {
 	editorArgs = append(editorArgs, path)
 	// Validate the editor executable path to avoid command injection
 	editorPath := filepath.Clean(editorArgs[0])
-	cmd := exec.Command(editorPath, editorArgs[1:]...)
+	cmd := exec.Command(editorPath, editorArgs[1:]...) //nolint:gosec // editor path from $EDITOR, trusted user input
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return projectEditorDoneMsg{path: path, err: err}
 	})
@@ -301,7 +302,7 @@ func (m Model) handleKeyProjectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.statusMsg = fmt.Sprintf("✗ Remove failed: %s", err)
 				return m, nil
 			}
-			m.statusMsg = fmt.Sprintf("✓ Removed %s", entry.Name)
+			m.statusMsg = "✓ Removed " + entry.Name
 			// Clamp cursor.
 			if m.projectCursor >= totalRows-1 && m.projectCursor > 0 {
 				m.projectCursor--
@@ -618,7 +619,7 @@ func (m Model) renderProjectDetail() string {
 	if m.projectConfirmReinit && m.projectInitResult != nil {
 		r := m.projectInitResult
 		b.WriteString("\n  " + detailTitleStyle.Render("Re-init: Scan Results") + "\n\n")
-		b.WriteString(fmt.Sprintf("  Scanned %d files in %d directories\n\n", r.FilesScanned, r.DirsScanned))
+		fmt.Fprintf(&b, "  Scanned %d files in %d directories\n\n", r.FilesScanned, r.DirsScanned)
 
 		// Build installed set for icons.
 		installedMap := make(map[string]bool, len(m.tools))
@@ -670,7 +671,7 @@ func (m Model) renderProjectDetail() string {
 		if m.projectInitResult != nil {
 			b.WriteString("\n  " + detailTitleStyle.Render("Project Detection") + "\n\n")
 			r := m.projectInitResult
-			b.WriteString(fmt.Sprintf("  Scanned %d files in %d directories\n\n", r.FilesScanned, r.DirsScanned))
+			fmt.Fprintf(&b, "  Scanned %d files in %d directories\n\n", r.FilesScanned, r.DirsScanned)
 			if len(r.Tools) > 0 {
 				b.WriteString(fmt.Sprintf("  Detected %d tools:\n", len(r.Tools)))
 				for _, d := range r.Tools {
@@ -718,8 +719,8 @@ func (m Model) renderProjectDetail() string {
 	b.WriteString(fmt.Sprintf("  %s  %s\n",
 		gauge(reqOK, reqTotal, 25, dashGaugeFill, dashGaugeEmpty),
 		fmt.Sprintf("%s / %s requirements met",
-			dashNumber.Render(fmt.Sprintf("%d", reqOK)),
-			dashDim.Render(fmt.Sprintf("%d", reqTotal)),
+			dashNumber.Render(strconv.Itoa(reqOK)),
+			dashDim.Render(strconv.Itoa(reqTotal)),
 		),
 	))
 	b.WriteString("\n")

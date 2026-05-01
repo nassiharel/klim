@@ -446,7 +446,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
 		case msg.cacheWarning != "":
 			// Non-fatal: cache was invalidated but the fresh scan succeeded.
-			m.statusMsg = fmt.Sprintf("⚠ %s", msg.cacheWarning)
+			m.statusMsg = "⚠ " + msg.cacheWarning
 		case msg.scanInfo != nil && msg.scanInfo.Source == service.ScanSourceCache:
 			// Cache hit: scan results came from disk, no subprocess calls ran.
 			ageStr := humaniseCacheAge(msg.scanInfo.CacheAt)
@@ -1897,12 +1897,13 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if idx < len(m.tools) {
 					name := m.tools[idx].Name
 					added, err := favorites.Toggle(name)
-					if err != nil {
-						m.statusMsg = fmt.Sprintf("⚠ %v", err)
-					} else if added {
+					switch {
+					case err != nil:
+						m.statusMsg = "⚠ " + err.Error()
+					case added:
 						m.favoriteNames[name] = true
 						m.statusMsg = "★ Added to favorites"
-					} else {
+					default:
 						delete(m.favoriteNames, name)
 						m.statusMsg = "☆ Removed from favorites"
 					}
@@ -1916,12 +1917,13 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if idx < len(m.tools) {
 				name := m.tools[idx].Name
 				added, err := favorites.Toggle(name)
-				if err != nil {
-					m.statusMsg = fmt.Sprintf("⚠ %v", err)
-				} else if added {
+				switch {
+				case err != nil:
+					m.statusMsg = "⚠ " + err.Error()
+				case added:
 					m.favoriteNames[name] = true
 					m.statusMsg = "★ Added to favorites"
-				} else {
+				default:
 					delete(m.favoriteNames, name)
 					m.statusMsg = "☆ Removed from favorites"
 				}

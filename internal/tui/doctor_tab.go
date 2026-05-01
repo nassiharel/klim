@@ -181,7 +181,7 @@ func (m Model) renderAuditView() string {
 			return sorted[i].name < sorted[j].name
 		})
 		for _, lc := range sorted {
-			b.WriteString(fmt.Sprintf("    %-20s %d tool(s)\n", lc.name, lc.count))
+			fmt.Fprintf(&b, "    %-20s %d tool(s)\n", lc.name, lc.count)
 		}
 		b.WriteString("\n")
 	}

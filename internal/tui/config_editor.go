@@ -193,7 +193,7 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					} else if v, err := strconv.Atoi(val); err == nil {
 						s.setInt(m.cfg, v)
 					} else {
-						m.statusMsg = fmt.Sprintf("✗ Invalid number: %s", val)
+						m.statusMsg = "✗ Invalid number: " + val
 						return m, nil
 					}
 				case settingDuration:

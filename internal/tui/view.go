@@ -2329,18 +2329,19 @@ func (m Model) renderHelp() string {
 			dimVersion.Render("q") + " quit",
 		}
 	case tabFavorites:
-		if m.favClearConfirm {
+		switch {
+		case m.favClearConfirm:
 			parts = []string{
 				dimVersion.Render("y") + " confirm",
 				dimVersion.Render("n/Esc") + " cancel",
 			}
-		} else if m.favMode == "share" && m.sharedToken != "" {
+		case m.favMode == "share" && m.sharedToken != "":
 			parts = []string{
 				dimVersion.Render("c") + " copy to clipboard",
 				dimVersion.Render("Esc") + " back",
 				dimVersion.Render("q") + " quit",
 			}
-		} else {
+		default:
 			parts = []string{
 				dimVersion.Render("↑↓") + " navigate",
 				dimVersion.Render("*") + " unfavorite",

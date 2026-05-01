@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -193,7 +194,7 @@ func exportMyPackFileCmd(pack registry.Pack) tea.Cmd {
 			return myPackActionMsg{action: "export", err: err}
 		}
 		abs, _ := filepath.Abs(filename)
-		return myPackActionMsg{action: "export", result: fmt.Sprintf("Exported to %s", abs)}
+		return myPackActionMsg{action: "export", result: "Exported to " + abs}
 	}
 }
 
@@ -257,7 +258,7 @@ func (m Model) renderMyPacksView() string {
 			cursor = "▸ "
 		}
 
-		toolCount := fmt.Sprintf("%d", len(pack.ToolNames))
+		toolCount := strconv.Itoa(len(pack.ToolNames))
 		desc := pack.Description
 		maxDesc := m.width - colName - colPackTools - 12
 		if maxDesc > 0 && len(desc) > maxDesc {

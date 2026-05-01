@@ -207,8 +207,8 @@ func (m Model) renderDashboardView() string {
 	if installed > 0 {
 		pctUpToDate := upToDate * 100 / installed
 		b.WriteString(fmt.Sprintf("  %s / %s up to date  ",
-			dashNumber.Render(fmt.Sprintf("%d", upToDate)),
-			dashDim.Render(fmt.Sprintf("%d", installed)),
+			dashNumber.Render(strconv.Itoa(upToDate)),
+			dashDim.Render(strconv.Itoa(installed)),
 		))
 		updateStyle := dashGaugeFill
 		if updates > 0 {
@@ -389,7 +389,7 @@ func (m Model) renderDashboardView() string {
 			b.WriteString(fmt.Sprintf("  %s  %s  %s  %s\n",
 				dashLabel.Render(fixedWidth(pm.name, 8)),
 				bar,
-				dashNumber.Render(fixedWidth(fmt.Sprintf("%d", pm.count), 3)),
+				dashNumber.Render(fixedWidth(strconv.Itoa(pm.count), 3)),
 				dashDim.Render(fmt.Sprintf("(%d%%)", pct)),
 			))
 		}
@@ -431,7 +431,7 @@ func (m Model) renderDashboardView() string {
 			b.WriteString(fmt.Sprintf("  %s  %s  %s\n",
 				dashLabel.Render(fixedWidth(cat.name, 18)),
 				miniGauge,
-				dashNumber.Render(fmt.Sprintf("%d", cat.count)),
+				dashNumber.Render(strconv.Itoa(cat.count)),
 			))
 		}
 	} else {
@@ -528,9 +528,9 @@ func (m Model) renderDashboardView() string {
 		dashLabel.Render(fixedWidth("Marketplace", 14)),
 		gauge(fullMarket, len(m.packs), 15, dashGaugeFill, dashGaugeEmpty),
 		fmt.Sprintf("%s / %s complete  %s partial",
-			dashNumber.Render(fmt.Sprintf("%d", fullMarket)),
-			dashDim.Render(fmt.Sprintf("%d", len(m.packs))),
-			dashGaugeWarn.Render(fmt.Sprintf("%d", partialMarket)),
+			dashNumber.Render(strconv.Itoa(fullMarket)),
+			dashDim.Render(strconv.Itoa(len(m.packs))),
+			dashGaugeWarn.Render(strconv.Itoa(partialMarket)),
 		),
 	))
 
@@ -538,9 +538,9 @@ func (m Model) renderDashboardView() string {
 		dashLabel.Render(fixedWidth("Custom", 14)),
 		gauge(fullCustom, len(m.customPacks), 15, dashGaugeInfo, dashGaugeEmpty),
 		fmt.Sprintf("%s / %s complete  %s partial",
-			dashNumber.Render(fmt.Sprintf("%d", fullCustom)),
-			dashDim.Render(fmt.Sprintf("%d", len(m.customPacks))),
-			dashGaugeWarn.Render(fmt.Sprintf("%d", partialCustom)),
+			dashNumber.Render(strconv.Itoa(fullCustom)),
+			dashDim.Render(strconv.Itoa(len(m.customPacks))),
+			dashGaugeWarn.Render(strconv.Itoa(partialCustom)),
 		),
 	))
 
@@ -556,7 +556,7 @@ func (m Model) renderDashboardView() string {
 		b.WriteString("  " + dashDim.Render("No backups yet. Export from the Backup tab to create one.") + "\n")
 	} else {
 		b.WriteString(fmt.Sprintf("  %s backup file(s)\n\n",
-			dashNumber.Render(fmt.Sprintf("%d", backupCount)),
+			dashNumber.Render(strconv.Itoa(backupCount)),
 		))
 		shown := backupCount
 		if shown > 3 {
@@ -567,7 +567,7 @@ func (m Model) renderDashboardView() string {
 			b.WriteString(fmt.Sprintf("    %s  %s  %s tools\n",
 				dashDim.Render("•"),
 				dashLabel.Render(bf.modTime.Format("2006-01-02 15:04")),
-				dashNumber.Render(fmt.Sprintf("%d", bf.toolCount)),
+				dashNumber.Render(strconv.Itoa(bf.toolCount)),
 			))
 		}
 		if backupCount > 3 {
