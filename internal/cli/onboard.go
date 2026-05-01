@@ -61,7 +61,7 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "  %d. %-12s %s\n", i+1, r.Name, r.Description)
 		}
 		fmt.Fprintln(os.Stderr)
-		fmt.Fprint(os.Stderr, "Enter number (1-6): ")
+		fmt.Fprintf(os.Stderr, "Enter number (1-%d): ", len(onboard.Roles))
 		var choice int
 		if _, err := fmt.Fscan(os.Stdin, &choice); err != nil || choice < 1 || choice > len(onboard.Roles) {
 			return errors.New("invalid choice")
