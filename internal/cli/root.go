@@ -56,8 +56,12 @@ for non-interactive operation.`,
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "enable verbose logging to stderr")
+	rootCmd.PersistentFlags().BoolVar(&verboseFlag, "verbose", false, "enable verbose logging to stderr")
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
+
+	// -v prints version (Cobra registers --version automatically; add -v shorthand).
+	rootCmd.Flags().BoolP("version", "v", false, "print version")
+
 
 	// Command groups for organized help output.
 	rootCmd.AddGroup(
