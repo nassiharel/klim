@@ -404,7 +404,7 @@ type toolActionCmd struct {
 }
 
 // SetStdin sets the stdin for the tool action command.
-func (c *toolActionCmd) SetStdin(r io.Reader)  { c.stdin = r }
+func (c *toolActionCmd) SetStdin(r io.Reader) { c.stdin = r }
 
 // SetStdout sets the stdout for the tool action command.
 func (c *toolActionCmd) SetStdout(w io.Writer) { c.stdout = w }

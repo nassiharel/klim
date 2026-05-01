@@ -1328,33 +1328,35 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "up", "k":
 		// Navigate: related tools → action menu → scroll.
-		if m.detailRelCursor > 0 {
+		switch {
+		case m.detailRelCursor > 0:
 			m.detailRelCursor--
-		} else if m.detailRelCursor == 0 {
+		case m.detailRelCursor == 0:
 			// Move from related list back to action menu (last item).
 			m.detailRelCursor = -1
 			if len(m.toolMenuItems) > 0 {
 				m.toolMenu = len(m.toolMenuItems) - 1
 			}
-		} else if m.toolMenu > 0 {
+		case m.toolMenu > 0:
 			m.toolMenu--
-		} else if m.detailScroll > 0 {
+		case m.detailScroll > 0:
 			m.detailScroll--
 		}
 	case "down", "j":
 		// Navigate: scroll → action menu → related tools.
-		if m.detailRelCursor >= 0 {
+		switch {
+		case m.detailRelCursor >= 0:
 			// In related list.
 			if m.detailRelCursor < len(m.detailRelated)-1 {
 				m.detailRelCursor++
 			}
-		} else if m.toolMenu < len(m.toolMenuItems)-1 {
+		case m.toolMenu < len(m.toolMenuItems)-1:
 			m.toolMenu++
-		} else if len(m.detailRelated) > 0 && m.detailRelCursor == -1 {
+		case len(m.detailRelated) > 0 && m.detailRelCursor == -1:
 			// Move from action menu to related list.
 			m.detailRelCursor = 0
 			m.toolMenu = len(m.toolMenuItems) - 1 // keep menu at last item visually
-		} else {
+		default:
 			m.detailScroll++
 		}
 		m.clampDetailScroll()
@@ -1916,14 +1918,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				added, err := favorites.Toggle(name)
 				if err != nil {
 					m.statusMsg = fmt.Sprintf("⚠ %v", err)
+				} else if added {
+					m.favoriteNames[name] = true
+					m.statusMsg = "★ Added to favorites"
 				} else {
-					if added {
-						m.favoriteNames[name] = true
-						m.statusMsg = "★ Added to favorites"
-					} else {
-						delete(m.favoriteNames, name)
-						m.statusMsg = "☆ Removed from favorites"
-					}
+					delete(m.favoriteNames, name)
+					m.statusMsg = "☆ Removed from favorites"
 				}
 			}
 		}
@@ -2616,7 +2616,6 @@ func (m Model) currentToolIdx() int {
 	}
 	return -1
 }
-
 
 // --- Backup ---
 

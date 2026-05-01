@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -126,7 +127,7 @@ func projectInitWriteCmd(dir string, tools []registry.Tool, detected []teamfile.
 		}
 
 		if len(tf.Tools) == 0 {
-			return projectInitDoneMsg{err: fmt.Errorf("no tools to include")}
+			return projectInitDoneMsg{err: errors.New("no tools to include")}
 		}
 
 		if err := teamfile.Write(tf, outPath); err != nil {
@@ -166,7 +167,7 @@ func projectEditCmd(path string) tea.Cmd {
 	}
 	if editor == "" {
 		return func() tea.Msg {
-			return projectEditorDoneMsg{path: path, err: fmt.Errorf("no $EDITOR set")}
+			return projectEditorDoneMsg{path: path, err: errors.New("no $EDITOR set")}
 		}
 	}
 	// Parse editor command. Handle quoted paths (e.g. "C:\Program Files\Code.exe" --wait).

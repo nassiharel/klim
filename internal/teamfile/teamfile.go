@@ -34,6 +34,7 @@ type RequiredTool struct {
 // CheckStatus indicates the result of checking one tool.
 type CheckStatus int
 
+// CheckStatus constants describe the result of checking one required tool.
 const (
 	// StatusOK indicates the tool is installed with a satisfactory version.
 	StatusOK       CheckStatus = iota // installed, version satisfied

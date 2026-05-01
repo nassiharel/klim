@@ -171,8 +171,8 @@ func (m Model) renderDashboardView() string {
 		}
 		b.WriteString("\n  " + dashSection.Render("Environment Score") + "\n\n")
 		b.WriteString(fmt.Sprintf("  %s / %s  Grade: %s  ",
-			dashNumber.Render(fmt.Sprintf("%d", scoreResult.Total)),
-			dashDim.Render(fmt.Sprintf("%d", scoreResult.MaxTotal)),
+			dashNumber.Render(strconv.Itoa(scoreResult.Total)),
+			dashDim.Render(strconv.Itoa(scoreResult.MaxTotal)),
 			dashNumber.Render(scoreResult.Grade),
 		))
 		b.WriteString(gauge(scoreResult.Total, scoreResult.MaxTotal, scoreGaugeW, scoreStyle, dashGaugeEmpty))
@@ -198,8 +198,8 @@ func (m Model) renderDashboardView() string {
 	}
 
 	b.WriteString(fmt.Sprintf("  %s / %s installed  ",
-		dashNumber.Render(fmt.Sprintf("%d", installed)),
-		dashDim.Render(fmt.Sprintf("%d", total)),
+		dashNumber.Render(strconv.Itoa(installed)),
+		dashDim.Render(strconv.Itoa(total)),
 	))
 	b.WriteString(gauge(installed, total, gaugeWidth, dashGaugeFill, dashGaugeEmpty))
 	b.WriteString(fmt.Sprintf("  %s\n", dashNumber.Render(fmt.Sprintf("%d%%", pctInstalled))))

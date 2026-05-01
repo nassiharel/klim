@@ -172,7 +172,7 @@ func GitHubAction(installs []ToolInstall, opts Options) string {
 	case "windows":
 		runner = "windows-latest"
 	}
-	b.WriteString(fmt.Sprintf("    runs-on: %s\n", runner))
+	fmt.Fprintf(&b, "    runs-on: %s\n", runner)
 	b.WriteString("    steps:\n")
 	b.WriteString("      - name: Install developer tools\n")
 	b.WriteString("        run: |\n")
@@ -180,10 +180,10 @@ func GitHubAction(installs []ToolInstall, opts Options) string {
 	sysPkgs, brewPkgs, npmPkgs, wingetPkgs, _, scoopPkgs, snapPkgs := classifyTools(installs, targetOS)
 
 	if len(sysPkgs) > 0 {
-		b.WriteString(fmt.Sprintf("          %s\n", bulkInstallCmd(targetOS, sysPkgs)))
+		fmt.Fprintf(&b, "          %s\n", bulkInstallCmd(targetOS, sysPkgs))
 	}
 	if len(brewPkgs) > 0 {
-		b.WriteString(fmt.Sprintf("          brew install %s\n", strings.Join(brewPkgs, " ")))
+		fmt.Fprintf(&b, "          brew install %s\n", strings.Join(brewPkgs, " "))
 	}
 	for _, pkg := range wingetPkgs {
 		b.WriteString(fmt.Sprintf("          winget install --id %s --accept-source-agreements --accept-package-agreements\n", pkg))
