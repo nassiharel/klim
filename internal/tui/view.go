@@ -2484,6 +2484,14 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("q") + " quit",
 			}
 		}
+		// Override footer during active batch operation.
+		if m.activeBatch != nil && m.activeBatch.isRunning() {
+			parts = []string{
+				upgradableStyle.Render(m.activeBatch.statusLine()),
+				dimVersion.Render("s") + " skip",
+				dimVersion.Render("Esc") + " cancel",
+			}
+		}
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 			parts = []string{
 				dimVersion.Render("↑↓") + " navigate",

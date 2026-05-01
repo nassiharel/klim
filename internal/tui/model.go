@@ -204,9 +204,10 @@ type Model struct {
 	backupCancelled bool           // true = user pressed Esc during install
 
 	// Batch update state (Updates tab).
-	updateSelected map[int]bool      // tool index → selected for batch upgrade
-	batchUpdating  bool              // true while batch upgrade is in progress
-	batchQueue     batchUpgradeQueue // remaining tool indices to upgrade
+	updateSelected map[int]bool // tool index → selected for batch upgrade
+
+	// Unified batch operation (used by batch upgrade, pack install, import).
+	activeBatch *batchOp // nil = no active batch operation
 
 	// Pack creation state (Backup tab → Create Pack).
 	creatingPack       bool            // true = pack creation wizard is active
@@ -415,8 +416,7 @@ func (m *Model) startScan() tea.Cmd {
 	// Clear upgrade selection — indices are tied to the old tool ordering
 	// and would select the wrong tools after a rescan reorders the list.
 	m.updateSelected = make(map[int]bool)
-	m.batchUpdating = false
-	m.batchQueue = nil
+	m.activeBatch = nil
 	m.doctorIssues = nil
 	m.auditFindings = nil
 	m.auditLicenses = nil
@@ -794,19 +794,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.startScan()
 		return m, cmd
 
-	case batchUpgradeItemMsg:
-		if msg.toolIdx >= len(m.tools) {
-			return m.fireNextBatchUpgrade()
+	case batchOpDoneMsg:
+		if m.activeBatch != nil {
+			m.activeBatch.complete(msg.idx, msg.err)
+			if m.activeBatch.cancelled {
+				// Cancelled — finish up.
+				m.activeBatch.finish()
+				m.statusMsg = m.activeBatch.summary() + " — refreshing..."
+				cmd := m.startScan()
+				return m, cmd
+			}
+			// Fire next item.
+			if cmd := m.activeBatch.next(); cmd != nil {
+				m.statusMsg = m.activeBatch.statusLine()
+				return m, cmd
+			}
+			// All done.
+			m.activeBatch.finish()
+			m.statusMsg = m.activeBatch.summary() + " — refreshing..."
+			cmd := m.startScan()
+			return m, cmd
 		}
-		if msg.err != nil {
-			m.statusMsg = fmt.Sprintf("✗ %s upgrade failed: %s", m.tools[msg.toolIdx].DisplayName, msg.err)
-		} else {
-			m.statusMsg = fmt.Sprintf("✓ %s upgraded", m.tools[msg.toolIdx].DisplayName)
-		}
-		// Deselect the completed tool.
-		delete(m.updateSelected, msg.toolIdx)
-		// Fire the next upgrade, or finish with a full refresh.
-		return m.fireNextBatchUpgrade()
+		return m, nil
 
 	case shareFinishedMsg:
 		if msg.err != nil {
@@ -1762,6 +1771,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = ""
 			return m, nil
 		}
+		// Cancel active batch operation.
+		if m.activeBatch != nil && m.activeBatch.isRunning() {
+			m.activeBatch.cancel()
+			m.statusMsg = "⚠ Cancelling — waiting for current item to finish..."
+			return m, nil
+		}
 		// Clear active filters.
 		if m.categoryFilter != "" || m.tagFilter != "" || m.platformFilter != "" || m.statusFilter != "" {
 			m.categoryFilter = ""
@@ -1855,6 +1870,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.doctorScroll = 0
 		return m, nil
 	case "s":
+		// Skip current item during active batch operation.
+		if m.activeBatch != nil && m.activeBatch.isRunning() {
+			m.activeBatch.skip()
+			m.statusMsg = "⏭ Skipped — advancing..."
+			return m, nil
+		}
 		// Cycle sort mode on tool-list tabs (not Backup/Dashboard/Config).
 		if m.activeTab <= tabDiscover && (m.activeTab != tabDiscover || m.discoverSubTab == discoverTools) {
 			m.sortMode = (m.sortMode + 1) % sortModeCount
@@ -2075,7 +2096,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "u":
 		// Batch upgrade selected tools (Updates tab only).
-		if m.activeTab == tabUpdates && !m.batchUpdating {
+		if m.activeTab == tabUpdates && (m.activeBatch == nil || !m.activeBatch.isRunning()) {
 			return m.startBatchUpgrade()
 		}
 		return m, nil
@@ -2897,14 +2918,10 @@ func (m Model) importSummary() string {
 
 // --- Batch upgrade (Updates tab) ---
 
-// batchUpgradeQueue holds the ordered list of tool indices to upgrade.
-// Items are shifted off the front as each upgrade completes.
-type batchUpgradeQueue []int
-
-// startBatchUpgrade kicks off sequential upgrades for all selected tools.
+// startBatchUpgrade kicks off sequential upgrades for all selected tools
+// using the unified batch operation engine.
 func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
-	// Build the queue of selected tool indices that have upgrade args.
-	var queue batchUpgradeQueue
+	var items []batchItem
 	for _, idx := range m.filteredIndex {
 		if !m.updateSelected[idx] {
 			continue
@@ -2914,40 +2931,44 @@ func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
 			continue
 		}
 		// Find upgrade args (best available source).
-		for _, src := range registry.SourcesForOS() {
-			if args := tool.Packages.UpgradeArgs(src); args != nil {
-				queue = append(queue, idx)
+		var args []string
+		var src string
+		for _, s := range registry.SourcesForOS() {
+			if a := tool.Packages.UpgradeArgs(s); a != nil {
+				args = a
+				src = string(s)
 				break
 			}
 		}
+		if args == nil {
+			items = append(items, batchItem{
+				name:    tool.Name,
+				display: tool.DisplayName,
+				source:  "",
+				status:  batchSkipped,
+				errMsg:  "no upgrade command available",
+			})
+			continue
+		}
+		items = append(items, batchItem{
+			name:    tool.Name,
+			display: tool.DisplayName,
+			cmdArgs: args,
+			source:  src,
+			status:  batchPending,
+		})
 	}
-	if len(queue) == 0 {
+	if len(items) == 0 {
 		m.statusMsg = "No upgradable tools selected."
 		return m, nil
 	}
-	m.batchUpdating = true
-	m.batchQueue = queue
-	return m.fireNextBatchUpgrade()
-}
-
-// fireNextBatchUpgrade pops the next tool off the queue and fires its upgrade.
-// Returns (model, nil) when the queue is empty.
-func (m Model) fireNextBatchUpgrade() (tea.Model, tea.Cmd) {
-	if len(m.batchQueue) == 0 {
-		cmd := m.startScan()
-		m.statusMsg = "✓ Batch upgrade complete — refreshing..."
+	m.activeBatch = newBatchOp("Upgrading", items)
+	m.statusMsg = m.activeBatch.statusLine()
+	if cmd := m.activeBatch.next(); cmd != nil {
 		return m, cmd
 	}
-	idx := m.batchQueue[0]
-	m.batchQueue = m.batchQueue[1:]
-	tool := &m.tools[idx]
-	// Find best upgrade args.
-	for _, src := range registry.SourcesForOS() {
-		if args := tool.Packages.UpgradeArgs(src); args != nil {
-			m.statusMsg = fmt.Sprintf("Upgrading %s...", tool.DisplayName)
-			return m, execBatchUpgradeCmd(idx, args)
-		}
-	}
-	// No upgrade args — skip and try next.
-	return m.fireNextBatchUpgrade()
+	// All items were pre-skipped.
+	m.activeBatch.finish()
+	m.statusMsg = m.activeBatch.summary()
+	return m, nil
 }
