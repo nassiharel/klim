@@ -404,7 +404,7 @@ func (m Model) renderTabBar() string {
 		{"Installed", tabInstalled},
 		{"Favorites", tabFavorites},
 		{"Updates", tabUpdates},
-		{"Discover", tabDiscover},
+		{"Marketplace", tabDiscover},
 		{"Backup", tabBackup},
 		{"Project", tabProject},
 		{"Dashboard", tabDashboard},
