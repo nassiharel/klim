@@ -39,8 +39,8 @@ func init() {
 func runSearch(cmd *cobra.Command, args []string) error {
 	query := strings.Join(args, " ")
 
-	// Load catalog.
-	tools, _, catErr := svc.Catalog.LoadTools(cmd.Context())
+	// Load catalog + scan PATH for install status (no version resolution).
+	tools, _, catErr := svc.ScanOnly(cmd.Context())
 	if catErr != nil {
 		return fmt.Errorf("loading catalog: %w", catErr)
 	}

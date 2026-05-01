@@ -2132,14 +2132,16 @@ func (m *Model) applyFilter() {
 	// Pre-compute search scores for all tools when filter is active.
 	var searchScores map[int]int
 	if filter != "" {
+		// Build pointer→index map once (O(n)), then map results (O(m)).
+		ptrToIdx := make(map[*registry.Tool]int, len(m.tools))
+		for i := range m.tools {
+			ptrToIdx[&m.tools[i]] = i
+		}
 		searchScores = make(map[int]int)
 		results := search.Search(m.tools, filter)
 		for _, r := range results {
-			for i := range m.tools {
-				if &m.tools[i] == r.Tool {
-					searchScores[i] = r.Score
-					break
-				}
+			if idx, ok := ptrToIdx[r.Tool]; ok {
+				searchScores[idx] = r.Score
 			}
 		}
 	}
@@ -2198,7 +2200,7 @@ func matchesTags(tags []string, filter string) bool {
 	return false
 }
 
-// hasTag reportswhether the tool has an exact tag match (case-insensitive).
+// hasTag reports whether the tool has an exact tag match (case-insensitive).
 func hasTag(tags []string, tag string) bool {
 	for _, t := range tags {
 		if strings.EqualFold(t, tag) {

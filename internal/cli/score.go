@@ -51,20 +51,11 @@ func runScore(cmd *cobra.Command, args []string) error {
 
 	// Run compliance if configured.
 	var compResult *compliance.Result
-	policyPath := cfg.Compliance.Policy
-	if policyPath == "" {
-		for _, candidate := range []string{".clim-policy.yaml", ".clim-policy.yml"} {
-			if _, err := os.Stat(candidate); err == nil {
-				policyPath = candidate
-				break
-			}
-		}
-	}
 	var compErrStr string
-	if policyPath != "" {
+	if policyPath := findPolicyPath(); policyPath != "" {
 		policy, loadErr := compliance.LoadPolicy(policyPath)
 		if loadErr != nil {
-			fmt.Fprintf(os.Stderr, "  ⚠ Compliance policy error: %v\n", loadErr)
+			_, _ = fmt.Fprintf(os.Stderr, "  ⚠ Compliance policy error: %v\n", loadErr)
 			compErrStr = loadErr.Error()
 		} else {
 			r := compliance.Check(policy, tools)

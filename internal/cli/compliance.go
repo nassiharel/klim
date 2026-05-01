@@ -69,16 +69,25 @@ func resolvePolicyPath() (string, error) {
 	if compliancePolicyFlag != "" {
 		return compliancePolicyFlag, nil
 	}
-	if cfg.Compliance.Policy != "" {
-		return cfg.Compliance.Policy, nil
-	}
-	// Try default locations.
-	for _, candidate := range []string{".clim-policy.yaml", ".clim-policy.yml"} {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
-		}
+	path := findPolicyPath()
+	if path != "" {
+		return path, nil
 	}
 	return "", errors.New("no policy file found\n\nConfigure in config.yaml:\n  compliance:\n    policy: /path/to/.clim-policy.yaml\n\nOr pass directly:\n  clim compliance check --policy .clim-policy.yaml\n\nOr generate one:\n  clim compliance init")
+}
+
+// findPolicyPath returns the policy file path from config or default
+// locations, or empty string if none exists. Shared across commands.
+func findPolicyPath() string {
+	if cfg.Compliance.Policy != "" {
+		return cfg.Compliance.Policy
+	}
+	for _, candidate := range []string{".clim-policy.yaml", ".clim-policy.yml"} {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func runComplianceCheck(cmd *cobra.Command, args []string) error {
