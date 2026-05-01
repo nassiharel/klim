@@ -1061,7 +1061,7 @@ func (m Model) renderHeader() string {
 			headerStyle.Render(fixedWidth("SOURCE", colSource)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
 	case tabDiscover:
-		return "    " +
+		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory)) + "  " +
 			headerStyle.Render(fixedWidth("STARS", colStars)) + "  " +
@@ -1189,19 +1189,7 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	cursor := rowCursor(selected, m.favoriteNames[tool.Name])
 
 	nameText := toolLabel(tool)
-	// Bold name for better scannability (installed tools show in green).
-	var nameCell string
-	if tool.IsInstalled() {
-		nameCell = upToDateStyle.Render(fixedWidth(nameText, colName))
-	} else {
-		nameCell = nameStyle.Render(fixedWidth(nameText, colName))
-	}
-
-	// Status icon.
-	statusIcon := dimVersion.Render("○")
-	if tool.IsInstalled() {
-		statusIcon = upToDateStyle.Render("✓")
-	}
+	nameCell := nameStyle.Render(fixedWidth(nameText, colName))
 
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
@@ -1214,7 +1202,7 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	if tool.GitHubInfo != nil && tool.GitHubInfo.Description != "" {
 		desc = tool.GitHubInfo.Description
 	}
-	descWidth := m.width - colName - colCategory - colStars - 14 // cursor + spacing + status
+	descWidth := m.width - colName - colCategory - colStars - 10 // cursor + spacing
 	if len(m.sidebarItems) > 0 {
 		descWidth -= colSidebar + 3
 	}
@@ -1226,7 +1214,7 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 		descCell = "  " + dimVersion.Render(fixedWidth(desc, descWidth))
 	}
 
-	line := cursor + statusIcon + " " + nameCell + "  " + catCell + "  " + starsCell + descCell
+	line := cursor + nameCell + "  " + catCell + "  " + starsCell + descCell
 
 	var badge string
 	switch tool.MarketplaceStatus {
