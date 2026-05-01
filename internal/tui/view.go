@@ -332,13 +332,7 @@ func (m Model) layoutWithFooter(body, footer string) string {
 	if gap < minGap {
 		gap = minGap
 	}
-	// Subtle rule above footer for visual separation.
-	ruleLen := m.width - 4
-	if ruleLen < 10 {
-		ruleLen = 10
-	}
-	rule := "  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
-	return body + strings.Repeat("\n", gap-1) + rule + "\n" + footer
+	return body + strings.Repeat("\n", gap) + footer
 }
 
 // visualRows returns the number of terminal rows occupied by s when rendered
@@ -421,14 +415,7 @@ func (m Model) renderTabBar() string {
 		}
 	}
 
-	// Subtle rule under tabs.
-	tabLine := "  " + strings.Join(parts, "")
-	ruleLen := m.width - 2
-	if ruleLen < 10 {
-		ruleLen = 10
-	}
-	rule := ruleStyle.Render(strings.Repeat("─", ruleLen))
-	return tabLine + "\n" + "  " + rule
+	return "  " + strings.Join(parts, "")
 }
 
 // --- Search Bar ---
