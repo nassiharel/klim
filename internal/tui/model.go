@@ -841,13 +841,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case packItemDoneMsg:
 		if msg.idx < len(m.packItems) {
-			if msg.err != nil {
-				m.packItems[msg.idx].status = packItemFailed
-				m.packItems[msg.idx].errMsg = msg.err.Error()
-			} else {
-				m.packItems[msg.idx].status = packItemDone
+			// Only update if not already marked (e.g., by skip/cancel).
+			if m.packItems[msg.idx].status == packItemRunning {
+				if msg.err != nil {
+					m.packItems[msg.idx].status = packItemFailed
+					m.packItems[msg.idx].errMsg = msg.err.Error()
+				} else {
+					m.packItems[msg.idx].status = packItemDone
+				}
+				m.packDone++
 			}
-			m.packDone++
 		}
 		// Fire the next item, or finish.
 		if cmd := m.nextPackItem(); cmd != nil {
@@ -856,7 +859,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// All done — refresh tools to pick up changes.
 		m.packInstalling = false
 		cmd := m.startScan()
-		m.statusMsg = "✓ Pack operation complete — refreshing..."
+		m.statusMsg = m.packSummary() + " — refreshing..."
 		return m, cmd
 
 	case packSavedMsg:
@@ -1464,10 +1467,32 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// While a pack operation is running, allow dismissing the view
 	// but keep the operation running in the background.
 	if m.packInstalling {
-		if msg.String() == "esc" || msg.String() == "q" {
+		switch msg.String() {
+		case "esc":
+			// Cancel pack operation — mark remaining as skipped.
+			for i := range m.packItems {
+				if m.packItems[i].status == packItemPending {
+					m.packItems[i].status = packItemSkipped
+					m.packItems[i].errMsg = "cancelled"
+					m.packDone++
+				}
+			}
+			m.statusMsg = "⚠ Cancelled — waiting for current item..."
+			return m, nil
+		case "s":
+			// Skip current running item.
+			for i := range m.packItems {
+				if m.packItems[i].status == packItemRunning {
+					m.packItems[i].status = packItemSkipped
+					m.packItems[i].errMsg = "skipped"
+					m.packDone++
+					break
+				}
+			}
+			m.statusMsg = "⏭ Skipped"
+			return m, nil
+		case "q":
 			m.showPackDetail = false
-			// packItems and packInstalling remain — the queue continues
-			// and packItemDoneMsg will fire the next item when it arrives.
 			return m, nil
 		}
 		return m, nil
@@ -1563,6 +1588,45 @@ func countPackSkipped(items []packItem) int {
 		}
 	}
 	return n
+}
+
+// packSummary returns a completion summary for the current pack operation.
+func (m Model) packSummary() string {
+	var succeeded, failed, skipped int
+	cancelled := false
+	for _, item := range m.packItems {
+		switch item.status {
+		case packItemDone:
+			succeeded++
+		case packItemFailed:
+			failed++
+		case packItemSkipped:
+			skipped++
+			if item.errMsg == "cancelled" {
+				cancelled = true
+			}
+		}
+	}
+	var parts []string
+	if succeeded > 0 {
+		parts = append(parts, fmt.Sprintf("%d succeeded", succeeded))
+	}
+	if failed > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed", failed))
+	}
+	if skipped > 0 {
+		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
+	}
+	prefix := "✓"
+	if cancelled {
+		prefix = "⚠ Cancelled —"
+	} else if failed > 0 {
+		prefix = "⚠"
+	}
+	if len(parts) == 0 {
+		return prefix + " Nothing to do"
+	}
+	return prefix + " " + strings.Join(parts, ", ")
 }
 
 // handleKeyFilter handles the search/filter text input mode.
@@ -1874,6 +1938,19 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activeBatch != nil && m.activeBatch.isRunning() {
 			m.activeBatch.skip()
 			m.statusMsg = "⏭ Skipped — advancing..."
+			return m, nil
+		}
+		// Skip current item during import.
+		if m.activeTab == tabBackup && m.isImportRunning() {
+			for i := range m.backupItems {
+				if m.backupItems[i].status == backupRunning {
+					m.backupItems[i].status = backupSkipped
+					m.backupItems[i].errMsg = "skipped"
+					m.backupDone++
+					break
+				}
+			}
+			m.statusMsg = "⏭ Skipped"
 			return m, nil
 		}
 		// Cycle sort mode on tool-list tabs (not Backup/Dashboard/Config).

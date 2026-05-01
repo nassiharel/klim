@@ -981,7 +981,20 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 		if pending == 0 && !m.packInstalling {
 			progressFooter = "  " + dim("Esc") + " back"
 		} else {
-			progressFooter = "  " + dim("Installing...")
+			// Show current item name + progress + skip/cancel hints.
+			current := ""
+			for _, item := range m.packItems {
+				if item.status == packItemRunning {
+					current = item.display
+					if current == "" {
+						current = item.name
+					}
+					break
+				}
+			}
+			status := fmt.Sprintf("  Installing %s (%d/%d)", current, m.packDone, len(m.packItems))
+			progressFooter = upgradableStyle.Render(status) + "   " +
+				dim("s") + " skip   " + dim("Esc") + " cancel"
 		}
 
 		return m.layoutWithFooter(b.String(), progressFooter)
@@ -2366,6 +2379,7 @@ func (m Model) renderHelp() string {
 		default:
 			if m.isImportRunning() {
 				parts = []string{
+					dimVersion.Render("s") + " skip",
 					dimVersion.Render("Esc") + " cancel",
 				}
 			} else {
