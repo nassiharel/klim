@@ -72,7 +72,6 @@ type projectAddToolMsg struct {
 
 type projectGenerateMsg struct {
 	format string // "github-action", "dockerfile", "devcontainer"
-	output string // generated content
 	path   string // output file path
 	tools  int
 	err    error
@@ -251,12 +250,14 @@ func projectGenerateCmd(format string, tf *teamfile.TeamFile, tfPath string, too
 		outPath := generateOutputPath(format, tfPath)
 		// Ensure parent directory exists.
 		if dir := filepath.Dir(outPath); dir != "" {
-			_ = os.MkdirAll(dir, 0o755)
+			if mkErr := os.MkdirAll(dir, 0o755); mkErr != nil {
+				return projectGenerateMsg{format: format, err: fmt.Errorf("creating directory: %w", mkErr)}
+			}
 		}
 		if err := os.WriteFile(outPath, []byte(output), 0o644); err != nil {
 			return projectGenerateMsg{format: format, err: err}
 		}
-		return projectGenerateMsg{format: format, output: output, path: outPath, tools: len(installs)}
+		return projectGenerateMsg{format: format, path: outPath, tools: len(installs)}
 	}
 }
 

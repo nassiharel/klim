@@ -78,7 +78,7 @@ func init() {
 	}
 
 	// Colorized help output when connected to a terminal.
-	if term.IsTerminal(int(os.Stdout.Fd())) || term.IsTerminal(int(os.Stderr.Fd())) {
+	if term.IsTerminal(int(os.Stdout.Fd())) || term.IsTerminal(int(os.Stderr.Fd())) { //nolint:gosec // G115: uintptr→int is the standard Go pattern for term.IsTerminal
 		initColorHelp()
 	}
 
@@ -163,7 +163,8 @@ func Execute() error {
 	return nil
 }
 
-// initColorHelp sets up colorized help output for all commands.
+// initColorHelp sets up colorized help output for the root command.
+// Subcommands use Cobra's default help template.
 func initColorHelp() {
 	defaultHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
@@ -171,7 +172,7 @@ func initColorHelp() {
 			defaultHelp(cmd, args)
 			return
 		}
-		w := cmd.OutOrStderr()
+		w := cmd.OutOrStdout()
 		p := func(format string, a ...any) { //nolint:errcheck
 			_, _ = fmt.Fprintf(w, format, a...)
 		}
