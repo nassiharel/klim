@@ -873,7 +873,10 @@ func (m Model) renderProjectDetail() string {
 	}
 
 	for i, action := range actions {
-		cursor := rowCursor(i == m.projectCursor, false)
+		cursor := "  "
+		if i == m.projectCursor {
+			cursor = "▸ "
+		}
 		line := cursor + nameStyle.Render(fixedWidth(action.label, 26)) + "  " + dimVersion.Render(action.desc)
 		if i == m.projectCursor {
 			w := lipgloss.Width(line)

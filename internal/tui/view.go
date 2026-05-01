@@ -836,7 +836,10 @@ func (m Model) renderRecCard(rec recommendation, selected, compact bool) string 
 	tool := m.tools[rec.toolIdx]
 
 	// --- Row 1: cursor + name + category + stars + gauge + pct ---
-	cursor := rowCursor(selected, false)
+	cursor := "  "
+	if selected {
+		cursor = "▸ "
+	}
 
 	displayName := tool.DisplayName
 	if displayName == "" {
@@ -1089,6 +1092,15 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 		line = m.renderDiscoverRow(tool, selected)
 	}
 
+	// Star indicator for favorited tools — replace second char of cursor
+	// prefix with a styled star.
+	if m.favoriteNames[tool.Name] {
+		runes := []rune(line)
+		if len(runes) >= 2 {
+			line = string(runes[0:1]) + upgradableStyle.Render("★") + string(runes[2:])
+		}
+	}
+
 	if selected {
 		padWidth := m.width
 		if len(m.sidebarItems) > 0 {
@@ -1098,35 +1110,17 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 		if w < padWidth {
 			line += strings.Repeat(" ", padWidth-w)
 		}
-		// Re-inject background after every ANSI reset so it persists
-		// across inner lipgloss-styled segments. Lipgloss uses both
-		// \x1b[0m and \x1b[m as reset sequences.
-		const bg = "\033[48;5;236m"
-		line = strings.ReplaceAll(line, "\033[0m", "\033[0m"+bg)
-		line = strings.ReplaceAll(line, "\033[m", "\033[m"+bg)
-		line = bg + line + "\033[0m"
+		line = selectedRowStyle.Render(line)
 	}
 
 	return line
 }
 
-// rowCursor returns the 2-column cursor prefix for tool list rows.
-func rowCursor(selected, favorite bool) string {
-	star := "\033[38;5;179m★\033[0m" // warm gold star using raw ANSI
-	switch {
-	case selected && favorite:
-		return "▸" + star
-	case selected:
-		return "▸ "
-	case favorite:
-		return " " + star
-	default:
-		return "  "
-	}
-}
-
 func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
-	cursor := rowCursor(selected, m.favoriteNames[tool.Name])
+	cursor := "  "
+	if selected {
+		cursor = "▸ "
+	}
 
 	// Name column: plain text padded, then styled.
 	nameText := toolLabel(tool)
@@ -1157,7 +1151,10 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 }
 
 func (m Model) renderUpdateRow(tool registry.Tool, toolIdx int, selected bool) string {
-	cursor := rowCursor(selected, m.favoriteNames[tool.Name])
+	cursor := "  "
+	if selected {
+		cursor = "▸ "
+	}
 
 	// Selection checkbox.
 	check := ""
@@ -1189,7 +1186,10 @@ func (m Model) renderUpdateRow(tool registry.Tool, toolIdx int, selected bool) s
 }
 
 func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
-	cursor := rowCursor(selected, m.favoriteNames[tool.Name])
+	cursor := "  "
+	if selected {
+		cursor = "▸ "
+	}
 
 	nameText := toolLabel(tool)
 	var nameCell string
