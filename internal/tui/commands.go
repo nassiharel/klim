@@ -424,7 +424,7 @@ func (c *toolActionCmd) Run() error {
 	}
 
 	// Clear screen before running command so previous exec output doesn't persist.
-	fmt.Fprint(stdout, "\033[2J\033[H") // ANSI: clear screen + cursor home
+	_, _ = fmt.Fprint(stdout, "\033[2J\033[H") // ANSI: clear screen + cursor home
 
 	cmd := exec.Command(c.args[0], c.args[1:]...)
 	cmd.Stdin = stdin
@@ -447,14 +447,14 @@ func (c *toolActionCmd) Run() error {
 	// Show result and wait for keypress — terminal is still ours.
 	if runErr != nil {
 		if hasExitCode {
-			fmt.Fprintf(stderr, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
+			_, _ = fmt.Fprintf(stderr, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
 		} else {
-			fmt.Fprintf(stderr, "\n✗ %s failed: %s\n", c.action, runErr)
+			_, _ = fmt.Fprintf(stderr, "\n✗ %s failed: %s\n", c.action, runErr)
 		}
 	} else {
-		fmt.Fprintf(stderr, "\n✓ %s completed (exit code 0)\n", c.action)
+		_, _ = fmt.Fprintf(stderr, "\n✓ %s completed (exit code 0)\n", c.action)
 	}
-	fmt.Fprint(stderr, "\nPress Enter to return to clim...")
+	_, _ = fmt.Fprint(stderr, "\nPress Enter to return to clim...")
 
 	// Read until newline so buffered stdin doesn't skip the pause.
 	br := bufio.NewReader(stdin)

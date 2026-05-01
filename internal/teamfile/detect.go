@@ -374,7 +374,7 @@ func scanFileForTools(path, source string, add func(string, string)) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024) // 256KB for large YAML/JSON lines
@@ -399,7 +399,7 @@ func scanDockerfile(path string, add func(string, string)) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	source := filepath.Base(path)
 	add("docker", source)
