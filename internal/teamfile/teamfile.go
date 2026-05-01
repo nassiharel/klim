@@ -15,6 +15,7 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
+// FileName is the filename for the .clim.yaml team manifest file.
 const FileName = ".clim.yaml"
 
 // TeamFile is the top-level .clim.yaml schema.
@@ -33,7 +34,9 @@ type RequiredTool struct {
 // CheckStatus indicates the result of checking one tool.
 type CheckStatus int
 
+// CheckStatus constants describe the result of checking one required tool.
 const (
+	// StatusOK indicates the tool is installed with a satisfactory version.
 	StatusOK       CheckStatus = iota // installed, version satisfied
 	StatusMissing                     // in catalog but not installed
 	StatusOutdated                    // installed but version too old
@@ -42,11 +45,11 @@ const (
 
 // CheckResult holds the result of checking one required tool.
 type CheckResult struct {
-	Tool      RequiredTool
-	Status    CheckStatus
-	Version   string // installed version ("" if missing)
-	Message   string // human-readable status
-	Optional  bool   // true if this is an optional tool
+	Tool     RequiredTool
+	Status   CheckStatus
+	Version  string // installed version ("" if missing)
+	Message  string // human-readable status
+	Optional bool   // true if this is an optional tool
 }
 
 // Find walks up from startDir looking for .clim.yaml. Returns the full path

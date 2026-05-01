@@ -20,13 +20,14 @@ import (
 // Severity classifies the importance of a diagnostic issue.
 type Severity string
 
+// Severity constants.
 const (
 	SeverityError   Severity = "error"
 	SeverityWarning Severity = "warning"
 	SeverityInfo    Severity = "info"
 )
 
-// Category groups issues by topic.
+// Category constants group issues by topic.
 const (
 	CategoryPATH  = "PATH"
 	CategoryTools = "Tools"
@@ -140,6 +141,7 @@ func checkBrokenPATH() []Issue {
 		if cleaned == "" {
 			continue
 		}
+		cleaned = filepath.Clean(cleaned)
 		info, err := os.Stat(cleaned)
 		switch {
 		case os.IsNotExist(err):

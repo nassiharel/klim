@@ -11,7 +11,7 @@ func TestBaseDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BaseDir: %v", err)
 	}
-	if !strings.HasSuffix(dir, filepath.Join("clim")) {
+	if !strings.HasSuffix(dir, "clim") {
 		t.Fatalf("unexpected base dir: %s", dir)
 	}
 }

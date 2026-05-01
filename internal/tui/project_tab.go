@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -126,7 +128,7 @@ func projectInitWriteCmd(dir string, tools []registry.Tool, detected []teamfile.
 		}
 
 		if len(tf.Tools) == 0 {
-			return projectInitDoneMsg{err: fmt.Errorf("no tools to include")}
+			return projectInitDoneMsg{err: errors.New("no tools to include")}
 		}
 
 		if err := teamfile.Write(tf, outPath); err != nil {
@@ -166,7 +168,7 @@ func projectEditCmd(path string) tea.Cmd {
 	}
 	if editor == "" {
 		return func() tea.Msg {
-			return projectEditorDoneMsg{path: path, err: fmt.Errorf("no $EDITOR set")}
+			return projectEditorDoneMsg{path: path, err: errors.New("no $EDITOR set")}
 		}
 	}
 	// Parse editor command. Handle quoted paths (e.g. "C:\Program Files\Code.exe" --wait).
@@ -187,7 +189,9 @@ func projectEditCmd(path string) tea.Cmd {
 		editorArgs = strings.Fields(editor)
 	}
 	editorArgs = append(editorArgs, path)
-	cmd := exec.Command(editorArgs[0], editorArgs[1:]...)
+	// Clean editor path for safe exec.
+	editorPath := filepath.Clean(editorArgs[0])
+	cmd := exec.Command(editorPath, editorArgs[1:]...) //nolint:gosec // editor path from $EDITOR, trusted user input
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return projectEditorDoneMsg{path: path, err: err}
 	})
@@ -298,7 +302,7 @@ func (m Model) handleKeyProjectList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.statusMsg = fmt.Sprintf("✗ Remove failed: %s", err)
 				return m, nil
 			}
-			m.statusMsg = fmt.Sprintf("✓ Removed %s", entry.Name)
+			m.statusMsg = "✓ Removed " + entry.Name
 			// Clamp cursor.
 			if m.projectCursor >= totalRows-1 && m.projectCursor > 0 {
 				m.projectCursor--
@@ -615,7 +619,7 @@ func (m Model) renderProjectDetail() string {
 	if m.projectConfirmReinit && m.projectInitResult != nil {
 		r := m.projectInitResult
 		b.WriteString("\n  " + detailTitleStyle.Render("Re-init: Scan Results") + "\n\n")
-		b.WriteString(fmt.Sprintf("  Scanned %d files in %d directories\n\n", r.FilesScanned, r.DirsScanned))
+		fmt.Fprintf(&b, "  Scanned %d files in %d directories\n\n", r.FilesScanned, r.DirsScanned)
 
 		// Build installed set for icons.
 		installedMap := make(map[string]bool, len(m.tools))
@@ -641,7 +645,7 @@ func (m Model) renderProjectDetail() string {
 		}
 
 		if len(r.Suggestions) > 0 {
-			b.WriteString(fmt.Sprintf("\n  💡 Suggested tools for this project:\n\n"))
+			b.WriteString("\n  💡 Suggested tools for this project:\n\n")
 			for _, s := range r.Suggestions {
 				icon := dashDim.Render("○")
 				if installedMap[s.Name] {
@@ -667,7 +671,7 @@ func (m Model) renderProjectDetail() string {
 		if m.projectInitResult != nil {
 			b.WriteString("\n  " + detailTitleStyle.Render("Project Detection") + "\n\n")
 			r := m.projectInitResult
-			b.WriteString(fmt.Sprintf("  Scanned %d files in %d directories\n\n", r.FilesScanned, r.DirsScanned))
+			fmt.Fprintf(&b, "  Scanned %d files in %d directories\n\n", r.FilesScanned, r.DirsScanned)
 			if len(r.Tools) > 0 {
 				b.WriteString(fmt.Sprintf("  Detected %d tools:\n", len(r.Tools)))
 				for _, d := range r.Tools {
@@ -675,7 +679,7 @@ func (m Model) renderProjectDetail() string {
 				}
 			}
 			if len(r.Suggestions) > 0 {
-				b.WriteString(fmt.Sprintf("\n  💡 Suggestions:\n"))
+				b.WriteString("  💡 Suggestions:\n")
 				for _, s := range r.Suggestions {
 					b.WriteString(fmt.Sprintf("    %s  %s\n", dimVersion.Render(fixedWidth(s.Name, 20)), dashDim.Render(s.Source)))
 				}
@@ -715,8 +719,8 @@ func (m Model) renderProjectDetail() string {
 	b.WriteString(fmt.Sprintf("  %s  %s\n",
 		gauge(reqOK, reqTotal, 25, dashGaugeFill, dashGaugeEmpty),
 		fmt.Sprintf("%s / %s requirements met",
-			dashNumber.Render(fmt.Sprintf("%d", reqOK)),
-			dashDim.Render(fmt.Sprintf("%d", reqTotal)),
+			dashNumber.Render(strconv.Itoa(reqOK)),
+			dashDim.Render(strconv.Itoa(reqTotal)),
 		),
 	))
 	b.WriteString("\n")

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -64,7 +65,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(tf.Tools) == 0 && len(tf.Optional) == 0 {
-		return fmt.Errorf(".clim.yaml has no tools defined")
+		return errors.New(".clim.yaml has no tools defined")
 	}
 
 	// Load catalog for package IDs.

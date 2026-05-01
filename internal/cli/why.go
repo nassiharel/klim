@@ -91,7 +91,7 @@ func runWhy(cmd *cobra.Command, args []string) error {
 				}
 				for _, opt := range tf.Optional {
 					if opt.Name == toolName {
-						refs = append(refs, fmt.Sprintf(".clim.yaml (optional) — %s", path))
+						refs = append(refs, ".clim.yaml (optional) — "+path)
 					}
 				}
 			}
@@ -163,25 +163,25 @@ func runWhy(cmd *cobra.Command, args []string) error {
 	// Available packages.
 	var pkgs []string
 	if t.Packages.Winget != "" {
-		pkgs = append(pkgs, fmt.Sprintf("winget: %s", t.Packages.Winget))
+		pkgs = append(pkgs, "winget: "+t.Packages.Winget)
 	}
 	if t.Packages.Choco != "" {
-		pkgs = append(pkgs, fmt.Sprintf("choco: %s", t.Packages.Choco))
+		pkgs = append(pkgs, "choco: "+t.Packages.Choco)
 	}
 	if t.Packages.Scoop != "" {
-		pkgs = append(pkgs, fmt.Sprintf("scoop: %s", t.Packages.Scoop))
+		pkgs = append(pkgs, "scoop: "+t.Packages.Scoop)
 	}
 	if t.Packages.Brew != "" {
-		pkgs = append(pkgs, fmt.Sprintf("brew: %s", t.Packages.Brew))
+		pkgs = append(pkgs, "brew: "+t.Packages.Brew)
 	}
 	if t.Packages.Apt != "" {
-		pkgs = append(pkgs, fmt.Sprintf("apt: %s", t.Packages.Apt))
+		pkgs = append(pkgs, "apt: "+t.Packages.Apt)
 	}
 	if t.Packages.Snap != "" {
-		pkgs = append(pkgs, fmt.Sprintf("snap: %s", t.Packages.Snap))
+		pkgs = append(pkgs, "snap: "+t.Packages.Snap)
 	}
 	if t.Packages.NPM != "" {
-		pkgs = append(pkgs, fmt.Sprintf("npm: %s", t.Packages.NPM))
+		pkgs = append(pkgs, "npm: "+t.Packages.NPM)
 	}
 	if len(pkgs) > 0 {
 		fmt.Fprintf(os.Stderr, "  Available via: %s\n", strings.Join(pkgs, ", "))

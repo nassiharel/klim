@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -24,6 +23,8 @@ import (
 	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/favorites"
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/score"
+	"github.com/nassiharel/clim/internal/search"
 	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/teamfile"
 )
@@ -76,8 +77,8 @@ const (
 
 // Sort modes for tool list tabs.
 const (
-	sortByName  = 0
-	sortByStars = 1
+	sortByName    = 0
+	sortByStars   = 1
 	sortModeCount = 2
 )
 
@@ -157,11 +158,11 @@ type Model struct {
 	detailRelCursor int              // cursor in "You might also like" list (-1 = not focused)
 
 	// Loading state.
-	phase    int // 0=scanning, 1=resolving, 2=done
-	loading  bool
-	pending  int  // count of tools still resolving versions
-	scanGen  int  // incremented on each scan; used to discard stale toolVersionMsg
-	scanOK   bool // true when the current scan completed without errors; gates cache writes
+	phase   int // 0=scanning, 1=resolving, 2=done
+	loading bool
+	pending int  // count of tools still resolving versions
+	scanGen int  // incremented on each scan; used to discard stale toolVersionMsg
+	scanOK  bool // true when the current scan completed without errors; gates cache writes
 
 	// Layout.
 	width  int
@@ -205,24 +206,24 @@ type Model struct {
 	batchQueue     batchUpgradeQueue // remaining tool indices to upgrade
 
 	// Pack creation state (Backup tab → Create Pack).
-	creatingPack       bool                // true = pack creation wizard is active
-	packCreatePhase    int                 // 0=name, 1=display_name, 2=description, 3=select tools, 4=output choice, 5=done
-	packCreateName     textinput.Model     // name input
-	packCreateDispName textinput.Model     // display_name input
-	packCreateDesc     textinput.Model     // description input
-	packCreateSelected map[int]bool        // tool index → selected for pack
-	packCreateCursor   int                 // cursor for tool selection list
-	packCreateFilter   string              // search filter for tool selection
-	packCreateFiltered []int               // filtered tool indices
+	creatingPack       bool            // true = pack creation wizard is active
+	packCreatePhase    int             // 0=name, 1=display_name, 2=description, 3=select tools, 4=output choice, 5=done
+	packCreateName     textinput.Model // name input
+	packCreateDispName textinput.Model // display_name input
+	packCreateDesc     textinput.Model // description input
+	packCreateSelected map[int]bool    // tool index → selected for pack
+	packCreateCursor   int             // cursor for tool selection list
+	packCreateFilter   string          // search filter for tool selection
+	packCreateFiltered []int           // filtered tool indices
 
 	// My Packs state (Backup tab → My Packs).
-	customPacks        []registry.Pack // loaded from custom-packs.yaml
-	viewingMyPacks     bool            // true = My Packs list is active
-	myPacksCursor      int
-	viewingMyPackDetail bool           // true = detail view for a custom pack
-	myPackDetailIdx    int             // index into customPacks
-	myPackMenuCursor   int             // cursor in detail action menu
-	myPackToken        string          // generated share token (for display in detail view)
+	customPacks         []registry.Pack // loaded from custom-packs.yaml
+	viewingMyPacks      bool            // true = My Packs list is active
+	myPacksCursor       int
+	viewingMyPackDetail bool   // true = detail view for a custom pack
+	myPackDetailIdx     int    // index into customPacks
+	myPackMenuCursor    int    // cursor in detail action menu
+	myPackToken         string // generated share token (for display in detail view)
 
 	// My Backups state (Backup tab → My Backups).
 	viewingMyBackups bool
@@ -233,9 +234,9 @@ type Model struct {
 	dashboardScroll int
 
 	// Favorites state.
-	favoriteNames    map[string]bool // in-memory lookup set, loaded at init
-	favMode          string          // "" (list), "export", "share"
-	favClearConfirm  bool            // true = awaiting y/n to clear all favorites
+	favoriteNames   map[string]bool // in-memory lookup set, loaded at init
+	favMode         string          // "" (list), "export", "share"
+	favClearConfirm bool            // true = awaiting y/n to clear all favorites
 
 	// Config editor state.
 	configCursor    int
@@ -244,33 +245,34 @@ type Model struct {
 	configScroll    int             // scroll offset for config tab
 
 	// Doctor tab state (includes audit + compliance findings).
-	doctorIssues     []doctor.Issue       // diagnostic results (nil = not yet checked)
-	auditFindings    []audit.Finding      // security audit findings
-	auditLicenses    map[string]int       // license counts
-	complianceResult *compliance.Result   // compliance check result (nil = no policy)
-	complianceError  string               // non-empty when policy failed to load
-	doctorScroll     int                  // scroll offset for doctor tab
-	doctorChecked    bool                 // true after first doctor check completed
-	doctorSubTab     int                  // 0=doctor, 1=audit, 2=compliance
+	doctorIssues     []doctor.Issue     // diagnostic results (nil = not yet checked)
+	auditFindings    []audit.Finding    // security audit findings
+	auditLicenses    map[string]int     // license counts
+	complianceResult *compliance.Result // compliance check result (nil = no policy)
+	complianceError  string             // non-empty when policy failed to load
+	cachedScore      score.Result       // computed once in runDoctor
+	doctorScroll     int                // scroll offset for doctor tab
+	doctorChecked    bool               // true after first doctor check completed
+	doctorSubTab     int                // 0=doctor, 1=audit, 2=compliance
 
 	// Team file (.clim.yaml) state.
-	teamFilePath    string                  // path to detected .clim.yaml ("" = not found)
-	teamFile        *teamfile.TeamFile      // parsed team file (nil = not found)
-	teamCheckResult []teamfile.CheckResult  // check results (nil = not checked yet)
+	teamFilePath    string                 // path to detected .clim.yaml ("" = not found)
+	teamFile        *teamfile.TeamFile     // parsed team file (nil = not found)
+	teamCheckResult []teamfile.CheckResult // check results (nil = not checked yet)
 
 	// Project tab state.
-	projectView       int // projectViewList, projectViewDetail, projectViewAddTool
-	projectCursor     int
-	projectInitResult *teamfile.DetectResult
-	projectScroll     int
-	projectEntries    []teamfile.ProjectEntry
-	projectsLoaded    bool // true after first load
-	projectAddCursor  int
-	projectAddFilter  string
-	projectAddFiltered []int
-	projectAddOptional bool   // true = adding to optional, false = required
-	projectConfirmReinit bool // true = showing detection results, waiting for confirm
-	projectReinitDir string   // directory for pending reinit
+	projectView          int // projectViewList, projectViewDetail, projectViewAddTool
+	projectCursor        int
+	projectInitResult    *teamfile.DetectResult
+	projectScroll        int
+	projectEntries       []teamfile.ProjectEntry
+	projectsLoaded       bool // true after first load
+	projectAddCursor     int
+	projectAddFilter     string
+	projectAddFiltered   []int
+	projectAddOptional   bool   // true = adding to optional, false = required
+	projectConfirmReinit bool   // true = showing detection results, waiting for confirm
+	projectReinitDir     string // directory for pending reinit
 }
 
 // NewModel creates a new TUI model.
@@ -325,13 +327,13 @@ func NewModel() Model {
 		backupBar:          progress.New(progress.WithWidth(40)),
 		updateSelected:     make(map[int]bool),
 		favoriteNames:      loadFavoriteNames(),
-		loading:        true,
-		phase:          phaseLoading,
-		activeTab:      tabInstalled,
-		detailIdx:      noDetail,
-		toolMenu:       noMenu,
-		width:          80,
-		height:         24,
+		loading:            true,
+		phase:              phaseLoading,
+		activeTab:          tabInstalled,
+		detailIdx:          noDetail,
+		toolMenu:           noMenu,
+		width:              80,
+		height:             24,
 	}
 }
 
@@ -444,7 +446,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("⚠ %v", msg.err)
 		case msg.cacheWarning != "":
 			// Non-fatal: cache was invalidated but the fresh scan succeeded.
-			m.statusMsg = fmt.Sprintf("⚠ %s", msg.cacheWarning)
+			m.statusMsg = "⚠ " + msg.cacheWarning
 		case msg.scanInfo != nil && msg.scanInfo.Source == service.ScanSourceCache:
 			// Cache hit: scan results came from disk, no subprocess calls ran.
 			ageStr := humaniseCacheAge(msg.scanInfo.CacheAt)
@@ -1326,33 +1328,35 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "up", "k":
 		// Navigate: related tools → action menu → scroll.
-		if m.detailRelCursor > 0 {
+		switch {
+		case m.detailRelCursor > 0:
 			m.detailRelCursor--
-		} else if m.detailRelCursor == 0 {
+		case m.detailRelCursor == 0:
 			// Move from related list back to action menu (last item).
 			m.detailRelCursor = -1
 			if len(m.toolMenuItems) > 0 {
 				m.toolMenu = len(m.toolMenuItems) - 1
 			}
-		} else if m.toolMenu > 0 {
+		case m.toolMenu > 0:
 			m.toolMenu--
-		} else if m.detailScroll > 0 {
+		case m.detailScroll > 0:
 			m.detailScroll--
 		}
 	case "down", "j":
 		// Navigate: scroll → action menu → related tools.
-		if m.detailRelCursor >= 0 {
+		switch {
+		case m.detailRelCursor >= 0:
 			// In related list.
 			if m.detailRelCursor < len(m.detailRelated)-1 {
 				m.detailRelCursor++
 			}
-		} else if m.toolMenu < len(m.toolMenuItems)-1 {
+		case m.toolMenu < len(m.toolMenuItems)-1:
 			m.toolMenu++
-		} else if len(m.detailRelated) > 0 && m.detailRelCursor == -1 {
+		case len(m.detailRelated) > 0 && m.detailRelCursor == -1:
 			// Move from action menu to related list.
 			m.detailRelCursor = 0
 			m.toolMenu = len(m.toolMenuItems) - 1 // keep menu at last item visually
-		} else {
+		default:
 			m.detailScroll++
 		}
 		m.clampDetailScroll()
@@ -1819,7 +1823,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "s":
 		// Cycle sort mode on tool-list tabs (not Backup/Dashboard/Config).
-		if m.activeTab <= tabDiscover && !(m.activeTab == tabDiscover && m.discoverSubTab != discoverTools) {
+		if m.activeTab <= tabDiscover && (m.activeTab != tabDiscover || m.discoverSubTab == discoverTools) {
 			m.sortMode = (m.sortMode + 1) % sortModeCount
 			m.cursor = 0
 			m.applyFilter()
@@ -1893,12 +1897,13 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if idx < len(m.tools) {
 					name := m.tools[idx].Name
 					added, err := favorites.Toggle(name)
-					if err != nil {
-						m.statusMsg = fmt.Sprintf("⚠ %v", err)
-					} else if added {
+					switch {
+					case err != nil:
+						m.statusMsg = "⚠ " + err.Error()
+					case added:
 						m.favoriteNames[name] = true
 						m.statusMsg = "★ Added to favorites"
-					} else {
+					default:
 						delete(m.favoriteNames, name)
 						m.statusMsg = "☆ Removed from favorites"
 					}
@@ -1912,16 +1917,15 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if idx < len(m.tools) {
 				name := m.tools[idx].Name
 				added, err := favorites.Toggle(name)
-				if err != nil {
-					m.statusMsg = fmt.Sprintf("⚠ %v", err)
-				} else {
-					if added {
-						m.favoriteNames[name] = true
-						m.statusMsg = "★ Added to favorites"
-					} else {
-						delete(m.favoriteNames, name)
-						m.statusMsg = "☆ Removed from favorites"
-					}
+				switch {
+				case err != nil:
+					m.statusMsg = "⚠ " + err.Error()
+				case added:
+					m.favoriteNames[name] = true
+					m.statusMsg = "★ Added to favorites"
+				default:
+					delete(m.favoriteNames, name)
+					m.statusMsg = "☆ Removed from favorites"
 				}
 			}
 		}
@@ -2126,6 +2130,23 @@ func (m *Model) applyFilter() {
 	m.platforms = collectPlatforms(tabTools)
 	m.sidebarItems = buildSidebarItems(m.categories, m.tags, m.platforms, tabTools)
 
+	// Pre-compute search scores for all tools when filter is active.
+	var searchScores map[int]int
+	if filter != "" {
+		// Build pointer→index map once (O(n)), then map results (O(m)).
+		ptrToIdx := make(map[*registry.Tool]int, len(m.tools))
+		for i := range m.tools {
+			ptrToIdx[&m.tools[i]] = i
+		}
+		searchScores = make(map[int]int)
+		results := search.Search(m.tools, filter)
+		for _, r := range results {
+			if idx, ok := ptrToIdx[r.Tool]; ok {
+				searchScores[idx] = r.Score
+			}
+		}
+	}
+
 	// Second pass: apply all filters (sidebar + text search).
 	for i, tool := range m.tools {
 		if !m.matchesTab(tool) {
@@ -2143,12 +2164,10 @@ func (m *Model) applyFilter() {
 		if m.platformFilter != "" && !hasPlatform(tool.Packages, m.platformFilter) {
 			continue
 		}
-		if filter != "" &&
-			!strings.Contains(strings.ToLower(tool.DisplayName), filter) &&
-			!strings.Contains(strings.ToLower(tool.Name), filter) &&
-			!strings.Contains(strings.ToLower(tool.Category), filter) &&
-			!matchesTags(tool.Tags, filter) {
-			continue
+		if filter != "" {
+			if searchScores[i] <= 0 {
+				continue
+			}
 		}
 		m.filteredIndex = append(m.filteredIndex, i)
 	}
@@ -2170,16 +2189,6 @@ func (m *Model) applyFilter() {
 	if m.cursor >= len(m.filteredIndex) {
 		m.cursor = max(0, len(m.filteredIndex)-1)
 	}
-}
-
-// matchesTags reports whether any tag contains the filter substring.
-func matchesTags(tags []string, filter string) bool {
-	for _, tag := range tags {
-		if strings.Contains(strings.ToLower(tag), filter) {
-			return true
-		}
-	}
-	return false
 }
 
 // hasTag reports whether the tool has an exact tag match (case-insensitive).
@@ -2399,41 +2408,22 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 	}
 	m.complianceResult, m.complianceError = runComplianceForTUI(m.tools, policyPath)
 
+	// Compute environment health score using precomputed data.
+	auditW, auditI := audit.CountBySeverity(m.auditFindings)
+	m.cachedScore = score.Compute(score.Input{
+		Tools:         m.tools,
+		DoctorIssues:  m.doctorIssues,
+		AuditWarnings: auditW,
+		AuditInfos:    auditI,
+		CompResult:    m.complianceResult,
+		ComplianceErr: m.complianceError,
+	})
+
 	m.doctorChecked = true
 	m.doctorScroll = 0
 }
 
 // --- Actions ---
-
-// startAction takes a source picker and either shows it (multiple choices)
-// or skips straight to confirmation (single choice). Does nothing if picker is nil.
-func (m *Model) startAction(picker *sourcePicker) {
-	if picker == nil {
-		return
-	}
-	if len(picker.choices) == 1 {
-		// Only one source available — skip picker, go straight to confirmation.
-		m.pendingAction = &pendingAction{
-			toolIdx: picker.toolIdx,
-			action:  picker.action,
-			cmdArgs: picker.choices[0].cmdArgs,
-		}
-		return
-	}
-	// Multiple sources — show as menu items in the detail view.
-	m.toolMenuItems = nil
-	for _, c := range picker.choices {
-		m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{
-			label: string(c.source),
-			picker: &sourcePicker{
-				toolIdx: picker.toolIdx,
-				action:  picker.action,
-				choices: []sourceChoice{c},
-			},
-		})
-	}
-	m.toolMenu = 0
-}
 
 // buildToolMenu resolves available actions for the current tool and populates the tool menu.
 // Returns true if the menu has any actions, false otherwise.
@@ -2627,139 +2617,6 @@ func (m Model) currentToolIdx() int {
 		return m.filteredIndex[m.cursor]
 	}
 	return -1
-}
-
-// resolveInstallAction builds a source picker for installing the current tool.
-// Returns nil if the tool is already installed or has no install sources.
-func (m Model) resolveInstallAction() *sourcePicker {
-	tool := m.currentTool()
-	if tool == nil || tool.IsInstalled() {
-		return nil
-	}
-	// Show all package managers that have a package ID for this tool,
-	// including ones not currently on PATH.
-	var choices []sourceChoice
-	for _, src := range allSourcesForOS() {
-		if args := tool.Packages.InstallArgs(src); args != nil {
-			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
-		}
-	}
-	if len(choices) == 0 {
-		return nil
-	}
-	return &sourcePicker{
-		toolIdx: m.currentToolIdx(),
-		action:  actionInstall,
-		choices: choices,
-	}
-}
-
-// allSourcesForOS returns all package managers for the current OS,
-// regardless of whether they're installed on PATH.
-func allSourcesForOS() []registry.InstallSource {
-	switch runtime.GOOS {
-	case "windows":
-		return []registry.InstallSource{
-			registry.SourceWinget, registry.SourceScoop,
-			registry.SourceChoco, registry.SourceNPM,
-		}
-	case "darwin":
-		return []registry.InstallSource{
-			registry.SourceBrew, registry.SourceNPM,
-		}
-	default:
-		return []registry.InstallSource{
-			registry.SourceApt, registry.SourceSnap,
-			registry.SourceBrew, registry.SourceNPM,
-		}
-	}
-}
-
-// resolveUpgradeAction builds a source picker for upgrading the current tool.
-// Only offers upgrade via package managers that actually installed the tool
-// (i.e. sources present in tool.Instances). Manual installs cannot be upgraded
-// through clim.
-func (m Model) resolveUpgradeAction() *sourcePicker {
-	tool := m.currentTool()
-	if tool == nil || !tool.IsInstalled() {
-		return nil
-	}
-
-	detected := tool.PrimaryInstance().Source
-	if detected == registry.SourceManual {
-		return nil
-	}
-
-	// Prefer detected source first, then other sources that actually installed
-	// this tool. Never offer an upgrade via a package manager the user did not
-	// use to install the tool — that would create a second, conflicting copy.
-	var choices []sourceChoice
-	if args := tool.Packages.UpgradeArgs(detected); args != nil {
-		choices = append(choices, sourceChoice{source: detected, cmdArgs: args})
-	}
-
-	seen := map[registry.InstallSource]bool{detected: true}
-	for _, inst := range tool.Instances {
-		if seen[inst.Source] || inst.Source == registry.SourceManual {
-			continue
-		}
-		seen[inst.Source] = true
-		if args := tool.Packages.UpgradeArgs(inst.Source); args != nil {
-			choices = append(choices, sourceChoice{source: inst.Source, cmdArgs: args})
-		}
-	}
-	if len(choices) == 0 {
-		return nil
-	}
-	return &sourcePicker{
-		toolIdx: m.currentToolIdx(),
-		action:  actionUpgrade,
-		choices: choices,
-	}
-}
-
-// resolveRemoveAction builds a source picker for removing the current tool.
-// Only offers remove via package managers that actually installed the tool
-// (i.e. sources present in tool.Instances). Manual installs cannot be removed
-// through clim.
-func (m Model) resolveRemoveAction() *sourcePicker {
-	tool := m.currentTool()
-	if tool == nil || !tool.IsInstalled() {
-		return nil
-	}
-
-	detected := tool.PrimaryInstance().Source
-	if detected == registry.SourceManual {
-		return nil
-	}
-
-	// Prefer detected source first, then other sources that actually installed
-	// this tool. Never offer a remove via a package manager the user did not
-	// use to install the tool — it would fail or, worse, remove an unrelated
-	// package with the same name.
-	var choices []sourceChoice
-	if args := tool.Packages.RemoveArgs(detected); args != nil {
-		choices = append(choices, sourceChoice{source: detected, cmdArgs: args})
-	}
-
-	seen := map[registry.InstallSource]bool{detected: true}
-	for _, inst := range tool.Instances {
-		if seen[inst.Source] || inst.Source == registry.SourceManual {
-			continue
-		}
-		seen[inst.Source] = true
-		if args := tool.Packages.RemoveArgs(inst.Source); args != nil {
-			choices = append(choices, sourceChoice{source: inst.Source, cmdArgs: args})
-		}
-	}
-	if len(choices) == 0 {
-		return nil
-	}
-	return &sourcePicker{
-		toolIdx: m.currentToolIdx(),
-		action:  actionRemove,
-		choices: choices,
-	}
 }
 
 // --- Backup ---

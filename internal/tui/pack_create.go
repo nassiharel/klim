@@ -292,7 +292,7 @@ func (m Model) renderPackCreateView() string {
 				selected++
 			}
 		}
-		b.WriteString(fmt.Sprintf("\n  Select tools (%d selected, %d total)\n", selected, len(m.tools)))
+		fmt.Fprintf(&b, "\n  Select tools (%d selected, %d total)\n", selected, len(m.tools))
 
 		if m.packCreateFilter != "" {
 			b.WriteString("  " + filterPromptStyle.Render("filter: ") + m.packCreateFilter + "\n")

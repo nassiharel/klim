@@ -27,7 +27,7 @@ import (
 )
 
 // cacheVersion is bumped whenever the on-disk schema changes so older
-// caches written by prior versions are ignored instead of mis-parsed.
+// caches written by prior versions are ignored instead of misparsed.
 const cacheVersion = 1
 
 // Entry captures the dynamic scan data for a single tool: install

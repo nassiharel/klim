@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -115,7 +116,7 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stderr, "Enter number (1-6): ")
 		var choice int
 		if _, err := fmt.Fscan(os.Stdin, &choice); err != nil || choice < 1 || choice > len(roles) {
-			return fmt.Errorf("invalid choice")
+			return errors.New("invalid choice")
 		}
 		role = &roles[choice-1]
 	}
@@ -220,8 +221,8 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "\nInstall all? [y/N]: ")
 	var answer string
-	fmt.Fscan(os.Stdin, &answer)
-	if strings.ToLower(answer) != "y" {
+	_, _ = fmt.Fscan(os.Stdin, &answer)
+	if !strings.EqualFold(answer, "y") {
 		fmt.Fprintln(os.Stderr, "Skipped.")
 		return nil
 	}

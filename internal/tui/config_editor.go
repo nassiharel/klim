@@ -193,7 +193,7 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					} else if v, err := strconv.Atoi(val); err == nil {
 						s.setInt(m.cfg, v)
 					} else {
-						m.statusMsg = fmt.Sprintf("✗ Invalid number: %s", val)
+						m.statusMsg = "✗ Invalid number: " + val
 						return m, nil
 					}
 				case settingDuration:
@@ -290,11 +290,9 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			for m.configCursor > 0 && settings[m.configCursor].label == "" {
 				m.configCursor--
 			}
-		} else {
+		} else if m.configScroll > 0 {
 			// At top of settings — scroll preamble into view.
-			if m.configScroll > 0 {
-				m.configScroll--
-			}
+			m.configScroll--
 		}
 		m.autoScrollConfig(settings)
 	case "down", "j":

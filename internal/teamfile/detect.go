@@ -36,8 +36,8 @@ type keyword struct {
 
 // DetectResult holds detection output including stats.
 type DetectResult struct {
-	Tools      []DetectedTool
-	Suggestions []DetectedTool // tools suggested based on ecosystem (not from files)
+	Tools        []DetectedTool
+	Suggestions  []DetectedTool // tools suggested based on ecosystem (not from files)
 	FilesScanned int
 	DirsScanned  int
 }
@@ -79,7 +79,7 @@ func DetectFromProject(dir string) DetectResult {
 		{"compose.yaml", []string{"docker", "docker-compose"}},
 		{"skaffold.yaml", []string{"docker", "kubectl"}},
 		// Build systems
-		{"Makefile", nil},         // make not in catalog
+		{"Makefile", nil}, // make not in catalog
 		{"Justfile", []string{"just"}},
 		// Go
 		{"go.mod", []string{"go"}},
@@ -122,7 +122,7 @@ func DetectFromProject(dir string) DetectResult {
 		{"uv.lock", []string{"uv", "python3"}},
 		{"uv.toml", []string{"uv"}},
 		// Ruby
-		{"Gemfile", nil},           // ruby not in catalog
+		{"Gemfile", nil}, // ruby not in catalog
 		{".ruby-version", nil},
 		// Java / JVM
 		{"pom.xml", []string{"java"}},
@@ -134,7 +134,7 @@ func DetectFromProject(dir string) DetectResult {
 		{"CMakeLists.txt", []string{"cmake"}},
 		// Terraform / IaC
 		{".terraform.lock.hcl", []string{"terraform"}},
-		{"terragrunt.hcl", nil},    // terragrunt not in catalog
+		{"terragrunt.hcl", nil}, // terragrunt not in catalog
 		// Ansible
 		{"ansible.cfg", []string{"ansible"}},
 		{"playbook.yml", []string{"ansible"}},
@@ -374,7 +374,7 @@ func scanFileForTools(path, source string, add func(string, string)) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024) // 256KB for large YAML/JSON lines
@@ -399,18 +399,18 @@ func scanDockerfile(path string, add func(string, string)) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	source := filepath.Base(path)
 	add("docker", source)
 
 	// Map Docker image base names to catalog tool names.
 	imageTools := map[string]string{
-		"node":    "node",
-		"golang":  "go",
-		"python":  "python3",
-		"rust":    "cargo",
-		"dotnet":  "dotnet",
+		"node":   "node",
+		"golang": "go",
+		"python": "python3",
+		"rust":   "cargo",
+		"dotnet": "dotnet",
 	}
 
 	scanner := bufio.NewScanner(f)
@@ -418,8 +418,8 @@ func scanDockerfile(path string, add func(string, string)) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if m := dockerFromRe.FindStringSubmatch(line); len(m) > 1 {
-			image := strings.Split(m[1], ":")[0]                                   // strip tag
-			image = strings.Split(image, "/")[len(strings.Split(image, "/"))-1]    // strip registry
+			image := strings.Split(m[1], ":")[0]                                // strip tag
+			image = strings.Split(image, "/")[len(strings.Split(image, "/"))-1] // strip registry
 			if tool, ok := imageTools[strings.ToLower(image)]; ok {
 				add(tool, source+" (FROM)")
 			}

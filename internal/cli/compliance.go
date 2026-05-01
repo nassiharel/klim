@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -68,16 +69,25 @@ func resolvePolicyPath() (string, error) {
 	if compliancePolicyFlag != "" {
 		return compliancePolicyFlag, nil
 	}
-	if cfg.Compliance.Policy != "" {
-		return cfg.Compliance.Policy, nil
+	path := findPolicyPath()
+	if path != "" {
+		return path, nil
 	}
-	// Try default locations.
+	return "", errors.New("no policy file found\n\nConfigure in config.yaml:\n  compliance:\n    policy: /path/to/.clim-policy.yaml\n\nOr pass directly:\n  clim compliance check --policy .clim-policy.yaml\n\nOr generate one:\n  clim compliance init")
+}
+
+// findPolicyPath returns the policy file path from config or default
+// locations, or empty string if none exists. Shared across commands.
+func findPolicyPath() string {
+	if cfg.Compliance.Policy != "" {
+		return cfg.Compliance.Policy
+	}
 	for _, candidate := range []string{".clim-policy.yaml", ".clim-policy.yml"} {
 		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
+			return candidate
 		}
 	}
-	return "", fmt.Errorf("no policy file found\n\nConfigure in config.yaml:\n  compliance:\n    policy: /path/to/.clim-policy.yaml\n\nOr pass directly:\n  clim compliance check --policy .clim-policy.yaml\n\nOr generate one:\n  clim compliance init")
+	return ""
 }
 
 func runComplianceCheck(cmd *cobra.Command, args []string) error {
@@ -129,14 +139,14 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stderr, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  STATUS\tTOOL\tRULE\tMESSAGE")
-	fmt.Fprintln(w, "  ------\t----\t----\t-------")
+	_, _ = fmt.Fprintln(w, "  STATUS\tTOOL\tRULE\tMESSAGE")
+	_, _ = fmt.Fprintln(w, "  ------\t----\t----\t-------")
 	for _, v := range result.Violations {
 		icon := "⚠"
 		if v.Severity == "error" {
 			icon = "✗"
 		}
-		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", icon, v.Tool, v.Rule, v.Message)
+		_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", icon, v.Tool, v.Rule, v.Message)
 	}
 	_ = w.Flush()
 

@@ -131,7 +131,7 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 			if t.GitHubInfo.Stars > 10000 {
 				score += 2
 			} else if t.GitHubInfo.Stars > 1000 {
-				score += 1
+				score++
 			}
 		}
 
@@ -139,7 +139,7 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 		if t.GitHubInfo != nil && t.GitHubInfo.PushedAt != "" {
 			if pushed, err := time.Parse(time.RFC3339, t.GitHubInfo.PushedAt); err == nil {
 				if time.Since(pushed) < 6*30*24*time.Hour {
-					score += 1
+					score++
 				}
 			}
 		}
@@ -403,10 +403,16 @@ type toolActionCmd struct {
 	stderr io.Writer
 }
 
-func (c *toolActionCmd) SetStdin(r io.Reader)  { c.stdin = r }
+// SetStdin sets the stdin for the tool action command.
+func (c *toolActionCmd) SetStdin(r io.Reader) { c.stdin = r }
+
+// SetStdout sets the stdout for the tool action command.
 func (c *toolActionCmd) SetStdout(w io.Writer) { c.stdout = w }
+
+// SetStderr sets the stderr for the tool action command.
 func (c *toolActionCmd) SetStderr(w io.Writer) { c.stderr = w }
 
+// Run executes the tool action command.
 func (c *toolActionCmd) Run() error {
 	// Apply os.Std* fallbacks so command I/O works even if Bubble Tea
 	// didn't set the fields (nil stdio would discard output).
@@ -424,7 +430,7 @@ func (c *toolActionCmd) Run() error {
 	}
 
 	// Clear screen before running command so previous exec output doesn't persist.
-	fmt.Fprint(stdout, "\033[2J\033[H") // ANSI: clear screen + cursor home
+	_, _ = fmt.Fprint(stdout, "\033[2J\033[H") // ANSI: clear screen + cursor home
 
 	cmd := exec.Command(c.args[0], c.args[1:]...)
 	cmd.Stdin = stdin
@@ -447,14 +453,14 @@ func (c *toolActionCmd) Run() error {
 	// Show result and wait for keypress — terminal is still ours.
 	if runErr != nil {
 		if hasExitCode {
-			fmt.Fprintf(stderr, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
+			_, _ = fmt.Fprintf(stderr, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
 		} else {
-			fmt.Fprintf(stderr, "\n✗ %s failed: %s\n", c.action, runErr)
+			_, _ = fmt.Fprintf(stderr, "\n✗ %s failed: %s\n", c.action, runErr)
 		}
 	} else {
-		fmt.Fprintf(stderr, "\n✓ %s completed (exit code 0)\n", c.action)
+		_, _ = fmt.Fprintf(stderr, "\n✓ %s completed (exit code 0)\n", c.action)
 	}
-	fmt.Fprint(stderr, "\nPress Enter to return to clim...")
+	_, _ = fmt.Fprint(stderr, "\nPress Enter to return to clim...")
 
 	// Read until newline so buffered stdin doesn't skip the pause.
 	br := bufio.NewReader(stdin)

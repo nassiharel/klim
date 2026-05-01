@@ -3,12 +3,20 @@ package tui
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/score"
 )
+
+// computeScore returns the cached environment health score.
+// Computed once in runDoctor(), not per render.
+func (m Model) computeScore() score.Result {
+	return m.cachedScore
+}
 
 // Dashboard color palette.
 var (
@@ -122,10 +130,10 @@ func (m Model) renderDashboardView() string {
 		label string
 		style lipgloss.Style
 	}{
-		{"●", fmt.Sprintf("%d", installed), "Installed", dashGaugeFill},
-		{"▲", fmt.Sprintf("%d", updates), "Updates", dashGaugeWarn},
-		{"○", fmt.Sprintf("%d", notInstalled), "Available", dashGaugeInfo},
-		{"★", fmt.Sprintf("%d", len(m.favoriteNames)), "Favorites", dashGaugeWarn},
+		{"●", strconv.Itoa(installed), "Installed", dashGaugeFill},
+		{"▲", strconv.Itoa(updates), "Updates", dashGaugeWarn},
+		{"○", strconv.Itoa(notInstalled), "Available", dashGaugeInfo},
+		{"★", strconv.Itoa(len(m.favoriteNames)), "Favorites", dashGaugeWarn},
 	}
 
 	var cardStrs []string
@@ -146,6 +154,32 @@ func (m Model) renderDashboardView() string {
 	b.WriteString("\n")
 
 	// ═══════════════════════════════════════════════════
+	// §1.5  ENVIRONMENT SCORE — overall health
+	// ═══════════════════════════════════════════════════
+	if m.doctorChecked {
+		scoreResult := m.computeScore()
+		scoreGaugeW := m.width - 40
+		if scoreGaugeW < 15 {
+			scoreGaugeW = 15
+		}
+		if scoreGaugeW > 40 {
+			scoreGaugeW = 40
+		}
+		scoreStyle := dashGaugeFill
+		if scoreResult.MaxTotal > 0 && scoreResult.Total*100/scoreResult.MaxTotal < 70 {
+			scoreStyle = dashGaugeWarn
+		}
+		b.WriteString("\n  " + dashSection.Render("Environment Score") + "\n\n")
+		b.WriteString(fmt.Sprintf("  %s / %s  Grade: %s  ",
+			dashNumber.Render(strconv.Itoa(scoreResult.Total)),
+			dashDim.Render(strconv.Itoa(scoreResult.MaxTotal)),
+			dashNumber.Render(scoreResult.Grade),
+		))
+		b.WriteString(gauge(scoreResult.Total, scoreResult.MaxTotal, scoreGaugeW, scoreStyle, dashGaugeEmpty))
+		b.WriteString("\n")
+	}
+
+	// ═══════════════════════════════════════════════════
 	// §2  TOOL COVERAGE — gauges
 	// ═══════════════════════════════════════════════════
 	b.WriteString("\n  " + dashSection.Render("Tool Coverage") + "\n\n")
@@ -164,8 +198,8 @@ func (m Model) renderDashboardView() string {
 	}
 
 	b.WriteString(fmt.Sprintf("  %s / %s installed  ",
-		dashNumber.Render(fmt.Sprintf("%d", installed)),
-		dashDim.Render(fmt.Sprintf("%d", total)),
+		dashNumber.Render(strconv.Itoa(installed)),
+		dashDim.Render(strconv.Itoa(total)),
 	))
 	b.WriteString(gauge(installed, total, gaugeWidth, dashGaugeFill, dashGaugeEmpty))
 	b.WriteString(fmt.Sprintf("  %s\n", dashNumber.Render(fmt.Sprintf("%d%%", pctInstalled))))
@@ -173,8 +207,8 @@ func (m Model) renderDashboardView() string {
 	if installed > 0 {
 		pctUpToDate := upToDate * 100 / installed
 		b.WriteString(fmt.Sprintf("  %s / %s up to date  ",
-			dashNumber.Render(fmt.Sprintf("%d", upToDate)),
-			dashDim.Render(fmt.Sprintf("%d", installed)),
+			dashNumber.Render(strconv.Itoa(upToDate)),
+			dashDim.Render(strconv.Itoa(installed)),
 		))
 		updateStyle := dashGaugeFill
 		if updates > 0 {
@@ -355,7 +389,7 @@ func (m Model) renderDashboardView() string {
 			b.WriteString(fmt.Sprintf("  %s  %s  %s  %s\n",
 				dashLabel.Render(fixedWidth(pm.name, 8)),
 				bar,
-				dashNumber.Render(fixedWidth(fmt.Sprintf("%d", pm.count), 3)),
+				dashNumber.Render(fixedWidth(strconv.Itoa(pm.count), 3)),
 				dashDim.Render(fmt.Sprintf("(%d%%)", pct)),
 			))
 		}
@@ -397,7 +431,7 @@ func (m Model) renderDashboardView() string {
 			b.WriteString(fmt.Sprintf("  %s  %s  %s\n",
 				dashLabel.Render(fixedWidth(cat.name, 18)),
 				miniGauge,
-				dashNumber.Render(fmt.Sprintf("%d", cat.count)),
+				dashNumber.Render(strconv.Itoa(cat.count)),
 			))
 		}
 	} else {
@@ -494,9 +528,9 @@ func (m Model) renderDashboardView() string {
 		dashLabel.Render(fixedWidth("Marketplace", 14)),
 		gauge(fullMarket, len(m.packs), 15, dashGaugeFill, dashGaugeEmpty),
 		fmt.Sprintf("%s / %s complete  %s partial",
-			dashNumber.Render(fmt.Sprintf("%d", fullMarket)),
-			dashDim.Render(fmt.Sprintf("%d", len(m.packs))),
-			dashGaugeWarn.Render(fmt.Sprintf("%d", partialMarket)),
+			dashNumber.Render(strconv.Itoa(fullMarket)),
+			dashDim.Render(strconv.Itoa(len(m.packs))),
+			dashGaugeWarn.Render(strconv.Itoa(partialMarket)),
 		),
 	))
 
@@ -504,9 +538,9 @@ func (m Model) renderDashboardView() string {
 		dashLabel.Render(fixedWidth("Custom", 14)),
 		gauge(fullCustom, len(m.customPacks), 15, dashGaugeInfo, dashGaugeEmpty),
 		fmt.Sprintf("%s / %s complete  %s partial",
-			dashNumber.Render(fmt.Sprintf("%d", fullCustom)),
-			dashDim.Render(fmt.Sprintf("%d", len(m.customPacks))),
-			dashGaugeWarn.Render(fmt.Sprintf("%d", partialCustom)),
+			dashNumber.Render(strconv.Itoa(fullCustom)),
+			dashDim.Render(strconv.Itoa(len(m.customPacks))),
+			dashGaugeWarn.Render(strconv.Itoa(partialCustom)),
 		),
 	))
 
@@ -522,7 +556,7 @@ func (m Model) renderDashboardView() string {
 		b.WriteString("  " + dashDim.Render("No backups yet. Export from the Backup tab to create one.") + "\n")
 	} else {
 		b.WriteString(fmt.Sprintf("  %s backup file(s)\n\n",
-			dashNumber.Render(fmt.Sprintf("%d", backupCount)),
+			dashNumber.Render(strconv.Itoa(backupCount)),
 		))
 		shown := backupCount
 		if shown > 3 {
@@ -533,7 +567,7 @@ func (m Model) renderDashboardView() string {
 			b.WriteString(fmt.Sprintf("    %s  %s  %s tools\n",
 				dashDim.Render("•"),
 				dashLabel.Render(bf.modTime.Format("2006-01-02 15:04")),
-				dashNumber.Render(fmt.Sprintf("%d", bf.toolCount)),
+				dashNumber.Render(strconv.Itoa(bf.toolCount)),
 			))
 		}
 		if backupCount > 3 {

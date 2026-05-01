@@ -419,7 +419,7 @@ func fetchExtraCached(ctx context.Context, fetcher catalog.MarketplaceFetcher, i
 	}
 	if len(tools) == 0 && len(packs) == 0 {
 		slog.Warn("extra marketplace has no tools or packs, not caching", "index", index)
-		return nil, fmt.Errorf("extra marketplace contains no tools or packs")
+		return nil, errors.New("extra marketplace contains no tools or packs")
 	}
 
 	// Write cache.

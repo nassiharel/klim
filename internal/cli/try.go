@@ -129,8 +129,7 @@ func runTry(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	var runErr error
-	runErr = c.Run()
+	runErr := c.Run()
 	fmt.Fprintln(os.Stderr)
 
 	// Cleanup prompt (unless --keep or was already installed).
@@ -147,7 +146,7 @@ func runTry(cmd *cobra.Command, args []string) error {
 func doCleanup(t registry.Tool, installSource registry.InstallSource) {
 	fmt.Fprint(os.Stderr, "Keep "+t.DisplayName+"? [Y/n]: ")
 	var answer string
-	fmt.Fscan(os.Stdin, &answer)
+	_, _ = fmt.Fscan(os.Stdin, &answer)
 	answer = strings.TrimSpace(strings.ToLower(answer))
 	if answer == "" || answer == "y" || answer == "yes" {
 		fmt.Fprintf(os.Stderr, "✓ Keeping %s.\n", t.DisplayName)

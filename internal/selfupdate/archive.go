@@ -96,26 +96,30 @@ func extractFromZip(r io.Reader, goos string) ([]byte, error) {
 	target := binaryName(goos)
 	for _, f := range zr.File {
 		if filepath.Base(f.Name) == target {
-			if f.UncompressedSize64 > maxBinarySize {
-				return nil, fmt.Errorf("binary in zip is too large (%d bytes, max %d)", f.UncompressedSize64, maxBinarySize)
-			}
-			rc, err := f.Open()
-			if err != nil {
-				return nil, fmt.Errorf("opening zip entry: %w", err)
-			}
-			defer func() { _ = rc.Close() }()
-
-			// Read up to maxBinarySize + 1 so we can detect truncation even
-			// if the zip header size is untrustworthy.
-			data, err := io.ReadAll(io.LimitReader(rc, maxBinarySize+1))
-			if err != nil {
-				return nil, fmt.Errorf("reading binary from zip: %w", err)
-			}
-			if int64(len(data)) > maxBinarySize {
-				return nil, fmt.Errorf("binary in zip exceeds maximum size (%d bytes)", maxBinarySize)
-			}
-			return data, nil
+			return extractZipEntry(f)
 		}
 	}
 	return nil, fmt.Errorf("binary %q not found in zip archive", target)
+}
+
+func extractZipEntry(f *zip.File) ([]byte, error) {
+	if f.UncompressedSize64 > maxBinarySize {
+		return nil, fmt.Errorf("binary in zip is too large (%d bytes, max %d)", f.UncompressedSize64, maxBinarySize)
+	}
+	rc, err := f.Open()
+	if err != nil {
+		return nil, fmt.Errorf("opening zip entry: %w", err)
+	}
+	defer func() { _ = rc.Close() }()
+
+	// Read up to maxBinarySize + 1 so we can detect truncation even
+	// if the zip header size is untrustworthy.
+	data, err := io.ReadAll(io.LimitReader(rc, maxBinarySize+1))
+	if err != nil {
+		return nil, fmt.Errorf("reading binary from zip: %w", err)
+	}
+	if int64(len(data)) > maxBinarySize {
+		return nil, fmt.Errorf("binary in zip exceeds maximum size (%d bytes)", maxBinarySize)
+	}
+	return data, nil
 }

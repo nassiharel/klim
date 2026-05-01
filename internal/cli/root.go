@@ -87,6 +87,8 @@ func init() {
 	rootCmd.AddCommand(generateCmd)
 
 	// Tool discovery & management.
+	searchCmd.GroupID = "tools"
+	rootCmd.AddCommand(searchCmd)
 	onboardCmd.GroupID = "tools"
 	rootCmd.AddCommand(onboardCmd)
 	whyCmd.GroupID = "tools"
@@ -117,6 +119,8 @@ func init() {
 	rootCmd.AddCommand(auditCmd)
 	complianceCmd.GroupID = "health"
 	rootCmd.AddCommand(complianceCmd)
+	scoreCmd.GroupID = "health"
+	rootCmd.AddCommand(scoreCmd)
 
 	// Shell integration.
 	shellCmd.GroupID = "shell"

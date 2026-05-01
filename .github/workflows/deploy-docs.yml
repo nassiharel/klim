@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
     paths: ['docs/**']
+  workflow_run:
+    workflows: ["Marketplace"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,11 +22,23 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     defaults:
       run:
         working-directory: docs
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Fetch assembled marketplace from marketplace branch
+        working-directory: .
+        run: |
+          git fetch origin marketplace --depth=1 2>/dev/null || true
+          git show origin/marketplace:marketplace.yaml > marketplace.yaml 2>/dev/null || echo "marketplace branch not available"
+      - name: Generate marketplace catalog page
+        working-directory: .
+        run: go run docs/scripts/gen-marketplace-page.go
       - uses: actions/setup-node@v4
         with:
           node-version: 22

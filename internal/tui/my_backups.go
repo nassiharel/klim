@@ -1,11 +1,11 @@
 package tui
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -174,7 +174,7 @@ func (m Model) renderMyBackupsView() string {
 			cursor = "▸ "
 		}
 
-		toolCount := fmt.Sprintf("%d", file.toolCount)
+		toolCount := strconv.Itoa(file.toolCount)
 		date := file.modTime.Format("2006-01-02 15:04")
 
 		line := cursor +

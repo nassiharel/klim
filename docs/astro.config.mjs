@@ -28,6 +28,12 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Marketplace',
+          items: [
+            { label: '📦 Tool Catalog', slug: 'marketplace/catalog' },
+          ],
+        },
+        {
           label: 'Guides',
           items: [
             { label: 'TUI Overview', slug: 'guides/tui-overview' },
@@ -66,6 +72,7 @@ export default defineConfig({
             {
               label: 'Tools',
               items: [
+                { label: 'search', slug: 'reference/commands/search' },
                 { label: 'diff', slug: 'reference/commands/diff' },
                 { label: 'onboard', slug: 'reference/commands/onboard' },
                 { label: 'try', slug: 'reference/commands/try' },
@@ -88,6 +95,7 @@ export default defineConfig({
                 { label: 'doctor', slug: 'reference/commands/doctor' },
                 { label: 'audit', slug: 'reference/commands/audit' },
                 { label: 'compliance', slug: 'reference/commands/compliance' },
+                { label: 'score', slug: 'reference/commands/score' },
               ],
             },
             {
