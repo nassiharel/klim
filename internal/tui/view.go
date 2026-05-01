@@ -1098,22 +1098,25 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 		if w < padWidth {
 			line += strings.Repeat(" ", padWidth-w)
 		}
-		line = selectedRowStyle.Render(line)
+		// Use raw ANSI background instead of lipgloss wrapping. Lipgloss
+		// emits resets after each inner styled segment, killing the
+		// background. Raw ANSI background persists until explicitly reset.
+		line = "\033[48;5;236m" + line + "\033[0m"
 	}
 
 	return line
 }
 
 // rowCursor returns the 2-column cursor prefix for tool list rows.
-// Uses plain characters to avoid ANSI escape conflicts with selectedRowStyle.
 func rowCursor(selected, favorite bool) string {
+	star := "\033[38;5;179m★\033[0m" // warm gold star using raw ANSI
 	switch {
 	case selected && favorite:
-		return "▸★"
+		return "▸" + star
 	case selected:
 		return "▸ "
 	case favorite:
-		return " ★"
+		return " " + star
 	default:
 		return "  "
 	}
