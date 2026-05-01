@@ -1035,13 +1035,8 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 
 	fmt.Fprintf(&b, "\n  %s  %d/%d installed\n", label("Status:"), installed, len(pack.ToolNames))
 
-	if installed < len(pack.ToolNames) {
-		b.WriteString("  " + nameStyle.Render("i to install missing tools") + "\n")
-	} else {
+	if installed >= len(pack.ToolNames) {
 		b.WriteString("  " + upToDateStyle.Render("All tools in this pack are installed! ✓") + "\n")
-	}
-	if installed > 0 {
-		b.WriteString("  " + dim("x to remove installed tools") + "\n")
 	}
 
 	// Footer.
