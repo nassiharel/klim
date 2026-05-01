@@ -3,7 +3,7 @@ name: Deploy Docs
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'marketplace/**']
+    paths: ['docs/**']
   workflow_run:
     workflows: ["Marketplace"]
     types: [completed]

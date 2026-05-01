@@ -189,7 +189,7 @@ func projectEditCmd(path string) tea.Cmd {
 		editorArgs = strings.Fields(editor)
 	}
 	editorArgs = append(editorArgs, path)
-	// Validate the editor executable path to avoid command injection
+	// Clean editor path for safe exec.
 	editorPath := filepath.Clean(editorArgs[0])
 	cmd := exec.Command(editorPath, editorArgs[1:]...) //nolint:gosec // editor path from $EDITOR, trusted user input
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
