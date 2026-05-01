@@ -1061,10 +1061,11 @@ func (m Model) renderHeader() string {
 			headerStyle.Render(fixedWidth("SOURCE", colSource)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory))
 	case tabDiscover:
-		return "  " +
+		return "    " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory)) + "  " +
-			headerStyle.Render(fixedWidth("STATUS", colStars))
+			headerStyle.Render(fixedWidth("STARS", colStars)) + "  " +
+			headerStyle.Render("DESCRIPTION")
 	case tabBackup:
 		return "    " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
@@ -1188,15 +1189,44 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	cursor := rowCursor(selected, m.favoriteNames[tool.Name])
 
 	nameText := toolLabel(tool)
-	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
+	// Bold name for better scannability (installed tools show in green).
+	var nameCell string
+	if tool.IsInstalled() {
+		nameCell = upToDateStyle.Render(fixedWidth(nameText, colName))
+	} else {
+		nameCell = nameStyle.Render(fixedWidth(nameText, colName))
+	}
+
+	// Status icon.
+	statusIcon := dimVersion.Render("○")
+	if tool.IsInstalled() {
+		statusIcon = upToDateStyle.Render("✓")
+	}
+
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
-	// Stars column: pad to a fixed width (empty string pads to colStars too) so
-	// the trailing marketplace-status badge lines up across rows.
+	// Stars column.
 	starsText := githubStarsBadge(tool)
 	starsCell := fixedWidthANSI(dimVersion.Render(starsText), colStars)
 
-	line := cursor + nameCell + "  " + catCell + "  " + starsCell
+	// Description preview — fill remaining width.
+	desc := ""
+	if tool.GitHubInfo != nil && tool.GitHubInfo.Description != "" {
+		desc = tool.GitHubInfo.Description
+	}
+	descWidth := m.width - colName - colCategory - colStars - 14 // cursor + spacing + status
+	if len(m.sidebarItems) > 0 {
+		descWidth -= colSidebar + 3
+	}
+	if descWidth < 10 {
+		descWidth = 0
+	}
+	descCell := ""
+	if descWidth > 0 && desc != "" {
+		descCell = "  " + dimVersion.Render(fixedWidth(desc, descWidth))
+	}
+
+	line := cursor + statusIcon + " " + nameCell + "  " + catCell + "  " + starsCell + descCell
 
 	var badge string
 	switch tool.MarketplaceStatus {
