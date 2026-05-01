@@ -59,10 +59,8 @@ for non-interactive operation.`,
 const (
 	cReset = "\033[0m"
 	cBold  = "\033[1m"
-	cDim   = "\033[2m"
 	cTeal  = "\033[38;5;37m"
 	cGreen = "\033[38;5;78m"
-	cGold  = "\033[38;5;179m"
 	cWhite = "\033[38;5;15m"
 	cGray  = "\033[38;5;244m"
 )

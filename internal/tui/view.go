@@ -333,10 +333,10 @@ func (m Model) layoutWithFooter(body, footer string) string {
 	if gap < minGap {
 		gap = minGap
 	}
-	// Subtle rule above footer (skip on very narrow terminals).
+	// Subtle rule above footer.
 	ruleLen := m.width - 4
-	if ruleLen < 4 {
-		return body + strings.Repeat("\n", gap) + footer
+	if ruleLen < 1 {
+		ruleLen = 1
 	}
 	rule := "  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
 	return body + strings.Repeat("\n", max(gap-1, 0)) + rule + "\n" + footer
@@ -423,9 +423,9 @@ func (m Model) renderTabBar() string {
 	}
 
 	tabLine := "  " + strings.Join(parts, "")
-	ruleLen := m.width - 2
-	if ruleLen < 4 {
-		return tabLine // skip rule on very narrow terminals
+	ruleLen := m.width - 4
+	if ruleLen < 1 {
+		ruleLen = 1
 	}
 	return tabLine + "\n  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
 }
