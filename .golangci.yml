@@ -53,6 +53,7 @@ linters:
         - G301 # directory permissions 0755 — standard for config dirs
         - G304 # file path from variable — expected in CLI tool
         - G306 # file permissions 0644 — standard for config files
+        - G115 # integer overflow uintptr→int — term.IsTerminal(int(fd)) is standard Go pattern
 
     errorlint:
       errorf: true
