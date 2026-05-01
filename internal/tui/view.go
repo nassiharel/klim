@@ -1090,68 +1090,30 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 	}
 
 	if selected {
-		// The cursor prefix contains its own ANSI colors. Wrapping the
-		// entire line with selectedRowStyle resets those colors mid-stream.
-		// Instead, split cursor (2 visual cols) from content and style
-		// each part independently.
-		cursor := rowCursor(true, m.favoriteNames[tool.Name])
-		// Strip the existing cursor prefix (first 2 visual columns) from the line.
-		content := stripPrefix(line, 2)
-
 		padWidth := m.width
 		if len(m.sidebarItems) > 0 {
 			padWidth = m.width - colSidebar - 3
 		}
-		padWidth -= 2 // cursor takes 2 columns
-		w := lipgloss.Width(content)
+		w := lipgloss.Width(line)
 		if w < padWidth {
-			content += strings.Repeat(" ", padWidth-w)
+			line += strings.Repeat(" ", padWidth-w)
 		}
-		line = cursor + selectedRowStyle.Render(content)
+		line = selectedRowStyle.Render(line)
 	}
 
 	return line
 }
 
-// stripPrefix removes the first n visual columns from a styled string.
-// It walks runes, tracking visible width (skipping ANSI escape sequences).
-func stripPrefix(s string, n int) string {
-	vis := 0
-	inEsc := false
-	for i, r := range s {
-		if inEsc {
-			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
-				inEsc = false
-			}
-			continue
-		}
-		if r == '\033' {
-			inEsc = true
-			continue
-		}
-		vis++
-		if vis > n {
-			return s[i:]
-		}
-	}
-	return ""
-}
-
 // rowCursor returns the 2-column cursor prefix for tool list rows.
+// Uses plain characters to avoid ANSI escape conflicts with selectedRowStyle.
 func rowCursor(selected, favorite bool) string {
-	// Set both foreground AND background on the bar so lipgloss's
-	// selectedRowStyle background wrap doesn't swallow the color.
-	accentBar := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("49")).
-		Background(selectedBg).
-		Bold(true)
 	switch {
 	case selected && favorite:
-		return accentBar.Render("▎") + upgradableStyle.Render("★")
+		return "▸★"
 	case selected:
-		return accentBar.Render("▎") + " "
+		return "▸ "
 	case favorite:
-		return " " + upgradableStyle.Render("★")
+		return " ★"
 	default:
 		return "  "
 	}
