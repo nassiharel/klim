@@ -1189,7 +1189,12 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	cursor := rowCursor(selected, m.favoriteNames[tool.Name])
 
 	nameText := toolLabel(tool)
-	nameCell := nameStyle.Render(fixedWidth(nameText, colName))
+	var nameCell string
+	if tool.IsInstalled() {
+		nameCell = upToDateStyle.Render(fixedWidth(nameText, colName))
+	} else {
+		nameCell = nameStyle.Render(fixedWidth(nameText, colName))
+	}
 
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
@@ -2542,6 +2547,9 @@ func (m Model) buildSidebarLines(maxRows int) []string {
 		case "platform":
 			isActive = (item.value == "" && m.platformFilter == "") ||
 				(item.value != "" && strings.EqualFold(item.value, m.platformFilter))
+		case "status":
+			isActive = (item.value == "" && m.statusFilter == "") ||
+				(item.value != "" && m.statusFilter == item.value)
 		}
 		if isActive {
 			style = nameStyle
