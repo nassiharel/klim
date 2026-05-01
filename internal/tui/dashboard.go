@@ -18,16 +18,16 @@ func (m Model) computeScore() score.Result {
 	return m.cachedScore
 }
 
-// Dashboard color palette.
+// Dashboard color palette — aligned with main palette.
 var (
 	dashGaugeEmpty = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
-	dashGaugeFill  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))  // green
-	dashGaugeWarn  = lipgloss.NewStyle().Foreground(lipgloss.Color("214")) // orange
-	dashGaugeInfo  = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))  // cyan
-	dashNumber     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
-	dashLabel      = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	dashSection    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
-	dashDim        = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	dashGaugeFill  = lipgloss.NewStyle().Foreground(successColor)
+	dashGaugeWarn  = lipgloss.NewStyle().Foreground(warningColor)
+	dashGaugeInfo  = lipgloss.NewStyle().Foreground(primaryColor)
+	dashNumber     = lipgloss.NewStyle().Bold(true).Foreground(highlightColor)
+	dashLabel      = lipgloss.NewStyle().Foreground(subtleColor)
+	dashSection    = lipgloss.NewStyle().Bold(true).Foreground(primaryColor)
+	dashDim        = lipgloss.NewStyle().Foreground(dimColor)
 )
 
 // namedCount is a generic name+count pair used in dashboard bar charts.

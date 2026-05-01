@@ -5,7 +5,6 @@ import (
 	"os"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -333,7 +332,13 @@ func (m Model) layoutWithFooter(body, footer string) string {
 	if gap < minGap {
 		gap = minGap
 	}
-	return body + strings.Repeat("\n", gap) + footer
+	// Subtle rule above footer for visual separation.
+	ruleLen := m.width - 4
+	if ruleLen < 10 {
+		ruleLen = 10
+	}
+	rule := "  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
+	return body + strings.Repeat("\n", gap-1) + rule + "\n" + footer
 }
 
 // visualRows returns the number of terminal rows occupied by s when rendered
@@ -370,25 +375,25 @@ func visualRows(s string, width int) int {
 // --- Title & Tabs ---
 
 func (m Model) renderTitleBar() string {
-	title := titleStyle.Render("  clim")
+	title := brandStyle.Render("clim")
 
 	if m.phase == phaseLoading {
-		return title + "  " + loadingStyle.Render(m.spinner.View()+" Loading tools...")
+		return "  " + title + "  " + loadingStyle.Render(m.spinner.View()+" Loading tools...")
 	}
 	if m.phase == phaseResolving && m.pending > 0 {
-		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s Checking versions (%d remaining)...", m.spinner.View(), m.pending))
+		return "  " + title + "  " + loadingStyle.Render(fmt.Sprintf("%s Checking versions (%d remaining)...", m.spinner.View(), m.pending))
 	}
 
 	inst, upd, notInst := m.stats()
 	active := inst + notInst
 	summary := fmt.Sprintf("%d/%d installed", inst, active)
 	if upd > 0 {
-		summary += " · " + upgradableStyle.Render(strconv.Itoa(upd)+" updates")
+		summary += "  " + upgradableStyle.Render(fmt.Sprintf("%d updates", upd))
 	}
 	if notInst > 0 {
-		summary += fmt.Sprintf(" · %d in marketplace", notInst)
+		summary += fmt.Sprintf("  %d available", notInst)
 	}
-	return title + "  " + summaryStyle.Render(summary)
+	return "  " + title + "  " + summaryStyle.Render(summary)
 }
 
 func (m Model) renderTabBar() string {
@@ -397,9 +402,9 @@ func (m Model) renderTabBar() string {
 		idx   int
 	}{
 		{"Installed", tabInstalled},
-		{"★ Favorites", tabFavorites},
+		{"Favorites", tabFavorites},
 		{"Updates", tabUpdates},
-		{"Marketplace", tabDiscover},
+		{"Discover", tabDiscover},
 		{"Backup", tabBackup},
 		{"Project", tabProject},
 		{"Dashboard", tabDashboard},
@@ -409,14 +414,21 @@ func (m Model) renderTabBar() string {
 
 	var parts []string
 	for _, tab := range tabs {
-		style := inactiveTabStyle
 		if tab.idx == m.activeTab {
-			style = activeTabStyle
+			parts = append(parts, activeTabStyle.Render(tab.label))
+		} else {
+			parts = append(parts, inactiveTabStyle.Render(tab.label))
 		}
-		parts = append(parts, style.Render(tab.label))
 	}
 
-	return "  " + strings.Join(parts, " ")
+	// Subtle rule under tabs.
+	tabLine := "  " + strings.Join(parts, "")
+	ruleLen := m.width - 2
+	if ruleLen < 10 {
+		ruleLen = 10
+	}
+	rule := ruleStyle.Render(strings.Repeat("─", ruleLen))
+	return tabLine + "\n" + "  " + rule
 }
 
 // --- Search Bar ---
@@ -424,14 +436,15 @@ func (m Model) renderTabBar() string {
 // renderSearchBar renders the search box with a styled border.
 func (m Model) renderSearchBar() string {
 	var content string
+	searchIcon := filterPromptStyle.Render(">")
 	switch {
 	case m.filtering:
-		content = filterPromptStyle.Render("🔍 ") + m.filterInput.View()
+		content = searchIcon + " " + m.filterInput.View()
 	case m.filterText != "":
-		content = filterPromptStyle.Render("🔍 ") + dimVersion.Render(m.filterText) +
+		content = searchIcon + " " + dimVersion.Render(m.filterText) +
 			"  " + dimVersion.Render("(/ edit  Esc clear)")
 	default:
-		content = dimVersion.Render("🔍 / search...")
+		content = dimVersion.Render("> / search...")
 	}
 
 	// Active filter indicators.
@@ -823,9 +836,10 @@ func (m Model) renderRecCard(rec recommendation, selected, compact bool) string 
 	tool := m.tools[rec.toolIdx]
 
 	// --- Row 1: cursor + name + category + stars + gauge + pct ---
+	accentBar := lipgloss.NewStyle().Foreground(primaryColor)
 	cursor := "  "
 	if selected {
-		cursor = "▸ "
+		cursor = accentBar.Render("▎") + " "
 	}
 
 	displayName := tool.DisplayName
@@ -1114,9 +1128,10 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 }
 
 func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
+	accentBar := lipgloss.NewStyle().Foreground(primaryColor)
 	cursor := "  "
 	if selected {
-		cursor = "▸ "
+		cursor = accentBar.Render("▎") + " "
 	}
 
 	// Name column: plain text padded, then styled.
@@ -1148,9 +1163,10 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 }
 
 func (m Model) renderUpdateRow(tool registry.Tool, toolIdx int, selected bool) string {
+	accentBar := lipgloss.NewStyle().Foreground(primaryColor)
 	cursor := "  "
 	if selected {
-		cursor = "▸ "
+		cursor = accentBar.Render("▎") + " "
 	}
 
 	// Selection checkbox.
@@ -1183,9 +1199,10 @@ func (m Model) renderUpdateRow(tool registry.Tool, toolIdx int, selected bool) s
 }
 
 func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
+	accentBar := lipgloss.NewStyle().Foreground(primaryColor)
 	cursor := "  "
 	if selected {
-		cursor = "▸ "
+		cursor = accentBar.Render("▎") + " "
 	}
 
 	nameText := toolLabel(tool)
