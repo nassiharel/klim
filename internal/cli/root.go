@@ -214,10 +214,10 @@ func initColorHelp() {
 			p("\n")
 		}
 
-		// Flags.
-		if cmd.HasAvailableLocalFlags() {
+		// Flags (includes persistent flags like --verbose).
+		if cmd.HasAvailableFlags() {
 			p("%s%sFlags:%s\n", cBold, cTeal, cReset)
-			p("%s\n", cmd.LocalFlags().FlagUsages())
+			p("%s\n", cmd.Flags().FlagUsages())
 		}
 
 		// Usage hint.

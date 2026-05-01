@@ -504,6 +504,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.categoryFilter = ""
 		m.tagFilter = ""
 		m.platformFilter = ""
+		m.statusFilter = ""
 
 		// Load packs.
 		if packs, err := m.svc.LoadPacks(context.Background()); err != nil {

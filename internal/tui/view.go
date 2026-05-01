@@ -300,7 +300,10 @@ func (m Model) layoutWithFooter(body, footer string) string {
 	const minGap = 1
 
 	if m.height <= 0 {
-		return body + strings.Repeat("\n", minGap) + footer
+		// Unknown height — render rule + footer without padding.
+		ruleLen := 40
+		rule := "  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
+		return body + "\n" + rule + "\n" + footer
 	}
 
 	footerRows := visualRows(footer, m.width) + 1 // +1 for rule line above footer
