@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -82,13 +83,19 @@ func NewWithConfig(cfg *config.Config) *ToolService {
 
 	var extraFetchers []catalog.MarketplaceFetcher
 	seen := make(map[string]bool)
-	for _, url := range cfg.Marketplace.ExtraURLs {
-		url = strings.TrimSpace(url)
-		if url == "" || seen[url] {
+	for _, rawURL := range cfg.Marketplace.ExtraURLs {
+		rawURL = strings.TrimSpace(rawURL)
+		if rawURL == "" || seen[rawURL] {
 			continue
 		}
-		seen[url] = true
-		extraFetchers = append(extraFetchers, &catalog.GitHubFetcher{URL: url})
+		// Validate URL scheme before adding.
+		parsed, parseErr := url.Parse(rawURL)
+		if parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			slog.Warn("skipping invalid extra marketplace URL", "url", rawURL)
+			continue
+		}
+		seen[rawURL] = true
+		extraFetchers = append(extraFetchers, &catalog.GitHubFetcher{URL: rawURL})
 	}
 
 	var maxAge time.Duration

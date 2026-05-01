@@ -5,6 +5,7 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -212,6 +213,18 @@ func (c *Config) Validate() []string {
 	// Marketplace URL.
 	if c.Marketplace.URL != "" && !strings.HasPrefix(c.Marketplace.URL, "http") {
 		w = append(w, fmt.Sprintf("marketplace.url: %q doesn't look like a URL", c.Marketplace.URL))
+	}
+
+	// Extra marketplace URLs.
+	for i, raw := range c.Marketplace.ExtraURLs {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		parsed, parseErr := url.Parse(raw)
+		if parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			w = append(w, fmt.Sprintf("marketplace.extra_urls[%d]: %q is not a valid http/https URL", i, raw))
+		}
 	}
 
 	return w
