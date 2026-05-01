@@ -220,8 +220,8 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "\nInstall all? [y/N]: ")
 	var answer string
-	fmt.Fscan(os.Stdin, &answer)
-	if strings.ToLower(answer) != "y" {
+	_, _ = fmt.Fscan(os.Stdin, &answer)
+	if !strings.EqualFold(answer, "y") {
 		fmt.Fprintln(os.Stderr, "Skipped.")
 		return nil
 	}

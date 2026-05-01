@@ -42,11 +42,11 @@ const (
 
 // CheckResult holds the result of checking one required tool.
 type CheckResult struct {
-	Tool      RequiredTool
-	Status    CheckStatus
-	Version   string // installed version ("" if missing)
-	Message   string // human-readable status
-	Optional  bool   // true if this is an optional tool
+	Tool     RequiredTool
+	Status   CheckStatus
+	Version  string // installed version ("" if missing)
+	Message  string // human-readable status
+	Optional bool   // true if this is an optional tool
 }
 
 // Find walks up from startDir looking for .clim.yaml. Returns the full path

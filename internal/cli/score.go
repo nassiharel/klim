@@ -75,7 +75,7 @@ func runScore(cmd *cobra.Command, args []string) error {
 	findings, _ := audit.Analyze(tools)
 	auditWarns, auditInfos := audit.CountBySeverity(findings)
 
-	result := score.Compute(score.ScoreInput{
+	result := score.Compute(score.Input{
 		Tools:         tools,
 		DoctorIssues:  doctorIssues,
 		AuditWarnings: auditWarns,
@@ -120,9 +120,10 @@ func runScore(cmd *cobra.Command, args []string) error {
 	// Category breakdown.
 	for _, c := range result.Categories {
 		icon := "✓"
-		if c.Status == "warning" {
+		switch c.Status {
+		case "warning":
 			icon = "⚠"
-		} else if c.Status == "error" {
+		case "error":
 			icon = "✗"
 		}
 		fmt.Fprintf(os.Stderr, "  %s %-22s %2d/%d", icon, c.Name, c.Points, c.MaxPts)

@@ -18,11 +18,11 @@ import (
 
 // My Packs detail action indices.
 const (
-	myPackActionExport = 0
-	myPackActionShare  = 1
+	myPackActionExport  = 0
+	myPackActionShare   = 1
 	myPackActionInstall = 2
-	myPackActionDelete = 3
-	myPackActionCount  = 4
+	myPackActionDelete  = 3
+	myPackActionCount   = 4
 )
 
 // myPackActionMsg is sent when a My Packs action completes.

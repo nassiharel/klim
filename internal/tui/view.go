@@ -727,11 +727,11 @@ func (m Model) renderForYouList() string {
 
 // Fixed column widths for recommendation card alignment.
 const (
-	colCatFY     = 16 // category column (chip style adds padding)
-	colStarsFY   = 11 // stars badge column
-	colGaugeFY   = 12 // match gauge width
-	colPctFY     = 5  // percentage column
-	colReasonFY  = 34 // "You use: ..." column
+	colCatFY    = 16 // category column (chip style adds padding)
+	colStarsFY  = 11 // stars badge column
+	colGaugeFY  = 12 // match gauge width
+	colPctFY    = 5  // percentage column
+	colReasonFY = 34 // "You use: ..." column
 )
 
 // renderRecCard renders a single 2-line recommendation card.

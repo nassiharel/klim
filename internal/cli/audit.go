@@ -101,8 +101,8 @@ func runAudit(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr, "  ✓ No issues found — your toolchain looks clean!")
 	} else {
 		w := tabwriter.NewWriter(os.Stderr, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "  SEVERITY\tTOOL\tCATEGORY\tMESSAGE")
-		fmt.Fprintln(w, "  --------\t----\t--------\t-------")
+		_, _ = fmt.Fprintln(w, "  SEVERITY\tTOOL\tCATEGORY\tMESSAGE")
+		_, _ = fmt.Fprintln(w, "  --------\t----\t--------\t-------")
 		for _, f := range findings {
 			icon := "ℹ"
 			if f.Severity == "warning" {
@@ -174,13 +174,13 @@ type cdxToolComponent struct {
 }
 
 type cdxComponent struct {
-	Type        string          `json:"type"`
-	Name        string          `json:"name"`
-	Version     string          `json:"version,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Licenses    []cdxLicense    `json:"licenses,omitempty"`
-	ExternalRef []cdxExtRef     `json:"externalReferences,omitempty"`
-	Properties  []cdxProperty   `json:"properties,omitempty"`
+	Type        string        `json:"type"`
+	Name        string        `json:"name"`
+	Version     string        `json:"version,omitempty"`
+	Description string        `json:"description,omitempty"`
+	Licenses    []cdxLicense  `json:"licenses,omitempty"`
+	ExternalRef []cdxExtRef   `json:"externalReferences,omitempty"`
+	Properties  []cdxProperty `json:"properties,omitempty"`
 }
 
 type cdxLicense struct {

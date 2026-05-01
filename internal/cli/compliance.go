@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -77,7 +78,7 @@ func resolvePolicyPath() (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("no policy file found\n\nConfigure in config.yaml:\n  compliance:\n    policy: /path/to/.clim-policy.yaml\n\nOr pass directly:\n  clim compliance check --policy .clim-policy.yaml\n\nOr generate one:\n  clim compliance init")
+	return "", errors.New("no policy file found\n\nConfigure in config.yaml:\n  compliance:\n    policy: /path/to/.clim-policy.yaml\n\nOr pass directly:\n  clim compliance check --policy .clim-policy.yaml\n\nOr generate one:\n  clim compliance init")
 }
 
 func runComplianceCheck(cmd *cobra.Command, args []string) error {
@@ -129,8 +130,8 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stderr, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  STATUS\tTOOL\tRULE\tMESSAGE")
-	fmt.Fprintln(w, "  ------\t----\t----\t-------")
+	_, _ = fmt.Fprintln(w, "  STATUS\tTOOL\tRULE\tMESSAGE")
+	_, _ = fmt.Fprintln(w, "  ------\t----\t----\t-------")
 	for _, v := range result.Violations {
 		icon := "⚠"
 		if v.Severity == "error" {

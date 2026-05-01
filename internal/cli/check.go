@@ -45,18 +45,18 @@ func init() {
 
 // jsonCheckResult is the JSON output schema.
 type jsonCheckResult struct {
-	Name       string `json:"name"`
-	Required   string `json:"required,omitempty"`
-	Installed  string `json:"installed,omitempty"`
-	Status     string `json:"status"` // "ok", "missing", "outdated", "unknown"
-	Message    string `json:"message"`
+	Name      string `json:"name"`
+	Required  string `json:"required,omitempty"`
+	Installed string `json:"installed,omitempty"`
+	Status    string `json:"status"` // "ok", "missing", "outdated", "unknown"
+	Message   string `json:"message"`
 }
 
 type jsonCheckOutput struct {
-	Project  string            `json:"project,omitempty"`
-	File     string            `json:"file"`
-	Results  []jsonCheckResult `json:"results"`
-	Summary  struct {
+	Project string            `json:"project,omitempty"`
+	File    string            `json:"file"`
+	Results []jsonCheckResult `json:"results"`
+	Summary struct {
 		OK       int `json:"ok"`
 		Missing  int `json:"missing"`
 		Outdated int `json:"outdated"`

@@ -35,7 +35,7 @@ func TestParseConstraint(t *testing.T) {
 func TestCheckConstraint(t *testing.T) {
 	tests := []struct {
 		op, installed, constraint string
-		want                     bool
+		want                      bool
 	}{
 		{">=", "1.30", "1.28", true},
 		{">=", "1.28", "1.28", true},

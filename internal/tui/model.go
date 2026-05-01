@@ -78,8 +78,8 @@ const (
 
 // Sort modes for tool list tabs.
 const (
-	sortByName  = 0
-	sortByStars = 1
+	sortByName    = 0
+	sortByStars   = 1
 	sortModeCount = 2
 )
 
@@ -159,11 +159,11 @@ type Model struct {
 	detailRelCursor int              // cursor in "You might also like" list (-1 = not focused)
 
 	// Loading state.
-	phase    int // 0=scanning, 1=resolving, 2=done
-	loading  bool
-	pending  int  // count of tools still resolving versions
-	scanGen  int  // incremented on each scan; used to discard stale toolVersionMsg
-	scanOK   bool // true when the current scan completed without errors; gates cache writes
+	phase   int // 0=scanning, 1=resolving, 2=done
+	loading bool
+	pending int  // count of tools still resolving versions
+	scanGen int  // incremented on each scan; used to discard stale toolVersionMsg
+	scanOK  bool // true when the current scan completed without errors; gates cache writes
 
 	// Layout.
 	width  int
@@ -207,24 +207,24 @@ type Model struct {
 	batchQueue     batchUpgradeQueue // remaining tool indices to upgrade
 
 	// Pack creation state (Backup tab → Create Pack).
-	creatingPack       bool                // true = pack creation wizard is active
-	packCreatePhase    int                 // 0=name, 1=display_name, 2=description, 3=select tools, 4=output choice, 5=done
-	packCreateName     textinput.Model     // name input
-	packCreateDispName textinput.Model     // display_name input
-	packCreateDesc     textinput.Model     // description input
-	packCreateSelected map[int]bool        // tool index → selected for pack
-	packCreateCursor   int                 // cursor for tool selection list
-	packCreateFilter   string              // search filter for tool selection
-	packCreateFiltered []int               // filtered tool indices
+	creatingPack       bool            // true = pack creation wizard is active
+	packCreatePhase    int             // 0=name, 1=display_name, 2=description, 3=select tools, 4=output choice, 5=done
+	packCreateName     textinput.Model // name input
+	packCreateDispName textinput.Model // display_name input
+	packCreateDesc     textinput.Model // description input
+	packCreateSelected map[int]bool    // tool index → selected for pack
+	packCreateCursor   int             // cursor for tool selection list
+	packCreateFilter   string          // search filter for tool selection
+	packCreateFiltered []int           // filtered tool indices
 
 	// My Packs state (Backup tab → My Packs).
-	customPacks        []registry.Pack // loaded from custom-packs.yaml
-	viewingMyPacks     bool            // true = My Packs list is active
-	myPacksCursor      int
-	viewingMyPackDetail bool           // true = detail view for a custom pack
-	myPackDetailIdx    int             // index into customPacks
-	myPackMenuCursor   int             // cursor in detail action menu
-	myPackToken        string          // generated share token (for display in detail view)
+	customPacks         []registry.Pack // loaded from custom-packs.yaml
+	viewingMyPacks      bool            // true = My Packs list is active
+	myPacksCursor       int
+	viewingMyPackDetail bool   // true = detail view for a custom pack
+	myPackDetailIdx     int    // index into customPacks
+	myPackMenuCursor    int    // cursor in detail action menu
+	myPackToken         string // generated share token (for display in detail view)
 
 	// My Backups state (Backup tab → My Backups).
 	viewingMyBackups bool
@@ -235,9 +235,9 @@ type Model struct {
 	dashboardScroll int
 
 	// Favorites state.
-	favoriteNames    map[string]bool // in-memory lookup set, loaded at init
-	favMode          string          // "" (list), "export", "share"
-	favClearConfirm  bool            // true = awaiting y/n to clear all favorites
+	favoriteNames   map[string]bool // in-memory lookup set, loaded at init
+	favMode         string          // "" (list), "export", "share"
+	favClearConfirm bool            // true = awaiting y/n to clear all favorites
 
 	// Config editor state.
 	configCursor    int
@@ -246,34 +246,34 @@ type Model struct {
 	configScroll    int             // scroll offset for config tab
 
 	// Doctor tab state (includes audit + compliance findings).
-	doctorIssues     []doctor.Issue       // diagnostic results (nil = not yet checked)
-	auditFindings    []audit.Finding      // security audit findings
-	auditLicenses    map[string]int       // license counts
-	complianceResult *compliance.Result   // compliance check result (nil = no policy)
-	complianceError  string               // non-empty when policy failed to load
-	cachedScore      score.Result         // computed once in runDoctor
-	doctorScroll     int                  // scroll offset for doctor tab
-	doctorChecked    bool                 // true after first doctor check completed
-	doctorSubTab     int                  // 0=doctor, 1=audit, 2=compliance
+	doctorIssues     []doctor.Issue     // diagnostic results (nil = not yet checked)
+	auditFindings    []audit.Finding    // security audit findings
+	auditLicenses    map[string]int     // license counts
+	complianceResult *compliance.Result // compliance check result (nil = no policy)
+	complianceError  string             // non-empty when policy failed to load
+	cachedScore      score.Result       // computed once in runDoctor
+	doctorScroll     int                // scroll offset for doctor tab
+	doctorChecked    bool               // true after first doctor check completed
+	doctorSubTab     int                // 0=doctor, 1=audit, 2=compliance
 
 	// Team file (.clim.yaml) state.
-	teamFilePath    string                  // path to detected .clim.yaml ("" = not found)
-	teamFile        *teamfile.TeamFile      // parsed team file (nil = not found)
-	teamCheckResult []teamfile.CheckResult  // check results (nil = not checked yet)
+	teamFilePath    string                 // path to detected .clim.yaml ("" = not found)
+	teamFile        *teamfile.TeamFile     // parsed team file (nil = not found)
+	teamCheckResult []teamfile.CheckResult // check results (nil = not checked yet)
 
 	// Project tab state.
-	projectView       int // projectViewList, projectViewDetail, projectViewAddTool
-	projectCursor     int
-	projectInitResult *teamfile.DetectResult
-	projectScroll     int
-	projectEntries    []teamfile.ProjectEntry
-	projectsLoaded    bool // true after first load
-	projectAddCursor  int
-	projectAddFilter  string
-	projectAddFiltered []int
-	projectAddOptional bool   // true = adding to optional, false = required
-	projectConfirmReinit bool // true = showing detection results, waiting for confirm
-	projectReinitDir string   // directory for pending reinit
+	projectView          int // projectViewList, projectViewDetail, projectViewAddTool
+	projectCursor        int
+	projectInitResult    *teamfile.DetectResult
+	projectScroll        int
+	projectEntries       []teamfile.ProjectEntry
+	projectsLoaded       bool // true after first load
+	projectAddCursor     int
+	projectAddFilter     string
+	projectAddFiltered   []int
+	projectAddOptional   bool   // true = adding to optional, false = required
+	projectConfirmReinit bool   // true = showing detection results, waiting for confirm
+	projectReinitDir     string // directory for pending reinit
 }
 
 // NewModel creates a new TUI model.
@@ -328,13 +328,13 @@ func NewModel() Model {
 		backupBar:          progress.New(progress.WithWidth(40)),
 		updateSelected:     make(map[int]bool),
 		favoriteNames:      loadFavoriteNames(),
-		loading:        true,
-		phase:          phaseLoading,
-		activeTab:      tabInstalled,
-		detailIdx:      noDetail,
-		toolMenu:       noMenu,
-		width:          80,
-		height:         24,
+		loading:            true,
+		phase:              phaseLoading,
+		activeTab:          tabInstalled,
+		detailIdx:          noDetail,
+		toolMenu:           noMenu,
+		width:              80,
+		height:             24,
 	}
 }
 
@@ -2417,7 +2417,7 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 
 	// Compute environment health score using precomputed data.
 	auditW, auditI := audit.CountBySeverity(m.auditFindings)
-	m.cachedScore = score.Compute(score.ScoreInput{
+	m.cachedScore = score.Compute(score.Input{
 		Tools:         m.tools,
 		DoctorIssues:  m.doctorIssues,
 		AuditWarnings: auditW,

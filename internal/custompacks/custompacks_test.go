@@ -11,9 +11,9 @@ import (
 func TestAddLoadDelete(t *testing.T) {
 	// Redirect storage to temp dir.
 	tmp := t.TempDir()
-	t.Setenv("AppData", tmp)          // Windows
-	t.Setenv("XDG_CONFIG_HOME", tmp)   // Linux
-	t.Setenv("HOME", tmp)              // macOS fallback
+	t.Setenv("AppData", tmp)         // Windows
+	t.Setenv("XDG_CONFIG_HOME", tmp) // Linux
+	t.Setenv("HOME", tmp)            // macOS fallback
 
 	pack := registry.Pack{
 		Name:        "test-pack",

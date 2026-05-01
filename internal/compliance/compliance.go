@@ -100,7 +100,7 @@ func Check(policy *Policy, tools []registry.Tool) Result {
 		// Blocked tools.
 		if blockedSet[strings.ToLower(t.Name)] {
 			result.addError(t.Name, "blocked_tool",
-				fmt.Sprintf("%s is blocked by company policy", t.DisplayName))
+				t.DisplayName+" is blocked by company policy")
 		}
 
 		// Allowed sources.
@@ -131,7 +131,7 @@ func Check(policy *Policy, tools []registry.Tool) Result {
 		t, ok := toolMap[strings.ToLower(req.Name)]
 		if !ok || !t.IsInstalled() {
 			result.addError(req.Name, "required_missing",
-				fmt.Sprintf("%s is required but not installed", req.Name))
+				req.Name+" is required but not installed")
 			continue
 		}
 		if req.Version != "" {

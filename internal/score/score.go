@@ -14,11 +14,11 @@ import (
 
 // Category represents one scoring dimension.
 type Category struct {
-	Name     string `json:"name"`
-	Points   int    `json:"points"`
-	MaxPts   int    `json:"max_points"`
-	Status   string `json:"status"` // "ok", "warning", "error"
-	Details  string `json:"details,omitempty"`
+	Name    string `json:"name"`
+	Points  int    `json:"points"`
+	MaxPts  int    `json:"max_points"`
+	Status  string `json:"status"` // "ok", "warning", "error"
+	Details string `json:"details,omitempty"`
 }
 
 // Result holds the complete score breakdown.
@@ -29,8 +29,8 @@ type Result struct {
 	Categories []Category `json:"categories"`
 }
 
-// ScoreInput holds all inputs for score computation.
-type ScoreInput struct {
+// Input holds all inputs for score computation.
+type Input struct {
 	Tools         []registry.Tool
 	DoctorIssues  []doctor.Issue
 	AuditWarnings int
@@ -40,14 +40,16 @@ type ScoreInput struct {
 }
 
 // Compute calculates the environment health score.
-func Compute(input ScoreInput) Result {
+func Compute(input Input) Result {
 	var cats []Category
 
-	cats = append(cats, scoreToolFreshness(input.Tools))
-	cats = append(cats, scoreDoctorHealth(input.DoctorIssues))
-	cats = append(cats, scoreAuditClean(input.AuditWarnings, input.AuditInfos))
-	cats = append(cats, scoreCompliance(input.CompResult, input.ComplianceErr))
-	cats = append(cats, scoreManagedSources(input.Tools))
+	cats = append(cats,
+		scoreToolFreshness(input.Tools),
+		scoreDoctorHealth(input.DoctorIssues),
+		scoreAuditClean(input.AuditWarnings, input.AuditInfos),
+		scoreCompliance(input.CompResult, input.ComplianceErr),
+		scoreManagedSources(input.Tools),
+	)
 
 	total, maxTotal := 0, 0
 	for _, c := range cats {
@@ -85,11 +87,11 @@ func BadgeURL(r Result) string {
 	return fmt.Sprintf("https://img.shields.io/badge/%s-%s-%s", label, value, color)
 }
 
-func grade(points, max int) string {
-	if max == 0 {
+func grade(points, maximum int) string {
+	if maximum == 0 {
 		return "?"
 	}
-	pct := points * 100 / max
+	pct := points * 100 / maximum
 	switch {
 	case pct >= 95:
 		return "A+"

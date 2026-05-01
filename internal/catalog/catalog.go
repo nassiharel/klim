@@ -392,4 +392,3 @@ func Refresh(ctx context.Context, fetcher MarketplaceFetcher) (*RefreshResult, e
 		Updated: diff.HasChanges(),
 	}, nil
 }
-

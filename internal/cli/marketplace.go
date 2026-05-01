@@ -77,7 +77,8 @@ func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
 		normalized = append(normalized, e)
 	}
 
-	c.Marketplace.ExtraURLs = append(normalized, url)
+	normalized = append(normalized, url)
+	c.Marketplace.ExtraURLs = normalized
 
 	if err := config.Save(c); err != nil {
 		return fmt.Errorf("saving config: %w", err)
