@@ -419,6 +419,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.doctorChecked = false
 	m.doctorScroll = 0
 	m.doctorSubTab = doctorSubDoctor
+	m.onboardTools = nil // indices tied to old tools slice
 	return tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg { return findToolsCmd(m.svc, true, gen)() },
@@ -536,6 +537,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recommendations = computeRecommendations(m.tools)
 		if m.discoverSubTab == discoverForYou && m.cursor >= len(m.recommendations) {
 			m.cursor = max(0, len(m.recommendations)-1)
+		}
+
+		// Recompute onboard recommendations if on that sub-tab.
+		if m.discoverSubTab == discoverOnboard {
+			m.recomputeOnboardTools()
 		}
 
 		// Apply marketplace refresh badges if a diff is pending.
@@ -1772,9 +1778,6 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor = 0
 			if m.discoverSubTab == discoverTools {
 				m.applyFilter()
-			}
-			if m.discoverSubTab == discoverOnboard {
-				m.recomputeOnboardTools()
 			}
 			return m, nil
 		}

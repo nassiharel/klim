@@ -39,6 +39,7 @@ func TestAllPaths(t *testing.T) {
 		{"CatalogCache", CatalogCache, "marketplace-cache.yaml"},
 		{"BackupsDir", BackupsDir, "backups"},
 		{"LogFile", LogFile, "clim.log"},
+		{"CompliancePolicy", CompliancePolicy, "policy.yaml"},
 	}
 	for _, tc := range fns {
 		t.Run(tc.name, func(t *testing.T) {
