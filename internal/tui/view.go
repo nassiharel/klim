@@ -836,11 +836,7 @@ func (m Model) renderRecCard(rec recommendation, selected, compact bool) string 
 	tool := m.tools[rec.toolIdx]
 
 	// --- Row 1: cursor + name + category + stars + gauge + pct ---
-	accentBar := lipgloss.NewStyle().Foreground(primaryColor)
-	cursor := "  "
-	if selected {
-		cursor = accentBar.Render("▎") + " "
-	}
+	cursor := rowCursor(selected, false)
 
 	displayName := tool.DisplayName
 	if displayName == "" {
@@ -1097,18 +1093,6 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 		line = m.renderDiscoverRow(tool, selected)
 	}
 
-	// Star indicator for favorited tools — inserted after cursor prefix,
-	// before the name. Keeps ▸ cursor visible for selected rows.
-	if m.favoriteNames[tool.Name] {
-		// Row format is "▸ NAME..." or "  NAME...". Replace the space
-		// after cursor with a styled star.
-		runes := []rune(line)
-		if len(runes) >= 2 {
-			// runes[0] = cursor char (▸ or space), runes[1] = space
-			line = string(runes[0:1]) + upgradableStyle.Render("★") + string(runes[2:])
-		}
-	}
-
 	if selected {
 		// Pad to tool column width (not full terminal width) so the selection
 		// highlight doesn't bleed into the sidebar column.
@@ -1127,12 +1111,23 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 	return line
 }
 
-func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
+// rowCursor returns the 2-column cursor prefix for tool list rows.
+func rowCursor(selected, favorite bool) string {
 	accentBar := lipgloss.NewStyle().Foreground(primaryColor)
-	cursor := "  "
-	if selected {
-		cursor = accentBar.Render("▎") + " "
+	switch {
+	case selected && favorite:
+		return accentBar.Render("▎") + upgradableStyle.Render("★")
+	case selected:
+		return accentBar.Render("▎") + " "
+	case favorite:
+		return " " + upgradableStyle.Render("★")
+	default:
+		return "  "
 	}
+}
+
+func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
+	cursor := rowCursor(selected, m.favoriteNames[tool.Name])
 
 	// Name column: plain text padded, then styled.
 	nameText := toolLabel(tool)
@@ -1163,11 +1158,7 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 }
 
 func (m Model) renderUpdateRow(tool registry.Tool, toolIdx int, selected bool) string {
-	accentBar := lipgloss.NewStyle().Foreground(primaryColor)
-	cursor := "  "
-	if selected {
-		cursor = accentBar.Render("▎") + " "
-	}
+	cursor := rowCursor(selected, m.favoriteNames[tool.Name])
 
 	// Selection checkbox.
 	check := ""
@@ -1199,11 +1190,7 @@ func (m Model) renderUpdateRow(tool registry.Tool, toolIdx int, selected bool) s
 }
 
 func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
-	accentBar := lipgloss.NewStyle().Foreground(primaryColor)
-	cursor := "  "
-	if selected {
-		cursor = accentBar.Render("▎") + " "
-	}
+	cursor := rowCursor(selected, m.favoriteNames[tool.Name])
 
 	nameText := toolLabel(tool)
 	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
