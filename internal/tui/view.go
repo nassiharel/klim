@@ -5,7 +5,6 @@ import (
 	"os"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -91,8 +90,8 @@ func (m Model) renderView() string {
 		lines := strings.Split(content, "\n")
 
 		footer := m.renderHelp()
-		footerRows := visualRows(footer, m.width)
-		const cfgHeaderRows = 3
+		footerRows := m.footerHeight()
+		const cfgHeaderRows = 4 // title + tabs + rule + blank
 		const cfgMinGap = 1
 		visibleRows := m.height - cfgHeaderRows - footerRows - cfgMinGap
 		if visibleRows < 5 {
@@ -129,8 +128,8 @@ func (m Model) renderView() string {
 		// Compute available visible rows: total height minus tab bar (2 lines),
 		// footer, and 1-line gap between body and footer.
 		footer := m.renderHelp()
-		footerRows := visualRows(footer, m.width)
-		const headerRows = 3 // title bar + tab bar + blank
+		footerRows := m.footerHeight()
+		const headerRows = 4 // title + tabs + rule + blank
 		const minGap = 1
 		visibleRows := m.height - headerRows - footerRows - minGap
 		if visibleRows < 5 {
@@ -167,8 +166,8 @@ func (m Model) renderView() string {
 		lines := strings.Split(content, "\n")
 
 		footer := m.renderHelp()
-		footerRows := visualRows(footer, m.width)
-		const headerRows = 3
+		footerRows := m.footerHeight()
+		const headerRows = 4 // title + tabs + rule + blank
 		const minGap = 1
 		visibleRows := m.height - headerRows - footerRows - minGap
 		if visibleRows < 5 {
@@ -226,9 +225,9 @@ func (m Model) renderView() string {
 	// Two-column layout: sidebar | tool list.
 	// Compute available rows dynamically based on actual footer height.
 	footer := m.renderHelp()
-	footerRows := visualRows(footer, m.width)
-	// Overhead: title(1) + tabs(1) + blank(1) + search(1) + blank(1) + gap(1) + footer.
-	overhead := 6 + footerRows
+	footerRows := m.footerHeight()
+	// Overhead: title(1) + tabs(1) + rule(1) + blank(1) + search(1) + blank(1) + gap(1) + footer.
+	overhead := 7 + footerRows
 	if m.activeTab == tabDiscover {
 		overhead += 2 // sub-tab bar + blank line
 	}
@@ -277,9 +276,10 @@ func (m Model) renderView() string {
 	return m.layoutWithFooter(body.String(), footer)
 }
 
-// footerHeight returns the number of visual rows the help/status footer occupies.
+// footerHeight returns the number of visual rows the help/status footer occupies,
+// including the rule separator line above it.
 func (m Model) footerHeight() int {
-	return visualRows(m.renderHelp(), m.width)
+	return visualRows(m.renderHelp(), m.width) + 1 // +1 for rule line
 }
 
 // layoutWithFooter pads `body` with blank lines so that `footer` sticks to the
@@ -300,10 +300,13 @@ func (m Model) layoutWithFooter(body, footer string) string {
 	const minGap = 1
 
 	if m.height <= 0 {
-		return body + strings.Repeat("\n", minGap) + footer
+		// Unknown height — render rule + footer without padding.
+		ruleLen := 40
+		rule := "  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
+		return body + "\n" + rule + "\n" + footer
 	}
 
-	footerRows := visualRows(footer, m.width)
+	footerRows := visualRows(footer, m.width) + 1 // +1 for rule line above footer
 	bodyRows := visualRows(body, m.width)
 
 	available := m.height - footerRows - minGap
@@ -333,7 +336,13 @@ func (m Model) layoutWithFooter(body, footer string) string {
 	if gap < minGap {
 		gap = minGap
 	}
-	return body + strings.Repeat("\n", gap) + footer
+	// Subtle rule above footer.
+	ruleLen := m.width - 4
+	if ruleLen < 1 {
+		ruleLen = 1
+	}
+	rule := "  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
+	return body + strings.Repeat("\n", max(gap-1, 0)) + rule + "\n" + footer
 }
 
 // visualRows returns the number of terminal rows occupied by s when rendered
@@ -370,25 +379,25 @@ func visualRows(s string, width int) int {
 // --- Title & Tabs ---
 
 func (m Model) renderTitleBar() string {
-	title := titleStyle.Render("  clim")
+	title := brandStyle.Render("clim")
 
 	if m.phase == phaseLoading {
-		return title + "  " + loadingStyle.Render(m.spinner.View()+" Loading tools...")
+		return "  " + title + "  " + loadingStyle.Render(m.spinner.View()+" Loading tools...")
 	}
 	if m.phase == phaseResolving && m.pending > 0 {
-		return title + "  " + loadingStyle.Render(fmt.Sprintf("%s Checking versions (%d remaining)...", m.spinner.View(), m.pending))
+		return "  " + title + "  " + loadingStyle.Render(fmt.Sprintf("%s Checking versions (%d remaining)...", m.spinner.View(), m.pending))
 	}
 
 	inst, upd, notInst := m.stats()
 	active := inst + notInst
 	summary := fmt.Sprintf("%d/%d installed", inst, active)
 	if upd > 0 {
-		summary += " · " + upgradableStyle.Render(strconv.Itoa(upd)+" updates")
+		summary += "  " + upgradableStyle.Render(fmt.Sprintf("%d updates", upd))
 	}
 	if notInst > 0 {
-		summary += fmt.Sprintf(" · %d in marketplace", notInst)
+		summary += fmt.Sprintf("  %d available", notInst)
 	}
-	return title + "  " + summaryStyle.Render(summary)
+	return "  " + title + "  " + summaryStyle.Render(summary)
 }
 
 func (m Model) renderTabBar() string {
@@ -397,7 +406,7 @@ func (m Model) renderTabBar() string {
 		idx   int
 	}{
 		{"Installed", tabInstalled},
-		{"★ Favorites", tabFavorites},
+		{"Favorites", tabFavorites},
 		{"Updates", tabUpdates},
 		{"Marketplace", tabDiscover},
 		{"Backup", tabBackup},
@@ -409,14 +418,19 @@ func (m Model) renderTabBar() string {
 
 	var parts []string
 	for _, tab := range tabs {
-		style := inactiveTabStyle
 		if tab.idx == m.activeTab {
-			style = activeTabStyle
+			parts = append(parts, activeTabStyle.Render(tab.label))
+		} else {
+			parts = append(parts, inactiveTabStyle.Render(tab.label))
 		}
-		parts = append(parts, style.Render(tab.label))
 	}
 
-	return "  " + strings.Join(parts, " ")
+	tabLine := "  " + strings.Join(parts, "")
+	ruleLen := m.width - 4
+	if ruleLen < 1 {
+		ruleLen = 1
+	}
+	return tabLine + "\n  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
 }
 
 // --- Search Bar ---
@@ -424,14 +438,15 @@ func (m Model) renderTabBar() string {
 // renderSearchBar renders the search box with a styled border.
 func (m Model) renderSearchBar() string {
 	var content string
+	searchIcon := filterPromptStyle.Render(">")
 	switch {
 	case m.filtering:
-		content = filterPromptStyle.Render("🔍 ") + m.filterInput.View()
+		content = searchIcon + " " + m.filterInput.View()
 	case m.filterText != "":
-		content = filterPromptStyle.Render("🔍 ") + dimVersion.Render(m.filterText) +
+		content = searchIcon + " " + dimVersion.Render(m.filterText) +
 			"  " + dimVersion.Render("(/ edit  Esc clear)")
 	default:
-		content = dimVersion.Render("🔍 / search...")
+		content = dimVersion.Render("> / search...")
 	}
 
 	// Active filter indicators.
@@ -559,8 +574,8 @@ func (m Model) renderPacksList() string {
 		headerStyle.Render("STATUS") +
 		"  " + dashDim.Render("[s: sort by "+sortLabel+"]") + "\n")
 
-	// Overhead: title(1) + tabs(1) + blank(1) + search(1) + sub-tabs(1) + header(1) + gap(1) + footer.
-	visibleRows := m.height - 7 - m.footerHeight()
+	// Overhead: title(1) + tabs(1) + rule(1) + blank(1) + search(1) + sub-tabs(1) + header(1) + gap(1) + footer.
+	visibleRows := m.height - 8 - m.footerHeight()
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
@@ -692,8 +707,8 @@ func (m Model) renderForYouList() string {
 	b.WriteString("  " + dashSection.Render("Recommended for you") +
 		"  " + dimVersion.Render(fmt.Sprintf("(%d suggestions)", len(m.recommendations))) + "\n\n")
 
-	// Overhead: title(1) + tabs(1) + blank(1) + search(1) + sub-tabs(1) + section header(1) + blank(1) + gap(1) + footer.
-	visibleLines := m.height - 8 - m.footerHeight()
+	// Overhead: title(1) + tabs(1) + rule(1) + blank(1) + search(1) + sub-tabs(1) + section header(1) + blank(1) + gap(1) + footer.
+	visibleLines := m.height - 9 - m.footerHeight()
 	if visibleLines < 6 {
 		visibleLines = 6
 	}
@@ -766,9 +781,9 @@ func (m Model) renderOnboardList() string {
 	b.WriteString("  " + dimVersion.Render(fmt.Sprintf("%d tools recommended", len(m.onboardTools))) + "\n\n")
 
 	// Paginated list using recommendation cards.
-	// Overhead: title(1) + tabs(1) + blank(1) + search(1) + sub-tabs(1) + role selector(1)
+	// Overhead: title(1) + tabs(1) + rule(1) + blank(1) + search(1) + sub-tabs(1) + role selector(1)
 	//           + role desc(1) + count(1) + blank(1) + footer.
-	visibleLines := m.height - 9 - m.footerHeight()
+	visibleLines := m.height - 10 - m.footerHeight()
 	if visibleLines < 6 {
 		visibleLines = 6
 	}
@@ -1025,13 +1040,8 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 
 	fmt.Fprintf(&b, "\n  %s  %d/%d installed\n", label("Status:"), installed, len(pack.ToolNames))
 
-	if installed < len(pack.ToolNames) {
-		b.WriteString("  " + nameStyle.Render("i to install missing tools") + "\n")
-	} else {
+	if installed >= len(pack.ToolNames) {
 		b.WriteString("  " + upToDateStyle.Render("All tools in this pack are installed! ✓") + "\n")
-	}
-	if installed > 0 {
-		b.WriteString("  " + dim("x to remove installed tools") + "\n")
 	}
 
 	// Footer.
@@ -1059,7 +1069,8 @@ func (m Model) renderHeader() string {
 		return "  " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
 			headerStyle.Render(fixedWidth("CATEGORY", colCategory)) + "  " +
-			headerStyle.Render(fixedWidth("STATUS", colStars))
+			headerStyle.Render(fixedWidth("STARS", colStars)) + "  " +
+			headerStyle.Render("DESCRIPTION")
 	case tabBackup:
 		return "    " +
 			headerStyle.Render(fixedWidth("TOOL", colName)) + "  " +
@@ -1083,24 +1094,18 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 		line = m.renderDiscoverRow(tool, selected)
 	}
 
-	// Star indicator for favorited tools — inserted after cursor prefix,
-	// before the name. Keeps ▸ cursor visible for selected rows.
+	// Star indicator for favorited tools — replace second char of cursor
+	// prefix with a styled star.
 	if m.favoriteNames[tool.Name] {
-		// Row format is "▸ NAME..." or "  NAME...". Replace the space
-		// after cursor with a styled star.
 		runes := []rune(line)
 		if len(runes) >= 2 {
-			// runes[0] = cursor char (▸ or space), runes[1] = space
 			line = string(runes[0:1]) + upgradableStyle.Render("★") + string(runes[2:])
 		}
 	}
 
 	if selected {
-		// Pad to tool column width (not full terminal width) so the selection
-		// highlight doesn't bleed into the sidebar column.
 		padWidth := m.width
-		hasSidebar := len(m.sidebarItems) > 0
-		if hasSidebar {
+		if len(m.sidebarItems) > 0 {
 			padWidth = m.width - colSidebar - 3
 		}
 		w := lipgloss.Width(line)
@@ -1189,15 +1194,37 @@ func (m Model) renderDiscoverRow(tool registry.Tool, selected bool) string {
 	}
 
 	nameText := toolLabel(tool)
-	nameCell := dimVersion.Render(fixedWidth(nameText, colName))
+	var nameCell string
+	if tool.IsInstalled() {
+		nameCell = upToDateStyle.Render(fixedWidth(nameText, colName))
+	} else {
+		nameCell = nameStyle.Render(fixedWidth(nameText, colName))
+	}
+
 	catCell := categoryStyle.Render(fixedWidth(tool.Category, colCategory))
 
-	// Stars column: pad to a fixed width (empty string pads to colStars too) so
-	// the trailing marketplace-status badge lines up across rows.
+	// Stars column.
 	starsText := githubStarsBadge(tool)
 	starsCell := fixedWidthANSI(dimVersion.Render(starsText), colStars)
 
-	line := cursor + nameCell + "  " + catCell + "  " + starsCell
+	// Description preview — fill remaining width.
+	desc := ""
+	if tool.GitHubInfo != nil && tool.GitHubInfo.Description != "" {
+		desc = tool.GitHubInfo.Description
+	}
+	descWidth := m.width - colName - colCategory - colStars - 10 // cursor + spacing
+	if len(m.sidebarItems) > 0 {
+		descWidth -= colSidebar + 3
+	}
+	if descWidth < 10 {
+		descWidth = 0
+	}
+	descCell := ""
+	if descWidth > 0 && desc != "" {
+		descCell = "  " + dimVersion.Render(fixedWidth(desc, descWidth))
+	}
+
+	line := cursor + nameCell + "  " + catCell + "  " + starsCell + descCell
 
 	var badge string
 	switch tool.MarketplaceStatus {
@@ -2034,7 +2061,7 @@ func (m Model) renderBackupView() string {
 		}
 
 		// Pad remaining space.
-		visibleRows := m.height - 8 - m.footerHeight()
+		visibleRows := m.height - 9 - m.footerHeight()
 		for range max(visibleRows, 0) {
 			b.WriteString("\n")
 		}
@@ -2069,7 +2096,7 @@ func (m Model) renderBackupView() string {
 		b.WriteString("  " + dimVersion.Render("Recipients can install with:") + "  " + detailCmdStyle.Render("clim open <token>") + "\n")
 
 		// Pad remaining space.
-		visibleRows := m.height - 12 - m.footerHeight()
+		visibleRows := m.height - 13 - m.footerHeight()
 		for range max(visibleRows, 0) {
 			b.WriteString("\n")
 		}
@@ -2129,7 +2156,7 @@ func (m Model) renderBackupView() string {
 	b.WriteString(m.renderHeader() + "\n")
 
 	// Backup rows.
-	visibleRows := m.height - 7 - m.footerHeight()
+	visibleRows := m.height - 8 - m.footerHeight()
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
@@ -2525,6 +2552,9 @@ func (m Model) buildSidebarLines(maxRows int) []string {
 		case "platform":
 			isActive = (item.value == "" && m.platformFilter == "") ||
 				(item.value != "" && strings.EqualFold(item.value, m.platformFilter))
+		case "status":
+			isActive = (item.value == "" && m.statusFilter == "") ||
+				(item.value != "" && m.statusFilter == item.value)
 		}
 		if isActive {
 			style = nameStyle

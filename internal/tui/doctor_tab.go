@@ -25,11 +25,11 @@ const (
 // Doctor view color palette.
 var (
 	doctorError   = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true) // red
-	doctorWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))            // orange
-	doctorInfo    = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))             // cyan
-	doctorFix     = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))            // gray
-	doctorSection = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))  // white bold
-	doctorOK      = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)  // green
+	doctorWarning = lipgloss.NewStyle().Foreground(warningColor)                     // warm gold
+	doctorInfo    = lipgloss.NewStyle().Foreground(primaryColor)                     // teal
+	doctorFix     = lipgloss.NewStyle().Foreground(subtleColor)                      // gray
+	doctorSection = lipgloss.NewStyle().Bold(true).Foreground(highlightColor)        // white bold
+	doctorOK      = lipgloss.NewStyle().Foreground(successColor).Bold(true)          // mint green
 )
 
 // renderDoctorView renders the Doctor tab content with sub-tabs.

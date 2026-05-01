@@ -125,6 +125,7 @@ type Model struct {
 	categoryFilter string   // "" = all categories; non-empty = only this category
 	tagFilter      string   // "" = all tags; non-empty = only tools with this tag
 	platformFilter string   // "" = all platforms; non-empty = only this platform
+	statusFilter   string   // "" = all; "installed" = installed; "available" = not installed
 	categories     []string // sorted unique categories, computed once after scan
 	tags           []string // sorted unique tags, computed once after scan
 	platforms      []string // sorted unique platforms, computed once after scan
@@ -279,6 +280,11 @@ type Model struct {
 	projectAddOptional   bool   // true = adding to optional, false = required
 	projectConfirmReinit bool   // true = showing detection results, waiting for confirm
 	projectReinitDir     string // directory for pending reinit
+
+	// Generate confirmation state.
+	projectGenConfirm bool   // true = file exists, waiting for y/n
+	projectGenFormat  string // pending format
+	projectGenPath    string // pending output path
 }
 
 // NewModel creates a new TUI model.
@@ -498,6 +504,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.categoryFilter = ""
 		m.tagFilter = ""
 		m.platformFilter = ""
+		m.statusFilter = ""
 
 		// Load packs.
 		if packs, err := m.svc.LoadPacks(context.Background()); err != nil {
@@ -1007,6 +1014,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case projectGenerateMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ Generate failed: %s", msg.err)
+			return m, nil
+		}
+		m.statusMsg = fmt.Sprintf("✓ Generated %s → %s (%d tools)", msg.format, msg.path, msg.tools)
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -1285,6 +1300,8 @@ func (m Model) handleKeySidebar(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.tagFilter = item.value
 				case "platform":
 					m.platformFilter = item.value
+				case "status":
+					m.statusFilter = item.value
 				}
 				m.cursor = 0
 				m.applyFilter()
@@ -1746,10 +1763,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// Clear active filters.
-		if m.categoryFilter != "" || m.tagFilter != "" || m.platformFilter != "" {
+		if m.categoryFilter != "" || m.tagFilter != "" || m.platformFilter != "" || m.statusFilter != "" {
 			m.categoryFilter = ""
 			m.tagFilter = ""
 			m.platformFilter = ""
+			m.statusFilter = ""
 			m.cursor = 0
 			m.applyFilter()
 			return m, nil
@@ -2220,6 +2238,24 @@ func (m *Model) applyFilter() {
 	m.platforms = collectPlatforms(tabTools)
 	m.sidebarItems = buildSidebarItems(m.categories, m.tags, m.platforms, tabTools)
 
+	// Prepend STATUS filter section on the Marketplace tab.
+	if m.activeTab == tabDiscover {
+		installedCount := 0
+		for _, t := range tabTools {
+			if t.IsInstalled() {
+				installedCount++
+			}
+		}
+		availableCount := len(tabTools) - installedCount
+		statusItems := []sidebarItem{
+			{label: "STATUS", isHeader: true},
+			{label: fmt.Sprintf("All (%d)", len(tabTools)), section: "status", value: ""},
+			{label: fmt.Sprintf("Installed (%d)", installedCount), section: "status", value: "installed"},
+			{label: fmt.Sprintf("Available (%d)", availableCount), section: "status", value: "available"},
+		}
+		m.sidebarItems = append(statusItems, m.sidebarItems...)
+	}
+
 	// Pre-compute search scores for all tools when filter is active.
 	var searchScores map[int]int
 	if filter != "" {
@@ -2240,6 +2276,13 @@ func (m *Model) applyFilter() {
 	// Second pass: apply all filters (sidebar + text search).
 	for i, tool := range m.tools {
 		if !m.matchesTab(tool) {
+			continue
+		}
+		// Status filter (Marketplace tab only).
+		if m.activeTab == tabDiscover && m.statusFilter == "installed" && !tool.IsInstalled() {
+			continue
+		}
+		if m.activeTab == tabDiscover && m.statusFilter == "available" && tool.IsInstalled() {
 			continue
 		}
 		// Structured category filter.
@@ -2310,7 +2353,7 @@ func (m *Model) matchesTab(tool registry.Tool) bool {
 	case tabUpdates:
 		return tool.HasUpdate()
 	case tabDiscover:
-		return !tool.IsInstalled()
+		return true // all tools; statusFilter applied in applyFilter
 	case tabBackup:
 		return false // Backup tab renders from backupItems, not tools
 	case tabProject:
