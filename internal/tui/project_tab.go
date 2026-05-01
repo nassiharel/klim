@@ -209,6 +209,20 @@ func projectEditCmd(path string) tea.Cmd {
 	})
 }
 
+// generateOutputPath returns the output file path for a generate format.
+func generateOutputPath(format, tfPath string) string {
+	dir := filepath.Dir(tfPath)
+	switch format {
+	case "github-action":
+		return filepath.Join(dir, ".github", "workflows", "clim-tools.yml")
+	case "dockerfile":
+		return filepath.Join(dir, "Dockerfile.clim")
+	case "devcontainer":
+		return filepath.Join(dir, ".devcontainer", "devcontainer.json")
+	}
+	return ""
+}
+
 func projectGenerateCmd(format string, tf *teamfile.TeamFile, tfPath string, tools []registry.Tool) tea.Cmd {
 	return func() tea.Msg {
 		installs := generate.ResolveInstalls(tf, tools)
@@ -234,20 +248,10 @@ func projectGenerateCmd(format string, tf *teamfile.TeamFile, tfPath string, too
 		default:
 			return projectGenerateMsg{format: format, err: fmt.Errorf("unknown format: %s", format)}
 		}
-		// Write to project directory.
-		dir := filepath.Dir(tfPath)
-		var outPath string
-		switch format {
-		case "github-action":
-			outDir := filepath.Join(dir, ".github", "workflows")
-			_ = os.MkdirAll(outDir, 0o755)
-			outPath = filepath.Join(outDir, "clim-tools.yml")
-		case "dockerfile":
-			outPath = filepath.Join(dir, "Dockerfile.clim")
-		case "devcontainer":
-			outDir := filepath.Join(dir, ".devcontainer")
-			_ = os.MkdirAll(outDir, 0o755)
-			outPath = filepath.Join(outDir, "devcontainer.json")
+		outPath := generateOutputPath(format, tfPath)
+		// Ensure parent directory exists.
+		if dir := filepath.Dir(outPath); dir != "" {
+			_ = os.MkdirAll(dir, 0o755)
 		}
 		if err := os.WriteFile(outPath, []byte(output), 0o644); err != nil {
 			return projectGenerateMsg{format: format, err: err}
@@ -304,6 +308,11 @@ func (m Model) handleKeyProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Confirmation for reinit.
 	if m.projectConfirmReinit {
 		return m.handleKeyProjectConfirmReinit(msg)
+	}
+
+	// Confirmation for generate overwrite.
+	if m.projectGenConfirm {
+		return m.handleKeyProjectGenConfirm(msg)
 	}
 
 	// Delegate to current view.
@@ -435,20 +444,11 @@ func (m Model) handleKeyProjectDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "Detecting project tools..."
 			return m, projectInitDetectCmd(dir)
 		case projectActionGenGHA:
-			if m.teamFile != nil && m.teamFilePath != "" {
-				m.statusMsg = "Generating GitHub Action..."
-				return m, projectGenerateCmd("github-action", m.teamFile, m.teamFilePath, m.tools)
-			}
+			return m.startGenerate("github-action")
 		case projectActionGenDockerfile:
-			if m.teamFile != nil && m.teamFilePath != "" {
-				m.statusMsg = "Generating Dockerfile..."
-				return m, projectGenerateCmd("dockerfile", m.teamFile, m.teamFilePath, m.tools)
-			}
+			return m.startGenerate("dockerfile")
 		case projectActionGenDevcontainer:
-			if m.teamFile != nil && m.teamFilePath != "" {
-				m.statusMsg = "Generating devcontainer.json..."
-				return m, projectGenerateCmd("devcontainer", m.teamFile, m.teamFilePath, m.tools)
-			}
+			return m.startGenerate("devcontainer")
 		case projectActionDelete:
 			// Remove project from registry and go back to list.
 			if m.teamFilePath != "" {
@@ -491,6 +491,42 @@ func (m Model) handleKeyProjectConfirmReinit(msg tea.KeyMsg) (tea.Model, tea.Cmd
 	case "esc", "n", "N":
 		m.projectConfirmReinit = false
 		m.projectInitResult = nil
+		m.statusMsg = ""
+		return m, nil
+	}
+	return m, nil
+}
+
+// startGenerate checks if the output file exists and either prompts for
+// confirmation or proceeds directly.
+func (m Model) startGenerate(format string) (tea.Model, tea.Cmd) {
+	if m.teamFile == nil || m.teamFilePath == "" {
+		return m, nil
+	}
+	outPath := generateOutputPath(format, m.teamFilePath)
+	if _, err := os.Stat(outPath); err == nil {
+		// File exists — ask for confirmation.
+		m.projectGenConfirm = true
+		m.projectGenFormat = format
+		m.projectGenPath = outPath
+		m.statusMsg = fmt.Sprintf("⚠ %s already exists. Overwrite? (y/n)", filepath.Base(outPath))
+		return m, nil
+	}
+	// File doesn't exist — generate directly.
+	m.statusMsg = fmt.Sprintf("Generating %s...", format)
+	return m, projectGenerateCmd(format, m.teamFile, m.teamFilePath, m.tools)
+}
+
+func (m Model) handleKeyProjectGenConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		m.projectGenConfirm = false
+		m.statusMsg = fmt.Sprintf("Generating %s...", m.projectGenFormat)
+		return m, projectGenerateCmd(m.projectGenFormat, m.teamFile, m.teamFilePath, m.tools)
+	case "esc", "n", "N":
+		m.projectGenConfirm = false
+		m.projectGenFormat = ""
+		m.projectGenPath = ""
 		m.statusMsg = ""
 		return m, nil
 	}

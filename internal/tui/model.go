@@ -280,6 +280,11 @@ type Model struct {
 	projectAddOptional   bool   // true = adding to optional, false = required
 	projectConfirmReinit bool   // true = showing detection results, waiting for confirm
 	projectReinitDir     string // directory for pending reinit
+
+	// Generate confirmation state.
+	projectGenConfirm bool   // true = file exists, waiting for y/n
+	projectGenFormat  string // pending format
+	projectGenPath    string // pending output path
 }
 
 // NewModel creates a new TUI model.
