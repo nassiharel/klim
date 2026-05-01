@@ -91,7 +91,7 @@ func (m Model) renderView() string {
 
 		footer := m.renderHelp()
 		footerRows := visualRows(footer, m.width)
-		const cfgHeaderRows = 3
+		const cfgHeaderRows = 4 // title + tabs + rule + blank
 		const cfgMinGap = 1
 		visibleRows := m.height - cfgHeaderRows - footerRows - cfgMinGap
 		if visibleRows < 5 {
@@ -129,7 +129,7 @@ func (m Model) renderView() string {
 		// footer, and 1-line gap between body and footer.
 		footer := m.renderHelp()
 		footerRows := visualRows(footer, m.width)
-		const headerRows = 3 // title bar + tab bar + blank
+		const headerRows = 4 // title bar + tab bar + rule + blank
 		const minGap = 1
 		visibleRows := m.height - headerRows - footerRows - minGap
 		if visibleRows < 5 {
@@ -167,7 +167,7 @@ func (m Model) renderView() string {
 
 		footer := m.renderHelp()
 		footerRows := visualRows(footer, m.width)
-		const headerRows = 3
+		const headerRows = 4 // title + tabs + rule + blank
 		const minGap = 1
 		visibleRows := m.height - headerRows - footerRows - minGap
 		if visibleRows < 5 {
@@ -226,8 +226,8 @@ func (m Model) renderView() string {
 	// Compute available rows dynamically based on actual footer height.
 	footer := m.renderHelp()
 	footerRows := visualRows(footer, m.width)
-	// Overhead: title(1) + tabs(1) + blank(1) + search(1) + blank(1) + gap(1) + footer.
-	overhead := 6 + footerRows
+	// Overhead: title(1) + tabs(1) + rule(1) + blank(1) + search(1) + blank(1) + gap(1) + footer.
+	overhead := 7 + footerRows
 	if m.activeTab == tabDiscover {
 		overhead += 2 // sub-tab bar + blank line
 	}
@@ -276,9 +276,10 @@ func (m Model) renderView() string {
 	return m.layoutWithFooter(body.String(), footer)
 }
 
-// footerHeight returns the number of visual rows the help/status footer occupies.
+// footerHeight returns the number of visual rows the help/status footer occupies,
+// including the rule separator line above it.
 func (m Model) footerHeight() int {
-	return visualRows(m.renderHelp(), m.width)
+	return visualRows(m.renderHelp(), m.width) + 1 // +1 for rule line
 }
 
 // layoutWithFooter pads `body` with blank lines so that `footer` sticks to the
@@ -302,7 +303,7 @@ func (m Model) layoutWithFooter(body, footer string) string {
 		return body + strings.Repeat("\n", minGap) + footer
 	}
 
-	footerRows := visualRows(footer, m.width)
+	footerRows := visualRows(footer, m.width) + 1 // +1 for rule line above footer
 	bodyRows := visualRows(body, m.width)
 
 	available := m.height - footerRows - minGap
@@ -332,7 +333,13 @@ func (m Model) layoutWithFooter(body, footer string) string {
 	if gap < minGap {
 		gap = minGap
 	}
-	return body + strings.Repeat("\n", gap) + footer
+	// Subtle rule above footer.
+	ruleLen := m.width - 4
+	if ruleLen < 10 {
+		ruleLen = 10
+	}
+	rule := "  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
+	return body + strings.Repeat("\n", max(gap-1, 0)) + rule + "\n" + footer
 }
 
 // visualRows returns the number of terminal rows occupied by s when rendered
@@ -415,7 +422,12 @@ func (m Model) renderTabBar() string {
 		}
 	}
 
-	return "  " + strings.Join(parts, "")
+	tabLine := "  " + strings.Join(parts, "")
+	ruleLen := m.width - 2
+	if ruleLen < 10 {
+		ruleLen = 10
+	}
+	return tabLine + "\n  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
 }
 
 // --- Search Bar ---
@@ -559,8 +571,8 @@ func (m Model) renderPacksList() string {
 		headerStyle.Render("STATUS") +
 		"  " + dashDim.Render("[s: sort by "+sortLabel+"]") + "\n")
 
-	// Overhead: title(1) + tabs(1) + blank(1) + search(1) + sub-tabs(1) + header(1) + gap(1) + footer.
-	visibleRows := m.height - 7 - m.footerHeight()
+	// Overhead: title(1) + tabs(1) + rule(1) + blank(1) + search(1) + sub-tabs(1) + header(1) + gap(1) + footer.
+	visibleRows := m.height - 8 - m.footerHeight()
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
@@ -692,8 +704,8 @@ func (m Model) renderForYouList() string {
 	b.WriteString("  " + dashSection.Render("Recommended for you") +
 		"  " + dimVersion.Render(fmt.Sprintf("(%d suggestions)", len(m.recommendations))) + "\n\n")
 
-	// Overhead: title(1) + tabs(1) + blank(1) + search(1) + sub-tabs(1) + section header(1) + blank(1) + gap(1) + footer.
-	visibleLines := m.height - 8 - m.footerHeight()
+	// Overhead: title(1) + tabs(1) + rule(1) + blank(1) + search(1) + sub-tabs(1) + section header(1) + blank(1) + gap(1) + footer.
+	visibleLines := m.height - 9 - m.footerHeight()
 	if visibleLines < 6 {
 		visibleLines = 6
 	}
@@ -766,9 +778,9 @@ func (m Model) renderOnboardList() string {
 	b.WriteString("  " + dimVersion.Render(fmt.Sprintf("%d tools recommended", len(m.onboardTools))) + "\n\n")
 
 	// Paginated list using recommendation cards.
-	// Overhead: title(1) + tabs(1) + blank(1) + search(1) + sub-tabs(1) + role selector(1)
+	// Overhead: title(1) + tabs(1) + rule(1) + blank(1) + search(1) + sub-tabs(1) + role selector(1)
 	//           + role desc(1) + count(1) + blank(1) + footer.
-	visibleLines := m.height - 9 - m.footerHeight()
+	visibleLines := m.height - 10 - m.footerHeight()
 	if visibleLines < 6 {
 		visibleLines = 6
 	}
@@ -2046,7 +2058,7 @@ func (m Model) renderBackupView() string {
 		}
 
 		// Pad remaining space.
-		visibleRows := m.height - 8 - m.footerHeight()
+		visibleRows := m.height - 9 - m.footerHeight()
 		for range max(visibleRows, 0) {
 			b.WriteString("\n")
 		}
@@ -2081,7 +2093,7 @@ func (m Model) renderBackupView() string {
 		b.WriteString("  " + dimVersion.Render("Recipients can install with:") + "  " + detailCmdStyle.Render("clim open <token>") + "\n")
 
 		// Pad remaining space.
-		visibleRows := m.height - 12 - m.footerHeight()
+		visibleRows := m.height - 13 - m.footerHeight()
 		for range max(visibleRows, 0) {
 			b.WriteString("\n")
 		}
@@ -2141,7 +2153,7 @@ func (m Model) renderBackupView() string {
 	b.WriteString(m.renderHeader() + "\n")
 
 	// Backup rows.
-	visibleRows := m.height - 7 - m.footerHeight()
+	visibleRows := m.height - 8 - m.footerHeight()
 	if visibleRows < 3 {
 		visibleRows = 3
 	}

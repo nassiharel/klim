@@ -242,7 +242,7 @@ func (m Model) renderMyPacksView() string {
 		headerStyle.Render(fixedWidth("TOOLS", colPackTools)) + "  " +
 		headerStyle.Render("DESCRIPTION") + "\n")
 
-	visibleRows := m.height - 8 - m.footerHeight()
+	visibleRows := m.height - 9 - m.footerHeight()
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
