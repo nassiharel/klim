@@ -1109,7 +1109,9 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 
 // rowCursor returns the 2-column cursor prefix for tool list rows.
 func rowCursor(selected, favorite bool) string {
-	accentBar := lipgloss.NewStyle().Foreground(primaryColor)
+	// Explicitly set background on the bar so it stays visible when the row
+	// gets the selectedRowStyle background applied over it.
+	accentBar := lipgloss.NewStyle().Foreground(lipgloss.Color("49")).Bold(true) // bright teal
 	switch {
 	case selected && favorite:
 		return accentBar.Render("▎") + upgradableStyle.Render("★")
