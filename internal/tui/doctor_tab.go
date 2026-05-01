@@ -267,7 +267,11 @@ func (m Model) renderComplianceView() string {
 		}
 		b.WriteString("  " + dashDim.Render("No compliance policy configured.") + "\n\n")
 		b.WriteString("  " + dashDim.Render("Create one with: clim compliance init") + "\n")
-		b.WriteString("  " + dashDim.Render("Policy is stored globally at ~/.config/clim/compliance/policy.yaml") + "\n")
+		policyHint := "Policy is stored in the clim config directory"
+		if p, pathErr := paths.CompliancePolicy(); pathErr == nil {
+			policyHint = "Policy location: " + p
+		}
+		b.WriteString("  " + dashDim.Render(policyHint) + "\n")
 		return b.String()
 	}
 

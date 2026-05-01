@@ -24,13 +24,12 @@ var complianceCmd = &cobra.Command{
 The policy defines which tools are allowed, blocked, required, and which
 install sources and licenses are permitted.
 
-The policy file is stored globally at ~/.config/clim/compliance/policy.yaml.
-Configure a custom path in config.yaml:
-  compliance:
-    policy: /custom/path/to/policy.yaml
+Policy resolution order:
+  1. --policy flag
+  2. compliance.policy in config.yaml
+  3. Default location in the clim config directory
 
-Or pass it directly:
-  clim compliance check --policy /path/to/policy.yaml`,
+Generate a default policy with: clim compliance init`,
 }
 
 var compliancePolicyFlag string
@@ -60,7 +59,7 @@ func init() {
 	complianceCheckCmd.Flags().BoolVar(&complianceJSONFlag, "json", false, "Output results as JSON")
 	complianceCheckCmd.Flags().BoolVar(&complianceRefreshFlag, "refresh", false, "Force fresh scan")
 	complianceShowCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Path to policy file (overrides config)")
-	complianceInitCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Output path (default: ~/.config/clim/compliance/policy.yaml)")
+	complianceInitCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Output path (default: clim config directory)")
 
 	complianceCmd.AddCommand(complianceCheckCmd)
 	complianceCmd.AddCommand(complianceShowCmd)
@@ -227,8 +226,7 @@ func runComplianceInit(cmd *cobra.Command, args []string) error {
 	}
 
 	sample := `# clim Compliance Policy
-# Stored at: ~/.config/clim/compliance/policy.yaml
-# Override in config.yaml:
+# Override location in config.yaml:
 #   compliance:
 #     policy: /custom/path/to/policy.yaml
 

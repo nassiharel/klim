@@ -59,8 +59,11 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&verboseFlag, "verbose", false, "enable verbose logging to stderr")
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
-	// -v prints version (Cobra registers --version automatically; add -v shorthand).
-	rootCmd.Flags().BoolP("version", "v", false, "print version")
+	// Cobra auto-registers --version in Execute; trigger it early to add -v shorthand.
+	rootCmd.InitDefaultVersionFlag()
+	if f := rootCmd.Flags().Lookup("version"); f != nil {
+		f.Shorthand = "v"
+	}
 
 	// Command groups for organized help output.
 	rootCmd.AddGroup(

@@ -258,7 +258,7 @@ type Model struct {
 	doctorSubTab     int                // 0=doctor, 1=audit, 2=compliance
 
 	// Onboard state (Discover → Onboard sub-tab).
-	onboardRole  int              // selected role index (-1 = none)
+	onboardRole  int              // selected role index (0 = first role)
 	onboardTools []recommendation // role-scored tools for current role
 
 	// Team file (.clim.yaml) state.
@@ -2716,6 +2716,12 @@ func (m *Model) recomputeOnboardTools() {
 	role := &onboard.Roles[m.onboardRole]
 	scored := onboard.Recommend(role, m.tools, 20)
 	recs := make([]recommendation, 0, len(scored))
+	maxScore := 0
+	for _, s := range scored {
+		if s.Score > maxScore {
+			maxScore = s.Score
+		}
+	}
 	for _, s := range scored {
 		desc := ""
 		stars := 0
@@ -2723,13 +2729,21 @@ func (m *Model) recomputeOnboardTools() {
 			desc = s.Tool.GitHubInfo.Description
 			stars = s.Tool.GitHubInfo.Stars
 		}
+		pct := 0
+		if maxScore > 0 {
+			pct = s.Score * 100 / maxScore
+			if pct < 1 {
+				pct = 1
+			}
+		}
 		recs = append(recs, recommendation{
 			toolIdx:     s.Index,
 			score:       s.Score,
-			reason:      role.Description,
+			reason:      "", // role description shown in header, not per-card
 			category:    s.Tool.Category,
 			description: desc,
 			stars:       stars,
+			matchPct:    pct,
 		})
 	}
 	m.onboardTools = recs

@@ -751,7 +751,7 @@ func (m Model) renderOnboardList() string {
 	b.WriteString("\n")
 
 	if m.onboardRole < 0 || m.onboardRole >= len(onboard.Roles) {
-		b.WriteString("\n  " + dimVersion.Render("Use ←/→ to pick a role, then browse recommended tools.") + "\n")
+		b.WriteString("\n  " + dimVersion.Render("Use [ ] to pick a role, then browse recommended tools.") + "\n")
 		return b.String()
 	}
 
@@ -766,7 +766,9 @@ func (m Model) renderOnboardList() string {
 	b.WriteString("  " + dimVersion.Render(fmt.Sprintf("%d tools recommended", len(m.onboardTools))) + "\n\n")
 
 	// Paginated list using recommendation cards.
-	visibleLines := m.height - 12
+	// Overhead: title(1) + tabs(1) + blank(1) + search(1) + sub-tabs(1) + role selector(1)
+	//           + role desc(1) + count(1) + blank(1) + footer.
+	visibleLines := m.height - 9 - m.footerHeight()
 	if visibleLines < 6 {
 		visibleLines = 6
 	}

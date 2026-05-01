@@ -108,8 +108,11 @@ func Recommend(role *Role, tools []registry.Tool, maxResults int) []ScoredTool {
 		}
 	}
 
-	sort.Slice(scored, func(i, j int) bool {
-		return scored[i].Score > scored[j].Score
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].Score != scored[j].Score {
+			return scored[i].Score > scored[j].Score
+		}
+		return scored[i].Tool.Name < scored[j].Tool.Name
 	})
 
 	if maxResults > 0 && len(scored) > maxResults {
