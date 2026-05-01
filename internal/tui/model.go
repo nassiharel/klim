@@ -1007,6 +1007,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case projectGenerateMsg:
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf("✗ Generate failed: %s", msg.err)
+			return m, nil
+		}
+		m.statusMsg = fmt.Sprintf("✓ Generated %s → %s (%d tools)", msg.format, msg.path, msg.tools)
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height

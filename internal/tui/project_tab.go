@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/nassiharel/clim/internal/generate"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/teamfile"
 )
@@ -25,14 +26,17 @@ const (
 
 // Project detail action indices.
 const (
-	projectActionRecheck        = 0
-	projectActionInstallMissing = 1
-	projectActionAddRequired    = 2
-	projectActionAddOptional    = 3
-	projectActionEdit           = 4
-	projectActionReinit         = 5
-	projectActionDelete         = 6
-	projectActionCount          = 7
+	projectActionRecheck         = 0
+	projectActionInstallMissing  = 1
+	projectActionAddRequired     = 2
+	projectActionAddOptional     = 3
+	projectActionEdit            = 4
+	projectActionReinit          = 5
+	projectActionGenGHA          = 6
+	projectActionGenDockerfile   = 7
+	projectActionGenDevcontainer = 8
+	projectActionDelete          = 9
+	projectActionCount           = 10
 )
 
 // --- Messages ---
@@ -64,6 +68,14 @@ type projectAddToolMsg struct {
 	toolName string
 	optional bool
 	err      error
+}
+
+type projectGenerateMsg struct {
+	format string // "github-action", "dockerfile", "devcontainer"
+	output string // generated content
+	path   string // output file path
+	tools  int
+	err    error
 }
 
 type projectListLoadedMsg struct {
@@ -195,6 +207,53 @@ func projectEditCmd(path string) tea.Cmd {
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return projectEditorDoneMsg{path: path, err: err}
 	})
+}
+
+func projectGenerateCmd(format string, tf *teamfile.TeamFile, tfPath string, tools []registry.Tool) tea.Cmd {
+	return func() tea.Msg {
+		installs := generate.ResolveInstalls(tf, tools)
+		if len(installs) == 0 {
+			return projectGenerateMsg{format: format, err: errors.New("no tools resolved from .clim.yaml")}
+		}
+		projectName := tf.Name
+		if projectName == "" {
+			projectName = filepath.Base(filepath.Dir(tfPath))
+		}
+		opts := generate.Options{
+			OS:          "ubuntu",
+			ProjectName: projectName,
+		}
+		var output string
+		switch format {
+		case "github-action":
+			output = generate.GitHubAction(installs, opts)
+		case "dockerfile":
+			output = generate.Dockerfile(installs, opts)
+		case "devcontainer":
+			output = generate.DevContainer(installs, opts)
+		default:
+			return projectGenerateMsg{format: format, err: fmt.Errorf("unknown format: %s", format)}
+		}
+		// Write to project directory.
+		dir := filepath.Dir(tfPath)
+		var outPath string
+		switch format {
+		case "github-action":
+			outDir := filepath.Join(dir, ".github", "workflows")
+			_ = os.MkdirAll(outDir, 0o755)
+			outPath = filepath.Join(outDir, "clim-tools.yml")
+		case "dockerfile":
+			outPath = filepath.Join(dir, "Dockerfile.clim")
+		case "devcontainer":
+			outDir := filepath.Join(dir, ".devcontainer")
+			_ = os.MkdirAll(outDir, 0o755)
+			outPath = filepath.Join(outDir, "devcontainer.json")
+		}
+		if err := os.WriteFile(outPath, []byte(output), 0o644); err != nil {
+			return projectGenerateMsg{format: format, err: err}
+		}
+		return projectGenerateMsg{format: format, output: output, path: outPath, tools: len(installs)}
+	}
 }
 
 // --- Key Handling ---
@@ -375,6 +434,21 @@ func (m Model) handleKeyProjectDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.projectInitResult = nil
 			m.statusMsg = "Detecting project tools..."
 			return m, projectInitDetectCmd(dir)
+		case projectActionGenGHA:
+			if m.teamFile != nil && m.teamFilePath != "" {
+				m.statusMsg = "Generating GitHub Action..."
+				return m, projectGenerateCmd("github-action", m.teamFile, m.teamFilePath, m.tools)
+			}
+		case projectActionGenDockerfile:
+			if m.teamFile != nil && m.teamFilePath != "" {
+				m.statusMsg = "Generating Dockerfile..."
+				return m, projectGenerateCmd("dockerfile", m.teamFile, m.teamFilePath, m.tools)
+			}
+		case projectActionGenDevcontainer:
+			if m.teamFile != nil && m.teamFilePath != "" {
+				m.statusMsg = "Generating devcontainer.json..."
+				return m, projectGenerateCmd("devcontainer", m.teamFile, m.teamFilePath, m.tools)
+			}
 		case projectActionDelete:
 			// Remove project from registry and go back to list.
 			if m.teamFilePath != "" {
@@ -756,15 +830,15 @@ func (m Model) renderProjectDetail() string {
 		{"Add optional tool", "Add a tool to optional list"},
 		{"Edit .clim.yaml", "Open in $EDITOR"},
 		{"Re-init", "Scan project files and regenerate"},
+		{"Generate GitHub Action", "CI workflow from .clim.yaml"},
+		{"Generate Dockerfile", "Container image from .clim.yaml"},
+		{"Generate devcontainer", "VS Code / Codespaces config"},
 		{"Delete project", "Remove from project list"},
 	}
 
 	for i, action := range actions {
-		cursor := "  "
-		if i == m.projectCursor {
-			cursor = "▸ "
-		}
-		line := cursor + nameStyle.Render(fixedWidth(action.label, 22)) + "  " + dimVersion.Render(action.desc)
+		cursor := rowCursor(i == m.projectCursor, false)
+		line := cursor + nameStyle.Render(fixedWidth(action.label, 26)) + "  " + dimVersion.Render(action.desc)
 		if i == m.projectCursor {
 			w := lipgloss.Width(line)
 			if w < m.width {
