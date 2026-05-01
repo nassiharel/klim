@@ -505,17 +505,28 @@ func (m Model) startGenerate(format string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	outPath := generateOutputPath(format, m.teamFilePath)
-	if _, err := os.Stat(outPath); err == nil {
+	if outPath == "" {
+		m.statusMsg = "✗ Unknown format: " + format
+		return m, nil
+	}
+	_, err := os.Stat(outPath)
+	switch {
+	case err == nil:
 		// File exists — ask for confirmation.
 		m.projectGenConfirm = true
 		m.projectGenFormat = format
 		m.projectGenPath = outPath
 		m.statusMsg = fmt.Sprintf("⚠ %s already exists. Overwrite? (y/n)", filepath.Base(outPath))
 		return m, nil
+	case errors.Is(err, os.ErrNotExist):
+		// File doesn't exist — generate directly.
+		m.statusMsg = fmt.Sprintf("Generating %s...", format)
+		return m, projectGenerateCmd(format, m.teamFile, m.teamFilePath, m.tools)
+	default:
+		// Other stat error (permissions, etc.)
+		m.statusMsg = fmt.Sprintf("✗ %s", err)
+		return m, nil
 	}
-	// File doesn't exist — generate directly.
-	m.statusMsg = fmt.Sprintf("Generating %s...", format)
-	return m, projectGenerateCmd(format, m.teamFile, m.teamFilePath, m.tools)
 }
 
 func (m Model) handleKeyProjectGenConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

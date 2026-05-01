@@ -2277,11 +2277,11 @@ func (m *Model) applyFilter() {
 		if !m.matchesTab(tool) {
 			continue
 		}
-		// Status filter (Marketplace tab).
-		if m.statusFilter == "installed" && !tool.IsInstalled() {
+		// Status filter (Marketplace tab only).
+		if m.activeTab == tabDiscover && m.statusFilter == "installed" && !tool.IsInstalled() {
 			continue
 		}
-		if m.statusFilter == "available" && tool.IsInstalled() {
+		if m.activeTab == tabDiscover && m.statusFilter == "available" && tool.IsInstalled() {
 			continue
 		}
 		// Structured category filter.

@@ -77,8 +77,8 @@ func init() {
 		f.Shorthand = "v"
 	}
 
-	// Colorized help output when connected to a terminal.
-	if term.IsTerminal(int(os.Stdout.Fd())) || term.IsTerminal(int(os.Stderr.Fd())) { //nolint:gosec // G115: uintptr→int is the standard Go pattern for term.IsTerminal
+	// Colorized help output only when stdout is a terminal (not piped/redirected).
+	if term.IsTerminal(int(os.Stdout.Fd())) { //nolint:gosec // G115: uintptr→int is the standard Go pattern for term.IsTerminal
 		initColorHelp()
 	}
 

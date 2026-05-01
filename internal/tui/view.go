@@ -90,7 +90,7 @@ func (m Model) renderView() string {
 		lines := strings.Split(content, "\n")
 
 		footer := m.renderHelp()
-		footerRows := visualRows(footer, m.width)
+		footerRows := m.footerHeight()
 		const cfgHeaderRows = 4 // title + tabs + rule + blank
 		const cfgMinGap = 1
 		visibleRows := m.height - cfgHeaderRows - footerRows - cfgMinGap
@@ -128,8 +128,8 @@ func (m Model) renderView() string {
 		// Compute available visible rows: total height minus tab bar (2 lines),
 		// footer, and 1-line gap between body and footer.
 		footer := m.renderHelp()
-		footerRows := visualRows(footer, m.width)
-		const headerRows = 4 // title bar + tab bar + rule + blank
+		footerRows := m.footerHeight()
+		const headerRows = 4 // title + tabs + rule + blank
 		const minGap = 1
 		visibleRows := m.height - headerRows - footerRows - minGap
 		if visibleRows < 5 {
@@ -166,7 +166,7 @@ func (m Model) renderView() string {
 		lines := strings.Split(content, "\n")
 
 		footer := m.renderHelp()
-		footerRows := visualRows(footer, m.width)
+		footerRows := m.footerHeight()
 		const headerRows = 4 // title + tabs + rule + blank
 		const minGap = 1
 		visibleRows := m.height - headerRows - footerRows - minGap
@@ -225,7 +225,7 @@ func (m Model) renderView() string {
 	// Two-column layout: sidebar | tool list.
 	// Compute available rows dynamically based on actual footer height.
 	footer := m.renderHelp()
-	footerRows := visualRows(footer, m.width)
+	footerRows := m.footerHeight()
 	// Overhead: title(1) + tabs(1) + rule(1) + blank(1) + search(1) + blank(1) + gap(1) + footer.
 	overhead := 7 + footerRows
 	if m.activeTab == tabDiscover {
@@ -333,10 +333,10 @@ func (m Model) layoutWithFooter(body, footer string) string {
 	if gap < minGap {
 		gap = minGap
 	}
-	// Subtle rule above footer.
+	// Subtle rule above footer (skip on very narrow terminals).
 	ruleLen := m.width - 4
-	if ruleLen < 10 {
-		ruleLen = 10
+	if ruleLen < 4 {
+		return body + strings.Repeat("\n", gap) + footer
 	}
 	rule := "  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
 	return body + strings.Repeat("\n", max(gap-1, 0)) + rule + "\n" + footer
@@ -424,8 +424,8 @@ func (m Model) renderTabBar() string {
 
 	tabLine := "  " + strings.Join(parts, "")
 	ruleLen := m.width - 2
-	if ruleLen < 10 {
-		ruleLen = 10
+	if ruleLen < 4 {
+		return tabLine // skip rule on very narrow terminals
 	}
 	return tabLine + "\n  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
 }

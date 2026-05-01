@@ -398,7 +398,7 @@ func (m *Model) autoScrollConfig(settings []configSetting) {
 	preamble := m.configPreambleLines()
 	cursorLine := preamble + settingLineOffset(settings, m.configCursor)
 
-	// Match renderView's visible rows: height - headerRows(3) - gap(1) - footer.
+	// Match renderView's visible rows: height - headerRows(4: title+tabs+rule+blank) - gap(1) - footer.
 	visibleRows := m.height - 5 - m.footerHeight()
 	if visibleRows < 5 {
 		visibleRows = 5
