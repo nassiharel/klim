@@ -15,6 +15,7 @@ import (
 	"github.com/nassiharel/clim/internal/build"
 	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/logging"
+	"github.com/nassiharel/clim/internal/onboard"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/scancache"
 )
@@ -213,6 +214,12 @@ func (m Model) renderView() string {
 	// Marketplace For You sub-tab — separate rendering path.
 	if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 		body.WriteString(m.renderForYouList())
+		return m.layoutWithFooter(body.String(), m.renderHelp())
+	}
+
+	// Marketplace Onboard sub-tab — role-based recommendations.
+	if m.activeTab == tabDiscover && m.discoverSubTab == discoverOnboard {
+		body.WriteString(m.renderOnboardList())
 		return m.layoutWithFooter(body.String(), m.renderHelp())
 	}
 
@@ -459,6 +466,7 @@ func (m Model) renderDiscoverSubTabs() string {
 		{"Tools", discoverTools},
 		{"Packs", discoverPacks},
 		{"For You", discoverForYou},
+		{"Onboard", discoverOnboard},
 	}
 	var parts []string
 	for _, l := range labels {
@@ -716,6 +724,76 @@ func (m Model) renderForYouList() string {
 	}
 
 	// Pad remaining lines to prevent layout jitter.
+	renderedItems := end - start
+	renderedLines := renderedItems*2 + max(renderedItems-1, 0)
+	for i := renderedLines; i < visibleLines; i++ {
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// renderOnboardList renders the role-based onboard sub-tab.
+func (m Model) renderOnboardList() string {
+	var b strings.Builder
+
+	// Role selector.
+	b.WriteString("  " + dashSection.Render("Select your role") + "  ")
+	for i, r := range onboard.Roles {
+		label := r.Name
+		if i == m.onboardRole {
+			b.WriteString(activeTabStyle.Render("▸ " + label))
+		} else {
+			b.WriteString(inactiveTabStyle.Render("  " + label))
+		}
+		b.WriteString(" ")
+	}
+	b.WriteString("\n")
+
+	if m.onboardRole < 0 || m.onboardRole >= len(onboard.Roles) {
+		b.WriteString("\n  " + dimVersion.Render("Use ←/→ to pick a role, then browse recommended tools.") + "\n")
+		return b.String()
+	}
+
+	role := &onboard.Roles[m.onboardRole]
+	b.WriteString("  " + dimVersion.Render(role.Description) + "\n\n")
+
+	if len(m.onboardTools) == 0 {
+		b.WriteString("  " + dimVersion.Render("No additional tools found — you may already have everything for this role!") + "\n")
+		return b.String()
+	}
+
+	b.WriteString("  " + dimVersion.Render(fmt.Sprintf("%d tools recommended", len(m.onboardTools))) + "\n\n")
+
+	// Paginated list using recommendation cards.
+	visibleLines := m.height - 12
+	if visibleLines < 6 {
+		visibleLines = 6
+	}
+	itemsPerPage := visibleLines / 3
+	if itemsPerPage < 2 {
+		itemsPerPage = 2
+	}
+
+	start := 0
+	if m.cursor >= itemsPerPage {
+		start = m.cursor - itemsPerPage + 1
+	}
+	end := start + itemsPerPage
+	if end > len(m.onboardTools) {
+		end = len(m.onboardTools)
+	}
+
+	for vi := start; vi < end; vi++ {
+		rec := m.onboardTools[vi]
+		selected := vi == m.cursor
+		b.WriteString(m.renderRecCard(rec, selected, false) + "\n")
+		if vi < end-1 {
+			b.WriteString("\n")
+		}
+	}
+
+	// Pad remaining lines.
 	renderedItems := end - start
 	renderedLines := renderedItems*2 + max(renderedItems-1, 0)
 	for i := renderedLines; i < visibleLines; i++ {
@@ -2380,6 +2458,17 @@ func (m Model) renderHelp() string {
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 			parts = []string{
 				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("Enter") + " detail",
+				dimVersion.Render("i") + " install",
+				dimVersion.Render("*") + " favorite",
+				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("q") + " quit",
+			}
+		}
+		if m.activeTab == tabDiscover && m.discoverSubTab == discoverOnboard {
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("[]") + " role",
 				dimVersion.Render("Enter") + " detail",
 				dimVersion.Render("i") + " install",
 				dimVersion.Render("*") + " favorite",

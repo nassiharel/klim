@@ -62,7 +62,6 @@ func init() {
 	// -v prints version (Cobra registers --version automatically; add -v shorthand).
 	rootCmd.Flags().BoolP("version", "v", false, "print version")
 
-
 	// Command groups for organized help output.
 	rootCmd.AddGroup(
 		&cobra.Group{ID: "core", Title: "Core Commands:"},
