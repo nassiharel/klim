@@ -11,23 +11,26 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/clim/internal/compliance"
+	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/progress"
 )
 
 var complianceCmd = &cobra.Command{
 	Use:   "compliance",
 	Short: "Validate tools against company compliance policy",
-	Long: `Check installed tools against a compliance policy file (.clim-policy.yaml).
+	Long: `Check installed tools against a compliance policy file.
 
 The policy defines which tools are allowed, blocked, required, and which
 install sources and licenses are permitted.
 
-Configure the policy path in config.yaml:
+The policy file is stored globally at ~/.config/clim/compliance/policy.yaml.
+Configure a custom path in config.yaml:
   compliance:
-    policy: /path/to/.clim-policy.yaml
+    policy: /custom/path/to/policy.yaml
 
 Or pass it directly:
-  clim compliance check --policy .clim-policy.yaml`,
+  clim compliance check --policy /path/to/policy.yaml`,
 }
 
 var compliancePolicyFlag string
@@ -48,7 +51,7 @@ var complianceShowCmd = &cobra.Command{
 
 var complianceInitCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Generate a sample .clim-policy.yaml",
+	Short: "Generate a sample compliance policy file",
 	RunE:  runComplianceInit,
 }
 
@@ -57,7 +60,7 @@ func init() {
 	complianceCheckCmd.Flags().BoolVar(&complianceJSONFlag, "json", false, "Output results as JSON")
 	complianceCheckCmd.Flags().BoolVar(&complianceRefreshFlag, "refresh", false, "Force fresh scan")
 	complianceShowCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Path to policy file (overrides config)")
-	complianceInitCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Output path (default: .clim-policy.yaml)")
+	complianceInitCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Output path (default: ~/.config/clim/compliance/policy.yaml)")
 
 	complianceCmd.AddCommand(complianceCheckCmd)
 	complianceCmd.AddCommand(complianceShowCmd)
@@ -73,18 +76,19 @@ func resolvePolicyPath() (string, error) {
 	if path != "" {
 		return path, nil
 	}
-	return "", errors.New("no policy file found\n\nConfigure in config.yaml:\n  compliance:\n    policy: /path/to/.clim-policy.yaml\n\nOr pass directly:\n  clim compliance check --policy .clim-policy.yaml\n\nOr generate one:\n  clim compliance init")
+	return "", errors.New("no policy file found\n\nGenerate one:\n  clim compliance init\n\nOr configure a custom path in config.yaml:\n  compliance:\n    policy: /path/to/policy.yaml\n\nOr pass directly:\n  clim compliance check --policy /path/to/policy.yaml")
 }
 
 // findPolicyPath returns the policy file path from config or default
-// locations, or empty string if none exists. Shared across commands.
+// global location, or empty string if none exists. Shared across commands.
 func findPolicyPath() string {
 	if cfg.Compliance.Policy != "" {
 		return cfg.Compliance.Policy
 	}
-	for _, candidate := range []string{".clim-policy.yaml", ".clim-policy.yml"} {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
+	// Check default global location.
+	if p, err := paths.CompliancePolicy(); err == nil {
+		if _, statErr := os.Stat(p); statErr == nil {
+			return p
 		}
 	}
 	return ""
@@ -209,9 +213,13 @@ func runComplianceShow(cmd *cobra.Command, args []string) error {
 }
 
 func runComplianceInit(cmd *cobra.Command, args []string) error {
-	path := ".clim-policy.yaml"
-	if compliancePolicyFlag != "" {
-		path = compliancePolicyFlag
+	path := compliancePolicyFlag
+	if path == "" {
+		p, err := paths.CompliancePolicy()
+		if err != nil {
+			return fmt.Errorf("resolving policy path: %w", err)
+		}
+		path = p
 	}
 
 	if _, err := os.Stat(path); err == nil {
@@ -219,9 +227,10 @@ func runComplianceInit(cmd *cobra.Command, args []string) error {
 	}
 
 	sample := `# clim Compliance Policy
-# Place this file in your repo root or configure in config.yaml:
+# Stored at: ~/.config/clim/compliance/policy.yaml
+# Override in config.yaml:
 #   compliance:
-#     policy: /path/to/.clim-policy.yaml
+#     policy: /custom/path/to/policy.yaml
 
 name: "My Company Policy"
 description: "Tool compliance rules for the engineering team"
@@ -258,6 +267,9 @@ required_tools:
     version: ">=2.40"
 `
 
+	if err := fileutil.EnsureDir(path); err != nil {
+		return fmt.Errorf("creating policy directory: %w", err)
+	}
 	if err := os.WriteFile(path, []byte(sample), 0644); err != nil {
 		return fmt.Errorf("writing policy: %w", err)
 	}
