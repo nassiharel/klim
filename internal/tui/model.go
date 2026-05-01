@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -1822,7 +1821,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "s":
 		// Cycle sort mode on tool-list tabs (not Backup/Dashboard/Config).
-		if m.activeTab <= tabDiscover && !(m.activeTab == tabDiscover && m.discoverSubTab != discoverTools) {
+		if m.activeTab <= tabDiscover && (m.activeTab != tabDiscover || m.discoverSubTab == discoverTools) {
 			m.sortMode = (m.sortMode + 1) % sortModeCount
 			m.cursor = 0
 			m.applyFilter()
@@ -2190,16 +2189,6 @@ func (m *Model) applyFilter() {
 	}
 }
 
-// matchesTags reports whether any tag contains the filter substring.
-func matchesTags(tags []string, filter string) bool {
-	for _, tag := range tags {
-		if strings.Contains(strings.ToLower(tag), filter) {
-			return true
-		}
-	}
-	return false
-}
-
 // hasTag reports whether the tool has an exact tag match (case-insensitive).
 func hasTag(tags []string, tag string) bool {
 	for _, t := range tags {
@@ -2434,36 +2423,6 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 
 // --- Actions ---
 
-// startAction takes a source picker and either shows it (multiple choices)
-// or skips straight to confirmation (single choice). Does nothing if picker is nil.
-func (m *Model) startAction(picker *sourcePicker) {
-	if picker == nil {
-		return
-	}
-	if len(picker.choices) == 1 {
-		// Only one source available — skip picker, go straight to confirmation.
-		m.pendingAction = &pendingAction{
-			toolIdx: picker.toolIdx,
-			action:  picker.action,
-			cmdArgs: picker.choices[0].cmdArgs,
-		}
-		return
-	}
-	// Multiple sources — show as menu items in the detail view.
-	m.toolMenuItems = nil
-	for _, c := range picker.choices {
-		m.toolMenuItems = append(m.toolMenuItems, toolMenuAction{
-			label: string(c.source),
-			picker: &sourcePicker{
-				toolIdx: picker.toolIdx,
-				action:  picker.action,
-				choices: []sourceChoice{c},
-			},
-		})
-	}
-	m.toolMenu = 0
-}
-
 // buildToolMenu resolves available actions for the current tool and populates the tool menu.
 // Returns true if the menu has any actions, false otherwise.
 func (m *Model) buildToolMenu() bool {
@@ -2658,138 +2617,6 @@ func (m Model) currentToolIdx() int {
 	return -1
 }
 
-// resolveInstallAction builds a source picker for installing the current tool.
-// Returns nil if the tool is already installed or has no install sources.
-func (m Model) resolveInstallAction() *sourcePicker {
-	tool := m.currentTool()
-	if tool == nil || tool.IsInstalled() {
-		return nil
-	}
-	// Show all package managers that have a package ID for this tool,
-	// including ones not currently on PATH.
-	var choices []sourceChoice
-	for _, src := range allSourcesForOS() {
-		if args := tool.Packages.InstallArgs(src); args != nil {
-			choices = append(choices, sourceChoice{source: src, cmdArgs: args})
-		}
-	}
-	if len(choices) == 0 {
-		return nil
-	}
-	return &sourcePicker{
-		toolIdx: m.currentToolIdx(),
-		action:  actionInstall,
-		choices: choices,
-	}
-}
-
-// allSourcesForOS returns all package managers for the current OS,
-// regardless of whether they're installed on PATH.
-func allSourcesForOS() []registry.InstallSource {
-	switch runtime.GOOS {
-	case "windows":
-		return []registry.InstallSource{
-			registry.SourceWinget, registry.SourceScoop,
-			registry.SourceChoco, registry.SourceNPM,
-		}
-	case "darwin":
-		return []registry.InstallSource{
-			registry.SourceBrew, registry.SourceNPM,
-		}
-	default:
-		return []registry.InstallSource{
-			registry.SourceApt, registry.SourceSnap,
-			registry.SourceBrew, registry.SourceNPM,
-		}
-	}
-}
-
-// resolveUpgradeAction builds a source picker for upgrading the current tool.
-// Only offers upgrade via package managers that actually installed the tool
-// (i.e. sources present in tool.Instances). Manual installs cannot be upgraded
-// through clim.
-func (m Model) resolveUpgradeAction() *sourcePicker {
-	tool := m.currentTool()
-	if tool == nil || !tool.IsInstalled() {
-		return nil
-	}
-
-	detected := tool.PrimaryInstance().Source
-	if detected == registry.SourceManual {
-		return nil
-	}
-
-	// Prefer detected source first, then other sources that actually installed
-	// this tool. Never offer an upgrade via a package manager the user did not
-	// use to install the tool — that would create a second, conflicting copy.
-	var choices []sourceChoice
-	if args := tool.Packages.UpgradeArgs(detected); args != nil {
-		choices = append(choices, sourceChoice{source: detected, cmdArgs: args})
-	}
-
-	seen := map[registry.InstallSource]bool{detected: true}
-	for _, inst := range tool.Instances {
-		if seen[inst.Source] || inst.Source == registry.SourceManual {
-			continue
-		}
-		seen[inst.Source] = true
-		if args := tool.Packages.UpgradeArgs(inst.Source); args != nil {
-			choices = append(choices, sourceChoice{source: inst.Source, cmdArgs: args})
-		}
-	}
-	if len(choices) == 0 {
-		return nil
-	}
-	return &sourcePicker{
-		toolIdx: m.currentToolIdx(),
-		action:  actionUpgrade,
-		choices: choices,
-	}
-}
-
-// resolveRemoveAction builds a source picker for removing the current tool.
-// Only offers remove via package managers that actually installed the tool
-// (i.e. sources present in tool.Instances). Manual installs cannot be removed
-// through clim.
-func (m Model) resolveRemoveAction() *sourcePicker {
-	tool := m.currentTool()
-	if tool == nil || !tool.IsInstalled() {
-		return nil
-	}
-
-	detected := tool.PrimaryInstance().Source
-	if detected == registry.SourceManual {
-		return nil
-	}
-
-	// Prefer detected source first, then other sources that actually installed
-	// this tool. Never offer a remove via a package manager the user did not
-	// use to install the tool — it would fail or, worse, remove an unrelated
-	// package with the same name.
-	var choices []sourceChoice
-	if args := tool.Packages.RemoveArgs(detected); args != nil {
-		choices = append(choices, sourceChoice{source: detected, cmdArgs: args})
-	}
-
-	seen := map[registry.InstallSource]bool{detected: true}
-	for _, inst := range tool.Instances {
-		if seen[inst.Source] || inst.Source == registry.SourceManual {
-			continue
-		}
-		seen[inst.Source] = true
-		if args := tool.Packages.RemoveArgs(inst.Source); args != nil {
-			choices = append(choices, sourceChoice{source: inst.Source, cmdArgs: args})
-		}
-	}
-	if len(choices) == 0 {
-		return nil
-	}
-	return &sourcePicker{
-		toolIdx: m.currentToolIdx(),
-		action:  actionRemove,
-		choices: choices,
-	}
-}
 
 // --- Backup ---
 

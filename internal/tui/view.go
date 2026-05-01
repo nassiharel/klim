@@ -1564,18 +1564,20 @@ func (m Model) renderAboutSection(tool registry.Tool) string {
 	// Platforms as colored pills (highlighted for the current OS).
 	if platforms := derivePlatforms(tool.Packages); len(platforms) > 0 {
 		current := currentOSLabel()
-		line := "  " + label(fixedWidth("Platforms", 14))
+		var lineBuilder strings.Builder
+		lineBuilder.WriteString("  " + label(fixedWidth("Platforms", 14)))
 		for i, p := range platforms {
 			pill := chipStyle.Render(p)
 			if p == current {
 				pill = chipAccentStyle.Render(p + " (this host)")
 			}
-			line += pill
+			lineBuilder.WriteString(pill)
 			if i < len(platforms)-1 {
-				line += " "
+				lineBuilder.WriteString(" ")
 			}
 		}
-		b.WriteString(line + "\n")
+		lineBuilder.WriteString("\n")
+		b.WriteString(lineBuilder.String())
 	}
 
 	// Tags + topics (deduped, case-insensitive).

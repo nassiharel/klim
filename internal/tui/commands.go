@@ -131,7 +131,7 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 			if t.GitHubInfo.Stars > 10000 {
 				score += 2
 			} else if t.GitHubInfo.Stars > 1000 {
-				score += 1
+				score++
 			}
 		}
 
@@ -139,7 +139,7 @@ func computeRecommendations(tools []registry.Tool) []recommendation {
 		if t.GitHubInfo != nil && t.GitHubInfo.PushedAt != "" {
 			if pushed, err := time.Parse(time.RFC3339, t.GitHubInfo.PushedAt); err == nil {
 				if time.Since(pushed) < 6*30*24*time.Hour {
-					score += 1
+					score++
 				}
 			}
 		}
@@ -403,10 +403,16 @@ type toolActionCmd struct {
 	stderr io.Writer
 }
 
+// SetStdin sets the stdin for the tool action command.
 func (c *toolActionCmd) SetStdin(r io.Reader)  { c.stdin = r }
+
+// SetStdout sets the stdout for the tool action command.
 func (c *toolActionCmd) SetStdout(w io.Writer) { c.stdout = w }
+
+// SetStderr sets the stderr for the tool action command.
 func (c *toolActionCmd) SetStderr(w io.Writer) { c.stderr = w }
 
+// Run executes the tool action command.
 func (c *toolActionCmd) Run() error {
 	// Apply os.Std* fallbacks so command I/O works even if Bubble Tea
 	// didn't set the fields (nil stdio would discard output).

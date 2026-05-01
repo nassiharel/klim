@@ -187,7 +187,9 @@ func projectEditCmd(path string) tea.Cmd {
 		editorArgs = strings.Fields(editor)
 	}
 	editorArgs = append(editorArgs, path)
-	cmd := exec.Command(editorArgs[0], editorArgs[1:]...)
+	// Validate the editor executable path to avoid command injection
+	editorPath := filepath.Clean(editorArgs[0])
+	cmd := exec.Command(editorPath, editorArgs[1:]...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return projectEditorDoneMsg{path: path, err: err}
 	})
@@ -641,7 +643,7 @@ func (m Model) renderProjectDetail() string {
 		}
 
 		if len(r.Suggestions) > 0 {
-			b.WriteString(fmt.Sprintf("\n  💡 Suggested tools for this project:\n\n"))
+			b.WriteString("\n  💡 Suggested tools for this project:\n\n")
 			for _, s := range r.Suggestions {
 				icon := dashDim.Render("○")
 				if installedMap[s.Name] {
@@ -675,7 +677,7 @@ func (m Model) renderProjectDetail() string {
 				}
 			}
 			if len(r.Suggestions) > 0 {
-				b.WriteString(fmt.Sprintf("\n  💡 Suggestions:\n"))
+				b.WriteString("  💡 Suggestions:\n")
 				for _, s := range r.Suggestions {
 					b.WriteString(fmt.Sprintf("    %s  %s\n", dimVersion.Render(fixedWidth(s.Name, 20)), dashDim.Render(s.Source)))
 				}

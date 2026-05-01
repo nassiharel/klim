@@ -129,8 +129,7 @@ func runTry(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	var runErr error
-	runErr = c.Run()
+	runErr := c.Run()
 	fmt.Fprintln(os.Stderr)
 
 	// Cleanup prompt (unless --keep or was already installed).

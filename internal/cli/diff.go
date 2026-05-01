@@ -154,8 +154,8 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "\nComparing local vs %s\n\n", remoteName)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "TOOL\tLOCAL\tREMOTE\tSTATUS")
-	fmt.Fprintln(w, "----\t-----\t------\t------")
+	_, _ = fmt.Fprintln(w, "TOOL\tLOCAL\tREMOTE\tSTATUS")
+	_, _ = fmt.Fprintln(w, "----\t-----\t------\t------")
 
 	for _, e := range entries {
 		localCol := e.localVersion
@@ -166,7 +166,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		if e.remoteSource != "" {
 			remoteCol += " (" + e.remoteSource + ")"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", e.name, localCol, remoteCol, e.status)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", e.name, localCol, remoteCol, e.status)
 	}
 	_ = w.Flush()
 

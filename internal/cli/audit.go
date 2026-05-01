@@ -108,7 +108,7 @@ func runAudit(cmd *cobra.Command, args []string) error {
 			if f.Severity == "warning" {
 				icon = "⚠"
 			}
-			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", icon, f.Tool, f.Category, f.Message)
+			_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", icon, f.Tool, f.Category, f.Message)
 		}
 		_ = w.Flush()
 	}

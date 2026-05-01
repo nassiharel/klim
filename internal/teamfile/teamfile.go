@@ -15,6 +15,7 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
+// FileName is the filename for the .clim.yaml team manifest file.
 const FileName = ".clim.yaml"
 
 // TeamFile is the top-level .clim.yaml schema.
@@ -34,6 +35,7 @@ type RequiredTool struct {
 type CheckStatus int
 
 const (
+	// StatusOK indicates the tool is installed with a satisfactory version.
 	StatusOK       CheckStatus = iota // installed, version satisfied
 	StatusMissing                     // in catalog but not installed
 	StatusOutdated                    // installed but version too old

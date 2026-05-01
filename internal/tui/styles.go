@@ -62,8 +62,6 @@ var (
 	detailTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(primaryColor)
 	detailLabelStyle = lipgloss.NewStyle().Foreground(subtleColor)
 	detailCmdStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("222")) // Yellow for commands
-	detailPrimary    = lipgloss.NewStyle().Foreground(successColor)
-	detailSecondary  = lipgloss.NewStyle().Foreground(dimColor)
 
 	// Hero description — readable (not dim) so the main "what is this tool"
 	// line is prominent.

@@ -146,7 +146,7 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 		if v.Severity == "error" {
 			icon = "✗"
 		}
-		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", icon, v.Tool, v.Rule, v.Message)
+		_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", icon, v.Tool, v.Rule, v.Message)
 	}
 	_ = w.Flush()
 

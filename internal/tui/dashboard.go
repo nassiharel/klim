@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -129,10 +130,10 @@ func (m Model) renderDashboardView() string {
 		label string
 		style lipgloss.Style
 	}{
-		{"●", fmt.Sprintf("%d", installed), "Installed", dashGaugeFill},
-		{"▲", fmt.Sprintf("%d", updates), "Updates", dashGaugeWarn},
-		{"○", fmt.Sprintf("%d", notInstalled), "Available", dashGaugeInfo},
-		{"★", fmt.Sprintf("%d", len(m.favoriteNames)), "Favorites", dashGaugeWarn},
+		{"●", strconv.Itoa(installed), "Installed", dashGaugeFill},
+		{"▲", strconv.Itoa(updates), "Updates", dashGaugeWarn},
+		{"○", strconv.Itoa(notInstalled), "Available", dashGaugeInfo},
+		{"★", strconv.Itoa(len(m.favoriteNames)), "Favorites", dashGaugeWarn},
 	}
 
 	var cardStrs []string
