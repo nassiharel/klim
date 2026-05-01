@@ -1098,10 +1098,13 @@ func (m Model) renderRow(tool registry.Tool, toolIdx int, selected bool) string 
 		if w < padWidth {
 			line += strings.Repeat(" ", padWidth-w)
 		}
-		// Use raw ANSI background instead of lipgloss wrapping. Lipgloss
-		// emits resets after each inner styled segment, killing the
-		// background. Raw ANSI background persists until explicitly reset.
-		line = "\033[48;5;236m" + line + "\033[0m"
+		// Re-inject background after every ANSI reset so it persists
+		// across inner lipgloss-styled segments. Lipgloss uses both
+		// \x1b[0m and \x1b[m as reset sequences.
+		const bg = "\033[48;5;236m"
+		line = strings.ReplaceAll(line, "\033[0m", "\033[0m"+bg)
+		line = strings.ReplaceAll(line, "\033[m", "\033[m"+bg)
+		line = bg + line + "\033[0m"
 	}
 
 	return line
