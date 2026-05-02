@@ -39,7 +39,9 @@ func TestBatchOp_SkipThenComplete_NoDblCount(t *testing.T) {
 	b := newBatchOp("Testing", items)
 
 	// Skip the running item.
-	b.skip()
+	if !b.skip() {
+		t.Error("skip should return true")
+	}
 	if b.items[0].status != batchSkipped {
 		t.Errorf("expected batchSkipped, got %d", b.items[0].status)
 	}

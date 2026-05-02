@@ -108,18 +108,18 @@ func (b *batchOp) cancel() {
 	}
 }
 
-// skip marks the currently running item as skipped. The process may
-// still be running — complete() will be a no-op when it arrives since
-// the item is already in a terminal state.
-func (b *batchOp) skip() {
+// skip marks the currently running item as skipped. Returns true if an
+// item was found and skipped, false if no item was running.
+func (b *batchOp) skip() bool {
 	for i := range b.items {
 		if b.items[i].status == batchRunning {
 			b.items[i].status = batchSkipped
 			b.items[i].errMsg = "skipped"
 			b.done++
-			return
+			return true
 		}
 	}
+	return false
 }
 
 // finish marks the batch as no longer running.

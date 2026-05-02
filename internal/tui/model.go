@@ -1505,15 +1505,19 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "s":
 			// Skip current running item.
+			skipped := false
 			for i := range m.packItems {
 				if m.packItems[i].status == packItemRunning {
 					m.packItems[i].status = packItemSkipped
 					m.packItems[i].errMsg = "skipped"
 					m.packDone++
+					skipped = true
 					break
 				}
 			}
-			m.statusMsg = "⏭ Skipped"
+			if skipped {
+				m.statusMsg = "⏭ Skipped"
+			}
 			return m, nil
 		case "q":
 			m.showPackDetail = false
@@ -1846,8 +1850,9 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "⚠ Cancelling — waiting for current item..."
 			return m, nil
 		case "s":
-			m.activeBatch.skip()
-			m.statusMsg = "⏭ Skipped"
+			if m.activeBatch.skip() {
+				m.statusMsg = "⏭ Skipped"
+			}
 			return m, nil
 		}
 		return m, nil
@@ -2991,6 +2996,7 @@ func (m *Model) cancelImport() {
 		if m.backupItems[i].status == backupPending {
 			m.backupItems[i].status = backupSkipped
 			m.backupItems[i].errMsg = "cancelled"
+			m.backupDone++
 		}
 	}
 	m.statusMsg = "⚠ Import cancelled — waiting for current install to finish..."
@@ -3074,8 +3080,8 @@ func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.activeBatch = newBatchOp("Upgrading", items)
-	m.statusMsg = m.activeBatch.statusLine()
 	if cmd := m.activeBatch.next(); cmd != nil {
+		m.statusMsg = m.activeBatch.statusLine()
 		return m, cmd
 	}
 	// All items were pre-skipped.
