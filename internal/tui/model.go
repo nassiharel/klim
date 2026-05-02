@@ -1854,7 +1854,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "s":
 			if m.activeBatch.skip() {
-				m.statusMsg = "⏭ Skipped"
+				m.statusMsg = "⏭ Marked as skipped — waiting for current to finish..."
 			}
 			return m, nil
 		}

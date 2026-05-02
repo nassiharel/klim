@@ -1003,7 +1003,7 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 				status = fmt.Sprintf("  %s %s (%d/%d)", verb, current, m.packDone, len(m.packItems))
 			}
 			progressFooter = upgradableStyle.Render(status) + "   " +
-				dim("s") + " skip   " + dim("Esc") + " cancel"
+				dim("s") + " skip   " + dim("Esc") + " cancel   " + dim("q") + " dismiss"
 		}
 
 		return m.layoutWithFooter(b.String(), progressFooter)
@@ -2390,6 +2390,7 @@ func (m Model) renderHelp() string {
 				parts = []string{
 					dimVersion.Render("s") + " skip",
 					dimVersion.Render("Esc") + " cancel",
+					dimVersion.Render("q") + " quit",
 				}
 			} else {
 				parts = []string{
@@ -2534,6 +2535,7 @@ func (m Model) renderHelp() string {
 				dimVersion.Render(m.activeBatch.progress()),
 				dimVersion.Render("s") + " skip",
 				dimVersion.Render("Esc") + " cancel",
+				dimVersion.Render("q") + " quit",
 			}
 		}
 	}
