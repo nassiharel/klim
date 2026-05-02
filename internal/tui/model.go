@@ -805,7 +805,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.activeBatch != nil {
 			m.activeBatch.complete(msg.idx, msg.err)
 			m.statusMsg = m.activeBatch.statusLine()
-			if m.activeBatch.cancelled {
+			// If cancelled or no items left, finish immediately (no delay window).
+			if m.activeBatch.cancelled || !m.activeBatch.hasPending() {
 				m.activeBatch.finish()
 				m.statusMsg = m.activeBatch.summary() + " — refreshing..."
 				cmd := m.startScan()
@@ -871,6 +872,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.packDone++
 			}
+		}
+		// If no pending items left, finish immediately (no delay window).
+		hasPending := false
+		for _, item := range m.packItems {
+			if item.status == packItemPending {
+				hasPending = true
+				break
+			}
+		}
+		if !hasPending {
+			m.packInstalling = false
+			cmd := m.startScan()
+			m.statusMsg = m.packSummary() + " — refreshing..."
+			return m, cmd
 		}
 		// Defer starting the next item so the TUI can render and accept input.
 		return m, packAdvanceCmd()
@@ -1493,7 +1508,17 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.packInstalling {
 		switch msg.String() {
 		case "esc":
-			// Cancel pack operation — mark remaining as skipped.
+			// Cancel pack operation — only if items are still pending/running.
+			hasActive := false
+			for _, item := range m.packItems {
+				if item.status == packItemPending || item.status == packItemRunning {
+					hasActive = true
+					break
+				}
+			}
+			if !hasActive {
+				return m, nil
+			}
 			m.packCancelled = true
 			for i := range m.packItems {
 				if m.packItems[i].status == packItemPending {

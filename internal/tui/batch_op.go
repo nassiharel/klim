@@ -132,6 +132,16 @@ func (b *batchOp) isRunning() bool {
 	return b.running
 }
 
+// hasPending returns true if any items are still pending or running.
+func (b *batchOp) hasPending() bool {
+	for _, item := range b.items {
+		if item.status == batchPending || item.status == batchRunning {
+			return true
+		}
+	}
+	return false
+}
+
 // progress returns "3/8" style progress string.
 func (b *batchOp) progress() string {
 	return fmt.Sprintf("%d/%d", b.done, len(b.items))

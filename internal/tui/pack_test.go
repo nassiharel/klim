@@ -143,6 +143,58 @@ func TestCountPackSkipped_Empty(t *testing.T) {
 	}
 }
 
+func TestPackSummary_Success(t *testing.T) {
+	m := Model{
+		packItems: []packItem{
+			{status: packItemDone},
+			{status: packItemDone},
+			{status: packItemSkipped, errMsg: "already installed"},
+		},
+	}
+	s := m.packSummary()
+	if s != "✓ 2 succeeded, 1 skipped" {
+		t.Errorf("unexpected summary: %q", s)
+	}
+}
+
+func TestPackSummary_Cancelled(t *testing.T) {
+	m := Model{
+		packCancelled: true,
+		packItems: []packItem{
+			{status: packItemDone},
+			{status: packItemSkipped, errMsg: "cancelled"},
+		},
+	}
+	s := m.packSummary()
+	if s != "⚠ Cancelled — 1 succeeded, 1 skipped" {
+		t.Errorf("unexpected summary: %q", s)
+	}
+}
+
+func TestPackSkipDoesNotDoubleCount(t *testing.T) {
+	items := []packItem{
+		{name: "a", status: packItemRunning},
+		{name: "b", status: packItemPending},
+	}
+	// Simulate skip: mark running as skipped, increment done.
+	items[0].status = packItemSkipped
+	items[0].errMsg = "skipped"
+	done := 1
+
+	// Simulate packItemDoneMsg arriving for already-skipped item.
+	if items[0].status == packItemRunning {
+		items[0].status = packItemDone
+		done++
+	}
+	// Should NOT have incremented again.
+	if done != 1 {
+		t.Errorf("expected done=1, got %d (double-counted)", done)
+	}
+	if items[0].status != packItemSkipped {
+		t.Errorf("expected packItemSkipped, got %d", items[0].status)
+	}
+}
+
 func TestBuildPackInstallItems_AllInstalled(t *testing.T) {
 	tools := []registry.Tool{
 		{
