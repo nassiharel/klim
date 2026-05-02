@@ -31,31 +31,39 @@ func TestBatchOp_Complete(t *testing.T) {
 	}
 }
 
-func TestBatchOp_SkipThenComplete_NoDblCount(t *testing.T) {
+func TestBatchOp_SkipNextPending(t *testing.T) {
 	items := []batchItem{
 		{name: "a", status: batchRunning},
 		{name: "b", status: batchPending},
+		{name: "c", status: batchPending},
 	}
 	b := newBatchOp("Testing", items)
 
-	// Skip the running item.
+	// Skip targets the next pending item (not the running one).
 	if !b.skip() {
 		t.Error("skip should return true")
 	}
-	if b.items[0].status != batchSkipped {
-		t.Errorf("expected batchSkipped, got %d", b.items[0].status)
+	if b.items[0].status != batchRunning {
+		t.Errorf("running item should stay running, got %d", b.items[0].status)
+	}
+	if b.items[1].status != batchSkipped {
+		t.Errorf("first pending item should be skipped, got %d", b.items[1].status)
 	}
 	if b.done != 1 {
-		t.Errorf("after skip: expected done=1, got %d", b.done)
+		t.Errorf("expected done=1, got %d", b.done)
 	}
 
-	// Complete arrives for already-skipped item — should be no-op.
-	b.complete(0, nil)
-	if b.items[0].status != batchSkipped {
-		t.Errorf("skip should stick, got %d", b.items[0].status)
+	// Skip again — targets item c.
+	if !b.skip() {
+		t.Error("second skip should return true")
 	}
-	if b.done != 1 {
-		t.Errorf("should not double-count, got done=%d", b.done)
+	if b.items[2].status != batchSkipped {
+		t.Errorf("second pending item should be skipped, got %d", b.items[2].status)
+	}
+
+	// No more pending — skip returns false.
+	if b.skip() {
+		t.Error("no pending items, skip should return false")
 	}
 }
 

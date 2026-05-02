@@ -1530,10 +1530,10 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "⚠ Cancelled — waiting for current item..."
 			return m, nil
 		case "s":
-			// Skip current running item.
+			// Skip the next pending item so it won't be executed.
 			skipped := false
 			for i := range m.packItems {
-				if m.packItems[i].status == packItemRunning {
+				if m.packItems[i].status == packItemPending {
 					m.packItems[i].status = packItemSkipped
 					m.packItems[i].errMsg = "skipped"
 					m.packDone++
@@ -1542,7 +1542,7 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 			if skipped {
-				m.statusMsg = "⏭ Skipped"
+				m.statusMsg = "⏭ Next item skipped"
 			}
 			return m, nil
 		case "q":
@@ -1879,7 +1879,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "s":
 			if m.activeBatch.skip() {
-				m.statusMsg = "⏭ Marked as skipped — waiting for current to finish..."
+				m.statusMsg = "⏭ Next item skipped"
 			}
 			return m, nil
 		}
@@ -2008,15 +2008,19 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "s":
 		// Skip current item during import.
 		if m.activeTab == tabBackup && m.isImportRunning() {
+			skipped := false
 			for i := range m.backupItems {
-				if m.backupItems[i].status == backupRunning {
+				if m.backupItems[i].status == backupPending {
 					m.backupItems[i].status = backupSkipped
 					m.backupItems[i].errMsg = "skipped"
 					m.backupDone++
+					skipped = true
 					break
 				}
 			}
-			m.statusMsg = "⏭ Skipped"
+			if skipped {
+				m.statusMsg = "⏭ Next item skipped"
+			}
 			return m, nil
 		}
 		// Cycle sort mode on tool-list tabs (not Backup/Dashboard/Config).

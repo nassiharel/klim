@@ -108,11 +108,12 @@ func (b *batchOp) cancel() {
 	}
 }
 
-// skip marks the currently running item as skipped. Returns true if an
-// item was found and skipped, false if no item was running.
+// skip marks the next pending item as skipped so it won't be executed.
+// Called between items (during the advance delay) when the TUI is active.
+// Returns true if an item was found and skipped.
 func (b *batchOp) skip() bool {
 	for i := range b.items {
-		if b.items[i].status == batchRunning {
+		if b.items[i].status == batchPending {
 			b.items[i].status = batchSkipped
 			b.items[i].errMsg = "skipped"
 			b.done++
