@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/clim/internal/paths"
 )
 
 var marketplaceCmd = &cobra.Command{
@@ -40,6 +41,8 @@ var marketplaceRemoveCmd = &cobra.Command{
 	RunE:  runMarketplaceRemove,
 }
 
+var marketplaceListOutputFmt func() (OutputFormat, error)
+
 var marketplaceListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all marketplace URLs",
@@ -47,6 +50,7 @@ var marketplaceListCmd = &cobra.Command{
 }
 
 func init() {
+	marketplaceListOutputFmt = addOutputFlag(marketplaceListCmd, OutputText, OutputJSON)
 	marketplaceCmd.AddCommand(marketplaceAddCmd)
 	marketplaceCmd.AddCommand(marketplaceRemoveCmd)
 	marketplaceCmd.AddCommand(marketplaceListCmd)
@@ -142,15 +146,56 @@ func runMarketplaceRemove(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+type marketplaceListReport struct {
+	Primary string   `json:"primary"`
+	Extra   []string `json:"extra"`
+}
+
 func runMarketplaceList(cmd *cobra.Command, args []string) error {
-	c, _, err := config.LoadWithWarnings()
+	out, err := marketplaceListOutputFmt()
 	if err != nil {
+		return err
+	}
+
+	// Probe path resolution first. LoadWithWarnings swallows
+	// paths.Config() failure (e.g. when os.UserConfigDir() can't resolve
+	// because HOME / XDG_CONFIG_HOME / APPDATA is unset) and returns
+	// Default() with a nil error, which would otherwise let JSON mode
+	// emit synthetic data. Surface that condition explicitly so:
+	//   - JSON mode fails loudly (callers never see synthetic defaults).
+	//   - Text mode prints a stderr warning before falling back.
+	_, pathErr := paths.Config()
+	if pathErr != nil {
+		if out == OutputJSON {
+			return fmt.Errorf("resolving config path: %w", pathErr)
+		}
+		fmt.Fprintf(os.Stderr, "⚠ Could not resolve config path (%v); showing defaults.\n", pathErr)
+	}
+
+	c, _, loadErr := config.LoadWithWarnings()
+	if loadErr != nil {
+		// In JSON mode never fall back to synthetic data — automation has
+		// no way to distinguish defaults from actual config otherwise.
+		if out == OutputJSON {
+			return fmt.Errorf("loading config: %w", loadErr)
+		}
+		fmt.Fprintf(os.Stderr, "⚠ Could not load config (%v); showing defaults.\n", loadErr)
 		c = config.Default()
 	}
 
 	primaryURL := c.Marketplace.URL
 	if primaryURL == "" {
 		primaryURL = config.DefaultMarketplaceURL
+	}
+
+	if out == OutputJSON {
+		extra := make([]string, 0, len(c.Marketplace.ExtraURLs))
+		for _, u := range c.Marketplace.ExtraURLs {
+			if e := strings.TrimSpace(u); e != "" {
+				extra = append(extra, e)
+			}
+		}
+		return printJSON(marketplaceListReport{Primary: primaryURL, Extra: extra})
 	}
 
 	fmt.Fprintf(os.Stderr, "Primary:\n  %s\n", primaryURL)
