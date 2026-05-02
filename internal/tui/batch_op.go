@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -47,11 +48,11 @@ type batchOpDoneMsg struct {
 }
 
 // newBatchOp creates a new batch operation with the given label and items.
-// Items already in a terminal state (skipped or failed) are counted as done.
+// Items already in a terminal state (skipped, failed, or done) are counted as done.
 func newBatchOp(label string, items []batchItem) *batchOp {
 	done := 0
 	for _, item := range items {
-		if item.status == batchSkipped || item.status == batchFailed {
+		if item.status == batchSkipped || item.status == batchFailed || item.status == batchDone {
 			done++
 		}
 	}
@@ -206,5 +207,27 @@ func execBatchItemCmd(idx int, args []string) tea.Cmd {
 	cmd := exec.Command(args[0], args[1:]...)
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return batchOpDoneMsg{idx: idx, err: err}
+	})
+}
+
+// batchAdvanceMsg signals the TUI to start the next batch item.
+// A short delay is inserted between items so the TUI can render
+// progress and accept skip/cancel input.
+type batchAdvanceMsg struct{}
+
+// batchAdvanceCmd returns a command that fires batchAdvanceMsg after a brief delay.
+func batchAdvanceCmd() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg {
+		return batchAdvanceMsg{}
+	})
+}
+
+// packAdvanceMsg signals the TUI to start the next pack item.
+type packAdvanceMsg struct{}
+
+// packAdvanceCmd returns a command that fires packAdvanceMsg after a brief delay.
+func packAdvanceCmd() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg {
+		return packAdvanceMsg{}
 	})
 }

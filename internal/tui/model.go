@@ -803,14 +803,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case batchOpDoneMsg:
 		if m.activeBatch != nil {
 			m.activeBatch.complete(msg.idx, msg.err)
+			m.statusMsg = m.activeBatch.statusLine()
 			if m.activeBatch.cancelled {
-				// Cancelled — finish up.
 				m.activeBatch.finish()
 				m.statusMsg = m.activeBatch.summary() + " — refreshing..."
 				cmd := m.startScan()
 				return m, cmd
 			}
-			// Fire next item.
+			// Defer starting the next item so the TUI can render
+			// progress and accept skip/cancel input between items.
+			return m, batchAdvanceCmd()
+		}
+		return m, nil
+
+	case batchAdvanceMsg:
+		if m.activeBatch != nil && m.activeBatch.isRunning() {
+			if m.activeBatch.cancelled {
+				m.activeBatch.finish()
+				m.statusMsg = m.activeBatch.summary() + " — refreshing..."
+				cmd := m.startScan()
+				return m, cmd
+			}
 			if cmd := m.activeBatch.next(); cmd != nil {
 				m.statusMsg = m.activeBatch.statusLine()
 				return m, cmd
@@ -858,15 +871,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.packDone++
 			}
 		}
-		// Fire the next item, or finish.
-		if cmd := m.nextPackItem(); cmd != nil {
+		// Defer starting the next item so the TUI can render and accept input.
+		return m, packAdvanceCmd()
+
+	case packAdvanceMsg:
+		if m.packInstalling {
+			if cmd := m.nextPackItem(); cmd != nil {
+				return m, cmd
+			}
+			m.packInstalling = false
+			cmd := m.startScan()
+			m.statusMsg = m.packSummary() + " — refreshing..."
 			return m, cmd
 		}
-		// All done — refresh tools to pick up changes.
-		m.packInstalling = false
-		cmd := m.startScan()
-		m.statusMsg = m.packSummary() + " — refreshing..."
-		return m, cmd
+		return m, nil
 
 	case packSavedMsg:
 		if msg.err != nil {
@@ -1551,6 +1569,7 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.packItems = buildPackInstallItems(m.tools, pack)
 			m.packDone = countPackSkipped(m.packItems)
 			m.packInstalling = true
+			m.packCancelled = false
 			if cmd := m.nextPackItem(); cmd != nil {
 				return m, cmd
 			}
@@ -1565,6 +1584,7 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.packItems = buildPackRemoveItems(m.tools, pack)
 			m.packDone = countPackSkipped(m.packItems)
 			m.packInstalling = true
+			m.packCancelled = false
 			if cmd := m.nextPackItem(); cmd != nil {
 				return m, cmd
 			}

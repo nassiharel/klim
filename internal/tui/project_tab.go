@@ -633,6 +633,7 @@ func (m Model) projectInstallMissing() (tea.Model, tea.Cmd) {
 	m.packItems = buildPackInstallItems(m.tools, rp)
 	m.packDone = countPackSkipped(m.packItems)
 	m.packInstalling = true
+	m.packCancelled = false
 	m.showPackDetail = false
 
 	if cmd := m.nextPackItem(); cmd != nil {

@@ -141,6 +141,7 @@ func (m Model) handleKeyMyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.packItems = buildPackInstallItems(m.tools, rp)
 			m.packDone = countPackSkipped(m.packItems)
 			m.packInstalling = true
+			m.packCancelled = false
 			m.showPackDetail = false
 			m.viewingMyPackDetail = false
 			m.viewingMyPacks = false
