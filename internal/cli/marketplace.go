@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/clim/internal/paths"
 )
 
 var marketplaceCmd = &cobra.Command{
@@ -154,6 +155,21 @@ func runMarketplaceList(cmd *cobra.Command, args []string) error {
 	out, err := marketplaceListOutputFmt()
 	if err != nil {
 		return err
+	}
+
+	// Probe path resolution first. LoadWithWarnings swallows
+	// paths.Config() failure (e.g. when os.UserConfigDir() can't resolve
+	// because HOME / XDG_CONFIG_HOME / APPDATA is unset) and returns
+	// Default() with a nil error, which would otherwise let JSON mode
+	// emit synthetic data. Surface that condition explicitly so:
+	//   - JSON mode fails loudly (callers never see synthetic defaults).
+	//   - Text mode prints a stderr warning before falling back.
+	_, pathErr := paths.Config()
+	if pathErr != nil {
+		if out == OutputJSON {
+			return fmt.Errorf("resolving config path: %w", pathErr)
+		}
+		fmt.Fprintf(os.Stderr, "⚠ Could not resolve config path (%v); showing defaults.\n", pathErr)
 	}
 
 	c, _, loadErr := config.LoadWithWarnings()
