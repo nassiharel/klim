@@ -148,6 +148,7 @@ type Model struct {
 	packItems      []packItem // per-tool status during pack install/remove
 	packInstalling bool       // true while a pack operation is in progress
 	packDone       int        // count of completed items
+	packCancelled  bool       // true if user cancelled pack operation
 
 	// Marketplace refresh diff — carried across rescans to apply badges.
 	lastDiff *catalog.DiffResult
@@ -1474,6 +1475,7 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "esc":
 			// Cancel pack operation — mark remaining as skipped.
+			m.packCancelled = true
 			for i := range m.packItems {
 				if m.packItems[i].status == packItemPending {
 					m.packItems[i].status = packItemSkipped
@@ -1508,6 +1510,7 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.packItems = nil
 		m.packInstalling = false
 		m.packDone = 0
+		m.packCancelled = false
 		return m, nil
 	case "up", "k":
 		if m.packToolCursor > 0 {
@@ -1597,7 +1600,6 @@ func countPackSkipped(items []packItem) int {
 // packSummary returns a completion summary for the current pack operation.
 func (m Model) packSummary() string {
 	var succeeded, failed, skipped int
-	cancelled := false
 	for _, item := range m.packItems {
 		switch item.status {
 		case packItemDone:
@@ -1606,9 +1608,6 @@ func (m Model) packSummary() string {
 			failed++
 		case packItemSkipped:
 			skipped++
-			if item.errMsg == "cancelled" {
-				cancelled = true
-			}
 		}
 	}
 	var parts []string
@@ -1622,7 +1621,7 @@ func (m Model) packSummary() string {
 		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
 	}
 	prefix := "✓"
-	if cancelled {
+	if m.packCancelled {
 		prefix = "⚠ Cancelled —"
 	} else if failed > 0 {
 		prefix = "⚠"
@@ -1960,6 +1959,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if m.backupItems[i].status == backupRunning {
 					m.backupItems[i].status = backupSkipped
 					m.backupItems[i].errMsg = "skipped"
+					m.backupDone++
 					break
 				}
 			}
@@ -2290,6 +2290,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.packToolCursor = 0
 				m.packItems = nil // clear any leftover progress from a previous pack
 				m.packDone = 0
+				m.packCancelled = false
 			}
 			return m, nil
 		}
