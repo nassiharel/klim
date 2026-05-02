@@ -21,6 +21,19 @@ clim share
 
 Outputs a compact `clim:v1:...` token that encodes your installed tool names. Share it via Slack, Teams, email, or any chat.
 
+For scripting, request structured output:
+
+```bash
+clim share --output json
+# {
+#   "token": "clim:v1:...",
+#   "tool_count": 24,
+#   "tools": ["az", "gh", "git", ...]
+# }
+```
+
+The `tools` array is sorted, so the same installed set always produces the same token. When no tools are installed, `token` is omitted from the JSON payload.
+
 ## Install from a Token
 
 ```bash

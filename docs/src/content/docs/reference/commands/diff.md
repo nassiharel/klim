@@ -16,6 +16,7 @@ clim diff <manifest.yaml | share-token> [flags]
 | Flag | Description |
 |------|-------------|
 | `--refresh` | Force fresh scan, ignoring cache |
+| `--output` | Output format: `text` (default) or `json` |
 
 ## Exit Codes
 
@@ -58,6 +59,35 @@ node      24.14.1 (winget)       —                ← local only
 
 Result: 1 match, 1 differ, 1 local only, 1 remote only
 ```
+
+## JSON Output
+
+`--output json` emits a structured report with canonical status keys (`match`, `differs`, `local_only`, `remote_only`), the original CLI argument as `target`, and a human-friendly `target_label`:
+
+```json
+{
+  "target": "colleague-tools.yaml",
+  "target_label": "colleague-tools.yaml (linux/amd64)",
+  "summary": {
+    "match": 1,
+    "differs": 1,
+    "local_only": 1,
+    "remote_only": 1
+  },
+  "entries": [
+    {
+      "name": "git",
+      "local_version": "2.53.0",
+      "local_source": "winget",
+      "remote_version": "99.0.0",
+      "remote_source": "winget",
+      "status": "differs"
+    }
+  ]
+}
+```
+
+`entries` is always an array (empty when no diffs). The exit-code semantics are unchanged: `--output json` with differences still exits 1.
 
 ## See Also
 

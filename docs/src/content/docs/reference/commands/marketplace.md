@@ -25,12 +25,18 @@ Extra marketplaces are cached locally (per-URL) and respect the same `auto_refre
 # List all marketplace sources
 clim config marketplace list
 
+# Same, as JSON for scripts
+clim config marketplace list --output json
+# {"primary": "https://...", "extra": []}
+
 # Add a team-internal marketplace
 clim config marketplace add https://raw.githubusercontent.com/myorg/tools/main/marketplace.yaml
 
 # Remove a marketplace
 clim config marketplace remove https://example.com/old-tools.yaml
 ```
+
+`clim config marketplace list` accepts `--output text` (default) or `--output json`. In JSON mode, a config-load failure is surfaced as an error rather than silently falling back to default URLs.
 
 ## Configuration
 

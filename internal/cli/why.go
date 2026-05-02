@@ -156,6 +156,7 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 					if opt.Name == toolName {
 						r.References = append(r.References, whyReference{
 							Kind: "teamfile", Path: path, Required: false,
+							Constraint: opt.Version,
 						})
 					}
 				}
@@ -175,6 +176,10 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 		}
 		tf, err := teamfile.Parse(climPath)
 		if err != nil {
+			// Surface parse failures rather than silently skipping —
+			// otherwise the report can claim "no references" when in fact
+			// a referenced .clim.yaml is malformed.
+			r.Warnings = append(r.Warnings, fmt.Sprintf("could not parse %s: %v", climPath, err))
 			continue
 		}
 		for _, req := range tf.Tools {
@@ -189,6 +194,7 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 			if opt.Name == toolName {
 				r.References = append(r.References, whyReference{
 					Kind: "project", Name: proj.Name, Path: climPath, Required: false,
+					Constraint: opt.Version,
 				})
 			}
 		}
@@ -283,10 +289,6 @@ func relatedInstalledTools(toolName string, t *registry.Tool, tools []registry.T
 }
 
 func renderWhyText(r whyReport) {
-	for _, w := range r.Warnings {
-		fmt.Fprintf(os.Stderr, "  ⚠ %s\n", w)
-	}
-
 	fmt.Fprintf(os.Stderr, "\n%s (%s)\n", r.DisplayName, r.Category)
 	if r.Description != "" {
 		fmt.Fprintf(os.Stderr, "  %s\n", r.Description)
@@ -326,6 +328,11 @@ func renderWhyText(r whyReport) {
 
 	if len(r.RelatedTools) > 0 {
 		fmt.Fprintf(os.Stderr, "  Related installed tools: %s\n", strings.Join(r.RelatedTools, ", "))
+	}
+
+	// Warnings last so they don't disrupt the tool heading / status block.
+	for _, w := range r.Warnings {
+		fmt.Fprintf(os.Stderr, "  ⚠ %s\n", w)
 	}
 }
 

@@ -20,7 +20,12 @@ Print the path to the local catalog cache file:
 ```bash
 clim tools path
 # Output: /home/user/.config/clim/marketplace/marketplace-cache.yaml
+
+clim tools path --output json
+# {"cache_path": "/home/user/.config/clim/marketplace/marketplace-cache.yaml"}
 ```
+
+Accepts `--output text` (default) or `--output json`.
 
 ## About the Catalog
 
