@@ -172,26 +172,49 @@ func TestPackSummary_Cancelled(t *testing.T) {
 }
 
 func TestPackSkipDoesNotDoubleCount(t *testing.T) {
-	items := []packItem{
-		{name: "a", status: packItemRunning},
-		{name: "b", status: packItemPending},
+	// Build a model with pack items simulating an in-progress operation.
+	m := Model{
+		packItems: []packItem{
+			{name: "a", status: packItemRunning, cmdArgs: []string{"echo", "a"}},
+			{name: "b", status: packItemPending, cmdArgs: []string{"echo", "b"}},
+		},
+		packInstalling: true,
+		packDone:       0,
 	}
-	// Simulate skip: mark running as skipped, increment done.
-	items[0].status = packItemSkipped
-	items[0].errMsg = "skipped"
-	done := 1
 
-	// Simulate packItemDoneMsg arriving for already-skipped item.
-	if items[0].status == packItemRunning {
-		items[0].status = packItemDone
-		done++
+	// User presses "s" to skip — should mark next pending item.
+	skipped := false
+	for i := range m.packItems {
+		if m.packItems[i].status == packItemPending {
+			m.packItems[i].status = packItemSkipped
+			m.packItems[i].errMsg = "skipped"
+			m.packDone++
+			skipped = true
+			break
+		}
 	}
-	// Should NOT have incremented again.
-	if done != 1 {
-		t.Errorf("expected done=1, got %d (double-counted)", done)
+	if !skipped {
+		t.Fatal("expected to skip a pending item")
 	}
-	if items[0].status != packItemSkipped {
-		t.Errorf("expected packItemSkipped, got %d", items[0].status)
+	if m.packDone != 1 {
+		t.Errorf("after skip: expected done=1, got %d", m.packDone)
+	}
+	if m.packItems[1].status != packItemSkipped {
+		t.Errorf("expected item b to be skipped, got %d", m.packItems[1].status)
+	}
+
+	// packItemDoneMsg arrives for running item a — should increment done.
+	if m.packItems[0].status == packItemRunning {
+		m.packItems[0].status = packItemDone
+		m.packDone++
+	}
+	if m.packDone != 2 {
+		t.Errorf("after complete: expected done=2, got %d", m.packDone)
+	}
+
+	// Verify no double-count: item b was already skipped, won't be touched.
+	if m.packItems[1].status != packItemSkipped {
+		t.Errorf("skipped item should stay skipped, got %d", m.packItems[1].status)
 	}
 }
 

@@ -226,9 +226,13 @@ func execBatchItemCmd(idx int, args []string) tea.Cmd {
 // progress and accept skip/cancel input.
 type batchAdvanceMsg struct{}
 
-// batchAdvanceCmd returns a command that fires batchAdvanceMsg after a brief delay.
+// advanceDelay is the pause between batch/pack items, giving the user
+// time to press skip (s) or cancel (Esc) before the next item starts.
+const advanceDelay = 1 * time.Second
+
+// batchAdvanceCmd returns a command that fires batchAdvanceMsg after a delay.
 func batchAdvanceCmd() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg {
+	return tea.Tick(advanceDelay, func(time.Time) tea.Msg {
 		return batchAdvanceMsg{}
 	})
 }
@@ -236,9 +240,9 @@ func batchAdvanceCmd() tea.Cmd {
 // packAdvanceMsg signals the TUI to start the next pack item.
 type packAdvanceMsg struct{}
 
-// packAdvanceCmd returns a command that fires packAdvanceMsg after a brief delay.
+// packAdvanceCmd returns a command that fires packAdvanceMsg after a delay.
 func packAdvanceCmd() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg {
+	return tea.Tick(advanceDelay, func(time.Time) tea.Msg {
 		return packAdvanceMsg{}
 	})
 }
