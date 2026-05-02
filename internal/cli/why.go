@@ -37,11 +37,12 @@ func init() {
 
 // whyReference is a JSON-friendly description of a place a tool is mentioned.
 type whyReference struct {
-	Kind       string `json:"kind"` // teamfile | project | pack | custom_pack
-	Name       string `json:"name,omitempty"`
-	Path       string `json:"path,omitempty"`
-	Required   bool   `json:"required,omitempty"`
-	Constraint string `json:"version_constraint,omitempty"`
+	Kind        string `json:"kind"` // teamfile | project | pack | custom_pack
+	Name        string `json:"name,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+	Constraint  string `json:"version_constraint,omitempty"`
 }
 
 type whyPackageEntry struct {
@@ -95,7 +96,7 @@ func runWhy(cmd *cobra.Command, args []string) error {
 		return printJSON(report)
 	}
 
-	renderWhyText(report, t)
+	renderWhyText(report)
 	return nil
 }
 
@@ -191,7 +192,7 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 		for _, pToolName := range pack.ToolNames {
 			if pToolName == toolName {
 				r.References = append(r.References, whyReference{
-					Kind: "pack", Name: pack.Name,
+					Kind: "pack", Name: pack.Name, DisplayName: pack.DisplayName,
 				})
 			}
 		}
@@ -205,7 +206,7 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 			for _, pToolName := range pack.ToolNames {
 				if pToolName == toolName {
 					r.References = append(r.References, whyReference{
-						Kind: "custom_pack", Name: pack.Name,
+						Kind: "custom_pack", Name: pack.Name, DisplayName: pack.DisplayName,
 					})
 				}
 			}
@@ -270,7 +271,7 @@ func relatedInstalledTools(toolName string, t *registry.Tool, tools []registry.T
 	return related
 }
 
-func renderWhyText(r whyReport, t *registry.Tool) {
+func renderWhyText(r whyReport) {
 	for _, w := range r.Warnings {
 		fmt.Fprintf(os.Stderr, "  ⚠ %s\n", w)
 	}
@@ -335,8 +336,14 @@ func formatWhyRef(ref whyReference) string {
 		}
 		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, role, ref.Path)
 	case "pack":
+		if ref.DisplayName != "" {
+			return fmt.Sprintf("Pack %q (%s)", ref.DisplayName, ref.Name)
+		}
 		return fmt.Sprintf("Pack %q", ref.Name)
 	case "custom_pack":
+		if ref.DisplayName != "" {
+			return fmt.Sprintf("Custom pack %q (%s)", ref.DisplayName, ref.Name)
+		}
 		return fmt.Sprintf("Custom pack %q", ref.Name)
 	}
 	return ref.Kind + " " + ref.Name

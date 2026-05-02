@@ -37,7 +37,7 @@ func runShare(cmd *cobra.Command, args []string) error {
 }
 
 type shareReport struct {
-	Token     string   `json:"token"`
+	Token     string   `json:"token,omitempty"`
 	ToolCount int      `json:"tool_count"`
 	Tools     []string `json:"tools"`
 }
@@ -57,7 +57,7 @@ func runShareGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Collect names of installed tools.
-	var names []string
+	names := []string{}
 	for _, tool := range tools {
 		if tool.IsInstalled() {
 			names = append(names, tool.Name)
@@ -66,7 +66,9 @@ func runShareGenerate(cmd *cobra.Command, args []string) error {
 
 	if len(names) == 0 {
 		if out == OutputJSON {
-			return printJSON(shareReport{Tools: []string{}})
+			// Token is intentionally omitted (omitempty) so callers can
+			// distinguish "no tools" from a real share payload.
+			return printJSON(shareReport{Tools: names})
 		}
 		fmt.Fprintln(os.Stderr, "No installed tools found.")
 		return nil

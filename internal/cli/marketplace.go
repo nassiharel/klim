@@ -156,8 +156,14 @@ func runMarketplaceList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	c, _, err := config.LoadWithWarnings()
-	if err != nil {
+	c, _, loadErr := config.LoadWithWarnings()
+	if loadErr != nil {
+		// In JSON mode never fall back to synthetic data — automation has
+		// no way to distinguish defaults from actual config otherwise.
+		if out == OutputJSON {
+			return fmt.Errorf("loading config: %w", loadErr)
+		}
+		fmt.Fprintf(os.Stderr, "⚠ Could not load config (%v); showing defaults.\n", loadErr)
 		c = config.Default()
 	}
 

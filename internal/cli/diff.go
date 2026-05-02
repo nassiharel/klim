@@ -164,7 +164,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 	// Print results.
 	if out == OutputJSON {
-		return printDiffJSON(remoteName, entries, matches, differs, localOnly, remoteOnly)
+		return printDiffJSON(target, remoteName, entries, matches, differs, localOnly, remoteOnly)
 	}
 
 	fmt.Fprintf(os.Stderr, "\nComparing local vs %s\n\n", remoteName)
@@ -205,9 +205,10 @@ type diffJSONEntry struct {
 }
 
 type diffJSONReport struct {
-	Target  string          `json:"target"`
-	Summary diffJSONSummary `json:"summary"`
-	Entries []diffJSONEntry `json:"entries"`
+	Target      string          `json:"target"`                 // raw CLI argument (file path or share token)
+	TargetLabel string          `json:"target_label,omitempty"` // human-friendly label, e.g. "share token" or "manifest.yaml (linux/amd64)"
+	Summary     diffJSONSummary `json:"summary"`
+	Entries     []diffJSONEntry `json:"entries"`
 }
 
 type diffJSONSummary struct {
@@ -217,9 +218,10 @@ type diffJSONSummary struct {
 	RemoteOnly int `json:"remote_only"`
 }
 
-func printDiffJSON(target string, entries []diffEntry, matches, differs, localOnly, remoteOnly int) error {
+func printDiffJSON(target, label string, entries []diffEntry, matches, differs, localOnly, remoteOnly int) error {
 	report := diffJSONReport{
-		Target: target,
+		Target:      target,
+		TargetLabel: label,
 		Summary: diffJSONSummary{
 			Match:      matches,
 			Differs:    differs,
