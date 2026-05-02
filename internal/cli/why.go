@@ -76,7 +76,7 @@ func runWhy(cmd *cobra.Command, args []string) error {
 	toolName := args[0]
 
 	sp := progress.New("Scanning...")
-	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), false)
+	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), false)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
@@ -201,7 +201,7 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 	}
 
 	// 3. Check packs.
-	packs, packErr := svc.LoadPacks(cmd.Context())
+	packs, packErr := svcFrom(cmd).LoadPacks(cmd.Context())
 	if packErr != nil {
 		r.Warnings = append(r.Warnings, fmt.Sprintf("could not load packs: %v", packErr))
 	}

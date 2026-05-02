@@ -91,7 +91,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 	// Scan installed tools and resolve versions (cached by default for speed).
 	sp := progress.New("Scanning installed tools...")
-	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), checkRefreshFlag)
+	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), checkRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err

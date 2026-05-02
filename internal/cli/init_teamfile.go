@@ -56,9 +56,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	var tools []registry.Tool
 	var scanErr error
 	if initMinVersionFlag {
-		tools, _, _, scanErr = svc.LoadAndResolveCached(cmd.Context(), false)
+		tools, _, _, scanErr = svcFrom(cmd).LoadAndResolveCached(cmd.Context(), false)
 	} else {
-		tools, _, scanErr = svc.ScanOnly(cmd.Context())
+		tools, _, scanErr = svcFrom(cmd).ScanOnly(cmd.Context())
 	}
 	if scanErr != nil {
 		sp.Fail(scanErr.Error())

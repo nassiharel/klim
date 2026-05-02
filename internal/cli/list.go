@@ -63,7 +63,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 
 	sp := progress.New("Loading marketplace catalog...")
-	tools, info, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), listRefreshFlag)
+	tools, info, scanInfo, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), listRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err

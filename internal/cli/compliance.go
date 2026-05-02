@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/clim/internal/compliance"
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/fileutil"
 	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/progress"
@@ -66,11 +67,11 @@ func init() {
 	// Registered in root.go with command group.
 }
 
-func resolvePolicyPath() (string, error) {
+func resolvePolicyPath(cmd *cobra.Command) (string, error) {
 	if compliancePolicyFlag != "" {
 		return compliancePolicyFlag, nil
 	}
-	path := findPolicyPath()
+	path := findPolicyPath(cfgFrom(cmd))
 	if path != "" {
 		return path, nil
 	}
@@ -79,7 +80,7 @@ func resolvePolicyPath() (string, error) {
 
 // findPolicyPath returns the policy file path from config or default
 // global location, or empty string if none exists. Shared across commands.
-func findPolicyPath() string {
+func findPolicyPath(cfg *config.Config) string {
 	if cfg.Compliance.Policy != "" {
 		return cfg.Compliance.Policy
 	}
@@ -98,7 +99,7 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	policyPath, err := resolvePolicyPath()
+	policyPath, err := resolvePolicyPath(cmd)
 	if err != nil {
 		return err
 	}
@@ -109,7 +110,7 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	sp := progress.New("Scanning tools...")
-	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), complianceRefreshFlag)
+	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), complianceRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
@@ -172,7 +173,7 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 }
 
 func runComplianceShow(cmd *cobra.Command, args []string) error {
-	policyPath, err := resolvePolicyPath()
+	policyPath, err := resolvePolicyPath(cmd)
 	if err != nil {
 		return err
 	}

@@ -69,7 +69,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load catalog for package IDs.
-	tools, _, catErr := svc.Catalog.LoadTools(cmd.Context())
+	tools, _, catErr := svcFrom(cmd).Catalog.LoadTools(cmd.Context())
 	if catErr != nil {
 		return fmt.Errorf("loading catalog: %w", catErr)
 	}

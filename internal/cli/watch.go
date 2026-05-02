@@ -56,7 +56,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 	}
 
 	sp := progress.New("Checking for updates...")
-	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), true) // always fresh
+	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), true) // always fresh
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
