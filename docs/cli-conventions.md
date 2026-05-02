@@ -20,7 +20,7 @@ expects, while the human-readable summary still prints to the terminal.
 Every command that produces structured data accepts:
 
 ```
---output text|json|yaml
+--output text|json
 ```
 
 * Default is `text` (human-readable).
@@ -28,6 +28,11 @@ Every command that produces structured data accepts:
   a deprecation warning.
 * When `--output=json` is set, only the JSON payload is written to stdout;
   prose stays on stderr.
+* `--output=yaml` is reserved (the `OutputYAML` constant exists in the
+  helper) but no command currently emits YAML; passing `yaml` to a command
+  that doesn't support it returns a usage error and exits 2.
+* Unknown values (e.g. `--output=jsno`) are usage errors and exit 2 — they
+  do **not** silently fall back to text.
 
 Currently supports JSON: `audit`, `check`, `compliance check`, `doctor`,
 `list`, `score`, `search`, `watch`. (`export` already emits YAML by design.)
@@ -38,7 +43,7 @@ Currently supports JSON: `audit`, `check`, `compliance check`, `doctor`,
 | --- | --- |
 | 0 | Success |
 | 1 | Runtime error (network failure, file IO, etc.) |
-| 2 | Usage error (bad flags, missing or extra arguments) |
+| 2 | Usage error — bad flags, missing/extra arguments, unknown command, unsupported `--output` value. Cobra's own flag-parse errors are wrapped via `SetFlagErrorFunc` and "unknown command/flag" errors that escape that hook are detected by message prefix in `cli.Run`. |
 | 3 | Partial failure (multi-item operation where some items failed, e.g. `clim import` with one or more install failures) |
 
 Commands like `audit`, `compliance check`, `check`, and `diff` may also exit

@@ -18,7 +18,7 @@ import (
 
 var auditRefreshFlag bool
 var auditSBOMFlag bool
-var auditOutput func() OutputFormat
+var auditOutput func() (OutputFormat, error)
 
 var auditCmd = &cobra.Command{
 	Use:   "audit",
@@ -61,6 +61,11 @@ type auditReport struct {
 }
 
 func runAudit(cmd *cobra.Command, args []string) error {
+	out, err := auditOutput()
+	if err != nil {
+		return err
+	}
+
 	sp := progress.New("Scanning installed tools...")
 	tools, _, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), auditRefreshFlag)
 	if err != nil {
@@ -89,7 +94,7 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	findings, licenses := audit.Analyze(tools)
 	warnings, infos := audit.CountBySeverity(findings)
 
-	if auditOutput() == OutputJSON {
+	if out == OutputJSON {
 		return printAuditJSON(findings, installedCount, warnings, infos, licenses)
 	}
 

@@ -13,7 +13,7 @@ import (
 
 var checkFileFlag string
 var checkRefreshFlag bool
-var checkOutput func() OutputFormat
+var checkOutput func() (OutputFormat, error)
 
 var checkCmd = &cobra.Command{
 	Use:   "check",
@@ -65,6 +65,11 @@ type jsonCheckOutput struct {
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
+	out, err := checkOutput()
+	if err != nil {
+		return err
+	}
+
 	// Find .clim.yaml.
 	path := checkFileFlag
 	if path == "" {
@@ -104,7 +109,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 	_ = teamfile.AddProject(filepath.Dir(path), name, len(tf.Tools)+len(tf.Optional))
 
-	if checkOutput() == OutputJSON {
+	if out == OutputJSON {
 		return printCheckJSON(tf, path, results, ok, missing, outdated, unknown)
 	}
 

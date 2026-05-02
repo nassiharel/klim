@@ -33,12 +33,14 @@ type outputFlagState struct {
 
 // addOutputFlag attaches the canonical --output flag to cmd and (when
 // OutputJSON is in supported) the deprecated --json alias. The returned
-// getter resolves the active format at run time.
+// getter resolves the active format at run time and validates that the
+// requested value is one this command supports — unsupported or unknown
+// values are returned as a *UsageError so they map to ExitUsage (2).
 //
 // Default format is OutputText. If the user passes both --json and
 // --output=text, --json wins (the deprecated alias is treated as an
 // explicit opt-in to JSON).
-func addOutputFlag(cmd *cobra.Command, supported ...OutputFormat) func() OutputFormat {
+func addOutputFlag(cmd *cobra.Command, supported ...OutputFormat) func() (OutputFormat, error) {
 	if len(supported) == 0 {
 		supported = []OutputFormat{OutputText, OutputJSON}
 	}
@@ -48,28 +50,36 @@ func addOutputFlag(cmd *cobra.Command, supported ...OutputFormat) func() OutputF
 	for i, s := range supported {
 		names[i] = string(s)
 	}
+	supportedList := strings.Join(names, "|")
 	cmd.Flags().StringVar(&state.output, "output", string(OutputText),
-		"output format: "+strings.Join(names, "|"))
+		"output format: "+supportedList)
 
 	if containsFormat(supported, OutputJSON) {
 		cmd.Flags().BoolVar(&state.json, "json", false, "output results as JSON (deprecated)")
 		_ = cmd.Flags().MarkDeprecated("json", "use --output=json instead")
 	}
 
-	return func() OutputFormat {
+	return func() (OutputFormat, error) {
 		if state.json {
-			return OutputJSON
+			// --json is gated by `containsFormat(supported, OutputJSON)` above.
+			return OutputJSON, nil
 		}
-		switch strings.ToLower(strings.TrimSpace(state.output)) {
-		case "json":
-			return OutputJSON
-		case "yaml", "yml":
-			return OutputYAML
+		raw := strings.ToLower(strings.TrimSpace(state.output))
+		var resolved OutputFormat
+		switch raw {
 		case "", "text", "human":
-			return OutputText
+			resolved = OutputText
+		case "json":
+			resolved = OutputJSON
+		case "yaml", "yml":
+			resolved = OutputYAML
+		default:
+			return "", &UsageError{Err: fmt.Errorf("invalid --output %q (supported: %s)", state.output, supportedList)}
 		}
-		// Unknown value — fall back to text rather than erroring late.
-		return OutputText
+		if !containsFormat(supported, resolved) {
+			return "", &UsageError{Err: fmt.Errorf("--output=%s is not supported by this command (supported: %s)", resolved, supportedList)}
+		}
+		return resolved, nil
 	}
 }
 

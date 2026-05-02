@@ -9,7 +9,7 @@ import (
 	"github.com/nassiharel/clim/internal/progress"
 )
 
-var watchOutputFmt func() OutputFormat
+var watchOutputFmt func() (OutputFormat, error)
 
 var watchCmd = &cobra.Command{
 	Use:   "watch",
@@ -50,6 +50,11 @@ type watchReport struct {
 }
 
 func runWatch(cmd *cobra.Command, args []string) error {
+	out, err := watchOutputFmt()
+	if err != nil {
+		return err
+	}
+
 	sp := progress.New("Checking for updates...")
 	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), true) // always fresh
 	if err != nil {
@@ -76,7 +81,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if watchOutputFmt() == OutputJSON {
+	if out == OutputJSON {
 		return printJSON(watchReport{
 			Updates:    updates,
 			TotalTools: installed,

@@ -67,12 +67,12 @@ func buildImportPlan(manifestTools []manifest.Tool, regMap map[string]*registry.
 			display = mt.DisplayName
 		)
 		if rt, exists := regMap[mt.Name]; exists {
+			display = cmp.Or(rt.DisplayName, mt.DisplayName, mt.Name)
 			if rt.IsInstalled() {
-				ps.alreadyInstalled = append(ps.alreadyInstalled, cmp.Or(rt.DisplayName, mt.Name))
+				ps.alreadyInstalled = append(ps.alreadyInstalled, display)
 				continue
 			}
 			pkgs = rt.Packages
-			display = cmp.Or(rt.DisplayName, display)
 		} else {
 			pkgs = registry.PackageIDs{
 				Winget: mt.Packages.Winget,

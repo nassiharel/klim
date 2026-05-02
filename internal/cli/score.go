@@ -16,7 +16,7 @@ import (
 
 var scoreBadgeFlag bool
 var scoreRefreshFlag bool
-var scoreOutput func() OutputFormat
+var scoreOutput func() (OutputFormat, error)
 
 var scoreCmd = &cobra.Command{
 	Use:   "score",
@@ -37,6 +37,11 @@ func init() {
 }
 
 func runScore(cmd *cobra.Command, args []string) error {
+	out, err := scoreOutput()
+	if err != nil {
+		return err
+	}
+
 	sp := progress.New("Scanning...")
 	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), scoreRefreshFlag)
 	if err != nil {
@@ -79,7 +84,7 @@ func runScore(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if scoreOutput() == OutputJSON {
+	if out == OutputJSON {
 		return printJSON(result)
 	}
 

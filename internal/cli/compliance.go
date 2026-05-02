@@ -33,7 +33,7 @@ Generate a default policy with: clim compliance init`,
 
 var compliancePolicyFlag string
 var complianceRefreshFlag bool
-var complianceOutput func() OutputFormat
+var complianceOutput func() (OutputFormat, error)
 
 var complianceCheckCmd = &cobra.Command{
 	Use:   "check",
@@ -93,6 +93,11 @@ func findPolicyPath() string {
 }
 
 func runComplianceCheck(cmd *cobra.Command, args []string) error {
+	out, err := complianceOutput()
+	if err != nil {
+		return err
+	}
+
 	policyPath, err := resolvePolicyPath()
 	if err != nil {
 		return err
@@ -113,7 +118,7 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 
 	result := compliance.Check(policy, tools)
 
-	if complianceOutput() == OutputJSON {
+	if out == OutputJSON {
 		if err := printJSON(result); err != nil {
 			return err
 		}

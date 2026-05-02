@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -61,6 +62,13 @@ for non-interactive operation.`,
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&verboseFlag, "verbose", false, "enable verbose logging to stderr")
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
+
+	// Wrap Cobra flag-parse errors in UsageError so they exit with code 2
+	// (ExitUsage), matching the convention documented in
+	// docs/cli-conventions.md. Children inherit this from the root.
+	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return &UsageError{Err: err}
+	})
 
 	// Cobra auto-registers --version in Execute; trigger it early to add -v shorthand.
 	rootCmd.InitDefaultVersionFlag()
@@ -151,8 +159,13 @@ func init() {
 //
 //	0 — success
 //	1 — runtime error
-//	2 — usage error (bad flags / args)
+//	2 — usage error (bad flags, args, or output format)
 //	3 — partial failure (e.g. some imports failed)
+//
+// Cobra's own flag-parse errors are wrapped in UsageError via
+// SetFlagErrorFunc on rootCmd, and "unknown command" / "unknown flag"
+// errors that escape that hook are detected by message prefix here. All
+// other errors map to ExitRuntime.
 func Run() int {
 	err := rootCmd.Execute()
 	if err == nil {
@@ -168,7 +181,26 @@ func Run() int {
 	if errors.As(err, &pf) {
 		return ExitPartialFailure
 	}
+	if isCobraUsageError(err) {
+		return ExitUsage
+	}
 	return ExitRuntime
+}
+
+// isCobraUsageError reports whether err is a Cobra-emitted usage error
+// (unknown command / unknown subcommand / unknown flag) that didn't go
+// through SetFlagErrorFunc. Detection is by message prefix because Cobra
+// returns plain `errors.New` instances for these cases.
+func isCobraUsageError(err error) bool {
+	msg := err.Error()
+	switch {
+	case strings.HasPrefix(msg, "unknown command"),
+		strings.HasPrefix(msg, "unknown flag"),
+		strings.HasPrefix(msg, "unknown shorthand flag"),
+		strings.HasPrefix(msg, "invalid argument"):
+		return true
+	}
+	return false
 }
 
 // Execute is retained for callers that want a plain error. Prefer Run, which

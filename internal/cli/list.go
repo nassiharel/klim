@@ -22,7 +22,7 @@ var (
 	listSourceFlag     string
 	listCategoriesFlag bool
 	listRefreshFlag    bool
-	listOutput         func() OutputFormat
+	listOutput         func() (OutputFormat, error)
 )
 
 var listCmd = &cobra.Command{
@@ -57,6 +57,11 @@ func init() {
 }
 
 func runList(cmd *cobra.Command, args []string) error {
+	out, err := listOutput()
+	if err != nil {
+		return err
+	}
+
 	sp := progress.New("Loading marketplace catalog...")
 	tools, info, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), listRefreshFlag)
 	if err != nil {
@@ -96,7 +101,7 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	// --categories: print available categories and exit.
 	if listCategoriesFlag {
-		if listOutput() == OutputJSON {
+		if out == OutputJSON {
 			return printJSON(collectListCategories(tools))
 		}
 		printCategories(tools)
@@ -104,7 +109,7 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 
 	// JSON output: emit structured tool list and skip the human table.
-	if listOutput() == OutputJSON {
+	if out == OutputJSON {
 		return printListJSON(tools)
 	}
 

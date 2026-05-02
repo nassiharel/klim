@@ -13,7 +13,7 @@ import (
 
 var searchCategoryFlag string
 var searchLimitFlag int
-var searchOutput func() OutputFormat
+var searchOutput func() (OutputFormat, error)
 
 var searchCmd = &cobra.Command{
 	Use:   "search <query>",
@@ -40,6 +40,10 @@ func init() {
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
+	out, err := searchOutput()
+	if err != nil {
+		return err
+	}
 	query := strings.Join(args, " ")
 
 	// Load catalog + scan PATH for install status (no version resolution).
@@ -67,7 +71,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		results = results[:searchLimitFlag]
 	}
 
-	if searchOutput() == OutputJSON {
+	if out == OutputJSON {
 		return printSearchJSON(query, results, totalMatches)
 	}
 

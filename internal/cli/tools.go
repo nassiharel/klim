@@ -26,7 +26,7 @@ Useful for piping into other tools or for inspection:
 
   clim tools path
   cat "$(clim tools path)"`,
-	Args: cobra.NoArgs,
+	Args: requireArgs(0, "clim tools path"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := catalog.CachePath()
 		if err != nil {

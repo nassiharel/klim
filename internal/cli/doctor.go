@@ -13,7 +13,7 @@ import (
 )
 
 var doctorRefreshFlag bool
-var doctorOutput func() OutputFormat
+var doctorOutput func() (OutputFormat, error)
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
@@ -46,6 +46,11 @@ type jsonDoctorOutput struct {
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {
+	out, err := doctorOutput()
+	if err != nil {
+		return err
+	}
+
 	sp := progress.New("Running diagnostics...")
 	tools, _, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), doctorRefreshFlag)
 	if err != nil {
@@ -62,7 +67,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	issues := doctor.Diagnose(tools, meta)
 	errors, warnings, infos := doctor.CountBySeverity(issues)
 
-	if doctorOutput() == OutputJSON {
+	if out == OutputJSON {
 		return printDoctorJSON(issues, errors, warnings, infos)
 	}
 
