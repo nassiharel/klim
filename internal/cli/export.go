@@ -179,7 +179,7 @@ func runExportSave(cmd *cobra.Command, args []string) error {
 
 	path, err := snapshot.Save(tools, label)
 	if err != nil {
-		return err
+		return fmt.Errorf("saving snapshot: %w", err)
 	}
 
 	var installed int
@@ -212,7 +212,7 @@ func runExportList(cmd *cobra.Command, args []string) error {
 func runExportShow(cmd *cobra.Command, args []string) error {
 	snap, err := snapshot.Load(args[0])
 	if err != nil {
-		return err
+		return fmt.Errorf("loading snapshot %q: %w", args[0], err)
 	}
 	if snap.Name != "" {
 		fmt.Fprintf(os.Stderr, "Snapshot: %s\n", snap.Name)
@@ -232,7 +232,7 @@ func runExportShow(cmd *cobra.Command, args []string) error {
 
 func runExportDelete(cmd *cobra.Command, args []string) error {
 	if err := snapshot.Delete(args[0]); err != nil {
-		return err
+		return fmt.Errorf("deleting snapshot %q: %w", args[0], err)
 	}
 	fmt.Fprintf(os.Stderr, "✓ Snapshot deleted: %s\n", args[0])
 	return nil
@@ -252,7 +252,7 @@ func runExportProfileSave(cmd *cobra.Command, args []string) error {
 
 	path, err := snapshot.SaveProfile(tools, name)
 	if err != nil {
-		return err
+		return fmt.Errorf("saving profile %q: %w", name, err)
 	}
 
 	var installed int
@@ -284,7 +284,7 @@ func runExportProfileList(cmd *cobra.Command, args []string) error {
 func runExportProfileShow(cmd *cobra.Command, args []string) error {
 	snap, err := snapshot.LoadProfile(args[0])
 	if err != nil {
-		return err
+		return fmt.Errorf("loading profile %q: %w", args[0], err)
 	}
 	fmt.Fprintf(os.Stderr, "Profile: %s\n", snap.Name)
 	fmt.Fprintf(os.Stderr, "OS/Arch: %s/%s\n", snap.OS, snap.Arch)
@@ -301,7 +301,7 @@ func runExportProfileShow(cmd *cobra.Command, args []string) error {
 
 func runExportProfileDelete(cmd *cobra.Command, args []string) error {
 	if err := snapshot.DeleteProfile(args[0]); err != nil {
-		return err
+		return fmt.Errorf("deleting profile %q: %w", args[0], err)
 	}
 	fmt.Fprintf(os.Stderr, "✓ Profile %q deleted\n", args[0])
 	return nil

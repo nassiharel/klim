@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -55,15 +56,7 @@ for non-interactive operation.`,
 	SilenceErrors: true,
 }
 
-// ANSI color codes for help output.
-const (
-	cReset = "\033[0m"
-	cBold  = "\033[1m"
-	cTeal  = "\033[38;5;37m"
-	cGreen = "\033[38;5;78m"
-	cWhite = "\033[38;5;15m"
-	cGray  = "\033[38;5;244m"
-)
+// ANSI color codes for help output are defined in help.go.
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&verboseFlag, "verbose", false, "enable verbose logging to stderr")
@@ -152,89 +145,54 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 }
 
-// Execute runs the root command.
+// Run executes the root command and returns a process exit code.
+//
+// Exit codes:
+//
+//	0 — success
+//	1 — runtime error
+//	2 — usage error (bad flags / args)
+//	3 — partial failure (e.g. some imports failed)
+func Run() int {
+	err := rootCmd.Execute()
+	if err == nil {
+		return ExitOK
+	}
+	fmt.Fprintln(os.Stderr, "Error:", err)
+
+	var ue *UsageError
+	if errors.As(err, &ue) {
+		return ExitUsage
+	}
+	var pf *PartialFailureError
+	if errors.As(err, &pf) {
+		return ExitPartialFailure
+	}
+	return ExitRuntime
+}
+
+// Execute is retained for callers that want a plain error. Prefer Run, which
+// distinguishes usage / runtime / partial-failure exits.
+//
+// Deprecated: use Run.
 func Execute() error {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return err
+	if Run() != ExitOK {
+		return errCLIFailed
 	}
 	return nil
 }
 
-// initColorHelp sets up colorized help output for the root command.
-// Subcommands use Cobra's default help template.
-func initColorHelp() {
-	defaultHelp := rootCmd.HelpFunc()
-	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		if cmd != rootCmd {
-			defaultHelp(cmd, args)
-			return
-		}
-		w := cmd.OutOrStdout()
-		p := func(format string, a ...any) { //nolint:errcheck
-			_, _ = fmt.Fprintf(w, format, a...)
-		}
-
-		// Brand header.
-		brand := cBold + cWhite + "\033[48;5;37m" + " clim " + cReset
-		p("\n  %s  %s\n\n", brand, cmd.Short)
-
-		// Description.
-		if cmd.Long != "" {
-			p("%s%s%s\n\n", cGray, cmd.Long, cReset)
-		}
-
-		// Command groups.
-		for _, g := range cmd.Groups() {
-			p("%s%s%s%s\n", cBold, cTeal, g.Title, cReset)
-			for _, c := range cmd.Commands() {
-				if c.GroupID == g.ID && c.IsAvailableCommand() {
-					p("  %s%-16s%s%s%s%s\n",
-						cGreen, c.Name(), cReset,
-						cGray, c.Short, cReset)
-				}
-			}
-			p("\n")
-		}
-
-		// Ungrouped commands.
-		var ungrouped []*cobra.Command
-		for _, c := range cmd.Commands() {
-			if c.IsAvailableCommand() && c.GroupID == "" {
-				ungrouped = append(ungrouped, c)
-			}
-		}
-		if len(ungrouped) > 0 {
-			p("%s%sAdditional Commands:%s\n", cBold, cTeal, cReset)
-			for _, c := range ungrouped {
-				p("  %s%-16s%s%s%s%s\n",
-					cGreen, c.Name(), cReset,
-					cGray, c.Short, cReset)
-			}
-			p("\n")
-		}
-
-		// Flags (includes persistent flags like --verbose).
-		if cmd.HasAvailableFlags() {
-			p("%s%sFlags:%s\n", cBold, cTeal, cReset)
-			p("%s\n", cmd.Flags().FlagUsages())
-		}
-
-		// Usage hint.
-		p("Use \"%sclim [command] --help%s\" for more information.\n\n",
-			cGreen, cReset)
-	})
-}
+var errCLIFailed = errors.New("clim: command failed")
 
 // requireArgs returns a Cobra Args validator that requires exactly n arguments
 // and prints a helpful error message with usage hint when they're missing.
 func requireArgs(n int, example string) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
 		if len(args) < n {
-			return fmt.Errorf("requires %d argument(s)\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, example, cmd.CommandPath())
+			return usageErrorf("requires %d argument(s)\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, example, cmd.CommandPath())
 		}
 		if len(args) > n {
-			return fmt.Errorf("accepts at most %d argument(s), received %d\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, len(args), example, cmd.CommandPath())
+			return usageErrorf("accepts at most %d argument(s), received %d\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, len(args), example, cmd.CommandPath())
 		}
 		return nil
 	}
@@ -244,7 +202,7 @@ func requireArgs(n int, example string) cobra.PositionalArgs {
 func requireMinArgs(n int, example string) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
 		if len(args) < n {
-			return fmt.Errorf("requires at least %d argument(s)\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, example, cmd.CommandPath())
+			return usageErrorf("requires at least %d argument(s)\n\nUsage:\n  %s\n\nRun '%s --help' for more information", n, example, cmd.CommandPath())
 		}
 		return nil
 	}

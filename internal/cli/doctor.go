@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -13,8 +12,8 @@ import (
 	"github.com/nassiharel/clim/internal/service"
 )
 
-var doctorJSONFlag bool
 var doctorRefreshFlag bool
+var doctorOutput func() OutputFormat
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
@@ -30,7 +29,7 @@ Exit codes:
 }
 
 func init() {
-	doctorCmd.Flags().BoolVar(&doctorJSONFlag, "json", false, "Output results as JSON")
+	doctorOutput = addOutputFlag(doctorCmd, OutputText, OutputJSON)
 	doctorCmd.Flags().BoolVar(&doctorRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	// Registered in root.go with command group.
 }
@@ -63,7 +62,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	issues := doctor.Diagnose(tools, meta)
 	errors, warnings, infos := doctor.CountBySeverity(issues)
 
-	if doctorJSONFlag {
+	if doctorOutput() == OutputJSON {
 		return printDoctorJSON(issues, errors, warnings, infos)
 	}
 
@@ -117,11 +116,9 @@ func printDoctorJSON(issues []doctor.Issue, errors, warnings, infos int) error {
 	out.Summary.Warnings = warnings
 	out.Summary.Infos = infos
 
-	data, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
+	if err := printJSON(out); err != nil {
 		return err
 	}
-	fmt.Println(string(data))
 
 	if doctor.HasErrors(issues) {
 		return fmt.Errorf("%d error(s) found", errors)

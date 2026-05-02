@@ -11,13 +11,14 @@ Module: `github.com/nassiharel/clim`
 ## Project Structure
 
 ```
-cmd/clim/main.go          Entry point → cli.Execute()
+cmd/clim/main.go          Entry point → cli.Run() (returns exit code)
 marketplace/                Modular tool catalog (source of truth)
   tools/*.yaml              One file per tool definition
   packs/*.yaml              One file per pack definition
   marketplace/   Marketplace assembly & validation scripts
     assemble/    Combines individual files → marketplace.yaml
     validate/    Schema validation, uniqueness, cross-references
+docs/cli-conventions.md    CLI conventions: streams, --output, exit codes
 install.sh                 Linux/macOS installer script
 install.ps1                Windows PowerShell installer script
 Makefile                   build / test / lint / cover / clean
@@ -26,7 +27,12 @@ Makefile                   build / test / lint / cover / clean
 internal/
   build/       Version/Commit/Date (ldflags) + Info(), VersionOnly()
   catalog/     Fetch marketplace.yaml from GitHub, cache locally, diff, refresh
-  cli/         Cobra commands: list, export, import, open, share, update, tools, config
+  cli/         Cobra commands. Notable files:
+                 root.go         rootCmd, group registration, Run/Execute
+                 errors.go       UsageError, PartialFailureError, exit codes
+                 help.go         Colorized help template for the root command
+                 output.go       Canonical --output {text,json,yaml} flag helpers
+                 installplan.go  Install-plan resolution + execution (shared by import / open)
   config/      config.yaml: logging, marketplace URL, performance, UI prefs
   custompacks/ User-created pack definitions → ~/.config/clim/marketplace/custom-packs.yaml
   detector/    Fallback version detection (Go buildinfo, Windows PE resources)
@@ -42,7 +48,9 @@ internal/
   selfupdate/  Self-update from GitHub Releases (download → extract → replace)
   service/     ToolService: composition root wiring catalog + finder + resolver
   share/       Compact token encode/decode for sharing tool lists
-  tui/         Bubbletea Model (model.go), commands (commands.go), rendering (view.go), favorites (favorites.go), styles
+  tui/         Bubbletea Model (model.go), commands (commands.go), rendering (view.go),
+                 sidebar/filter helpers (sidebar.go), pure utilities (util.go),
+                 favorites (favorites.go), styles
 ```
 
 ## Architecture

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -15,9 +14,9 @@ import (
 	"github.com/nassiharel/clim/internal/score"
 )
 
-var scoreJSONFlag bool
 var scoreBadgeFlag bool
 var scoreRefreshFlag bool
+var scoreOutput func() OutputFormat
 
 var scoreCmd = &cobra.Command{
 	Use:   "score",
@@ -31,7 +30,7 @@ Grade scale: A+ (95+), A (90+), B (80+), C (70+), D (60+), F (<60)`,
 }
 
 func init() {
-	scoreCmd.Flags().BoolVar(&scoreJSONFlag, "json", false, "Output as JSON")
+	scoreOutput = addOutputFlag(scoreCmd, OutputText, OutputJSON)
 	scoreCmd.Flags().BoolVar(&scoreBadgeFlag, "badge", false, "Output shields.io badge URL")
 	scoreCmd.Flags().BoolVar(&scoreRefreshFlag, "refresh", false, "Force fresh scan")
 	// Registered in root.go with command group.
@@ -80,13 +79,8 @@ func runScore(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if scoreJSONFlag {
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(data))
-		return nil
+	if scoreOutput() == OutputJSON {
+		return printJSON(result)
 	}
 
 	// Human output.

@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"cmp"
 	"fmt"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -20,6 +22,7 @@ var (
 	listSourceFlag     string
 	listCategoriesFlag bool
 	listRefreshFlag    bool
+	listOutput         func() OutputFormat
 )
 
 var listCmd = &cobra.Command{
@@ -28,10 +31,11 @@ var listCmd = &cobra.Command{
 	Long: `List installed developer tools with version info, install sources, and update status.
 
 Flags:
-  --category <name>   Show only tools in a specific category (e.g. Cloud, CLI, Containers)
-  --source <name>     Show only tools from a specific install source (e.g. brew, winget, apt)
-  --categories        Print available category names and exit
-  --refresh           Force a fresh scan, ignoring the on-disk cache
+  --category <name>    Show only tools in a specific category (e.g. Cloud, CLI, Containers)
+  --source <name>      Show only tools from a specific install source (e.g. brew, winget, apt)
+  --categories         Print available category names and exit
+  --refresh            Force a fresh scan, ignoring the on-disk cache
+  --output text|json   Output format (default: text)
 
 Examples:
   clim list                          # all installed tools
@@ -39,7 +43,8 @@ Examples:
   clim list --source brew            # only Homebrew-installed tools
   clim list --category IaC --source brew  # combine filters
   clim list --categories             # list available categories
-  clim list --refresh                # bypass cache and rescan`,
+  clim list --refresh                # bypass cache and rescan
+  clim list --output json            # machine-readable output`,
 	RunE: runList,
 }
 
@@ -48,6 +53,7 @@ func init() {
 	listCmd.Flags().StringVar(&listSourceFlag, "source", "", "Filter by install source (e.g. brew, winget, apt)")
 	listCmd.Flags().BoolVar(&listCategoriesFlag, "categories", false, "Print available category names and exit")
 	listCmd.Flags().BoolVar(&listRefreshFlag, "refresh", false, "Force a fresh scan, ignoring the on-disk cache")
+	listOutput = addOutputFlag(listCmd, OutputText, OutputJSON)
 }
 
 func runList(cmd *cobra.Command, args []string) error {
@@ -90,8 +96,16 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	// --categories: print available categories and exit.
 	if listCategoriesFlag {
+		if listOutput() == OutputJSON {
+			return printJSON(collectListCategories(tools))
+		}
 		printCategories(tools)
 		return nil
+	}
+
+	// JSON output: emit structured tool list and skip the human table.
+	if listOutput() == OutputJSON {
+		return printListJSON(tools)
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
@@ -118,7 +132,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		}
 
 		shown++
-		ver := or(primary.Version, "—")
+		ver := cmp.Or(primary.Version, "—")
 		status := registry.StatusString(primary.Version, tool.Latest)
 
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
@@ -133,7 +147,7 @@ func runList(cmd *cobra.Command, args []string) error {
 
 		for _, inst := range tool.Instances[1:] {
 			_, _ = fmt.Fprintf(w, "  └─ also:\t\t%s\t\t%s\t\t%s\n",
-				or(inst.Version, "—"),
+				cmp.Or(inst.Version, "—"),
 				inst.Source,
 				registry.TruncatePath(inst.Path, 45),
 			)
@@ -184,9 +198,91 @@ func printCategories(tools []registry.Tool) {
 	}
 }
 
-func or(val, fallback string) string {
-	if val == "" {
-		return fallback
+// or() and the local helper have been replaced by stdlib cmp.Or.
+
+// listJSONTool is the JSON shape for `clim list --output json`.
+type listJSONTool struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Installed   bool   `json:"installed"`
+	Version     string `json:"version,omitempty"`
+	Latest      string `json:"latest,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Status      string `json:"status,omitempty"`
+	Update      bool   `json:"update_available,omitempty"`
+}
+
+type listJSONOutput struct {
+	OS    string         `json:"os"`
+	Arch  string         `json:"arch"`
+	Tools []listJSONTool `json:"tools"`
+}
+
+func printListJSON(tools []registry.Tool) error {
+	out := listJSONOutput{
+		OS:   runtime.GOOS,
+		Arch: runtime.GOARCH,
 	}
-	return val
+	for _, tool := range tools {
+		if !tool.IsInstalled() {
+			continue
+		}
+		primary := tool.PrimaryInstance()
+		// Apply filters.
+		if listCategoryFlag != "" && !strings.EqualFold(tool.Category, listCategoryFlag) {
+			continue
+		}
+		if listSourceFlag != "" && primary != nil && !strings.EqualFold(string(primary.Source), listSourceFlag) {
+			continue
+		}
+		entry := listJSONTool{
+			Name:        tool.Name,
+			DisplayName: tool.DisplayName,
+			Category:    tool.Category,
+			Installed:   true,
+			Latest:      tool.Latest,
+			Update:      tool.HasUpdate(),
+		}
+		if primary != nil {
+			entry.Version = primary.Version
+			entry.Source = string(primary.Source)
+			entry.Path = primary.Path
+			entry.Status = registry.StatusString(primary.Version, tool.Latest)
+		}
+		out.Tools = append(out.Tools, entry)
+	}
+	return printJSON(out)
+}
+
+// listJSONCategory is the per-category JSON shape for --categories --output json.
+type listJSONCategory struct {
+	Name      string `json:"name"`
+	Installed int    `json:"installed"`
+}
+
+func collectListCategories(tools []registry.Tool) []listJSONCategory {
+	seen := make(map[string]int)
+	for _, t := range tools {
+		if t.Category == "" {
+			continue
+		}
+		if _, ok := seen[t.Category]; !ok {
+			seen[t.Category] = 0
+		}
+		if t.IsInstalled() {
+			seen[t.Category]++
+		}
+	}
+	cats := make([]string, 0, len(seen))
+	for cat := range seen {
+		cats = append(cats, cat)
+	}
+	sort.Strings(cats)
+	out := make([]listJSONCategory, 0, len(cats))
+	for _, cat := range cats {
+		out = append(out, listJSONCategory{Name: cat, Installed: seen[cat]})
+	}
+	return out
 }

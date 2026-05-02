@@ -230,16 +230,6 @@ func (c *Config) Validate() []string {
 	return w
 }
 
-// MustLoad calls Load and panics on error (corrupt YAML).
-// Missing file is not an error — defaults are returned silently.
-func MustLoad() *Config {
-	cfg, err := Load()
-	if err != nil {
-		panic(fmt.Sprintf("clim: %v", err))
-	}
-	return cfg
-}
-
 const configHeader = "# clim — Configuration\n# All values are optional. Defaults are shown below.\n# Restart clim after editing for changes to take effect.\n\n"
 
 // Save writes the config to config.yaml atomically.

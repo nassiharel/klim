@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -33,8 +32,8 @@ Generate a default policy with: clim compliance init`,
 }
 
 var compliancePolicyFlag string
-var complianceJSONFlag bool
 var complianceRefreshFlag bool
+var complianceOutput func() OutputFormat
 
 var complianceCheckCmd = &cobra.Command{
 	Use:   "check",
@@ -56,7 +55,7 @@ var complianceInitCmd = &cobra.Command{
 
 func init() {
 	complianceCheckCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Path to policy file (overrides config)")
-	complianceCheckCmd.Flags().BoolVar(&complianceJSONFlag, "json", false, "Output results as JSON")
+	complianceOutput = addOutputFlag(complianceCheckCmd, OutputText, OutputJSON)
 	complianceCheckCmd.Flags().BoolVar(&complianceRefreshFlag, "refresh", false, "Force fresh scan")
 	complianceShowCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Path to policy file (overrides config)")
 	complianceInitCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Output path (default: clim config directory)")
@@ -114,12 +113,10 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 
 	result := compliance.Check(policy, tools)
 
-	if complianceJSONFlag {
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
+	if complianceOutput() == OutputJSON {
+		if err := printJSON(result); err != nil {
 			return err
 		}
-		fmt.Println(string(data))
 		if !result.Compliant {
 			var errorCount int
 			for _, v := range result.Violations {

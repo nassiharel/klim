@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,8 +12,8 @@ import (
 )
 
 var checkFileFlag string
-var checkJSONFlag bool
 var checkRefreshFlag bool
+var checkOutput func() OutputFormat
 
 var checkCmd = &cobra.Command{
 	Use:   "check",
@@ -32,13 +31,13 @@ Exit codes:
 Usage:
   clim check                      # auto-find .clim.yaml
   clim check --file path/to/.clim.yaml
-  clim check --json               # machine-readable output for CI`,
+  clim check --output json        # machine-readable output for CI`,
 	RunE: runCheck,
 }
 
 func init() {
 	checkCmd.Flags().StringVarP(&checkFileFlag, "file", "f", "", "Path to .clim.yaml (default: auto-detect)")
-	checkCmd.Flags().BoolVar(&checkJSONFlag, "json", false, "Output results as JSON")
+	checkOutput = addOutputFlag(checkCmd, OutputText, OutputJSON)
 	checkCmd.Flags().BoolVar(&checkRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	// Registered in root.go with command group.
 }
@@ -105,7 +104,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 	_ = teamfile.AddProject(filepath.Dir(path), name, len(tf.Tools)+len(tf.Optional))
 
-	if checkJSONFlag {
+	if checkOutput() == OutputJSON {
 		return printCheckJSON(tf, path, results, ok, missing, outdated, unknown)
 	}
 
@@ -204,11 +203,9 @@ func printCheckJSON(tf *teamfile.TeamFile, path string, results []teamfile.Check
 		})
 	}
 
-	data, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
+	if err := printJSON(out); err != nil {
 		return err
 	}
-	fmt.Println(string(data))
 
 	if !out.AllSatisfied {
 		return fmt.Errorf("%d tool(s) missing, outdated, or unknown", missing+outdated+unknown)
