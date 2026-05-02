@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
@@ -17,9 +16,9 @@ import (
 	"github.com/nassiharel/clim/internal/service"
 )
 
-var auditJSONFlag bool
 var auditRefreshFlag bool
 var auditSBOMFlag bool
+var auditOutput func() (OutputFormat, error)
 
 var auditCmd = &cobra.Command{
 	Use:   "audit",
@@ -42,7 +41,7 @@ Exit codes:
 }
 
 func init() {
-	auditCmd.Flags().BoolVar(&auditJSONFlag, "json", false, "Output results as JSON")
+	auditOutput = addOutputFlag(auditCmd, OutputText, OutputJSON)
 	auditCmd.Flags().BoolVar(&auditRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	auditCmd.Flags().BoolVar(&auditSBOMFlag, "sbom", false, "Generate CycloneDX SBOM instead of audit report")
 	// Registered in root.go with command group.
@@ -62,6 +61,11 @@ type auditReport struct {
 }
 
 func runAudit(cmd *cobra.Command, args []string) error {
+	out, err := auditOutput()
+	if err != nil {
+		return err
+	}
+
 	sp := progress.New("Scanning installed tools...")
 	tools, _, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), auditRefreshFlag)
 	if err != nil {
@@ -90,7 +94,7 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	findings, licenses := audit.Analyze(tools)
 	warnings, infos := audit.CountBySeverity(findings)
 
-	if auditJSONFlag {
+	if out == OutputJSON {
 		return printAuditJSON(findings, installedCount, warnings, infos, licenses)
 	}
 
@@ -135,11 +139,9 @@ func printAuditJSON(findings []auditFinding, total, warnings, infos int, license
 	report.Summary.Infos = infos
 	report.Summary.Licenses = licenses
 
-	data, err := json.MarshalIndent(report, "", "  ")
-	if err != nil {
+	if err := printJSON(report); err != nil {
 		return err
 	}
-	fmt.Println(string(data))
 
 	if warnings > 0 {
 		return fmt.Errorf("%d warning(s) found", warnings)
@@ -260,11 +262,9 @@ func generateSBOM(tools []registry.Tool) error {
 		bom.Components = append(bom.Components, comp)
 	}
 
-	data, err := json.MarshalIndent(bom, "", "  ")
-	if err != nil {
+	if err := printJSON(bom); err != nil {
 		return err
 	}
-	fmt.Println(string(data))
 	fmt.Fprintf(os.Stderr, "\n%d components in SBOM\n", len(bom.Components))
 	return nil
 }

@@ -57,7 +57,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(m.Tools) == 0 {
-		fmt.Println("No tools in manifest.")
+		fmt.Fprintln(os.Stderr, "No tools in manifest.")
 		return nil
 	}
 
@@ -66,7 +66,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	// Load registry and scan PATH to know what's already installed.
 	regTools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
-		return err
+		return fmt.Errorf("scanning installed tools: %w", err)
 	}
 
 	regMap := registry.ToolMap(regTools)
@@ -96,81 +96,13 @@ func runImport(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "\n──── Done: %d installed, %d failed, %d already present ────\n",
 		succeeded, failed, len(ps.alreadyInstalled))
 	if failed > 0 {
-		return fmt.Errorf("%d tool(s) failed to install", failed)
+		return &PartialFailureError{Op: "import", Succeeded: succeeded, Failed: failed}
 	}
 	return nil
 }
 
-// buildImportPlan classifies manifest tools into install/skip/error categories.
-func buildImportPlan(manifestTools []manifest.Tool, regMap map[string]*registry.Tool) planSummary {
-	var ps planSummary
-
-	for _, mt := range manifestTools {
-		rt, exists := regMap[mt.Name]
-		if !exists {
-			// Tool not in registry — try to use manifest's package IDs directly.
-			pkgs := registry.PackageIDs{
-				Winget: mt.Packages.Winget,
-				Choco:  mt.Packages.Choco,
-				Scoop:  mt.Packages.Scoop,
-				Brew:   mt.Packages.Brew,
-				Apt:    mt.Packages.Apt,
-				Snap:   mt.Packages.Snap,
-				NPM:    mt.Packages.NPM,
-			}
-			src := pkgs.BestInstallSource()
-			if mt.Source != "" {
-				preferred := registry.InstallSource(mt.Source)
-				if args := pkgs.InstallArgs(preferred); args != nil {
-					src = preferred
-				}
-			}
-			installArgs := pkgs.InstallArgs(src)
-			if installArgs == nil {
-				if pkgs.HasAnyPackageForOS() {
-					ps.noPkgMgr = append(ps.noPkgMgr, mt.Name)
-				} else {
-					ps.noPackage = append(ps.noPackage, mt.Name)
-				}
-				continue
-			}
-			ps.toInstall = append(ps.toInstall, installPlan{
-				name: mt.Name, display: mt.DisplayName,
-				cmdArgs: installArgs, source: string(src),
-			})
-			continue
-		}
-
-		if rt.IsInstalled() {
-			ps.alreadyInstalled = append(ps.alreadyInstalled, mt.DisplayName)
-			continue
-		}
-
-		src := rt.Packages.BestInstallSource()
-		if mt.Source != "" {
-			preferred := registry.InstallSource(mt.Source)
-			if args := rt.Packages.InstallArgs(preferred); args != nil {
-				src = preferred
-			}
-		}
-		installArgs := rt.Packages.InstallArgs(src)
-		if installArgs == nil {
-			if rt.Packages.HasAnyPackageForOS() {
-				ps.noPkgMgr = append(ps.noPkgMgr, mt.Name)
-			} else {
-				ps.noPackage = append(ps.noPackage, mt.Name)
-			}
-			continue
-		}
-
-		ps.toInstall = append(ps.toInstall, installPlan{
-			name: mt.Name, display: mt.DisplayName,
-			cmdArgs: installArgs, source: string(src),
-		})
-	}
-
-	return ps
-}
+// buildImportPlan now lives in installplan.go (consolidated with the
+// other install-plan helpers).
 
 // validateManifest checks that a parsed manifest has the minimum required
 // structure — tools must have a non-empty name. This catches cases where

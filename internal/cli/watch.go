@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -10,7 +9,7 @@ import (
 	"github.com/nassiharel/clim/internal/progress"
 )
 
-var watchJSONFlag bool
+var watchOutputFmt func() (OutputFormat, error)
 
 var watchCmd = &cobra.Command{
 	Use:   "watch",
@@ -18,14 +17,14 @@ var watchCmd = &cobra.Command{
 	Long: `Check all installed tools for available updates and report results.
 
 Designed to run periodically (cron, Task Scheduler) or on-demand.
-Use --json for machine-readable output suitable for notifications.
+Use --output=json for machine-readable output suitable for notifications.
 
 Examples:
   clim watch                         # human-readable check
-  clim watch --json                  # JSON output for scripts
+  clim watch --output json           # JSON output for scripts
 
   # Cron job (daily at 9am):
-  0 9 * * * clim watch --json >> ~/.config/clim/watch.log
+  0 9 * * * clim watch --output json >> ~/.config/clim/watch.log
 
   # Windows Task Scheduler:
   schtasks /create /tn "clim-watch" /tr "clim watch" /sc daily /st 09:00`,
@@ -33,7 +32,7 @@ Examples:
 }
 
 func init() {
-	watchCmd.Flags().BoolVar(&watchJSONFlag, "json", false, "Output results as JSON")
+	watchOutputFmt = addOutputFlag(watchCmd, OutputText, OutputJSON)
 	// Registered in root.go with command group.
 }
 
@@ -44,13 +43,18 @@ type watchResult struct {
 	Source    string `json:"source"`
 }
 
-type watchOutput struct {
+type watchReport struct {
 	Updates    []watchResult `json:"updates"`
 	TotalTools int           `json:"total_tools"`
 	UpToDate   int           `json:"up_to_date"`
 }
 
 func runWatch(cmd *cobra.Command, args []string) error {
+	out, err := watchOutputFmt()
+	if err != nil {
+		return err
+	}
+
 	sp := progress.New("Checking for updates...")
 	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), true) // always fresh
 	if err != nil {
@@ -77,18 +81,12 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if watchJSONFlag {
-		out := watchOutput{
+	if out == OutputJSON {
+		return printJSON(watchReport{
 			Updates:    updates,
 			TotalTools: installed,
 			UpToDate:   installed - len(updates),
-		}
-		data, err := json.MarshalIndent(out, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(data))
-		return nil
+		})
 	}
 
 	// Human output.
