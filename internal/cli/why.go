@@ -15,6 +15,8 @@ import (
 	"github.com/nassiharel/clim/internal/teamfile"
 )
 
+var whyOutputFmt func() (OutputFormat, error)
+
 var whyCmd = &cobra.Command{
 	Use:   "why <tool>",
 	Short: "Show why a tool is needed and where it's referenced",
@@ -22,16 +24,54 @@ var whyCmd = &cobra.Command{
 
 Examples:
   clim why kubectl
-  clim why terraform`,
+  clim why terraform
+  clim why kubectl --output json`,
 	Args: requireArgs(1, "clim why <tool>"),
 	RunE: runWhy,
 }
 
 func init() {
+	whyOutputFmt = addOutputFlag(whyCmd, OutputText, OutputJSON)
 	// Registered in root.go with command group.
 }
 
+// whyReference is a JSON-friendly description of a place a tool is mentioned.
+type whyReference struct {
+	Kind       string `json:"kind"` // teamfile | project | pack | custom_pack
+	Name       string `json:"name,omitempty"`
+	Path       string `json:"path,omitempty"`
+	Required   bool   `json:"required,omitempty"`
+	Constraint string `json:"version_constraint,omitempty"`
+}
+
+type whyPackageEntry struct {
+	Source string `json:"source"`
+	ID     string `json:"id"`
+}
+
+type whyReport struct {
+	Name         string            `json:"name"`
+	DisplayName  string            `json:"display_name,omitempty"`
+	Category     string            `json:"category,omitempty"`
+	Description  string            `json:"description,omitempty"`
+	Installed    bool              `json:"installed"`
+	Version      string            `json:"version,omitempty"`
+	Source       string            `json:"source,omitempty"`
+	Path         string            `json:"path,omitempty"`
+	Instances    int               `json:"instances,omitempty"`
+	Latest       string            `json:"latest,omitempty"`
+	UpdateAvail  bool              `json:"update_available,omitempty"`
+	References   []whyReference    `json:"references"`
+	AvailableVia []whyPackageEntry `json:"available_via,omitempty"`
+	RelatedTools []string          `json:"related_tools,omitempty"`
+	Warnings     []string          `json:"warnings,omitempty"`
+}
+
 func runWhy(cmd *cobra.Command, args []string) error {
+	out, err := whyOutputFmt()
+	if err != nil {
+		return err
+	}
 	toolName := args[0]
 
 	sp := progress.New("Scanning...")
@@ -49,49 +89,62 @@ func runWhy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%s is not in the catalog", toolName)
 	}
 
-	fmt.Fprintf(os.Stderr, "\n%s (%s)\n", t.DisplayName, t.Category)
-	if t.GitHubInfo != nil && t.GitHubInfo.Description != "" {
-		fmt.Fprintf(os.Stderr, "  %s\n", t.GitHubInfo.Description)
-	}
-	fmt.Fprintln(os.Stderr)
+	report := buildWhyReport(cmd, toolName, t, tools)
 
-	// Installation status.
-	if t.IsInstalled() {
+	if out == OutputJSON {
+		return printJSON(report)
+	}
+
+	renderWhyText(report, t)
+	return nil
+}
+
+// buildWhyReport collects all referenced data without printing anything.
+// Warnings (e.g. "could not load project registry") are accumulated on the
+// report rather than printed to stderr so JSON callers see the same data.
+func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools []registry.Tool) whyReport {
+	r := whyReport{
+		Name:        t.Name,
+		DisplayName: t.DisplayName,
+		Category:    t.Category,
+		Installed:   t.IsInstalled(),
+		Latest:      t.Latest,
+	}
+	if t.GitHubInfo != nil {
+		r.Description = t.GitHubInfo.Description
+	}
+	if r.Installed {
 		primary := t.PrimaryInstance()
-		fmt.Fprintf(os.Stderr, "  ✓ Installed: %s (%s) at %s\n", primary.Version, primary.Source, primary.Path)
-		if len(t.Instances) > 1 {
-			fmt.Fprintf(os.Stderr, "    + %d additional installation(s)\n", len(t.Instances)-1)
+		if primary != nil {
+			r.Version = primary.Version
+			r.Source = string(primary.Source)
+			r.Path = primary.Path
 		}
-		if t.HasUpdate() {
-			fmt.Fprintf(os.Stderr, "    ⬆ Update available: %s → %s\n", primary.Version, t.Latest)
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "  ✗ Not installed\n")
+		r.Instances = len(t.Instances)
+		r.UpdateAvail = t.HasUpdate()
 	}
-	fmt.Fprintln(os.Stderr)
 
-	// References.
-	var refs []string
-
-	// 1. Check .clim.yaml projects.
+	// 1. Check .clim.yaml in or above CWD.
 	cwd, _ := os.Getwd()
+	var seenTeamPath string
 	if cwd != "" {
 		path := teamfile.Find(cwd)
 		if path != "" {
-			tf, err := teamfile.Parse(path)
-			if err == nil {
+			seenTeamPath = path
+			if tf, err := teamfile.Parse(path); err == nil {
 				for _, req := range tf.Tools {
 					if req.Name == toolName {
-						constraint := ""
-						if req.Version != "" {
-							constraint = " " + req.Version
-						}
-						refs = append(refs, fmt.Sprintf(".clim.yaml (required%s) — %s", constraint, path))
+						r.References = append(r.References, whyReference{
+							Kind: "teamfile", Path: path,
+							Required: true, Constraint: req.Version,
+						})
 					}
 				}
 				for _, opt := range tf.Optional {
 					if opt.Name == toolName {
-						refs = append(refs, ".clim.yaml (optional) — "+path)
+						r.References = append(r.References, whyReference{
+							Kind: "teamfile", Path: path, Required: false,
+						})
 					}
 				}
 			}
@@ -101,12 +154,12 @@ func runWhy(cmd *cobra.Command, args []string) error {
 	// 2. Check all registered projects.
 	projects, projErr := teamfile.LoadProjects()
 	if projErr != nil {
-		fmt.Fprintf(os.Stderr, "  ⚠ Could not load project registry: %v\n", projErr)
+		r.Warnings = append(r.Warnings, fmt.Sprintf("could not load project registry: %v", projErr))
 	}
 	for _, proj := range projects {
 		climPath := filepath.Join(proj.Path, ".clim.yaml")
-		if cwd != "" && filepath.Clean(climPath) == filepath.Clean(teamfile.Find(cwd)) {
-			continue // already handled above
+		if seenTeamPath != "" && filepath.Clean(climPath) == filepath.Clean(seenTeamPath) {
+			continue
 		}
 		tf, err := teamfile.Parse(climPath)
 		if err != nil {
@@ -114,12 +167,17 @@ func runWhy(cmd *cobra.Command, args []string) error {
 		}
 		for _, req := range tf.Tools {
 			if req.Name == toolName {
-				refs = append(refs, fmt.Sprintf("Project %q (required) — %s", proj.Name, climPath))
+				r.References = append(r.References, whyReference{
+					Kind: "project", Name: proj.Name, Path: climPath,
+					Required: true, Constraint: req.Version,
+				})
 			}
 		}
 		for _, opt := range tf.Optional {
 			if opt.Name == toolName {
-				refs = append(refs, fmt.Sprintf("Project %q (optional) — %s", proj.Name, climPath))
+				r.References = append(r.References, whyReference{
+					Kind: "project", Name: proj.Name, Path: climPath, Required: false,
+				})
 			}
 		}
 	}
@@ -127,72 +185,67 @@ func runWhy(cmd *cobra.Command, args []string) error {
 	// 3. Check packs.
 	packs, packErr := svc.LoadPacks(cmd.Context())
 	if packErr != nil {
-		fmt.Fprintf(os.Stderr, "  ⚠ Could not load packs: %v\n", packErr)
+		r.Warnings = append(r.Warnings, fmt.Sprintf("could not load packs: %v", packErr))
 	}
 	for _, pack := range packs {
 		for _, pToolName := range pack.ToolNames {
 			if pToolName == toolName {
-				refs = append(refs, fmt.Sprintf("Pack %q (%s)", pack.DisplayName, pack.Name))
+				r.References = append(r.References, whyReference{
+					Kind: "pack", Name: pack.Name,
+				})
 			}
 		}
 	}
 
 	// 4. Check custom packs.
 	if cp, cpErr := custompacks.Load(); cpErr != nil {
-		fmt.Fprintf(os.Stderr, "  ⚠ Could not load custom packs: %v\n", cpErr)
+		r.Warnings = append(r.Warnings, fmt.Sprintf("could not load custom packs: %v", cpErr))
 	} else {
 		for _, pack := range cp {
 			for _, pToolName := range pack.ToolNames {
 				if pToolName == toolName {
-					refs = append(refs, fmt.Sprintf("Custom pack %q (%s)", pack.DisplayName, pack.Name))
+					r.References = append(r.References, whyReference{
+						Kind: "custom_pack", Name: pack.Name,
+					})
 				}
 			}
 		}
 	}
 
-	if len(refs) > 0 {
-		fmt.Fprintf(os.Stderr, "  Referenced by:\n")
-		for _, ref := range refs {
-			fmt.Fprintf(os.Stderr, "    • %s\n", ref)
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "  No project or pack references found.\n")
-	}
-	fmt.Fprintln(os.Stderr)
-
 	// Available packages.
-	var pkgs []string
-	if t.Packages.Winget != "" {
-		pkgs = append(pkgs, "winget: "+t.Packages.Winget)
-	}
-	if t.Packages.Choco != "" {
-		pkgs = append(pkgs, "choco: "+t.Packages.Choco)
-	}
-	if t.Packages.Scoop != "" {
-		pkgs = append(pkgs, "scoop: "+t.Packages.Scoop)
-	}
-	if t.Packages.Brew != "" {
-		pkgs = append(pkgs, "brew: "+t.Packages.Brew)
-	}
-	if t.Packages.Apt != "" {
-		pkgs = append(pkgs, "apt: "+t.Packages.Apt)
-	}
-	if t.Packages.Snap != "" {
-		pkgs = append(pkgs, "snap: "+t.Packages.Snap)
-	}
-	if t.Packages.NPM != "" {
-		pkgs = append(pkgs, "npm: "+t.Packages.NPM)
-	}
-	if len(pkgs) > 0 {
-		fmt.Fprintf(os.Stderr, "  Available via: %s\n", strings.Join(pkgs, ", "))
-	}
+	r.AvailableVia = append(r.AvailableVia, collectPackageEntriesForWhy(t.Packages)...)
 
-	// Dependents — tools commonly used with this one (same category/tags).
-	var related []string
+	// Related installed tools (same category/tags).
+	r.RelatedTools = relatedInstalledTools(toolName, t, tools)
+
+	return r
+}
+
+func collectPackageEntriesForWhy(pkgs registry.PackageIDs) []whyPackageEntry {
+	all := []whyPackageEntry{
+		{Source: "winget", ID: pkgs.Winget},
+		{Source: "choco", ID: pkgs.Choco},
+		{Source: "scoop", ID: pkgs.Scoop},
+		{Source: "brew", ID: pkgs.Brew},
+		{Source: "apt", ID: pkgs.Apt},
+		{Source: "snap", ID: pkgs.Snap},
+		{Source: "npm", ID: pkgs.NPM},
+	}
+	out := make([]whyPackageEntry, 0, len(all))
+	for _, e := range all {
+		if e.ID != "" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func relatedInstalledTools(toolName string, t *registry.Tool, tools []registry.Tool) []string {
 	toolTags := make(map[string]bool)
 	for _, tag := range t.Tags {
 		toolTags[strings.ToLower(tag)] = true
 	}
+	var related []string
 	for _, other := range tools {
 		if other.Name == toolName || !other.IsInstalled() {
 			continue
@@ -214,9 +267,77 @@ func runWhy(cmd *cobra.Command, args []string) error {
 	if len(related) > 5 {
 		related = related[:5]
 	}
-	if len(related) > 0 {
-		fmt.Fprintf(os.Stderr, "  Related installed tools: %s\n", strings.Join(related, ", "))
+	return related
+}
+
+func renderWhyText(r whyReport, t *registry.Tool) {
+	for _, w := range r.Warnings {
+		fmt.Fprintf(os.Stderr, "  ⚠ %s\n", w)
 	}
 
-	return nil
+	fmt.Fprintf(os.Stderr, "\n%s (%s)\n", r.DisplayName, r.Category)
+	if r.Description != "" {
+		fmt.Fprintf(os.Stderr, "  %s\n", r.Description)
+	}
+	fmt.Fprintln(os.Stderr)
+
+	if r.Installed {
+		fmt.Fprintf(os.Stderr, "  ✓ Installed: %s (%s) at %s\n", r.Version, r.Source, r.Path)
+		if r.Instances > 1 {
+			fmt.Fprintf(os.Stderr, "    + %d additional installation(s)\n", r.Instances-1)
+		}
+		if r.UpdateAvail {
+			fmt.Fprintf(os.Stderr, "    ⬆ Update available: %s → %s\n", r.Version, r.Latest)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "  ✗ Not installed\n")
+	}
+	fmt.Fprintln(os.Stderr)
+
+	if len(r.References) > 0 {
+		fmt.Fprintf(os.Stderr, "  Referenced by:\n")
+		for _, ref := range r.References {
+			fmt.Fprintf(os.Stderr, "    • %s\n", formatWhyRef(ref))
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "  No project or pack references found.\n")
+	}
+	fmt.Fprintln(os.Stderr)
+
+	if len(r.AvailableVia) > 0 {
+		var pairs []string
+		for _, p := range r.AvailableVia {
+			pairs = append(pairs, p.Source+": "+p.ID)
+		}
+		fmt.Fprintf(os.Stderr, "  Available via: %s\n", strings.Join(pairs, ", "))
+	}
+
+	if len(r.RelatedTools) > 0 {
+		fmt.Fprintf(os.Stderr, "  Related installed tools: %s\n", strings.Join(r.RelatedTools, ", "))
+	}
+}
+
+func formatWhyRef(ref whyReference) string {
+	switch ref.Kind {
+	case "teamfile":
+		if ref.Required {
+			constraint := ""
+			if ref.Constraint != "" {
+				constraint = " " + ref.Constraint
+			}
+			return fmt.Sprintf(".clim.yaml (required%s) — %s", constraint, ref.Path)
+		}
+		return ".clim.yaml (optional) — " + ref.Path
+	case "project":
+		role := "optional"
+		if ref.Required {
+			role = "required"
+		}
+		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, role, ref.Path)
+	case "pack":
+		return fmt.Sprintf("Pack %q", ref.Name)
+	case "custom_pack":
+		return fmt.Sprintf("Custom pack %q", ref.Name)
+	}
+	return ref.Kind + " " + ref.Name
 }

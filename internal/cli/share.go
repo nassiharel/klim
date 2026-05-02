@@ -9,6 +9,8 @@ import (
 	"github.com/nassiharel/clim/internal/share"
 )
 
+var shareOutputFmt func() (OutputFormat, error)
+
 var shareCmd = &cobra.Command{
 	Use:   "share",
 	Short: "Share your toolchain — generate tokens, install from tokens",
@@ -16,13 +18,15 @@ var shareCmd = &cobra.Command{
 a token shared by a teammate.
 
 Usage:
-  clim share                 # generate a share token
-  clim share open <token>    # install from a share token`,
+  clim share                         # generate a share token (text)
+  clim share --output json           # generate a share token (JSON)
+  clim share open <token>            # install from a share token`,
 	Args: cobra.NoArgs,
 	RunE: runShare,
 }
 
 func init() {
+	shareOutputFmt = addOutputFlag(shareCmd, OutputText, OutputJSON)
 	shareCmd.AddCommand(openCmd)
 	// rootCmd.AddCommand done in root.go via group assignment.
 }
@@ -32,11 +36,24 @@ func runShare(cmd *cobra.Command, args []string) error {
 	return runShareGenerate(cmd, args)
 }
 
+type shareReport struct {
+	Token     string   `json:"token"`
+	ToolCount int      `json:"tool_count"`
+	Tools     []string `json:"tools"`
+}
+
 func runShareGenerate(cmd *cobra.Command, args []string) error {
-	fmt.Fprintln(os.Stderr, "Scanning installed tools...")
-	tools, _, err := svc.ScanOnly(cmd.Context())
+	out, err := shareOutputFmt()
 	if err != nil {
 		return err
+	}
+
+	if out == OutputText {
+		fmt.Fprintln(os.Stderr, "Scanning installed tools...")
+	}
+	tools, _, err := svc.ScanOnly(cmd.Context())
+	if err != nil {
+		return fmt.Errorf("scanning installed tools: %w", err)
 	}
 
 	// Collect names of installed tools.
@@ -48,6 +65,9 @@ func runShareGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(names) == 0 {
+		if out == OutputJSON {
+			return printJSON(shareReport{Tools: []string{}})
+		}
 		fmt.Fprintln(os.Stderr, "No installed tools found.")
 		return nil
 	}
@@ -55,6 +75,10 @@ func runShareGenerate(cmd *cobra.Command, args []string) error {
 	token, err := share.Encode(names)
 	if err != nil {
 		return fmt.Errorf("encoding share token: %w", err)
+	}
+
+	if out == OutputJSON {
+		return printJSON(shareReport{Token: token, ToolCount: len(names), Tools: names})
 	}
 
 	fmt.Fprintf(os.Stderr, "\nShare token (%d tools):\n\n", len(names))

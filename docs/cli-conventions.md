@@ -34,8 +34,10 @@ Every command that produces structured data accepts:
 * Unknown values (e.g. `--output=jsno`) are usage errors and exit 2 — they
   do **not** silently fall back to text.
 
-Currently supports JSON: `audit`, `check`, `compliance check`, `doctor`,
-`list`, `score`, `search`, `watch`. (`export` already emits YAML by design.)
+Currently supports JSON: `audit`, `check`, `compliance check`, `diff`,
+`doctor`, `list`, `score`, `search`, `share`, `tools path`, `watch`,
+`why`, and `config marketplace list`. (`export` already emits YAML by
+design.)
 
 ## Exit codes
 

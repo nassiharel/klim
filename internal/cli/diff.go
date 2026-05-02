@@ -18,6 +18,7 @@ import (
 )
 
 var diffRefreshFlag bool
+var diffOutputFmt func() (OutputFormat, error)
 
 var diffCmd = &cobra.Command{
 	Use:   "diff <manifest.yaml | share-token>",
@@ -26,6 +27,7 @@ var diffCmd = &cobra.Command{
 
   clim diff my-tools.yaml            # compare against a manifest file
   clim diff clim:v1:abc123...        # compare against a share token
+  clim diff my-tools.yaml --output json
 
 Shows which tools match, differ in version, or are missing on either side.
 
@@ -38,6 +40,7 @@ Exit codes:
 
 func init() {
 	diffCmd.Flags().BoolVar(&diffRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
+	diffOutputFmt = addOutputFlag(diffCmd, OutputText, OutputJSON)
 	// Registered in root.go with command group.
 }
 
@@ -49,9 +52,14 @@ type diffEntry struct {
 	remoteVersion string
 	remoteSource  string
 	status        string // "✓ match", "≠ differs", "← local only", "→ remote only"
+	statusKey     string // canonical key for JSON: "match" | "differs" | "local_only" | "remote_only"
 }
 
 func runDiff(cmd *cobra.Command, args []string) error {
+	out, err := diffOutputFmt()
+	if err != nil {
+		return err
+	}
 	target := args[0]
 
 	// Load remote/target tools.
@@ -122,9 +130,11 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			// Compare using raw versions first, then format for display.
 			if versionsEqual(local.Version, remote.Version) {
 				e.status = "✓ match"
+				e.statusKey = "match"
 				matches++
 			} else {
 				e.status = "≠ differs"
+				e.statusKey = "differs"
 				differs++
 			}
 			e.remoteVersion = remote.Version
@@ -137,6 +147,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			e.remoteVersion = "—"
 			e.remoteSource = ""
 			e.status = "← local only"
+			e.statusKey = "local_only"
 			localOnly++
 		case !hasLocal && hasRemote:
 			e.localVersion = "—"
@@ -144,6 +155,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			e.remoteVersion = remote.Version
 			e.remoteSource = remote.Source
 			e.status = "→ remote only"
+			e.statusKey = "remote_only"
 			remoteOnly++
 		}
 
@@ -151,6 +163,10 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	// Print results.
+	if out == OutputJSON {
+		return printDiffJSON(remoteName, entries, matches, differs, localOnly, remoteOnly)
+	}
+
 	fmt.Fprintf(os.Stderr, "\nComparing local vs %s\n\n", remoteName)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
@@ -173,6 +189,62 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "\nResult: %d match, %d differ, %d local only, %d remote only\n",
 		matches, differs, localOnly, remoteOnly)
 
+	if differs > 0 || localOnly > 0 || remoteOnly > 0 {
+		return fmt.Errorf("%d difference(s) found", differs+localOnly+remoteOnly)
+	}
+	return nil
+}
+
+type diffJSONEntry struct {
+	Name          string `json:"name"`
+	LocalVersion  string `json:"local_version,omitempty"`
+	LocalSource   string `json:"local_source,omitempty"`
+	RemoteVersion string `json:"remote_version,omitempty"`
+	RemoteSource  string `json:"remote_source,omitempty"`
+	Status        string `json:"status"` // match | differs | local_only | remote_only
+}
+
+type diffJSONReport struct {
+	Target  string          `json:"target"`
+	Summary diffJSONSummary `json:"summary"`
+	Entries []diffJSONEntry `json:"entries"`
+}
+
+type diffJSONSummary struct {
+	Match      int `json:"match"`
+	Differs    int `json:"differs"`
+	LocalOnly  int `json:"local_only"`
+	RemoteOnly int `json:"remote_only"`
+}
+
+func printDiffJSON(target string, entries []diffEntry, matches, differs, localOnly, remoteOnly int) error {
+	report := diffJSONReport{
+		Target: target,
+		Summary: diffJSONSummary{
+			Match:      matches,
+			Differs:    differs,
+			LocalOnly:  localOnly,
+			RemoteOnly: remoteOnly,
+		},
+	}
+	for _, e := range entries {
+		entry := diffJSONEntry{
+			Name:         e.name,
+			LocalSource:  e.localSource,
+			RemoteSource: e.remoteSource,
+			Status:       e.statusKey,
+		}
+		if e.localVersion != "—" {
+			entry.LocalVersion = e.localVersion
+		}
+		if e.remoteVersion != "—" {
+			entry.RemoteVersion = e.remoteVersion
+		}
+		report.Entries = append(report.Entries, entry)
+	}
+	if err := printJSON(report); err != nil {
+		return err
+	}
 	if differs > 0 || localOnly > 0 || remoteOnly > 0 {
 		return fmt.Errorf("%d difference(s) found", differs+localOnly+remoteOnly)
 	}

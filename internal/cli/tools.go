@@ -17,6 +17,8 @@ The catalog is fetched from the marketplace branch on first use and cached
 locally. Use these subcommands to inspect or operate on the cache.`,
 }
 
+var toolsPathOutputFmt func() (OutputFormat, error)
+
 var toolsPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "Print the path to the local catalog cache",
@@ -25,18 +27,33 @@ var toolsPathCmd = &cobra.Command{
 Useful for piping into other tools or for inspection:
 
   clim tools path
-  cat "$(clim tools path)"`,
+  cat "$(clim tools path)"
+  clim tools path --output json    # {"cache_path": "..."}`,
 	Args: requireArgs(0, "clim tools path"),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := catalog.CachePath()
-		if err != nil {
-			return fmt.Errorf("resolving catalog cache path: %w", err)
-		}
-		fmt.Println(path)
-		return nil
-	},
+	RunE: runToolsPath,
 }
 
 func init() {
+	toolsPathOutputFmt = addOutputFlag(toolsPathCmd, OutputText, OutputJSON)
 	toolsCmd.AddCommand(toolsPathCmd)
+}
+
+type toolsPathReport struct {
+	CachePath string `json:"cache_path"`
+}
+
+func runToolsPath(cmd *cobra.Command, args []string) error {
+	out, err := toolsPathOutputFmt()
+	if err != nil {
+		return err
+	}
+	path, err := catalog.CachePath()
+	if err != nil {
+		return fmt.Errorf("resolving catalog cache path: %w", err)
+	}
+	if out == OutputJSON {
+		return printJSON(toolsPathReport{CachePath: path})
+	}
+	fmt.Println(path)
+	return nil
 }

@@ -40,6 +40,8 @@ var marketplaceRemoveCmd = &cobra.Command{
 	RunE:  runMarketplaceRemove,
 }
 
+var marketplaceListOutputFmt func() (OutputFormat, error)
+
 var marketplaceListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all marketplace URLs",
@@ -47,6 +49,7 @@ var marketplaceListCmd = &cobra.Command{
 }
 
 func init() {
+	marketplaceListOutputFmt = addOutputFlag(marketplaceListCmd, OutputText, OutputJSON)
 	marketplaceCmd.AddCommand(marketplaceAddCmd)
 	marketplaceCmd.AddCommand(marketplaceRemoveCmd)
 	marketplaceCmd.AddCommand(marketplaceListCmd)
@@ -142,7 +145,17 @@ func runMarketplaceRemove(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+type marketplaceListReport struct {
+	Primary string   `json:"primary"`
+	Extra   []string `json:"extra"`
+}
+
 func runMarketplaceList(cmd *cobra.Command, args []string) error {
+	out, err := marketplaceListOutputFmt()
+	if err != nil {
+		return err
+	}
+
 	c, _, err := config.LoadWithWarnings()
 	if err != nil {
 		c = config.Default()
@@ -151,6 +164,16 @@ func runMarketplaceList(cmd *cobra.Command, args []string) error {
 	primaryURL := c.Marketplace.URL
 	if primaryURL == "" {
 		primaryURL = config.DefaultMarketplaceURL
+	}
+
+	if out == OutputJSON {
+		extra := make([]string, 0, len(c.Marketplace.ExtraURLs))
+		for _, u := range c.Marketplace.ExtraURLs {
+			if e := strings.TrimSpace(u); e != "" {
+				extra = append(extra, e)
+			}
+		}
+		return printJSON(marketplaceListReport{Primary: primaryURL, Extra: extra})
 	}
 
 	fmt.Fprintf(os.Stderr, "Primary:\n  %s\n", primaryURL)
