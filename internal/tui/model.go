@@ -416,7 +416,9 @@ func (m *Model) startScan() tea.Cmd {
 	// Clear upgrade selection — indices are tied to the old tool ordering
 	// and would select the wrong tools after a rescan reorders the list.
 	m.updateSelected = make(map[int]bool)
-	m.activeBatch = nil
+	if m.activeBatch == nil || !m.activeBatch.isRunning() {
+		m.activeBatch = nil
+	}
 	m.doctorIssues = nil
 	m.auditFindings = nil
 	m.auditLicenses = nil
@@ -772,13 +774,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case backupItemDoneMsg:
 		if msg.idx < len(m.backupItems) {
-			if msg.err != nil {
-				m.backupItems[msg.idx].status = backupFailed
-				m.backupItems[msg.idx].errMsg = msg.err.Error()
-			} else {
-				m.backupItems[msg.idx].status = backupDone
+			// Only update if still running (not already skipped by user).
+			if m.backupItems[msg.idx].status == backupRunning {
+				if msg.err != nil {
+					m.backupItems[msg.idx].status = backupFailed
+					m.backupItems[msg.idx].errMsg = msg.err.Error()
+				} else {
+					m.backupItems[msg.idx].status = backupDone
+				}
+				m.backupDone++
 			}
-			m.backupDone++
 		}
 		// If cancelled or no more items, finish up.
 		if m.backupCancelled {
@@ -1811,6 +1816,25 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
+	}
+
+	// While a batch operation is running, only allow skip (s), cancel (Esc),
+	// and quit. Block all other actions to prevent state corruption.
+	if m.activeBatch != nil && m.activeBatch.isRunning() {
+		switch msg.String() {
+		case "esc":
+			m.activeBatch.cancel()
+			m.statusMsg = "⚠ Cancelling — waiting for current item..."
+			return m, nil
+		case "s":
+			m.activeBatch.skip()
+			m.statusMsg = "⏭ Skipped"
+			return m, nil
+		}
+		return m, nil
+	}
+
+	switch msg.String() {
 	case "c":
 		// Copy share token to clipboard (Backup tab only).
 		if m.activeTab == tabBackup && m.backupMode == backupModeShare && m.sharedToken != "" {
@@ -1835,12 +1859,6 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.backupDone = 0
 			m.backupConfirm = false
 			m.statusMsg = ""
-			return m, nil
-		}
-		// Cancel active batch operation.
-		if m.activeBatch != nil && m.activeBatch.isRunning() {
-			m.activeBatch.cancel()
-			m.statusMsg = "⚠ Cancelling — waiting for current item to finish..."
 			return m, nil
 		}
 		// Clear active filters.
@@ -1936,19 +1954,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.doctorScroll = 0
 		return m, nil
 	case "s":
-		// Skip current item during active batch operation.
-		if m.activeBatch != nil && m.activeBatch.isRunning() {
-			m.activeBatch.skip()
-			m.statusMsg = "⏭ Skipped"
-			return m, nil
-		}
 		// Skip current item during import.
 		if m.activeTab == tabBackup && m.isImportRunning() {
 			for i := range m.backupItems {
 				if m.backupItems[i].status == backupRunning {
 					m.backupItems[i].status = backupSkipped
 					m.backupItems[i].errMsg = "skipped"
-					m.backupDone++
 					break
 				}
 			}
@@ -2301,10 +2312,6 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "r":
-		// Block rescan during active batch operation.
-		if m.activeBatch != nil && m.activeBatch.isRunning() {
-			return m, nil
-		}
 		// On the Marketplace tab, refresh the catalog from GitHub.
 		if m.activeTab == tabDiscover {
 			m.statusMsg = "Refreshing marketplace..."
