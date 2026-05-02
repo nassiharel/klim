@@ -149,6 +149,7 @@ type Model struct {
 	packInstalling bool       // true while a pack operation is in progress
 	packDone       int        // count of completed items
 	packCancelled  bool       // true if user cancelled pack operation
+	packAction     string     // "Installing" or "Removing" — for progress display
 
 	// Marketplace refresh diff — carried across rescans to apply badges.
 	lastDiff *catalog.DiffResult
@@ -1574,6 +1575,7 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.packDone = countPackSkipped(m.packItems)
 			m.packInstalling = true
 			m.packCancelled = false
+			m.packAction = "Installing"
 			if cmd := m.nextPackItem(); cmd != nil {
 				return m, cmd
 			}
@@ -1589,6 +1591,7 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.packDone = countPackSkipped(m.packItems)
 			m.packInstalling = true
 			m.packCancelled = false
+			m.packAction = "Removing"
 			if cmd := m.nextPackItem(); cmd != nil {
 				return m, cmd
 			}

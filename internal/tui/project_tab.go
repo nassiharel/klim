@@ -630,10 +630,15 @@ func (m Model) projectInstallMissing() (tea.Model, tea.Cmd) {
 	}
 
 	rp := registry.Pack{Name: "project-requirements", ToolNames: missing}
+	if m.packInstalling {
+		m.statusMsg = "Pack operation in progress — please wait..."
+		return m, nil
+	}
 	m.packItems = buildPackInstallItems(m.tools, rp)
 	m.packDone = countPackSkipped(m.packItems)
 	m.packInstalling = true
 	m.packCancelled = false
+	m.packAction = "Installing"
 	m.showPackDetail = false
 
 	if cmd := m.nextPackItem(); cmd != nil {

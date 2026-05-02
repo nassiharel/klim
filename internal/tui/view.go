@@ -992,11 +992,15 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 					break
 				}
 			}
+			verb := m.packAction
+			if verb == "" {
+				verb = "Installing"
+			}
 			var status string
 			if current == "" {
-				status = fmt.Sprintf("  Installing... (%d/%d)", m.packDone, len(m.packItems))
+				status = fmt.Sprintf("  %s... (%d/%d)", verb, m.packDone, len(m.packItems))
 			} else {
-				status = fmt.Sprintf("  Installing %s (%d/%d)", current, m.packDone, len(m.packItems))
+				status = fmt.Sprintf("  %s %s (%d/%d)", verb, current, m.packDone, len(m.packItems))
 			}
 			progressFooter = upgradableStyle.Render(status) + "   " +
 				dim("s") + " skip   " + dim("Esc") + " cancel"
