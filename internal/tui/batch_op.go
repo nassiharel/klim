@@ -228,7 +228,7 @@ type batchAdvanceMsg struct{}
 
 // advanceDelay is the pause between batch/pack items, giving the user
 // time to press skip (s) or cancel (Esc) before the next item starts.
-const advanceDelay = 1 * time.Second
+const advanceDelay = 500 * time.Millisecond
 
 // batchAdvanceCmd returns a command that fires batchAdvanceMsg after a delay.
 func batchAdvanceCmd() tea.Cmd {
