@@ -148,6 +148,8 @@ type Model struct {
 	packItems      []packItem // per-tool status during pack install/remove
 	packInstalling bool       // true while a pack operation is in progress
 	packDone       int        // count of completed items
+	packCancelled  bool       // true if user cancelled pack operation
+	packAction     string     // "Installing" or "Removing" — for progress display
 
 	// Marketplace refresh diff — carried across rescans to apply badges.
 	lastDiff *catalog.DiffResult
@@ -204,9 +206,10 @@ type Model struct {
 	backupCancelled bool           // true = user pressed Esc during install
 
 	// Batch update state (Updates tab).
-	updateSelected map[int]bool      // tool index → selected for batch upgrade
-	batchUpdating  bool              // true while batch upgrade is in progress
-	batchQueue     batchUpgradeQueue // remaining tool indices to upgrade
+	updateSelected map[int]bool // tool index → selected for batch upgrade
+
+	// Active batch upgrade operation (Updates tab).
+	activeBatch *batchOp // nil = no active batch operation
 
 	// Pack creation state (Backup tab → Create Pack).
 	creatingPack       bool            // true = pack creation wizard is active
@@ -415,8 +418,9 @@ func (m *Model) startScan() tea.Cmd {
 	// Clear upgrade selection — indices are tied to the old tool ordering
 	// and would select the wrong tools after a rescan reorders the list.
 	m.updateSelected = make(map[int]bool)
-	m.batchUpdating = false
-	m.batchQueue = nil
+	if m.activeBatch == nil || !m.activeBatch.isRunning() {
+		m.activeBatch = nil
+	}
 	m.doctorIssues = nil
 	m.auditFindings = nil
 	m.auditLicenses = nil
@@ -772,13 +776,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case backupItemDoneMsg:
 		if msg.idx < len(m.backupItems) {
-			if msg.err != nil {
-				m.backupItems[msg.idx].status = backupFailed
-				m.backupItems[msg.idx].errMsg = msg.err.Error()
-			} else {
-				m.backupItems[msg.idx].status = backupDone
+			// Only update if still running (not already skipped by user).
+			if m.backupItems[msg.idx].status == backupRunning {
+				if msg.err != nil {
+					m.backupItems[msg.idx].status = backupFailed
+					m.backupItems[msg.idx].errMsg = msg.err.Error()
+				} else {
+					m.backupItems[msg.idx].status = backupDone
+				}
+				m.backupDone++
 			}
-			m.backupDone++
 		}
 		// If cancelled or no more items, finish up.
 		if m.backupCancelled {
@@ -794,19 +801,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.startScan()
 		return m, cmd
 
-	case batchUpgradeItemMsg:
-		if msg.toolIdx >= len(m.tools) {
-			return m.fireNextBatchUpgrade()
+	case batchOpDoneMsg:
+		if m.activeBatch != nil {
+			m.activeBatch.complete(msg.idx, msg.err)
+			m.statusMsg = m.activeBatch.statusLine()
+			// If cancelled or no items left, finish immediately (no delay window).
+			if m.activeBatch.cancelled || !m.activeBatch.hasPending() {
+				m.activeBatch.finish()
+				m.statusMsg = m.activeBatch.summary() + " — refreshing..."
+				cmd := m.startScan()
+				return m, cmd
+			}
+			// Defer starting the next item so the TUI can render
+			// progress and accept skip/cancel input between items.
+			return m, batchAdvanceCmd()
 		}
-		if msg.err != nil {
-			m.statusMsg = fmt.Sprintf("✗ %s upgrade failed: %s", m.tools[msg.toolIdx].DisplayName, msg.err)
-		} else {
-			m.statusMsg = fmt.Sprintf("✓ %s upgraded", m.tools[msg.toolIdx].DisplayName)
+		return m, nil
+
+	case batchAdvanceMsg:
+		if m.activeBatch != nil && m.activeBatch.isRunning() {
+			if m.activeBatch.cancelled {
+				m.activeBatch.finish()
+				m.statusMsg = m.activeBatch.summary() + " — refreshing..."
+				cmd := m.startScan()
+				return m, cmd
+			}
+			if cmd := m.activeBatch.next(); cmd != nil {
+				m.statusMsg = m.activeBatch.statusLine()
+				return m, cmd
+			}
+			// All done.
+			m.activeBatch.finish()
+			m.statusMsg = m.activeBatch.summary() + " — refreshing..."
+			cmd := m.startScan()
+			return m, cmd
 		}
-		// Deselect the completed tool.
-		delete(m.updateSelected, msg.toolIdx)
-		// Fire the next upgrade, or finish with a full refresh.
-		return m.fireNextBatchUpgrade()
+		return m, nil
 
 	case shareFinishedMsg:
 		if msg.err != nil {
@@ -832,23 +862,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case packItemDoneMsg:
 		if msg.idx < len(m.packItems) {
-			if msg.err != nil {
-				m.packItems[msg.idx].status = packItemFailed
-				m.packItems[msg.idx].errMsg = msg.err.Error()
-			} else {
-				m.packItems[msg.idx].status = packItemDone
+			// Only update if not already marked (e.g., by skip/cancel).
+			if m.packItems[msg.idx].status == packItemRunning {
+				if msg.err != nil {
+					m.packItems[msg.idx].status = packItemFailed
+					m.packItems[msg.idx].errMsg = msg.err.Error()
+				} else {
+					m.packItems[msg.idx].status = packItemDone
+				}
+				m.packDone++
 			}
-			m.packDone++
 		}
-		// Fire the next item, or finish.
-		if cmd := m.nextPackItem(); cmd != nil {
+		// If no pending items left, finish immediately (no delay window).
+		hasPending := false
+		for _, item := range m.packItems {
+			if item.status == packItemPending {
+				hasPending = true
+				break
+			}
+		}
+		if !hasPending {
+			m.packInstalling = false
+			cmd := m.startScan()
+			m.statusMsg = m.packSummary() + " — refreshing..."
 			return m, cmd
 		}
-		// All done — refresh tools to pick up changes.
-		m.packInstalling = false
-		cmd := m.startScan()
-		m.statusMsg = "✓ Pack operation complete — refreshing..."
-		return m, cmd
+		// Defer starting the next item so the TUI can render and accept input.
+		return m, packAdvanceCmd()
+
+	case packAdvanceMsg:
+		if m.packInstalling {
+			if cmd := m.nextPackItem(); cmd != nil {
+				return m, cmd
+			}
+			m.packInstalling = false
+			cmd := m.startScan()
+			m.statusMsg = m.packSummary() + " — refreshing..."
+			return m, cmd
+		}
+		return m, nil
 
 	case packSavedMsg:
 		if msg.err != nil {
@@ -1452,13 +1504,49 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyPackDetail handles navigation in the pack detail view.
 func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// While a pack operation is running, allow dismissing the view
-	// but keep the operation running in the background.
+	// While a pack operation is running: Esc cancels, s skips, q dismisses view.
 	if m.packInstalling {
-		if msg.String() == "esc" || msg.String() == "q" {
+		switch msg.String() {
+		case "esc":
+			// Cancel pack operation — only if items are still pending/running.
+			hasActive := false
+			for _, item := range m.packItems {
+				if item.status == packItemPending || item.status == packItemRunning {
+					hasActive = true
+					break
+				}
+			}
+			if !hasActive {
+				return m, nil
+			}
+			m.packCancelled = true
+			for i := range m.packItems {
+				if m.packItems[i].status == packItemPending {
+					m.packItems[i].status = packItemSkipped
+					m.packItems[i].errMsg = "cancelled"
+					m.packDone++
+				}
+			}
+			m.statusMsg = "⚠ Cancelled — waiting for current item..."
+			return m, nil
+		case "s":
+			// Skip the next pending item so it won't be executed.
+			skipped := false
+			for i := range m.packItems {
+				if m.packItems[i].status == packItemPending {
+					m.packItems[i].status = packItemSkipped
+					m.packItems[i].errMsg = "skipped"
+					m.packDone++
+					skipped = true
+					break
+				}
+			}
+			if skipped {
+				m.statusMsg = "⏭ Next item skipped"
+			}
+			return m, nil
+		case "q":
 			m.showPackDetail = false
-			// packItems and packInstalling remain — the queue continues
-			// and packItemDoneMsg will fire the next item when it arrives.
 			return m, nil
 		}
 		return m, nil
@@ -1470,6 +1558,7 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.packItems = nil
 		m.packInstalling = false
 		m.packDone = 0
+		m.packCancelled = false
 		return m, nil
 	case "up", "k":
 		if m.packToolCursor > 0 {
@@ -1510,6 +1599,8 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.packItems = buildPackInstallItems(m.tools, pack)
 			m.packDone = countPackSkipped(m.packItems)
 			m.packInstalling = true
+			m.packCancelled = false
+			m.packAction = "Installing"
 			if cmd := m.nextPackItem(); cmd != nil {
 				return m, cmd
 			}
@@ -1524,6 +1615,8 @@ func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.packItems = buildPackRemoveItems(m.tools, pack)
 			m.packDone = countPackSkipped(m.packItems)
 			m.packInstalling = true
+			m.packCancelled = false
+			m.packAction = "Removing"
 			if cmd := m.nextPackItem(); cmd != nil {
 				return m, cmd
 			}
@@ -1554,6 +1647,41 @@ func countPackSkipped(items []packItem) int {
 		}
 	}
 	return n
+}
+
+// packSummary returns a completion summary for the current pack operation.
+func (m Model) packSummary() string {
+	var succeeded, failed, skipped int
+	for _, item := range m.packItems {
+		switch item.status {
+		case packItemDone:
+			succeeded++
+		case packItemFailed:
+			failed++
+		case packItemSkipped:
+			skipped++
+		}
+	}
+	var parts []string
+	if succeeded > 0 {
+		parts = append(parts, fmt.Sprintf("%d succeeded", succeeded))
+	}
+	if failed > 0 {
+		parts = append(parts, fmt.Sprintf("%d failed", failed))
+	}
+	if skipped > 0 {
+		parts = append(parts, fmt.Sprintf("%d skipped", skipped))
+	}
+	prefix := "✓"
+	if m.packCancelled {
+		prefix = "⚠ Cancelled —"
+	} else if failed > 0 {
+		prefix = "⚠"
+	}
+	if len(parts) == 0 {
+		return prefix + " Nothing to do"
+	}
+	return prefix + " " + strings.Join(parts, ", ")
 }
 
 // handleKeyFilter handles the search/filter text input mode.
@@ -1716,6 +1844,9 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.doctorScroll = 0
 			return m, nil
 		case "r":
+			if m.activeBatch != nil && m.activeBatch.isRunning() {
+				return m, nil // block rescan during batch
+			}
 			cmd := m.startScan()
 			return m, cmd
 		}
@@ -1736,6 +1867,26 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
+	}
+
+	// While a batch operation is running, only allow skip (s), cancel (Esc),
+	// and quit. Block all other actions to prevent state corruption.
+	if m.activeBatch != nil && m.activeBatch.isRunning() {
+		switch msg.String() {
+		case "esc":
+			m.activeBatch.cancel()
+			m.statusMsg = "⚠ Cancelling — waiting for current item..."
+			return m, nil
+		case "s":
+			if m.activeBatch.skip() {
+				m.statusMsg = "⏭ Next item skipped"
+			}
+			return m, nil
+		}
+		return m, nil
+	}
+
+	switch msg.String() {
 	case "c":
 		// Copy share token to clipboard (Backup tab only).
 		if m.activeTab == tabBackup && m.backupMode == backupModeShare && m.sharedToken != "" {
@@ -1855,6 +2006,23 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.doctorScroll = 0
 		return m, nil
 	case "s":
+		// Skip current item during import.
+		if m.activeTab == tabBackup && m.isImportRunning() {
+			skipped := false
+			for i := range m.backupItems {
+				if m.backupItems[i].status == backupPending {
+					m.backupItems[i].status = backupSkipped
+					m.backupItems[i].errMsg = "skipped"
+					m.backupDone++
+					skipped = true
+					break
+				}
+			}
+			if skipped {
+				m.statusMsg = "⏭ Next item skipped"
+			}
+			return m, nil
+		}
 		// Cycle sort mode on tool-list tabs (not Backup/Dashboard/Config).
 		if m.activeTab <= tabDiscover && (m.activeTab != tabDiscover || m.discoverSubTab == discoverTools) {
 			m.sortMode = (m.sortMode + 1) % sortModeCount
@@ -2075,7 +2243,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "u":
 		// Batch upgrade selected tools (Updates tab only).
-		if m.activeTab == tabUpdates && !m.batchUpdating {
+		if m.activeTab == tabUpdates && (m.activeBatch == nil || !m.activeBatch.isRunning()) {
 			return m.startBatchUpgrade()
 		}
 		return m, nil
@@ -2179,6 +2347,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.packToolCursor = 0
 				m.packItems = nil // clear any leftover progress from a previous pack
 				m.packDone = 0
+				m.packCancelled = false
 			}
 			return m, nil
 		}
@@ -2859,6 +3028,7 @@ func (m *Model) cancelImport() {
 		if m.backupItems[i].status == backupPending {
 			m.backupItems[i].status = backupSkipped
 			m.backupItems[i].errMsg = "cancelled"
+			m.backupDone++
 		}
 	}
 	m.statusMsg = "⚠ Import cancelled — waiting for current install to finish..."
@@ -2897,14 +3067,10 @@ func (m Model) importSummary() string {
 
 // --- Batch upgrade (Updates tab) ---
 
-// batchUpgradeQueue holds the ordered list of tool indices to upgrade.
-// Items are shifted off the front as each upgrade completes.
-type batchUpgradeQueue []int
-
-// startBatchUpgrade kicks off sequential upgrades for all selected tools.
+// startBatchUpgrade kicks off sequential upgrades for all selected tools
+// using the unified batch operation engine.
 func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
-	// Build the queue of selected tool indices that have upgrade args.
-	var queue batchUpgradeQueue
+	var items []batchItem
 	for _, idx := range m.filteredIndex {
 		if !m.updateSelected[idx] {
 			continue
@@ -2914,40 +3080,44 @@ func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
 			continue
 		}
 		// Find upgrade args (best available source).
-		for _, src := range registry.SourcesForOS() {
-			if args := tool.Packages.UpgradeArgs(src); args != nil {
-				queue = append(queue, idx)
+		var args []string
+		var src string
+		for _, s := range registry.SourcesForOS() {
+			if a := tool.Packages.UpgradeArgs(s); a != nil {
+				args = a
+				src = string(s)
 				break
 			}
 		}
+		if args == nil {
+			items = append(items, batchItem{
+				name:    tool.Name,
+				display: tool.DisplayName,
+				source:  "",
+				status:  batchSkipped,
+				errMsg:  "no upgrade command available",
+			})
+			continue
+		}
+		items = append(items, batchItem{
+			name:    tool.Name,
+			display: tool.DisplayName,
+			cmdArgs: args,
+			source:  src,
+			status:  batchPending,
+		})
 	}
-	if len(queue) == 0 {
+	if len(items) == 0 {
 		m.statusMsg = "No upgradable tools selected."
 		return m, nil
 	}
-	m.batchUpdating = true
-	m.batchQueue = queue
-	return m.fireNextBatchUpgrade()
-}
-
-// fireNextBatchUpgrade pops the next tool off the queue and fires its upgrade.
-// Returns (model, nil) when the queue is empty.
-func (m Model) fireNextBatchUpgrade() (tea.Model, tea.Cmd) {
-	if len(m.batchQueue) == 0 {
-		cmd := m.startScan()
-		m.statusMsg = "✓ Batch upgrade complete — refreshing..."
+	m.activeBatch = newBatchOp("Upgrading", items)
+	if cmd := m.activeBatch.next(); cmd != nil {
+		m.statusMsg = m.activeBatch.statusLine()
 		return m, cmd
 	}
-	idx := m.batchQueue[0]
-	m.batchQueue = m.batchQueue[1:]
-	tool := &m.tools[idx]
-	// Find best upgrade args.
-	for _, src := range registry.SourcesForOS() {
-		if args := tool.Packages.UpgradeArgs(src); args != nil {
-			m.statusMsg = fmt.Sprintf("Upgrading %s...", tool.DisplayName)
-			return m, execBatchUpgradeCmd(idx, args)
-		}
-	}
-	// No upgrade args — skip and try next.
-	return m.fireNextBatchUpgrade()
+	// All items were pre-skipped.
+	m.activeBatch.finish()
+	m.statusMsg = m.activeBatch.summary()
+	return m, nil
 }

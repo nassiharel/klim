@@ -305,12 +305,6 @@ type backupItemDoneMsg struct {
 	err error
 }
 
-// batchUpgradeItemMsg is sent when one batch-upgrade tool finishes.
-type batchUpgradeItemMsg struct {
-	toolIdx int
-	err     error
-}
-
 // backupTickMsg advances the animated progress by marking the next pending item as done.
 type backupTickMsg struct{}
 
@@ -973,14 +967,6 @@ func buildTokenImportPlanCmd(svc *service.ToolService, token string) tea.Cmd {
 
 		return backupPlanMsg{items: items, fromToken: true}
 	}
-}
-
-// execBatchUpgradeCmd suspends the TUI and runs one upgrade command.
-func execBatchUpgradeCmd(toolIdx int, args []string) tea.Cmd {
-	cmd := exec.Command(args[0], args[1:]...)
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
-		return batchUpgradeItemMsg{toolIdx: toolIdx, err: err}
-	})
 }
 
 // humaniseCacheAge renders a cache-write timestamp as a short, human-friendly

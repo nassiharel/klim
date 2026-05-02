@@ -981,7 +981,29 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 		if pending == 0 && !m.packInstalling {
 			progressFooter = "  " + dim("Esc") + " back"
 		} else {
-			progressFooter = "  " + dim("Installing...")
+			// Show current item name + progress + skip/cancel hints.
+			current := ""
+			for _, item := range m.packItems {
+				if item.status == packItemRunning {
+					current = item.display
+					if current == "" {
+						current = item.name
+					}
+					break
+				}
+			}
+			verb := m.packAction
+			if verb == "" {
+				verb = "Installing"
+			}
+			var status string
+			if current == "" {
+				status = fmt.Sprintf("  %s... (%d/%d)", verb, m.packDone, len(m.packItems))
+			} else {
+				status = fmt.Sprintf("  %s %s (%d/%d)", verb, current, m.packDone, len(m.packItems))
+			}
+			progressFooter = upgradableStyle.Render(status) + "   " +
+				dim("s") + " skip   " + dim("Esc") + " cancel   " + dim("q") + " dismiss"
 		}
 
 		return m.layoutWithFooter(b.String(), progressFooter)
@@ -2366,7 +2388,9 @@ func (m Model) renderHelp() string {
 		default:
 			if m.isImportRunning() {
 				parts = []string{
+					dimVersion.Render("s") + " skip",
 					dimVersion.Render("Esc") + " cancel",
+					dimVersion.Render("q") + " quit",
 				}
 			} else {
 				parts = []string{
@@ -2502,6 +2526,15 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("i") + " install",
 				dimVersion.Render("*") + " favorite",
 				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("q") + " quit",
+			}
+		}
+		// Override footer during active batch operation (applied last).
+		if m.activeBatch != nil && m.activeBatch.isRunning() {
+			parts = []string{
+				dimVersion.Render(m.activeBatch.progress()),
+				dimVersion.Render("s") + " skip",
+				dimVersion.Render("Esc") + " cancel",
 				dimVersion.Render("q") + " quit",
 			}
 		}

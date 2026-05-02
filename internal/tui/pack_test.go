@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -140,6 +142,79 @@ func TestCountPackSkipped_Empty(t *testing.T) {
 	got := countPackSkipped(nil)
 	if got != 0 {
 		t.Errorf("countPackSkipped(nil) = %d, want 0", got)
+	}
+}
+
+func TestPackSummary_Success(t *testing.T) {
+	m := Model{
+		packItems: []packItem{
+			{status: packItemDone},
+			{status: packItemDone},
+			{status: packItemSkipped, errMsg: "already installed"},
+		},
+	}
+	s := m.packSummary()
+	if s != "✓ 2 succeeded, 1 skipped" {
+		t.Errorf("unexpected summary: %q", s)
+	}
+}
+
+func TestPackSummary_Cancelled(t *testing.T) {
+	m := Model{
+		packCancelled: true,
+		packItems: []packItem{
+			{status: packItemDone},
+			{status: packItemSkipped, errMsg: "cancelled"},
+		},
+	}
+	s := m.packSummary()
+	if s != "⚠ Cancelled — 1 succeeded, 1 skipped" {
+		t.Errorf("unexpected summary: %q", s)
+	}
+}
+
+func TestPackSkipDoesNotDoubleCount(t *testing.T) {
+	// Build a model with pack items simulating an in-progress operation.
+	m := NewModel()
+	m.packItems = []packItem{
+		{name: "a", status: packItemRunning, cmdArgs: []string{"echo", "a"}},
+		{name: "b", status: packItemPending, cmdArgs: []string{"echo", "b"}},
+		{name: "c", status: packItemPending, cmdArgs: []string{"echo", "c"}},
+	}
+	m.packInstalling = true
+	m.packDone = 0
+
+	// Simulate user pressing "s" via handleKeyPackDetail.
+	m.showPackDetail = true
+	m.packDetailIdx = 0
+	m.packs = []registry.Pack{{Name: "test", ToolNames: []string{"a", "b", "c"}}}
+	sKey := tea.KeyPressMsg(tea.Key{Code: 's', Text: "s"})
+	result, _ := m.handleKeyPackDetail(sKey)
+	m = result.(Model)
+
+	// Item b should be skipped, done should be 1.
+	if m.packItems[1].status != packItemSkipped {
+		t.Errorf("expected item b to be skipped, got %d", m.packItems[1].status)
+	}
+	if m.packDone != 1 {
+		t.Errorf("after skip: expected done=1, got %d", m.packDone)
+	}
+
+	// Simulate packItemDoneMsg for running item a via Update().
+	result, _ = m.Update(packItemDoneMsg{idx: 0, err: nil})
+	m = result.(Model)
+
+	// Item a should be done, done should be 2.
+	if m.packItems[0].status != packItemDone {
+		t.Errorf("expected item a to be done, got %d", m.packItems[0].status)
+	}
+	if m.packDone != 2 {
+		t.Errorf("after complete: expected done=2, got %d", m.packDone)
+	}
+
+	// Item b stays skipped (no double-count).
+	if m.packItems[1].status != packItemSkipped {
+		t.Errorf("skipped item should stay skipped, got %d", m.packItems[1].status)
 	}
 }
 
