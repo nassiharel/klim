@@ -63,9 +63,9 @@ type whyReport struct {
 	Latest       string            `json:"latest,omitempty"`
 	UpdateAvail  bool              `json:"update_available,omitempty"`
 	References   []whyReference    `json:"references"`
-	AvailableVia []whyPackageEntry `json:"available_via,omitempty"`
-	RelatedTools []string          `json:"related_tools,omitempty"`
-	Warnings     []string          `json:"warnings,omitempty"`
+	AvailableVia []whyPackageEntry `json:"available_via"`
+	RelatedTools []string          `json:"related_tools"`
+	Warnings     []string          `json:"warnings"`
 }
 
 func runWhy(cmd *cobra.Command, args []string) error {
@@ -140,7 +140,10 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 		path := teamfile.Find(cwd)
 		if path != "" {
 			seenTeamPath = path
-			if tf, err := teamfile.Parse(path); err == nil {
+			tf, err := teamfile.Parse(path)
+			if err != nil {
+				r.Warnings = append(r.Warnings, fmt.Sprintf("could not parse %s: %v", path, err))
+			} else {
 				for _, req := range tf.Tools {
 					if req.Name == toolName {
 						r.References = append(r.References, whyReference{

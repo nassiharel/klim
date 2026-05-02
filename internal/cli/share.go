@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/spf13/cobra"
 
@@ -56,13 +57,17 @@ func runShareGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("scanning installed tools: %w", err)
 	}
 
-	// Collect names of installed tools.
+	// Collect names of installed tools in deterministic (sorted) order so
+	// the same installed set always produces the same token, regardless of
+	// catalog ordering. This keeps the share output stable for scripts
+	// and caching.
 	names := []string{}
 	for _, tool := range tools {
 		if tool.IsInstalled() {
 			names = append(names, tool.Name)
 		}
 	}
+	sort.Strings(names)
 
 	if len(names) == 0 {
 		if out == OutputJSON {
