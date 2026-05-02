@@ -103,13 +103,21 @@ func runWhy(cmd *cobra.Command, args []string) error {
 // buildWhyReport collects all referenced data without printing anything.
 // Warnings (e.g. "could not load project registry") are accumulated on the
 // report rather than printed to stderr so JSON callers see the same data.
+//
+// Collection fields are pre-allocated to empty slices so the JSON shape
+// is stable: callers always see arrays, never null, regardless of whether
+// the tool has any references / available packages / related tools.
 func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools []registry.Tool) whyReport {
 	r := whyReport{
-		Name:        t.Name,
-		DisplayName: t.DisplayName,
-		Category:    t.Category,
-		Installed:   t.IsInstalled(),
-		Latest:      t.Latest,
+		Name:         t.Name,
+		DisplayName:  t.DisplayName,
+		Category:     t.Category,
+		Installed:    t.IsInstalled(),
+		Latest:       t.Latest,
+		References:   []whyReference{},
+		AvailableVia: []whyPackageEntry{},
+		RelatedTools: []string{},
+		Warnings:     []string{},
 	}
 	if t.GitHubInfo != nil {
 		r.Description = t.GitHubInfo.Description
@@ -246,7 +254,7 @@ func relatedInstalledTools(toolName string, t *registry.Tool, tools []registry.T
 	for _, tag := range t.Tags {
 		toolTags[strings.ToLower(tag)] = true
 	}
-	var related []string
+	related := []string{}
 	for _, other := range tools {
 		if other.Name == toolName || !other.IsInstalled() {
 			continue

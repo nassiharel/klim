@@ -228,6 +228,8 @@ func printDiffJSON(target, label string, entries []diffEntry, matches, differs, 
 			LocalOnly:  localOnly,
 			RemoteOnly: remoteOnly,
 		},
+		// Always allocate so JSON consumers see "entries": [] rather than null.
+		Entries: make([]diffJSONEntry, 0, len(entries)),
 	}
 	for _, e := range entries {
 		entry := diffJSONEntry{
