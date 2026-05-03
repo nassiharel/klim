@@ -36,6 +36,9 @@ func (s *Server) pageConfig(w http.ResponseWriter, r *http.Request) {
 // every subsequent request sees the new values without a restart
 // (most fields still need a restart to take effect — the running
 // service caches several values — and we surface that in the UI).
+//
+// Reads and writes go through s.cfgMu so concurrent GET /config
+// can't observe a half-updated struct.
 func (s *Server) pageConfigSave(w http.ResponseWriter, r *http.Request) {
 	if s.opts.Config == nil {
 		s.serveError(w, r, fmt.Errorf("no config loaded"), http.StatusInternalServerError)
@@ -45,7 +48,7 @@ func (s *Server) pageConfigSave(w http.ResponseWriter, r *http.Request) {
 		s.serveError(w, r, err, http.StatusBadRequest)
 		return
 	}
-	staged := *s.opts.Config
+	staged := s.snapshotConfig()
 	var fieldErrors []string
 	for _, st := range config.AllSettings() {
 		raw := r.FormValue(st.Key)
@@ -63,7 +66,7 @@ func (s *Server) pageConfigSave(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	*s.opts.Config = staged
+	s.writeConfig(staged)
 	if err := config.Save(s.opts.Config); err != nil {
 		view := buildConfigView(s, "save failed: "+err.Error())
 		s.renderPage(w, r, "config.html", pageData{
@@ -100,7 +103,10 @@ func buildConfigView(s *Server, errMsg string) configView {
 	if s.opts.Config == nil {
 		return configView{Error: "no config loaded"}
 	}
-	body, err := yaml.Marshal(s.opts.Config)
+	// Snapshot under the read lock so we don't race with a concurrent
+	// pageConfigSave; render against the local copy.
+	cfg := s.snapshotConfig()
+	body, err := yaml.Marshal(&cfg)
 	view := configView{Error: errMsg}
 	if err != nil && errMsg == "" {
 		view.Error = err.Error()
@@ -110,8 +116,8 @@ func buildConfigView(s *Server, errMsg string) configView {
 	for _, st := range config.AllSettings() {
 		view.Settings = append(view.Settings, configRow{
 			Setting: st,
-			Display: st.Display(s.opts.Config),
-			Raw:     st.Raw(s.opts.Config),
+			Display: st.Display(&cfg),
+			Raw:     st.Raw(&cfg),
 		})
 	}
 	return view

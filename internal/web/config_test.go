@@ -204,6 +204,41 @@ func TestPageConfig_RendersNoHiddenFalseForBools(t *testing.T) {
 	}
 }
 
+func TestPageConfig_ConcurrentReadsAndWritesAreRaceFree(t *testing.T) {
+	// Regression for the PR #48 review: pageConfigSave used to write
+	// *s.opts.Config without synchronisation, racing with pageConfig
+	// readers. Run with `go test -race` to catch a regression.
+	ts, cfg := startConfigServer(t)
+	const iterations = 30
+	done := make(chan struct{})
+
+	// Writer: alternate two valid log levels via the form.
+	go func() {
+		defer close(done)
+		for i := 0; i < iterations; i++ {
+			form := url.Values{}
+			for _, s := range config.AllSettings() {
+				form.Set(s.Key, s.Raw(cfg))
+			}
+			level := "info"
+			if i%2 == 0 {
+				level = "warn"
+			}
+			form.Set("log_level", level)
+			postFormSameOrigin(t, ts.URL, "/config", form)
+		}
+	}()
+
+	// Reader: hit /config repeatedly while writes are in flight.
+	for i := 0; i < iterations; i++ {
+		resp, _ := get(t, ts.URL+"/config")
+		if resp.StatusCode != 200 {
+			t.Errorf("read %d: status=%d", i, resp.StatusCode)
+		}
+	}
+	<-done
+}
+
 func TestPageConfigSave_RejectsCrossOrigin(t *testing.T) {
 	ts, _ := startConfigServer(t)
 	c := &http.Client{}

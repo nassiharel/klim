@@ -261,6 +261,60 @@ func TestJobs_FormSubmitRedirectsToJobPage(t *testing.T) {
 	}
 }
 
+func TestSplitSSELines(t *testing.T) {
+	cases := []struct {
+		name, in string
+		want     []string
+	}{
+		{"empty", "", []string{""}},
+		{"single LF", "hello\nworld", []string{"hello", "world"}},
+		{"CRLF", "hello\r\nworld", []string{"hello", "world"}},
+		{"bare CR (regression for PR48)", "Progress\rDone", []string{"Progress", "Done"}},
+		{"mixed", "a\nb\rc\r\nd", []string{"a", "b", "c", "d"}},
+		{"no terminator", "single", []string{"single"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := splitSSELines(c.in)
+			if len(got) != len(c.want) {
+				t.Fatalf("len=%d want %d (got %v)", len(got), len(c.want), got)
+			}
+			for i := range got {
+				if got[i] != c.want[i] {
+					t.Errorf("[%d] got %q want %q", i, got[i], c.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestWriteSSE_StripsCarriageReturns(t *testing.T) {
+	// Regression for the PR #48 review: a job line containing a bare
+	// \r used to produce an SSE frame with embedded \r in the data:
+	// field, which the browser EventSource parser treats as a line
+	// terminator — corrupting the event. writeSSE now normalises
+	// both \r\n and \r into \n so each "data:" payload is a single
+	// physical line.
+	rec := httptest.NewRecorder()
+	writeSSE(rec, "line", "==> Downloading\r==> Installing")
+	out := rec.Body.String()
+	if strings.Contains(out, "\r") {
+		t.Fatalf("output still contains a raw \\r — would corrupt SSE framing:\n%q", out)
+	}
+	// Both phases of the progress message must show up as separate
+	// data: lines.
+	if !strings.Contains(out, "data: ==> Downloading\n") {
+		t.Errorf("missing 'Downloading' line: %q", out)
+	}
+	if !strings.Contains(out, "data: ==> Installing\n") {
+		t.Errorf("missing 'Installing' line: %q", out)
+	}
+	// Event must terminate with a blank line so the browser dispatches it.
+	if !strings.HasSuffix(out, "\n\n") {
+		t.Errorf("event missing trailing blank line: %q", out)
+	}
+}
+
 func TestJobs_RejectsCrossOriginPOST(t *testing.T) {
 	exec := newScriptedExecutor(nil, nil, nil)
 	ts, _, _ := startTestServerWithExecutor(t, exec)

@@ -246,18 +246,39 @@ func (s *Server) apiJobsStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// writeSSE writes one named SSE event. Escapes embedded newlines so a
-// multi-line payload doesn't terminate the event prematurely (each
-// physical newline in data: is treated as a record terminator by the
-// browser EventSource API after the next blank line).
+// writeSSE writes one named SSE event. The SSE spec terminates lines
+// on \n, \r, or \r\n; Go's strings.Split on "\n" alone would leave
+// embedded \r bytes inside data: lines, which the browser's
+// EventSource parser then treats as record terminators — corrupting
+// event framing for tools like winget / npm that emit \r-based
+// progress updates. We split on either separator and strip any
+// stray \r so each "data:" payload is the literal text from a
+// single source line.
 func writeSSE(w http.ResponseWriter, event, data string) {
 	if event != "" {
 		_, _ = fmt.Fprintf(w, "event: %s\n", event)
 	}
-	for _, line := range strings.Split(data, "\n") {
+	for _, line := range splitSSELines(data) {
 		_, _ = fmt.Fprintf(w, "data: %s\n", line)
 	}
 	_, _ = fmt.Fprint(w, "\n")
+}
+
+// splitSSELines returns data split on \n, \r, or \r\n. Each returned
+// segment has no embedded carriage returns or line feeds, so it can
+// safely become a single "data:" field in an SSE event.
+func splitSSELines(data string) []string {
+	if data == "" {
+		return []string{""}
+	}
+	// Normalise \r\n and bare \r to \n first; then split on \n only.
+	// Carriage-return-as-line-terminator is extremely common in
+	// install/update tooling that overwrites a single line with
+	// progress percentages — clim's job log doesn't render those
+	// in-place anyway, so we treat each \r-terminated chunk as its
+	// own line.
+	normalised := strings.ReplaceAll(strings.ReplaceAll(data, "\r\n", "\n"), "\r", "\n")
+	return strings.Split(normalised, "\n")
 }
 
 // pageJob renders the live job-progress HTML page.

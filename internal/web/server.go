@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nassiharel/clim/internal/config"
@@ -79,6 +80,13 @@ type Server struct {
 	// directly).
 	jobCtx    context.Context
 	jobCancel context.CancelFunc
+	// cfgMu guards reads/writes of *opts.Config. The web server
+	// handles requests concurrently, and the /config editor mutates
+	// the live pointer in place; without synchronisation a render-
+	// in-progress GET /config could observe a half-updated struct
+	// (or trip the race detector). Reads use RLock so multiple
+	// renders run in parallel.
+	cfgMu sync.RWMutex
 }
 
 // New constructs a Server. The TCP listener is bound here so the caller
@@ -136,6 +144,29 @@ func (s *Server) AuthToken() string { return s.opts.AuthToken }
 // AuthedURL returns the URL with the token query parameter appended
 // (or the plain URL if no token is required).
 func (s *Server) AuthedURL() string { return authedURL(s.URL(), s.opts.AuthToken) }
+
+// snapshotConfig returns a value-copy of the running config under
+// cfgMu's read lock. Callers can render or mutate the copy without
+// holding the lock for the full request lifetime.
+func (s *Server) snapshotConfig() config.Config {
+	s.cfgMu.RLock()
+	defer s.cfgMu.RUnlock()
+	if s.opts.Config == nil {
+		return config.Config{}
+	}
+	return *s.opts.Config
+}
+
+// writeConfig replaces the running config under cfgMu's write lock.
+// All readers via snapshotConfig either see the old or the new
+// value, never a half-updated struct.
+func (s *Server) writeConfig(cfg config.Config) {
+	s.cfgMu.Lock()
+	defer s.cfgMu.Unlock()
+	if s.opts.Config != nil {
+		*s.opts.Config = cfg
+	}
+}
 
 // URL returns the http://host:port URL the server is listening on.
 // Safe to call before Serve.
