@@ -100,6 +100,44 @@ func (s *Server) apiTrailShow(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// apiFavoritesList returns the current favorite names sorted.
+func (s *Server) apiFavoritesList(w http.ResponseWriter, _ *http.Request) {
+	favs, err := s.loader.Favorites()
+	if err != nil {
+		s.jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	names := make([]string, 0, len(favs))
+	for n := range favs {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	s.writeJSON(w, http.StatusOK, map[string]any{
+		"favorites": names,
+		"count":     len(names),
+	})
+}
+
+// apiFavoritesToggle flips the favorite state of a tool. Returns the
+// resulting state in the response so clients can re-render without
+// re-fetching.
+func (s *Server) apiFavoritesToggle(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		s.jsonError(w, http.StatusBadRequest, "missing tool name")
+		return
+	}
+	added, err := s.loader.ToggleFavorite(name)
+	if err != nil {
+		s.jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, http.StatusOK, map[string]any{
+		"name":     name,
+		"favorite": added,
+	})
+}
+
 // --- API DTOs ---
 //
 // The DTOs intentionally mirror the existing CLI JSON output rather

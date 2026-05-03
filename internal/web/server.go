@@ -153,14 +153,14 @@ func (s *Server) routes() {
 	// HTML pages.
 	s.mux.HandleFunc("GET /{$}", s.pageInstalled)
 	s.mux.HandleFunc("GET /tools/{name}", s.pageTool)
+	s.mux.HandleFunc("GET /updates", s.pageUpdates)
+	s.mux.HandleFunc("GET /discover", s.pageDiscover)
+	s.mux.HandleFunc("GET /favorites", s.pageFavorites)
 	s.mux.HandleFunc("GET /dashboard", s.pageDashboard)
 	s.mux.HandleFunc("GET /trail", s.pageTrail)
 	s.mux.HandleFunc("GET /trail/{ref...}", s.pageTrailShow)
-	// Stubbed tabs (Phase 2 scope).
-	s.mux.HandleFunc("GET /updates", s.pageStub("Updates"))
-	s.mux.HandleFunc("GET /discover", s.pageStub("Discover"))
+	// Stubbed tabs (Phase 3 scope).
 	s.mux.HandleFunc("GET /backup", s.pageStub("Backup"))
-	s.mux.HandleFunc("GET /favorites", s.pageStub("Favorites"))
 	s.mux.HandleFunc("GET /config", s.pageStub("Config"))
 
 	// JSON API.
@@ -169,6 +169,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/dashboard", s.apiDashboard)
 	s.mux.HandleFunc("GET /api/trail", s.apiTrail)
 	s.mux.HandleFunc("GET /api/trail/{ref...}", s.apiTrailShow)
+	s.mux.HandleFunc("GET /api/favorites", s.apiFavoritesList)
+	// Mutating endpoints. The form-submitting HTML page POSTs here and
+	// reloads; the JSON variant is also reachable for scripts.
+	s.mux.Handle("POST /api/favorites/{name}/toggle", csrfProtect(s, http.HandlerFunc(s.apiFavoritesToggle)))
+	s.mux.Handle("POST /favorites/{name}/toggle", csrfProtect(s, http.HandlerFunc(s.pageFavoritesToggle)))
 }
 
 func isLoopback(host string) bool {

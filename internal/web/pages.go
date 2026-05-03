@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/nassiharel/clim/internal/favorites"
 	"github.com/nassiharel/clim/internal/githubfmt"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
@@ -122,6 +123,132 @@ func (s *Server) pageDashboard(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// pageUpdates renders the list of installed tools that have a newer
+// version available. This is the second-most-common landing page so
+// the user can act on the actual deltas rather than scanning the
+// whole installed list.
+func (s *Server) pageUpdates(w http.ResponseWriter, r *http.Request) {
+	tools, _, err := s.loader.LoadInstalled(r.Context())
+	if err != nil {
+		s.serveError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	favs, _ := s.loader.Favorites()
+	if favs == nil {
+		favs = map[string]bool{}
+	}
+	updates := make([]updateRow, 0, len(tools))
+	for _, t := range tools {
+		pi := t.PrimaryInstance()
+		if pi == nil || t.Latest == "" {
+			continue
+		}
+		if registry.CompareVersions(pi.Version, t.Latest) >= 0 {
+			continue
+		}
+		updates = append(updates, updateRow{
+			Tool:     t,
+			Current:  pi.Version,
+			Latest:   t.Latest,
+			Source:   string(pi.Source),
+			Favorite: favs[t.Name],
+		})
+	}
+	s.renderPage(w, r, "updates.html", pageData{
+		Title:     "Updates",
+		ActiveTab: "updates",
+		Data: updatesView{
+			Rows:  updates,
+			Total: len(updates),
+		},
+	})
+}
+
+// pageDiscover renders the full marketplace catalog with optional
+// category, tag, and free-text filters. Unlike Installed, this page
+// includes tools that aren't installed locally — it's the entry point
+// for finding new tools.
+func (s *Server) pageDiscover(w http.ResponseWriter, r *http.Request) {
+	tools, _, err := s.loader.LoadInstalled(r.Context())
+	if err != nil {
+		s.serveError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	cat := strings.TrimSpace(r.URL.Query().Get("category"))
+	tag := strings.TrimSpace(r.URL.Query().Get("tag"))
+	filtered := filterDiscover(tools, q, cat, tag)
+	favs, _ := s.loader.Favorites()
+	if favs == nil {
+		favs = map[string]bool{}
+	}
+	s.renderPage(w, r, "discover.html", pageData{
+		Title:     "Discover",
+		ActiveTab: "discover",
+		Data: discoverView{
+			Tools:      filtered,
+			Total:      len(tools),
+			Filtered:   len(filtered),
+			Categories: distinctCatalogCategories(tools),
+			Tags:       distinctCatalogTags(tools),
+			Query:      q,
+			Category:   cat,
+			Tag:        tag,
+			Favorites:  favs,
+		},
+	})
+}
+
+// pageFavorites lists the user's favorited tools and exposes a toggle
+// action on each row.
+func (s *Server) pageFavorites(w http.ResponseWriter, r *http.Request) {
+	favs, err := s.loader.Favorites()
+	if err != nil {
+		s.serveError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	tools, _, err := s.loader.LoadInstalled(r.Context())
+	if err != nil {
+		s.serveError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	rows := make([]registry.Tool, 0, len(favs))
+	for _, t := range tools {
+		if favs[t.Name] {
+			rows = append(rows, t)
+		}
+	}
+	s.renderPage(w, r, "favorites.html", pageData{
+		Title:     "Favorites",
+		ActiveTab: "favorites",
+		Data: favoritesView{
+			Tools: rows,
+			Total: len(rows),
+		},
+	})
+}
+
+// pageFavoritesToggle handles the form-submission flow from the
+// favorite/unfavorite buttons. It toggles the favorite and redirects
+// back to the page the user came from (Referer) so the toggle UX is
+// "click and the row updates".
+func (s *Server) pageFavoritesToggle(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		s.serveError(w, r, fmt.Errorf("missing tool name"), http.StatusBadRequest)
+		return
+	}
+	if _, err := s.loader.ToggleFavorite(name); err != nil {
+		s.serveError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	dest := r.Referer()
+	if dest == "" {
+		dest = "/favorites"
+	}
+	http.Redirect(w, r, dest, http.StatusSeeOther)
+}
+
 // pageTrail renders the trail entry list.
 func (s *Server) pageTrail(w http.ResponseWriter, r *http.Request) {
 	entries, err := trail.Log(trail.LogOptions{})
@@ -185,6 +312,36 @@ type installedView struct {
 	Catalog    catalogSummary
 }
 
+type updateRow struct {
+	Tool     registry.Tool
+	Current  string
+	Latest   string
+	Source   string
+	Favorite bool
+}
+
+type updatesView struct {
+	Rows  []updateRow
+	Total int
+}
+
+type discoverView struct {
+	Tools      []registry.Tool
+	Total      int
+	Filtered   int
+	Categories []string
+	Tags       []string
+	Query      string
+	Category   string
+	Tag        string
+	Favorites  map[string]bool
+}
+
+type favoritesView struct {
+	Tools []registry.Tool
+	Total int
+}
+
 type toolView struct {
 	Tool      registry.Tool
 	Installed bool
@@ -226,6 +383,8 @@ type catalogSummary struct {
 type loader interface {
 	LoadInstalled(ctx context.Context) ([]registry.Tool, catalogSummary, error)
 	LoadTool(ctx context.Context, name string) (registry.Tool, error)
+	Favorites() (map[string]bool, error)
+	ToggleFavorite(name string) (bool, error)
 }
 
 type serviceLoader struct{ svc *service.ToolService }
@@ -263,6 +422,14 @@ func (l *serviceLoader) LoadTool(ctx context.Context, name string) (registry.Too
 		}
 	}
 	return registry.Tool{}, notFoundError{Name: name}
+}
+
+func (l *serviceLoader) Favorites() (map[string]bool, error) {
+	return favorites.Set()
+}
+
+func (l *serviceLoader) ToggleFavorite(name string) (bool, error) {
+	return favorites.Toggle(name)
 }
 
 type notFoundError struct{ Name string }
@@ -336,6 +503,86 @@ func distinctCategories(tools []registry.Tool) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// distinctCatalogCategories is like distinctCategories but for the
+// Discover page, which shows non-installed tools too.
+func distinctCatalogCategories(tools []registry.Tool) []string {
+	seen := map[string]struct{}{}
+	for _, t := range tools {
+		if t.Category == "" {
+			continue
+		}
+		seen[t.Category] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for c := range seen {
+		out = append(out, c)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func distinctCatalogTags(tools []registry.Tool) []string {
+	seen := map[string]struct{}{}
+	for _, t := range tools {
+		for _, tag := range t.Tags {
+			if tag == "" {
+				continue
+			}
+			seen[tag] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for c := range seen {
+		out = append(out, c)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// filterDiscover filters the catalog (NOT just installed tools) by
+// search term, category, and tag.
+func filterDiscover(tools []registry.Tool, q, cat, tag string) []registry.Tool {
+	q = strings.ToLower(strings.TrimSpace(q))
+	cat = strings.TrimSpace(cat)
+	tag = strings.TrimSpace(tag)
+	out := make([]registry.Tool, 0, len(tools))
+	for _, t := range tools {
+		if cat != "" && !strings.EqualFold(t.Category, cat) {
+			continue
+		}
+		if tag != "" && !hasTag(t, tag) {
+			continue
+		}
+		if q != "" && !matchesQuery(t, q) {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
+func hasTag(t registry.Tool, tag string) bool {
+	for _, x := range t.Tags {
+		if strings.EqualFold(x, tag) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesQuery(t registry.Tool, q string) bool {
+	if strings.Contains(strings.ToLower(t.Name), q) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(t.DisplayName), q) {
+		return true
+	}
+	if t.GitHubInfo != nil && strings.Contains(strings.ToLower(t.GitHubInfo.Description), q) {
+		return true
+	}
+	return false
 }
 
 func distinctSources(tools []registry.Tool) []string {

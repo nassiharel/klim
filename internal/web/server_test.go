@@ -16,7 +16,10 @@ import (
 
 // fixtureLoader serves deterministic tool data so handler tests don't
 // depend on the host machine's PATH or installed package managers.
-type fixtureLoader struct{ tools []registry.Tool }
+type fixtureLoader struct {
+	tools []registry.Tool
+	favs  map[string]bool
+}
 
 func (l *fixtureLoader) LoadInstalled(_ context.Context) ([]registry.Tool, catalogSummary, error) {
 	out := make([]registry.Tool, len(l.tools))
@@ -31,6 +34,29 @@ func (l *fixtureLoader) LoadTool(_ context.Context, name string) (registry.Tool,
 		}
 	}
 	return registry.Tool{}, notFoundError{Name: name}
+}
+
+func (l *fixtureLoader) Favorites() (map[string]bool, error) {
+	if l.favs == nil {
+		return map[string]bool{}, nil
+	}
+	out := make(map[string]bool, len(l.favs))
+	for k, v := range l.favs {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (l *fixtureLoader) ToggleFavorite(name string) (bool, error) {
+	if l.favs == nil {
+		l.favs = map[string]bool{}
+	}
+	if l.favs[name] {
+		delete(l.favs, name)
+		return false, nil
+	}
+	l.favs[name] = true
+	return true, nil
 }
 
 func fixtureTools() []registry.Tool {
@@ -50,26 +76,37 @@ func fixtureTools() []registry.Tool {
 			Name:        "kubectl",
 			DisplayName: "kubectl",
 			Category:    "Containers",
+			Tags:        []string{"kubernetes", "cli"},
 			Latest:      "1.31.0",
 			LatestFrom:  "brew",
 			Instances: []registry.Instance{
 				{Path: "/usr/local/bin/kubectl", Version: "1.28.4", Source: registry.SourceBrew},
 			},
 		},
+		{
+			// Catalog-only tool — not installed on this fixture host.
+			Name:        "terraform",
+			DisplayName: "Terraform",
+			Category:    "IaC",
+			Tags:        []string{"hashicorp", "infrastructure"},
+		},
 	}
 }
 
 // startTestServer wires a Server to an httptest.NewServer with the
 // fixture loader so tests can hit real HTTP without flakey port races.
-func startTestServer(t *testing.T) *httptest.Server {
+func startTestServer(t *testing.T) (*httptest.Server, *fixtureLoader) {
 	t.Helper()
 	srv, err := New(Options{Service: service.New(), Bind: "127.0.0.1"})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	srv.loader = &fixtureLoader{tools: fixtureTools()}
+	loader := &fixtureLoader{tools: fixtureTools(), favs: map[string]bool{}}
+	srv.loader = loader
 	t.Cleanup(func() { _ = srv.Close() })
-	return httptest.NewServer(srv.httpsrv.Handler)
+	ts := httptest.NewServer(srv.httpsrv.Handler)
+	t.Cleanup(ts.Close)
+	return ts, loader
 }
 
 func get(t *testing.T, url string) (*http.Response, string) {
@@ -85,8 +122,7 @@ func get(t *testing.T, url string) (*http.Response, string) {
 }
 
 func TestServer_Healthz(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
+	ts, _ := startTestServer(t)
 	resp, body := get(t, ts.URL+"/healthz")
 	if resp.StatusCode != 200 {
 		t.Fatalf("status: %d", resp.StatusCode)
@@ -97,8 +133,7 @@ func TestServer_Healthz(t *testing.T) {
 }
 
 func TestServer_InstalledPage(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
+	ts, _ := startTestServer(t)
 	resp, body := get(t, ts.URL+"/")
 	if resp.StatusCode != 200 {
 		t.Fatalf("status: %d (body=%s)", resp.StatusCode, body)
@@ -120,8 +155,7 @@ func TestServer_InstalledPage(t *testing.T) {
 }
 
 func TestServer_InstalledPage_FilterByQuery(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
+	ts, _ := startTestServer(t)
 	resp, body := get(t, ts.URL+"/?q=git")
 	if resp.StatusCode != 200 {
 		t.Fatalf("status: %d", resp.StatusCode)
@@ -135,8 +169,7 @@ func TestServer_InstalledPage_FilterByQuery(t *testing.T) {
 }
 
 func TestServer_ToolPage(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
+	ts, _ := startTestServer(t)
 	resp, body := get(t, ts.URL+"/tools/git")
 	if resp.StatusCode != 200 {
 		t.Fatalf("status: %d (body=%s)", resp.StatusCode, body)
@@ -147,8 +180,7 @@ func TestServer_ToolPage(t *testing.T) {
 }
 
 func TestServer_ToolPage_NotFound(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
+	ts, _ := startTestServer(t)
 	resp, _ := get(t, ts.URL+"/tools/this-tool-does-not-exist")
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", resp.StatusCode)
@@ -156,8 +188,7 @@ func TestServer_ToolPage_NotFound(t *testing.T) {
 }
 
 func TestServer_DashboardPage(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
+	ts, _ := startTestServer(t)
 	resp, body := get(t, ts.URL+"/dashboard")
 	if resp.StatusCode != 200 {
 		t.Fatalf("status: %d", resp.StatusCode)
@@ -168,9 +199,8 @@ func TestServer_DashboardPage(t *testing.T) {
 }
 
 func TestServer_StubPages(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
-	for _, path := range []string{"/updates", "/discover", "/backup", "/favorites", "/config"} {
+	ts, _ := startTestServer(t)
+	for _, path := range []string{"/backup", "/config"} {
 		resp, body := get(t, ts.URL+path)
 		if resp.StatusCode != 200 {
 			t.Errorf("%s: status %d", path, resp.StatusCode)
@@ -182,8 +212,7 @@ func TestServer_StubPages(t *testing.T) {
 }
 
 func TestServer_StaticAsset(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
+	ts, _ := startTestServer(t)
 	resp, body := get(t, ts.URL+"/static/styles.css")
 	if resp.StatusCode != 200 {
 		t.Fatalf("status: %d", resp.StatusCode)
@@ -194,8 +223,7 @@ func TestServer_StaticAsset(t *testing.T) {
 }
 
 func TestAPI_Tools(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
+	ts, _ := startTestServer(t)
 	resp, body := get(t, ts.URL+"/api/tools")
 	if resp.StatusCode != 200 {
 		t.Fatalf("status: %d (%s)", resp.StatusCode, body)
@@ -214,8 +242,8 @@ func TestAPI_Tools(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &payload); err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, body)
 	}
-	if payload.Count != 2 {
-		t.Fatalf("count=%d, want 2", payload.Count)
+	if payload.Count != 3 {
+		t.Fatalf("count=%d, want 3", payload.Count)
 	}
 	byName := map[string]bool{}
 	for _, t := range payload.Tools {
@@ -230,8 +258,7 @@ func TestAPI_Tools(t *testing.T) {
 }
 
 func TestAPI_Tool_NotFound(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
+	ts, _ := startTestServer(t)
 	resp, body := get(t, ts.URL+"/api/tools/nope")
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status: %d (%s)", resp.StatusCode, body)
@@ -242,8 +269,7 @@ func TestAPI_Tool_NotFound(t *testing.T) {
 }
 
 func TestAPI_Dashboard(t *testing.T) {
-	ts := startTestServer(t)
-	defer ts.Close()
+	ts, _ := startTestServer(t)
 	resp, body := get(t, ts.URL+"/api/dashboard")
 	if resp.StatusCode != 200 {
 		t.Fatalf("status: %d", resp.StatusCode)

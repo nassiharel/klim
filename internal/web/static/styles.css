@@ -237,3 +237,17 @@ table.kv td {
   border-radius: 999px;
   font-size: 0.85rem;
 }
+
+.inline { display: inline; margin: 0; padding: 0; }
+.iconbtn {
+  background: transparent;
+  border: none;
+  color: var(--warn);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+.iconbtn:hover { color: var(--text); }
+
+.small { font-size: 0.85rem; }

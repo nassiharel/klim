@@ -24,6 +24,9 @@ var templateFiles embed.FS
 var pageTemplates = []string{
 	"installed.html",
 	"tool.html",
+	"updates.html",
+	"discover.html",
+	"favorites.html",
 	"dashboard.html",
 	"trail.html",
 	"snapshot.html",

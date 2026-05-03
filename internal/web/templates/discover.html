@@ -1,0 +1,66 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>Discover</h1>
+  <p class="muted">Browse the marketplace catalog · {{$d.Filtered}} of {{$d.Total}} tools shown.</p>
+</section>
+
+<form method="GET" action="/discover" class="filters">
+  <input type="search" name="q" placeholder="search name, display, description" value="{{$d.Query}}" autocomplete="off">
+  <select name="category">
+    <option value="">All categories</option>
+    {{range $d.Categories}}
+      <option value="{{.}}" {{if eq . $d.Category}}selected{{end}}>{{.}}</option>
+    {{end}}
+  </select>
+  <select name="tag">
+    <option value="">All tags</option>
+    {{range $d.Tags}}
+      <option value="{{.}}" {{if eq . $d.Tag}}selected{{end}}>{{.}}</option>
+    {{end}}
+  </select>
+  <button type="submit">Apply</button>
+  <a href="/discover" class="btn-link">Reset</a>
+</form>
+
+{{if eq (len $d.Tools) 0}}
+  <p class="empty">No tools match these filters.</p>
+{{else}}
+<table class="grid">
+  <thead>
+    <tr>
+      <th></th>
+      <th>Tool</th>
+      <th>Category</th>
+      <th>Tags</th>
+      <th>Stars</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range $d.Tools}}
+      <tr>
+        <td>
+          <form method="POST" action="/favorites/{{.Name}}/toggle" class="inline">
+            <button class="iconbtn" type="submit" title="{{if index $d.Favorites .Name}}Unfavorite{{else}}Favorite{{end}}">
+              {{if index $d.Favorites .Name}}★{{else}}☆{{end}}
+            </button>
+          </form>
+        </td>
+        <td><a href="/tools/{{.Name}}" class="tool-link">{{.Name}}</a>{{if .DisplayName}} <span class="muted">{{.DisplayName}}</span>{{end}}</td>
+        <td>{{dash .Category}}</td>
+        <td class="muted small">{{join .Tags ", "}}</td>
+        <td>{{if .GitHubInfo}}★ {{.GitHubInfo.Stars}}{{else}}—{{end}}</td>
+        <td>
+          {{if .IsInstalled}}
+            <span class="badge ok">installed</span>
+          {{else}}
+            <span class="badge muted">not installed</span>
+          {{end}}
+        </td>
+      </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}
