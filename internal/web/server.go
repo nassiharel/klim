@@ -175,13 +175,18 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /updates", s.pageUpdates)
 	s.mux.HandleFunc("GET /discover", s.pageDiscover)
 	s.mux.HandleFunc("GET /favorites", s.pageFavorites)
+	s.mux.HandleFunc("GET /packs", s.pagePacks)
+	s.mux.HandleFunc("GET /packs/{name}", s.pagePack)
+	s.mux.HandleFunc("GET /foryou", s.pageForYou)
+	s.mux.HandleFunc("GET /projects", s.pageProjects)
+	s.mux.HandleFunc("GET /projects/{path...}", s.pageProject)
 	s.mux.HandleFunc("GET /dashboard", s.pageDashboard)
 	s.mux.HandleFunc("GET /trail", s.pageTrail)
 	s.mux.HandleFunc("GET /trail/{ref...}", s.pageTrailShow)
-	// Stubbed tabs (Phase 5+ scope).
 	s.mux.HandleFunc("GET /backup", s.pageBackup)
-	s.mux.HandleFunc("GET /config", s.pageConfig)
 	s.mux.HandleFunc("GET /backup/export.yaml", s.downloadExport)
+	s.mux.HandleFunc("GET /backup/saved/{name}", s.downloadSavedBackup)
+	s.mux.HandleFunc("GET /config", s.pageConfig)
 
 	// JSON API.
 	s.mux.HandleFunc("GET /api/tools", s.apiTools)

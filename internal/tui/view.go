@@ -951,11 +951,11 @@ func (m Model) relatedTools(tool registry.Tool) []recommendation {
 			stars = t.GitHubInfo.Stars
 		}
 		recs = append(recs, recommendation{
-			toolIdx:     i,
-			score:       score,
-			category:    t.Category,
-			description: desc,
-			stars:       stars,
+			ToolIdx:     i,
+			Score:       score,
+			Category:    t.Category,
+			Description: desc,
+			Stars:       stars,
 		})
 		if score > maxScore {
 			maxScore = score
@@ -963,10 +963,10 @@ func (m Model) relatedTools(tool registry.Tool) []recommendation {
 	}
 
 	sort.Slice(recs, func(i, j int) bool {
-		if recs[i].score != recs[j].score {
-			return recs[i].score > recs[j].score
+		if recs[i].Score != recs[j].Score {
+			return recs[i].Score > recs[j].Score
 		}
-		return m.tools[recs[i].toolIdx].Name < m.tools[recs[j].toolIdx].Name
+		return m.tools[recs[i].ToolIdx].Name < m.tools[recs[j].ToolIdx].Name
 	})
 
 	if len(recs) > 5 {
@@ -976,9 +976,9 @@ func (m Model) relatedTools(tool registry.Tool) []recommendation {
 	// Compute matchPct.
 	if maxScore > 0 {
 		for i := range recs {
-			recs[i].matchPct = recs[i].score * 100 / maxScore
-			if recs[i].matchPct < 1 {
-				recs[i].matchPct = 1
+			recs[i].MatchPct = recs[i].Score * 100 / maxScore
+			if recs[i].MatchPct < 1 {
+				recs[i].MatchPct = 1
 			}
 		}
 	}

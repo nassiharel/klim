@@ -1592,7 +1592,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Toggle favorite — For You sub-tab uses recommendations, not filteredIndex.
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 			if m.cursor < len(m.recommendations) {
-				idx := m.recommendations[m.cursor].toolIdx
+				idx := m.recommendations[m.cursor].ToolIdx
 				if idx < len(m.tools) {
 					name := m.tools[idx].Name
 					added, err := favorites.Toggle(name)
@@ -1613,7 +1613,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Toggle favorite — Onboard sub-tab uses onboardTools.
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverOnboard {
 			if m.cursor < len(m.onboardTools) {
-				idx := m.onboardTools[m.cursor].toolIdx
+				idx := m.onboardTools[m.cursor].ToolIdx
 				if idx < len(m.tools) {
 					name := m.tools[idx].Name
 					added, err := favorites.Toggle(name)
@@ -1677,8 +1677,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 			if m.cursor < len(m.recommendations) {
 				rec := m.recommendations[m.cursor]
-				if rec.toolIdx < len(m.tools) {
-					tool := m.tools[rec.toolIdx]
+				if rec.ToolIdx < len(m.tools) {
+					tool := m.tools[rec.ToolIdx]
 					src := tool.Packages.BestInstallSource()
 					if src == "" {
 						m.statusMsg = "⚠ No package manager available for this tool"
@@ -1690,7 +1690,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 					m.pendingAction = &pendingAction{
-						toolIdx: rec.toolIdx,
+						toolIdx: rec.ToolIdx,
 						action:  actionInstall,
 						cmdArgs: args,
 					}
@@ -1702,8 +1702,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverOnboard {
 			if m.cursor < len(m.onboardTools) {
 				rec := m.onboardTools[m.cursor]
-				if rec.toolIdx < len(m.tools) {
-					tool := m.tools[rec.toolIdx]
+				if rec.ToolIdx < len(m.tools) {
+					tool := m.tools[rec.ToolIdx]
 					src := tool.Packages.BestInstallSource()
 					if src == "" {
 						m.statusMsg = "⚠ No package manager available for this tool"
@@ -1715,7 +1715,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 					m.pendingAction = &pendingAction{
-						toolIdx: rec.toolIdx,
+						toolIdx: rec.ToolIdx,
 						action:  actionInstall,
 						cmdArgs: args,
 					}
@@ -1852,14 +1852,14 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// On Marketplace For You sub-tab, open the recommended tool's detail.
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverForYou {
 			if m.cursor < len(m.recommendations) {
-				m.openDetailView(m.recommendations[m.cursor].toolIdx)
+				m.openDetailView(m.recommendations[m.cursor].ToolIdx)
 			}
 			return m, nil
 		}
 		// On Marketplace Onboard sub-tab, open the recommended tool's detail.
 		if m.activeTab == tabDiscover && m.discoverSubTab == discoverOnboard {
 			if m.cursor < len(m.onboardTools) {
-				m.openDetailView(m.onboardTools[m.cursor].toolIdx)
+				m.openDetailView(m.onboardTools[m.cursor].ToolIdx)
 			}
 			return m, nil
 		}
@@ -2193,13 +2193,13 @@ func (m *Model) recomputeOnboardTools() {
 			}
 		}
 		recs = append(recs, recommendation{
-			toolIdx:     s.Index,
-			score:       s.Score,
-			reason:      "", // role description shown in header, not per-card
-			category:    s.Tool.Category,
-			description: desc,
-			stars:       stars,
-			matchPct:    pct,
+			ToolIdx:     s.Index,
+			Score:       s.Score,
+			Reason:      "", // role description shown in header, not per-card
+			Category:    s.Tool.Category,
+			Description: desc,
+			Stars:       stars,
+			MatchPct:    pct,
 		})
 	}
 	m.onboardTools = recs

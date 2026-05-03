@@ -1,0 +1,38 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>For You</h1>
+  <p class="muted">Tools we think you'd like, ranked by overlap with your installed set.</p>
+</section>
+
+{{if eq $d.Total 0}}
+  <p class="empty">No recommendations yet. Install a few tools first — we'll suggest related ones.</p>
+{{else}}
+<div class="cards">
+  {{range $d.Recommendations}}
+    {{$t := index $d.Tools .ToolIdx}}
+    <div class="card rec-card">
+      <div class="rec-header">
+        <a href="/tools/{{$t.Name}}" class="tool-link">{{$t.Name}}</a>
+        {{if $t.DisplayName}}<span class="muted">{{$t.DisplayName}}</span>{{end}}
+        <span class="match-pct" title="{{.Score}} score">{{.MatchPct}}% match</span>
+      </div>
+      {{if .Description}}<p class="muted">{{.Description}}</p>{{end}}
+      <p class="muted small">
+        {{if $t.Category}}{{$t.Category}} · {{end}}
+        {{if .Stars}}★ {{.Stars}} · {{end}}
+        {{if .Reason}}because of: {{.Reason}}{{end}}
+      </p>
+      <div class="actions">
+        <form method="POST" action="/tools/{{$t.Name}}/install" class="inline">
+          <button class="btn-primary" type="submit">Install</button>
+        </form>
+        <form method="POST" action="/favorites/{{$t.Name}}/toggle" class="inline">
+          <button class="btn-link" type="submit">{{if index $d.Favorites $t.Name}}★ Unfavorite{{else}}☆ Favorite{{end}}</button>
+        </form>
+      </div>
+    </div>
+  {{end}}
+</div>
+{{end}}
+{{end}}

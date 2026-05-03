@@ -302,3 +302,23 @@ table.kv td {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.rec-card {
+  position: relative;
+}
+.rec-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+.match-pct {
+  margin-left: auto;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.15em 0.6em;
+  font-size: 0.78em;
+  font-weight: 600;
+}

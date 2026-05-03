@@ -24,6 +24,32 @@
 </section>
 {{end}}
 
+{{if $d.Backups}}
+<section class="card">
+  <h2>My Backups</h2>
+  <p class="muted">Saved backup files in <code>~/.config/clim/backups/</code>. Click to download.</p>
+  <table class="grid">
+    <thead>
+      <tr><th>File</th><th>Size</th><th>Modified</th></tr>
+    </thead>
+    <tbody>
+      {{range $d.Backups}}
+        <tr>
+          <td><a href="{{.DownloadURL}}" class="tool-link">{{.Name}}</a></td>
+          <td>{{.Size}} bytes</td>
+          <td class="muted small">{{.ModifiedAt.Local.Format "2006-01-02 15:04"}}</td>
+        </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{else if $d.BackupsErr}}
+<section class="card">
+  <h2>My Backups</h2>
+  <p class="muted">Couldn't list backups: {{$d.BackupsErr}}</p>
+</section>
+{{end}}
+
 {{if $d.YAML}}
 <section class="card">
   <h2>Manifest preview</h2>

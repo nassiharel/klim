@@ -27,13 +27,17 @@ var pageTemplates = []string{
 	"updates.html",
 	"discover.html",
 	"favorites.html",
+	"packs.html",
+	"pack.html",
+	"foryou.html",
+	"projects.html",
+	"project.html",
 	"dashboard.html",
 	"trail.html",
 	"snapshot.html",
 	"job.html",
 	"backup.html",
 	"config.html",
-	"stub.html",
 }
 
 // loadTemplates returns one fully-parsed template per page. Each tree

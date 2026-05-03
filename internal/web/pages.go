@@ -285,19 +285,6 @@ func (s *Server) pageTrailShow(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// pageStub renders a "Coming soon" placeholder for tabs that aren't
-// fully implemented yet. Returns a closure so the handler can carry
-// the tab name without parsing the path.
-func (s *Server) pageStub(name string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		s.renderPage(w, r, "stub.html", pageData{
-			Title:     name,
-			ActiveTab: strings.ToLower(name),
-			Data:      stubView{Name: name},
-		})
-	}
-}
-
 // --- view models ---
 
 type installedView struct {
@@ -368,8 +355,6 @@ type snapshotView struct {
 	Snapshot *trail.Snapshot
 }
 
-type stubView struct{ Name string }
-
 type catalogSummary struct {
 	Source string
 	Count  int
@@ -385,6 +370,7 @@ type loader interface {
 	LoadTool(ctx context.Context, name string) (registry.Tool, error)
 	Favorites() (map[string]bool, error)
 	ToggleFavorite(name string) (bool, error)
+	LoadPacks(ctx context.Context) ([]registry.Pack, error)
 }
 
 type serviceLoader struct{ svc *service.ToolService }
@@ -430,6 +416,10 @@ func (l *serviceLoader) Favorites() (map[string]bool, error) {
 
 func (l *serviceLoader) ToggleFavorite(name string) (bool, error) {
 	return favorites.Toggle(name)
+}
+
+func (l *serviceLoader) LoadPacks(ctx context.Context) ([]registry.Pack, error) {
+	return l.svc.LoadPacks(ctx)
 }
 
 type notFoundError struct{ Name string }

@@ -19,6 +19,7 @@ import (
 type fixtureLoader struct {
 	tools []registry.Tool
 	favs  map[string]bool
+	packs []registry.Pack
 }
 
 func (l *fixtureLoader) LoadInstalled(_ context.Context) ([]registry.Tool, catalogSummary, error) {
@@ -57,6 +58,12 @@ func (l *fixtureLoader) ToggleFavorite(name string) (bool, error) {
 	}
 	l.favs[name] = true
 	return true, nil
+}
+
+func (l *fixtureLoader) LoadPacks(_ context.Context) ([]registry.Pack, error) {
+	out := make([]registry.Pack, len(l.packs))
+	copy(out, l.packs)
+	return out, nil
 }
 
 func fixtureTools() []registry.Tool {
