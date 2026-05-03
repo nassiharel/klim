@@ -52,12 +52,7 @@ func FormatDate(ts string) string {
 	}
 	t, err := time.Parse(time.RFC3339, ts)
 	if err != nil {
-		// Tolerate legacy "2006-01-02T15:04:05Z" without timezone name.
-		if t2, err2 := time.Parse("2006-01-02T15:04:05Z", ts); err2 == nil {
-			t = t2
-		} else {
-			return ts
-		}
+		return ts
 	}
 	delta := time.Since(t)
 	switch {

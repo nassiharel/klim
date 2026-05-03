@@ -14,8 +14,16 @@ func TestWrap_ASCII(t *testing.T) {
 }
 
 func TestWrap_EmptyInput(t *testing.T) {
-	if got := Wrap("", 10); got != nil {
-		t.Errorf("expected nil, got %v", got)
+	// Empty input returns nil regardless of maxWidth. The empty-input
+	// check runs before maxWidth so the docstring contract holds for
+	// Wrap("", 0) as well as Wrap("", 10).
+	for _, w := range []int{-1, 0, 10} {
+		if got := Wrap("", w); got != nil {
+			t.Errorf("Wrap(\"\", %d) = %v, want nil", w, got)
+		}
+	}
+	if got := Wrap("   \t  ", 10); got != nil {
+		t.Errorf("whitespace-only input should be nil, got %v", got)
 	}
 }
 

@@ -17,15 +17,16 @@ import (
 // for correctly. Splits on whitespace; a single word longer than
 // maxWidth is emitted on its own line (not hard-cut).
 //
-// Returns nil for empty input. Returns the input unchanged in a
-// single-element slice when maxWidth <= 0.
+// Returns nil for empty input (regardless of maxWidth). Returns the
+// input unchanged in a single-element slice when maxWidth <= 0 and
+// the input is non-empty — the empty-input check runs first.
 func Wrap(text string, maxWidth int) []string {
-	if maxWidth <= 0 {
-		return []string{text}
-	}
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return nil
+	}
+	if maxWidth <= 0 {
+		return []string{text}
 	}
 	var lines []string
 	current := words[0]

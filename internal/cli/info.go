@@ -59,6 +59,12 @@ type infoInstance struct {
 type infoReference = Reference
 
 // infoGitHub mirrors the catalog's GitHub metadata in CLI-shape.
+//
+// Topics is intentionally NOT tagged omitempty so it always serializes
+// as an array (`[]` when there are no topics). The PR-advertised
+// contract says collection fields render as arrays so consumers can
+// safely iterate without nil-checking. Other fields stay omitempty
+// since they're scalars.
 type infoGitHub struct {
 	Slug        string   `json:"slug,omitempty"`
 	URL         string   `json:"url,omitempty"`
@@ -67,7 +73,7 @@ type infoGitHub struct {
 	Description string   `json:"description,omitempty"`
 	Homepage    string   `json:"homepage,omitempty"`
 	License     string   `json:"license,omitempty"`
-	Topics      []string `json:"topics,omitempty"`
+	Topics      []string `json:"topics"`
 	Archived    bool     `json:"archived,omitempty"`
 	LastPush    string   `json:"last_push,omitempty"`
 }
@@ -124,9 +130,12 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		return notFoundError(toolName, closestToolName(tools, toolName))
 	}
 
-	// Resolve only the requested tool's versions. RefreshTool is a
-	// no-op for tools that aren't installed, so this is fast even for
-	// catalog-only entries the user is investigating.
+	// Resolve only the requested tool's versions. RefreshTool runs an
+	// extra single-tool PATH check first (Finder.FindAll on a one-element
+	// slice) and only spawns package-manager queries when the tool turns
+	// out to be installed. The single-tool PATH check is fast, and most
+	// importantly we avoid the catalog-wide version-resolution fan-out
+	// that LoadAndResolveCached used to do on a cold cache.
 	resolved := svcFrom(cmd).RefreshTool(cmd.Context(), *t)
 	*t = resolved
 	sp.Done("Done")
@@ -174,7 +183,7 @@ func buildInfoReport(cmd *cobra.Command, t *registry.Tool, tools []registry.Tool
 
 	r.Packages = append(r.Packages, catalogPackagesFor(t.Packages)...)
 	if t.GitHubSlug != "" || t.GitHubInfo != nil {
-		gh := &infoGitHub{Slug: t.GitHubSlug}
+		gh := &infoGitHub{Slug: t.GitHubSlug, Topics: []string{}}
 		if t.GitHubSlug != "" {
 			gh.URL = "https://github.com/" + t.GitHubSlug
 		}
@@ -184,7 +193,7 @@ func buildInfoReport(cmd *cobra.Command, t *registry.Tool, tools []registry.Tool
 			gh.Description = t.GitHubInfo.Description
 			gh.Homepage = t.GitHubInfo.Homepage
 			gh.License = t.GitHubInfo.License
-			gh.Topics = append([]string{}, t.GitHubInfo.Topics...)
+			gh.Topics = append(gh.Topics, t.GitHubInfo.Topics...)
 			gh.Archived = t.GitHubInfo.Archived
 			gh.LastPush = t.GitHubInfo.PushedAt
 		}

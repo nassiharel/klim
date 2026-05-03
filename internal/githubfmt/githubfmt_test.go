@@ -79,16 +79,6 @@ func TestFormatDate_HoursAgo(t *testing.T) {
 	}
 }
 
-func TestFormatDate_LegacyFormat(t *testing.T) {
-	// Older catalog entries used "2006-01-02T15:04:05Z" without the
-	// trailing timezone-name notation. Make sure we still parse them.
-	ts := "2024-01-15T12:00:00Z"
-	got := FormatDate(ts)
-	if got == ts {
-		t.Fatalf("legacy format not parsed: got %q", got)
-	}
-}
-
 func TestRepoURL(t *testing.T) {
 	if got := RepoURL(""); got != "" {
 		t.Errorf("empty slug = %q", got)

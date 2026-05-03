@@ -165,3 +165,32 @@ func TestBuildInfoReport_JSONContract(t *testing.T) {
 		t.Errorf("packages[1] = %v", second)
 	}
 }
+
+// TestBuildInfoReport_GitHubTopicsAlwaysArray locks the contract
+// that the GitHub block's topics field is always serialized as an
+// array (never omitted), so consumers can iterate without nil-checks
+// — the same guarantee the documented JSON shape advertises for
+// every collection field.
+func TestBuildInfoReport_GitHubTopicsAlwaysArray(t *testing.T) {
+	chdirTemp(t)
+	redirectConfig(t)
+
+	// Tool with GitHub metadata but no topics.
+	tool := registry.Tool{
+		Name:       "kubectl",
+		GitHubSlug: "kubernetes/kubectl",
+		GitHubInfo: &registry.GitHubInfo{
+			Stars:  1000,
+			Topics: nil,
+		},
+	}
+	cmd := withRefscanCtx(t, nil)
+	report := buildInfoReport(cmd, &tool, []registry.Tool{tool})
+	raw, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"topics":[]`) {
+		t.Errorf("expected `\"topics\":[]` in JSON, got: %s", raw)
+	}
+}

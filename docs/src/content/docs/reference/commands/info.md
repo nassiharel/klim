@@ -21,9 +21,12 @@ clim info <tool> [flags]
 |------|-------------|
 | `--output` | `text` (default) or `json` |
 
-`clim info` always performs a fresh single-tool scan (it scans PATH
-once for the catalog and resolves package-manager versions only for
-the requested tool), so there is no cache to bypass.
+`clim info` always runs a fresh scan: it walks PATH once to build the
+catalog state, then re-checks PATH for the requested tool and resolves
+its package-manager versions. Catalog-wide version resolution is
+skipped, so a single `clim info <tool>` is much cheaper than the
+previous behaviour that fanned out package-manager queries for every
+tool in the marketplace. There is no cache to bypass.
 
 ## Examples
 
