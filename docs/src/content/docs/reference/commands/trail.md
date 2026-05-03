@@ -19,8 +19,8 @@ clim trail <subcommand>
 
 | Subcommand | Description |
 |---|---|
-| `clim trail capture` | Record the current toolchain as a new entry |
-| `clim trail log` | Show entries newest-first |
+| `clim trail capture` | Record the current toolchain as a new entry (forces a fresh PATH scan by default) |
+| `clim trail log` | Show entries newest-first, with `@<index>` and short ref columns |
 | `clim trail show <ref>` | Display the toolchain at a specific entry |
 | `clim trail diff <ref> [<ref>]` | Compare two entries (defaults second arg to `HEAD`) |
 | `clim trail prune` | Trim the trail and GC orphan objects |
@@ -93,14 +93,28 @@ $ clim trail show HEAD --output json
 ```
 
 The snapshot body is hashed in canonical form (tools sorted, no
-timestamp / label / op), so two captures of an identical environment
-hash to the same `ObjectID` and dedupe automatically.
+timestamp / label / op, **no per-machine paths**), so two captures of
+an identical environment hash to the same `ObjectID` and dedupe
+automatically — even across machines, which is forward-compatible
+with `clim sync`.
 
 The trail YAML format is read with **strict decoding** —
 `yaml.KnownFields(true)` plus an explicit `schema_version`. A trail
 written by a future, incompatible version of clim is rejected with a
-"newer clim wrote this trail; upgrade clim" error rather than silently
-mis-interpreted.
+"newer clim wrote this trail; upgrade clim" error, and a corrupted /
+hand-edited log without `schema_version` is also rejected.
+
+## Capture defaults
+
+`clim trail capture` performs a fresh PATH scan by default so the
+recorded snapshot matches your current toolchain — not whatever the
+scan cache last saw. Pass `--refresh=false` to reuse the on-disk scan
+cache (useful only when chaining clim commands and you want them to
+see exactly the same view).
+
+`--label` must be unique. Re-using an existing label fails fast rather
+than creating an ambiguous label that would break `clim trail
+show <label>`.
 
 ## What's NOT in the current release
 

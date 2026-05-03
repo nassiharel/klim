@@ -112,7 +112,10 @@ type logFile struct {
 	Entries       []Entry `yaml:"entries"`
 }
 
-// loadLog reads log.yaml strictly. A missing file returns an empty log.
+// loadLog reads log.yaml strictly. A missing file returns an empty log
+// (treated as "fresh trail, no history yet"). A partially-corrupt or
+// version-mismatched file fails closed — clim owns this format and we
+// would rather refuse to run than silently mis-interpret history.
 func loadLog(r fsRoots) (*logFile, error) {
 	data, err := os.ReadFile(r.log)
 	if errors.Is(err, os.ErrNotExist) {
@@ -127,10 +130,11 @@ func loadLog(r fsRoots) (*logFile, error) {
 	if err := dec.Decode(&lf); err != nil {
 		return nil, fmt.Errorf("parsing trail log: %w", err)
 	}
+	// Strict: a non-empty log MUST carry an explicit schema_version.
+	// We never wrote a versionless log (saveLog always sets it), so any
+	// log we're reading without one was hand-edited or corrupted.
 	if lf.SchemaVersion == 0 {
-		// Allow legacy unset; default to current. (Future bumps will require
-		// an explicit migration.)
-		lf.SchemaVersion = SchemaVersion
+		return nil, fmt.Errorf("trail log is missing schema_version (corrupted or hand-edited?) — delete %s to start over", r.log)
 	}
 	if lf.SchemaVersion != SchemaVersion {
 		return nil, fmt.Errorf("trail log has unsupported schema version %d (this clim supports %d) — upgrade clim",
@@ -165,11 +169,14 @@ func saveLog(r fsRoots, lf *logFile) error {
 // Two captures of an identical environment store one object and two entries.
 //
 // op identifies how the change was triggered (capture / import / install /
-// upgrade / remove). label is an optional user-provided tag.
+// upgrade / remove). label is an optional user-provided tag — capture
+// fails if the label is already used by another entry, so labels stay
+// unique and `Resolve(<label>)` always points at one entry.
 func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 	if op == "" {
 		op = OpCapture
 	}
+	label = strings.TrimSpace(label)
 	r, err := resolveRoots()
 	if err != nil {
 		return nil, err
@@ -183,19 +190,31 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := writeObject(r, id, body); err != nil {
-		return nil, fmt.Errorf("writing trail object: %w", err)
-	}
 
+	// Acquire the lock BEFORE writing the object, so a concurrent prune
+	// can't observe a freshly-written object as orphaned and GC it
+	// before this entry is appended.
 	release, err := acquireLock(r.lock)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
 
+	if err := writeObject(r, id, body); err != nil {
+		return nil, fmt.Errorf("writing trail object: %w", err)
+	}
+
 	lf, err := loadLog(r)
 	if err != nil {
 		return nil, err
+	}
+	if label != "" {
+		for i := range lf.Entries {
+			if lf.Entries[i].Label == label {
+				return nil, fmt.Errorf("trail: label %q is already used by entry @%d (use `clim trail capture` without --label, or pick a different name)",
+					label, lf.Entries[i].Index)
+			}
+		}
 	}
 	nextIdx := 0
 	if len(lf.Entries) > 0 {
@@ -206,7 +225,7 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 		Object:    id,
 		Time:      time.Now().UTC(),
 		Operation: op,
-		Label:     strings.TrimSpace(label),
+		Label:     label,
 		Summary:   summarize(r, lf, &snap),
 	}
 	lf.Entries = append(lf.Entries, entry)

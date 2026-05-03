@@ -355,3 +355,95 @@ func fileExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
 }
+
+// TestHash_PathIndependent verifies that two snapshots with the same
+// (Name, Version, Source) but different Path values hash to the same
+// ObjectID. Path is per-machine and excluded from the canonical hash.
+func TestHash_PathIndependent(t *testing.T) {
+	useTempDir(t)
+	a := []registry.Tool{fakeTool("git", "2.53.0", registry.SourceWinget, "/usr/bin/git")}
+	b := []registry.Tool{fakeTool("git", "2.53.0", registry.SourceWinget, "C:\\Program Files\\Git\\cmd\\git.exe")}
+	idA, _, err := hashSnapshot(canonicalSnapshot("linux", "amd64", a))
+	if err != nil {
+		t.Fatal(err)
+	}
+	idB, _, err := hashSnapshot(canonicalSnapshot("linux", "amd64", b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if idA != idB {
+		t.Fatalf("hashes differ on Path-only diff: %s vs %s (Path should not be part of hash)", idA.Short(), idB.Short())
+	}
+}
+
+// TestResolve_HashAfterDedupe regression-tests the bug where two entries
+// pointing at the same object made every hash-prefix lookup ambiguous.
+// After dedupe, `Resolve("<hash>")` must still return the (newest) entry
+// for that object.
+func TestResolve_HashAfterDedupe(t *testing.T) {
+	useTempDir(t)
+	tools := orderedTools()
+	e1, err := Capture(OpCapture, "first", tools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e2, err := Capture(OpCapture, "second", tools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e1.Object != e2.Object {
+		t.Fatalf("setup: expected dedupe; got distinct objects %s and %s", e1.Object.Short(), e2.Object.Short())
+	}
+	got, err := Resolve(string(e1.Object[:7]))
+	if err != nil {
+		t.Fatalf("Resolve(prefix): %v", err)
+	}
+	// Newest entry wins on tie.
+	if got.Index != e2.Index {
+		t.Fatalf("Resolve hash after dedupe: got entry @%d, want @%d (newest)", got.Index, e2.Index)
+	}
+}
+
+// TestCapture_LabelUniqueness verifies that re-using a label fails fast
+// rather than creating an ambiguous label that breaks Resolve.
+func TestCapture_LabelUniqueness(t *testing.T) {
+	useTempDir(t)
+	tools := orderedTools()
+	if _, err := Capture(OpCapture, "before-upgrade", tools); err != nil {
+		t.Fatalf("first capture: %v", err)
+	}
+	_, err := Capture(OpCapture, "before-upgrade", tools)
+	if err == nil {
+		t.Fatal("expected duplicate-label error, got nil")
+	}
+	if !strings.Contains(err.Error(), "label") || !strings.Contains(err.Error(), "already used") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// First capture's label must still resolve unambiguously.
+	e, err := Resolve("before-upgrade")
+	if err != nil {
+		t.Fatalf("Resolve(label) after rejected duplicate: %v", err)
+	}
+	if e.Label != "before-upgrade" {
+		t.Fatalf("got label %q", e.Label)
+	}
+}
+
+// TestLoadLog_RejectsVersionlessLog verifies that a hand-edited or
+// corrupted log without schema_version is rejected rather than silently
+// treated as the current version.
+func TestLoadLog_RejectsVersionlessLog(t *testing.T) {
+	dir := useTempDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "log.yaml")
+	// Note: missing schema_version on purpose.
+	body := []byte("entries: []\n")
+	if err := os.WriteFile(logPath, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Log(LogOptions{}); err == nil || !strings.Contains(err.Error(), "schema_version") {
+		t.Fatalf("expected missing-schema_version error, got %v", err)
+	}
+}

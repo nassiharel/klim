@@ -23,7 +23,7 @@ var trailCmd = &cobra.Command{
 content-addressed snapshot, exposing git-style history inspection.
 
 Two captures of an identical toolchain share storage. Each capture
-appends a Entry to the linear trail history.
+appends an Entry to the linear trail history.
 
 Subcommands:
   capture   Manually record the current toolchain
@@ -38,10 +38,14 @@ prefix), or an entry's --label.`,
 
 // --- clim trail capture ---
 
+// trailCaptureFresh controls whether `clim trail capture` does a fresh
+// PATH scan (default true) or reuses the on-disk scan cache. Default is
+// true so captures match the user's current toolchain; --no-refresh
+// opts into cached behavior for back-to-back clim commands.
 var (
 	trailCaptureLabel string
 	trailCaptureOp    string
-	trailCaptureFresh bool
+	trailCaptureFresh = true
 )
 
 var trailCaptureCmd = &cobra.Command{
@@ -51,7 +55,13 @@ var trailCaptureCmd = &cobra.Command{
 
 If the resulting environment is identical to a previous capture, no
 new object is stored on disk — only the new history entry is appended.
-Pass --label to tag the entry for later reference (e.g. "before-upgrade").`,
+Pass --label to tag the entry for later reference (e.g. "before-upgrade").
+
+By default capture forces a fresh PATH scan so the recorded snapshot
+matches the toolchain you have right now (not whatever the scan cache
+last saw). Pass --no-refresh to use cached scan data — useful only
+when you've just run another clim command that already populated the
+cache and want to capture the exact same view.`,
 	Args: cobra.NoArgs,
 	RunE: runTrailCapture,
 }
@@ -99,8 +109,19 @@ var trailDiffCmd = &cobra.Command{
   clim trail diff HEAD~1            # HEAD~1 vs HEAD
   clim trail diff HEAD~3 HEAD       # explicit two-arg form
   clim trail diff before-upgrade    # vs HEAD (label)`,
-	Args: cobra.RangeArgs(1, 2),
+	Args: trailDiffArgs,
 	RunE: runTrailDiff,
+}
+
+// trailDiffArgs accepts 1 or 2 args, returning a UsageError on any other
+// count so wrong invocations exit 2 (not 1) per docs/cli-conventions.md.
+func trailDiffArgs(cmd *cobra.Command, args []string) error {
+	if len(args) >= 1 && len(args) <= 2 {
+		return nil
+	}
+	return &UsageError{Err: fmt.Errorf(
+		"requires 1 or 2 arguments, got %d\n\nUsage:\n  clim trail diff <ref> [<ref>]\n\nRun '%s --help' for more information",
+		len(args), cmd.CommandPath())}
 }
 
 // --- clim trail prune ---
@@ -126,9 +147,9 @@ references is deleted from disk.`,
 
 func init() {
 	// capture
-	trailCaptureCmd.Flags().StringVar(&trailCaptureLabel, "label", "", "Optional label for the new entry")
+	trailCaptureCmd.Flags().StringVar(&trailCaptureLabel, "label", "", "Optional label for the new entry (must be unique)")
 	trailCaptureCmd.Flags().StringVar(&trailCaptureOp, "op", trail.OpCapture, "Operation kind (capture, install, upgrade, remove, import)")
-	trailCaptureCmd.Flags().BoolVar(&trailCaptureFresh, "refresh", false, "Force a fresh PATH scan before capturing")
+	trailCaptureCmd.Flags().BoolVar(&trailCaptureFresh, "refresh", true, "Force a fresh PATH scan before capturing (default true; pass --refresh=false to reuse the scan cache)")
 
 	// log
 	trailLogCmd.Flags().IntVarP(&trailLogLimit, "limit", "n", 0, "Maximum number of entries to print (0 = no limit)")
@@ -209,10 +230,11 @@ func runTrailLog(cmd *cobra.Command, _ []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "REF\tWHEN\tOP\tLABEL\tSUMMARY")
-	_, _ = fmt.Fprintln(w, "---\t----\t--\t-----\t-------")
+	_, _ = fmt.Fprintln(w, "INDEX\tREF\tWHEN\tOP\tLABEL\tSUMMARY")
+	_, _ = fmt.Fprintln(w, "-----\t---\t----\t--\t-----\t-------")
 	for _, e := range entries {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "@%d\t%s\t%s\t%s\t%s\t%s\n",
+			e.Index,
 			e.Object.Short(),
 			humanAgo(e.Time),
 			e.Operation,

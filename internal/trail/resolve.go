@@ -67,24 +67,40 @@ func Resolve(refSpec string) (*Entry, error) {
 
 	// Hash (full or prefix). All-hex chars and at least 7 long.
 	if isHexPrefix(refSpec) && len(refSpec) >= 7 {
+		// Dedupe matches by Object — multiple entries can point at the
+		// same snapshot (that's the whole dedupe story), so we should
+		// only consider the hash ambiguous when the prefix matches
+		// genuinely different objects. When all matches share one
+		// object, return the newest entry that points at it.
+		seenObject := make(map[ObjectID]struct{})
 		var matches []*Entry
 		for i := range lf.Entries {
 			if strings.HasPrefix(string(lf.Entries[i].Object), strings.ToLower(refSpec)) {
+				if _, dup := seenObject[lf.Entries[i].Object]; !dup {
+					seenObject[lf.Entries[i].Object] = struct{}{}
+				}
 				matches = append(matches, &lf.Entries[i])
 			}
 		}
-		switch len(matches) {
-		case 0:
+		switch {
+		case len(seenObject) == 0:
 			// fall through to label resolution
-		case 1:
+		case len(seenObject) == 1:
+			// One distinct object — return the newest entry that points at it.
+			for i := len(lf.Entries) - 1; i >= 0; i-- {
+				if strings.HasPrefix(string(lf.Entries[i].Object), strings.ToLower(refSpec)) {
+					return &lf.Entries[i], nil
+				}
+			}
+			// Unreachable given matches != nil.
 			return matches[len(matches)-1], nil
 		default:
-			short := make([]string, 0, len(matches))
-			for _, m := range matches {
-				short = append(short, m.Object.Short())
+			short := make([]string, 0, len(seenObject))
+			for id := range seenObject {
+				short = append(short, id.Short())
 			}
-			return nil, fmt.Errorf("trail: ref %q is ambiguous (matches %d objects: %s)",
-				refSpec, len(matches), strings.Join(short, ", "))
+			return nil, fmt.Errorf("trail: ref %q is ambiguous (matches %d distinct objects: %s)",
+				refSpec, len(seenObject), strings.Join(short, ", "))
 		}
 	}
 

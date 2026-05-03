@@ -68,8 +68,15 @@ func (o ObjectID) IsValid() bool {
 // Snapshot is the canonical environment content.
 //
 // Two snapshots with the same OS/Arch and the same set of installed
-// tools (by Name+Version+Source) hash to the same ObjectID, which is
-// why Tools must be sorted before marshalling.
+// tools (by Name + Version + Source) hash to the same ObjectID, which
+// is why Tools must be sorted before marshalling.
+//
+// Note: Tool.Path is intentionally NOT part of the canonical content —
+// paths are machine-specific (e.g. `C:\Users\alice\...`), so including
+// them would prevent dedupe across machines and break future cross-host
+// scenarios (clim sync). Path lives on the Tool struct because it's
+// useful in `show` output for forensic / revert work, but it is hashed
+// only via the per-instance fields below.
 type Snapshot struct {
 	SchemaVersion int    `yaml:"schema_version" json:"schema_version"`
 	OS            string `yaml:"os"             json:"os"`
@@ -77,8 +84,9 @@ type Snapshot struct {
 	Tools         []Tool `yaml:"tools"          json:"tools"`
 }
 
-// Tool is the trail-internal projection of a registry.Tool. Only the
-// env-defining fields are kept so that captures dedupe by content.
+// Tool is the trail-internal projection of a registry.Tool. Name +
+// Version + Source define content (and participate in hashing); Path is
+// metadata for inspection and is excluded from canonical hashing.
 type Tool struct {
 	Name    string `yaml:"name"              json:"name"`
 	Version string `yaml:"version,omitempty" json:"version,omitempty"`
@@ -150,12 +158,36 @@ func marshalSnapshot(s Snapshot) ([]byte, error) {
 }
 
 // hashSnapshot returns the ObjectID for a canonical Snapshot. Identical
-// environments produce identical hashes regardless of capture time.
+// environments produce identical hashes regardless of capture time AND
+// regardless of per-machine binary paths (Path is excluded from hashing
+// even though it's stored in the Snapshot body for inspection).
 func hashSnapshot(s Snapshot) (ObjectID, []byte, error) {
 	body, err := marshalSnapshot(s)
 	if err != nil {
 		return "", nil, err
 	}
-	sum := sha256.Sum256(body)
+	hashed := stripPathsForHash(s)
+	hashedBody, err := marshalSnapshot(hashed)
+	if err != nil {
+		return "", nil, err
+	}
+	sum := sha256.Sum256(hashedBody)
 	return ObjectID(hex.EncodeToString(sum[:])), body, nil
+}
+
+// stripPathsForHash returns a copy of s with Tool.Path zeroed so that
+// content hashing is path-independent. The returned value is only used
+// for hashing; storage retains the original (path-bearing) Snapshot.
+func stripPathsForHash(s Snapshot) Snapshot {
+	tools := make([]Tool, len(s.Tools))
+	for i, t := range s.Tools {
+		t.Path = ""
+		tools[i] = t
+	}
+	return Snapshot{
+		SchemaVersion: s.SchemaVersion,
+		OS:            s.OS,
+		Arch:          s.Arch,
+		Tools:         tools,
+	}
 }
