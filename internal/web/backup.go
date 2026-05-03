@@ -32,6 +32,11 @@ type backupView struct {
 	ShareErr   string
 	Backups    []savedBackup
 	BackupsErr string
+	// Flash holds a one-shot status message rendered at the top of
+	// the page after a save / delete / preview action redirects back
+	// here. Levels: "ok" (green) or "err" (red).
+	FlashLevel string
+	FlashMsg   string
 }
 
 // savedBackup describes one *.yaml file under ~/.config/clim/backups/.
@@ -60,6 +65,9 @@ func (s *Server) pageBackup(w http.ResponseWriter, r *http.Request) {
 	} else {
 		view.Backups = backups
 	}
+	// One-shot flash from the redirect helpers.
+	view.FlashLevel = r.URL.Query().Get("flash")
+	view.FlashMsg = r.URL.Query().Get("msg")
 	s.renderPage(w, r, "backup.html", pageData{
 		Title:     "Backup",
 		ActiveTab: "backup",

@@ -1,0 +1,58 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <a href="/backup" class="back">← Backup</a>
+  <h1>Preview install</h1>
+  <p class="muted">Source: {{$d.Source}} · {{$d.Total}} tools listed</p>
+</section>
+
+<section class="card">
+  <h2>Summary</h2>
+  <p>
+    <span class="badge ok">{{$d.AlreadyInstalled}} already installed</span>
+    {{if $d.ReadyToInstall}}<span class="badge update">{{$d.ReadyToInstall}} ready to install</span>{{end}}
+    {{if $d.NotInCatalog}}<span class="badge muted">{{$d.NotInCatalog}} not in catalog</span>{{end}}
+  </p>
+  <p class="muted small">Click <strong>Install</strong> on each row to start a job. Each tool installs through the same package manager <code>clim list</code> would suggest. Watch progress on the resulting job page.</p>
+</section>
+
+<section class="card">
+  <h2>Tools</h2>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range $d.Rows}}
+        <tr>
+          <td>
+            {{if .Tool}}
+              <a href="/tools/{{.Name}}" class="tool-link">{{.Name}}</a>
+              {{if .Tool.DisplayName}}<span class="muted">{{.Tool.DisplayName}}</span>{{end}}
+            {{else}}
+              {{.Name}} <span class="muted small">(not in catalog)</span>
+            {{end}}
+          </td>
+          <td>
+            {{if eq .Status "installed"}}<span class="badge ok">✓ installed</span>
+            {{else if eq .Status "ready"}}<span class="badge update">missing</span>
+            {{else}}<span class="badge muted">unknown tool</span>
+            {{end}}
+          </td>
+          <td>
+            {{if eq .Status "ready"}}
+              <form method="POST" action="/tools/{{.Name}}/install" class="inline">
+                <button class="btn-primary" type="submit">Install</button>
+              </form>
+            {{end}}
+          </td>
+        </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}

@@ -37,6 +37,7 @@ var pageTemplates = []string{
 	"snapshot.html",
 	"job.html",
 	"backup.html",
+	"backup_preview.html",
 	"config.html",
 }
 

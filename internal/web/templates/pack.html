@@ -51,4 +51,14 @@
     </tbody>
   </table>
 </section>
+
+{{if $d.IsCustom}}
+<section class="card">
+  <h2>Custom pack actions</h2>
+  <p class="muted">This pack is stored in your <code>~/.config/clim/marketplace/custom-packs.yaml</code>.</p>
+  <form method="POST" action="/backup/packs/{{$p.Name}}/delete" class="inline" onsubmit="return confirm('Delete pack {{$p.Name}}? Tools stay installed.')">
+    <button type="submit" class="btn-danger">Delete pack</button>
+  </form>
+</section>
+{{end}}
 {{end}}
