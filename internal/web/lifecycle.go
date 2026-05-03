@@ -70,10 +70,11 @@ func (l *lifecycle) unregister() {
 // signal. When r.Context() fires (browser closes the tab or
 // navigates away), unregister runs and may schedule shutdown.
 //
-// The endpoint is intentionally unauthenticated even when a token is
-// required, because we send a small ping every 15 seconds and rely
-// on the browser closing the connection automatically; without a
-// keepalive intermediary proxies might idle-close it.
+// The endpoint goes through authMiddleware like every other route;
+// when --insecure-bind enables a token, the browser's auth cookie
+// (set on the first ?token= visit) carries through to this stream
+// automatically. We send a 15-second SSE comment heartbeat so
+// intermediary proxies don't idle-close the long-lived connection.
 func (s *Server) apiLifecycleStream(w http.ResponseWriter, r *http.Request) {
 	if s.lifecycle == nil {
 		http.Error(w, "lifecycle disabled", http.StatusNotFound)

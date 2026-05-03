@@ -28,17 +28,10 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Marketplace',
-          items: [
-            { label: '📦 Tool Catalog', slug: 'marketplace/catalog' },
-          ],
-        },
-        {
           label: 'Guides',
           items: [
             { label: 'TUI Overview', slug: 'guides/tui-overview' },
             { label: 'Favorites', slug: 'guides/favorites' },
-            { label: 'Marketplace', slug: 'guides/marketplace' },
             { label: 'Batch Updates', slug: 'guides/batch-updates' },
             { label: 'Backup & Restore', slug: 'guides/backup-restore' },
             { label: 'Team Manifests', slug: 'guides/team-manifests' },

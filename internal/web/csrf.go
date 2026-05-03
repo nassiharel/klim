@@ -104,8 +104,10 @@ func originHostMatches(got, want *url.URL) bool {
 func portMatches(got, want *url.URL) bool {
 	gp := got.Port()
 	wp := want.Port()
-	// Treat "" (default) and explicit defaults as equivalent. Browser
-	// Origin headers always include the port for non-default ports,
-	// which is the case for clim browser.
+	// Strict equality. We never need to treat default ports as
+	// equivalent because clim always binds to an explicit, non-
+	// standard port (the listener Addr ports are always present in
+	// both Origin headers and r.Host), so any mismatch here is
+	// genuinely a different origin.
 	return gp == wp
 }

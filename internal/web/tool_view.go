@@ -24,35 +24,13 @@ func buildPMRows(t registry.Tool) []pmRow {
 		}
 		rows = append(rows, pmRow{
 			Source:     string(st.Source),
-			PackageID:  packageIDFor(t.Packages, st.Source),
+			PackageID:  t.Packages.PkgID(st.Source),
 			Available:  st.Available,
 			InstallCmd: strings.Join(args, " "),
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Source < rows[j].Source })
 	return rows
-}
-
-// packageIDFor reads the package id for source out of PackageIDs.
-// PackageIDs.pkgID() is unexported, so we mirror its switch here.
-func packageIDFor(p registry.PackageIDs, source registry.InstallSource) string {
-	switch source {
-	case registry.SourceWinget:
-		return p.Winget
-	case registry.SourceChoco:
-		return p.Choco
-	case registry.SourceScoop:
-		return p.Scoop
-	case registry.SourceBrew:
-		return p.Brew
-	case registry.SourceApt:
-		return p.Apt
-	case registry.SourceSnap:
-		return p.Snap
-	case registry.SourceNPM:
-		return p.NPM
-	}
-	return ""
 }
 
 // mergedTagsAndTopics returns a sorted, deduped list of the tool's

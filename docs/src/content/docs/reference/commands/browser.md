@@ -31,11 +31,15 @@ clim browser listening on http://127.0.0.1:54321
 | `--port` | Listen port (`0` lets the kernel pick a free one). Default `0`. |
 | `--bind` | Bind address. Default `127.0.0.1`. |
 | `--no-open` | Do not auto-open the browser. |
-| `--insecure-bind` | Allow non-loopback bind addresses. The server has **no authentication** — use with caution. |
+| `--keep-alive` | Keep the server running after the last browser tab closes (default: shut down 10 seconds after last tab disconnects). |
+| `--insecure-bind` | Allow non-loopback bind addresses. Auto-generates a 32-byte bearer token and prints a `?token=…` URL; the lone purpose of this flag is to be an explicit acknowledgement that the server will be reachable from the network. |
 
 `--bind` defaults to `127.0.0.1` and refuses any non-loopback address
 unless `--insecure-bind` is also passed, so you can't accidentally
-expose an unauthenticated server on a LAN.
+expose an unauthenticated server on a LAN. When `--insecure-bind` is
+on, every request other than `/healthz` requires the token (cookie,
+`?token=` query param, or `Authorization: Bearer`). See the Security
+section below for details.
 
 ## Pages
 

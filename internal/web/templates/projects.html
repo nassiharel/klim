@@ -21,7 +21,7 @@
   <tbody>
     {{range $d.Projects}}
       <tr>
-        <td><a href="/projects/{{.Entry.Path}}" class="tool-link">{{.Entry.Name}}</a></td>
+        <td><a href="/projects/{{.PathURL}}" class="tool-link">{{.Entry.Name}}</a></td>
         <td><code class="muted">{{.Entry.Path}}</code></td>
         <td>
           {{if .HasFile}}

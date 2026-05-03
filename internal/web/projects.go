@@ -8,7 +8,6 @@ import (
 	"os"
 	"sort"
 
-	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/teamfile"
 )
 
@@ -20,6 +19,12 @@ type projectsView struct {
 
 type projectRow struct {
 	Entry teamfile.ProjectEntry
+	// PathURL is the URL-safe version of Entry.Path used in the
+	// /projects/<path...> link target. We pre-escape here so the
+	// template doesn't need a custom func and so spaces / # / % in
+	// real project paths round-trip through url.PathUnescape on the
+	// detail handler.
+	PathURL string
 	// Summary is best-effort: we Parse() the file but don't run a full
 	// PATH check (that's per-project on the detail page) so the
 	// landing page stays cheap.
@@ -37,7 +42,7 @@ func (s *Server) pageProjects(w http.ResponseWriter, r *http.Request) {
 	}
 	rows := make([]projectRow, 0, len(projects))
 	for _, p := range projects {
-		row := projectRow{Entry: p}
+		row := projectRow{Entry: p, PathURL: url.PathEscape(p.Path)}
 		filePath := p.Path + string(os.PathSeparator) + teamfile.FileName
 		if _, err := os.Stat(filePath); err == nil {
 			row.HasFile = true
@@ -149,8 +154,3 @@ func projectCheckStatusName(s teamfile.CheckStatus) string {
 	}
 	return "—"
 }
-
-// (Keeps the registry import in scope for projectRow; harmless if
-// unused, but lets future code that needs registry types here drop in
-// without churning imports.)
-var _ = registry.SortByName

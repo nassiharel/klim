@@ -105,10 +105,11 @@ JSON API mirrors the same handlers under `/api`:
 JSON responses use the same shapes the existing CLI commands emit so
 existing tooling (and tests) can read both indistinguishably.
 
-Pages for **Updates**, **Discover**, **Backup / Favorites**, **Config**
-ship as **stub pages** in Phase 1 — they render the layout shell and a
-"Coming soon" notice. This proves the layout is correct end-to-end and
-makes follow-up PRs additive.
+> **Note (post-Phase 1):** what shipped in PR #48 went well past the
+> Phase 1 scope described above. **Updates**, **Discover**,
+> **Backup**, **Favorites**, **For You**, **Packs**, **Projects**,
+> and **Config** are all live (Phase 2–5 of the same PR). The
+> "Phase 2+" roadmap below tracks what came after.
 
 ## Testing strategy
 

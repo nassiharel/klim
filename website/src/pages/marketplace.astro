@@ -1,0 +1,320 @@
+---
+import '../styles/global.css';
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import marketplace from '../data/marketplace.json';
+
+const { tools, packs } = marketplace;
+
+const categoryIcons: Record<string, string> = {
+  CLI: '⌨️',
+  Cloud: '☁️',
+  Containers: '🐳',
+  Database: '🗄️',
+  IaC: '🏗️',
+  Language: '💻',
+  Security: '🔒',
+  Shell: '🐚',
+  VCS: '📝',
+  AI: '🤖',
+  PkgMgr: '📦',
+  Observability: '📊',
+  Testing: '🧪',
+  Network: '🌐',
+  Editor: '✏️',
+  Media: '🎬',
+  Other: '🔧',
+};
+
+const categories = [...new Set(tools.map((t: any) => t.category))].sort();
+const categoryCountMap = tools.reduce((acc: Record<string, number>, t: any) => {
+  acc[t.category] = (acc[t.category] || 0) + 1;
+  return acc;
+}, {} as Record<string, number>);
+
+function pmBadges(packages: Record<string, string>) {
+  const labels: Record<string, string> = {
+    brew: 'Homebrew',
+    winget: 'winget',
+    scoop: 'Scoop',
+    choco: 'Chocolatey',
+    apt: 'apt',
+    snap: 'snap',
+    npm: 'npm',
+  };
+  return Object.keys(packages)
+    .filter(k => k in labels)
+    .map(k => labels[k]);
+}
+---
+
+<Layout title="Marketplace — clim" description="Browse 136+ curated developer tools and packs available in the clim marketplace.">
+  <Header />
+
+  <main class="pt-28 pb-20">
+    <!-- Hero -->
+    <section class="mx-auto max-w-6xl px-6 text-center mb-16">
+      <h1 class="text-4xl font-bold text-white sm:text-5xl">
+        Tool <span class="bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">Marketplace</span>
+      </h1>
+      <p class="mx-auto mt-4 max-w-2xl text-lg text-gray-400">
+        Browse {tools.length} curated developer tools and {packs.length} packs.
+        Install any of them with <code class="rounded bg-gray-800 px-1.5 py-0.5 text-sm text-green-400">clim</code>.
+      </p>
+    </section>
+
+    <!-- Tabs: Tools / Packs -->
+    <section class="mx-auto max-w-6xl px-6">
+      <div class="mb-8 flex items-center gap-1 rounded-lg bg-gray-900 p-1 w-fit mx-auto" role="tablist">
+        <button
+          id="tab-tools"
+          role="tab"
+          aria-selected="true"
+          class="tab-btn rounded-md px-5 py-2 text-sm font-medium transition-colors text-white bg-gray-800"
+        >
+          🔧 Tools <span class="ml-1 text-xs text-gray-400">({tools.length})</span>
+        </button>
+        <button
+          id="tab-packs"
+          role="tab"
+          aria-selected="false"
+          class="tab-btn rounded-md px-5 py-2 text-sm font-medium transition-colors text-gray-400 hover:text-white"
+        >
+          📦 Packs <span class="ml-1 text-xs text-gray-400">({packs.length})</span>
+        </button>
+      </div>
+
+      <!-- Tools Panel -->
+      <div id="panel-tools">
+        <!-- Search + Category Filter -->
+        <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div class="relative flex-1 max-w-md">
+            <input
+              id="tool-search"
+              type="text"
+              placeholder="Search tools..."
+              class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2.5 pl-10 text-sm text-white placeholder-gray-500 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+            />
+            <svg class="absolute left-3 top-3 h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <div id="tool-count" class="text-sm text-gray-500">
+            Showing {tools.length} tools
+          </div>
+        </div>
+
+        <!-- Category Chips -->
+        <div class="mb-8 flex flex-wrap gap-2">
+          <button
+            class="category-chip active rounded-full border border-green-500 bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400 transition-colors"
+            data-category="all"
+          >
+            All ({tools.length})
+          </button>
+          {categories.map((cat: string) => (
+            <button
+              class="category-chip rounded-full border border-gray-700 px-3 py-1 text-xs font-medium text-gray-400 transition-colors hover:border-gray-500 hover:text-white"
+              data-category={cat}
+            >
+              {categoryIcons[cat] || '🔧'} {cat} ({categoryCountMap[cat]})
+            </button>
+          ))}
+        </div>
+
+        <!-- Tool Cards Grid -->
+        <div id="tools-grid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {tools.map((tool: any) => (
+            <div
+              class="tool-card group rounded-xl border border-gray-800 bg-gray-900/50 p-5 transition-all hover:border-green-500/40 hover:bg-gray-900 hover:shadow-lg hover:shadow-green-500/5"
+              data-name={tool.name}
+              data-display={tool.display_name.toLowerCase()}
+              data-category={tool.category}
+              data-tags={tool.tags.join(',')}
+            >
+              <div class="mb-3 flex items-start justify-between">
+                <div>
+                  <h3 class="font-semibold text-white group-hover:text-green-400 transition-colors">
+                    {tool.display_name}
+                  </h3>
+                  <span class="text-xs text-gray-500">{tool.name}</span>
+                </div>
+                <span class="rounded-md bg-gray-800 px-2 py-0.5 text-xs text-gray-400 whitespace-nowrap">
+                  {categoryIcons[tool.category] || '🔧'} {tool.category}
+                </span>
+              </div>
+
+              {tool.github && (
+                <a
+                  href={`https://github.com/${tool.github}`}
+                  class="mb-3 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-green-400 transition-colors"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                  </svg>
+                  {tool.github}
+                </a>
+              )}
+
+              <div class="flex flex-wrap gap-1.5">
+                {pmBadges(tool.packages).map((pm: string) => (
+                  <span class="rounded bg-gray-800/80 px-1.5 py-0.5 text-[10px] text-gray-500">
+                    {pm}
+                  </span>
+                ))}
+              </div>
+
+              {tool.tags.length > 0 && (
+                <div class="mt-3 flex flex-wrap gap-1">
+                  {tool.tags.slice(0, 3).map((tag: string) => (
+                    <span class="rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] text-green-400/70">
+                      {tag}
+                    </span>
+                  ))}
+                  {tool.tags.length > 3 && (
+                    <span class="text-[10px] text-gray-600">+{tool.tags.length - 3}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <!-- No results message -->
+        <div id="no-results" class="hidden py-16 text-center">
+          <p class="text-lg text-gray-500">No tools match your search.</p>
+          <p class="mt-2 text-sm text-gray-600">Try a different keyword or category.</p>
+        </div>
+      </div>
+
+      <!-- Packs Panel -->
+      <div id="panel-packs" class="hidden">
+        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {packs.map((pack: any) => {
+            const toolCount = pack.tools.length;
+            return (
+              <div class="group rounded-xl border border-gray-800 bg-gray-900/50 p-6 transition-all hover:border-green-500/40 hover:bg-gray-900 hover:shadow-lg hover:shadow-green-500/5">
+                <div class="mb-3 flex items-center gap-3">
+                  <span class="text-3xl">{pack.icon}</span>
+                  <div>
+                    <h3 class="font-semibold text-white group-hover:text-green-400 transition-colors">
+                      {pack.display_name}
+                    </h3>
+                    <span class="text-xs text-gray-500">{toolCount} tools</span>
+                  </div>
+                </div>
+                <p class="mb-4 text-sm text-gray-400 leading-relaxed">{pack.description}</p>
+                <div class="flex flex-wrap gap-1.5">
+                  {pack.tools.map((t: string) => (
+                    <span class="rounded-md bg-gray-800 px-2 py-1 text-xs text-gray-300 font-mono">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="mx-auto max-w-4xl px-6 mt-20 text-center">
+      <div class="rounded-2xl border border-gray-800 bg-gradient-to-b from-gray-900 to-gray-950 p-10">
+        <h2 class="text-2xl font-bold text-white">Ready to try?</h2>
+        <p class="mt-3 text-gray-400">
+          Install clim and browse the full marketplace from your terminal.
+        </p>
+        <div class="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <pre class="rounded-lg bg-gray-950 border border-gray-800 px-5 py-3 font-mono text-sm text-green-400">curl -fsSL https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash</pre>
+        </div>
+        <p class="mt-4 text-sm text-gray-500">
+          Then run <code class="text-green-400">clim</code> and switch to the Discover tab.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</Layout>
+
+<script>
+  // Tab switching
+  const tabTools = document.getElementById('tab-tools')!;
+  const tabPacks = document.getElementById('tab-packs')!;
+  const panelTools = document.getElementById('panel-tools')!;
+  const panelPacks = document.getElementById('panel-packs')!;
+
+  function activateTab(tab: HTMLElement, panel: HTMLElement, otherTab: HTMLElement, otherPanel: HTMLElement) {
+    tab.classList.add('text-white', 'bg-gray-800');
+    tab.classList.remove('text-gray-400');
+    tab.setAttribute('aria-selected', 'true');
+    panel.classList.remove('hidden');
+
+    otherTab.classList.remove('text-white', 'bg-gray-800');
+    otherTab.classList.add('text-gray-400');
+    otherTab.setAttribute('aria-selected', 'false');
+    otherPanel.classList.add('hidden');
+  }
+
+  tabTools.addEventListener('click', () => activateTab(tabTools, panelTools, tabPacks, panelPacks));
+  tabPacks.addEventListener('click', () => activateTab(tabPacks, panelPacks, tabTools, panelTools));
+
+  // Category filtering + search
+  const searchInput = document.getElementById('tool-search') as HTMLInputElement;
+  const toolCards = document.querySelectorAll('.tool-card') as NodeListOf<HTMLElement>;
+  const categoryChips = document.querySelectorAll('.category-chip') as NodeListOf<HTMLElement>;
+  const toolCount = document.getElementById('tool-count')!;
+  const noResults = document.getElementById('no-results')!;
+  const toolsGrid = document.getElementById('tools-grid')!;
+
+  let activeCategory = 'all';
+
+  function filterTools() {
+    const query = searchInput.value.toLowerCase().trim();
+    let visible = 0;
+
+    toolCards.forEach(card => {
+      const name = card.dataset.display || '';
+      const rawName = card.dataset.name || '';
+      const category = card.dataset.category || '';
+      const tags = card.dataset.tags || '';
+
+      const matchesCategory = activeCategory === 'all' || category === activeCategory;
+      const matchesSearch = !query ||
+        name.includes(query) ||
+        rawName.includes(query) ||
+        category.toLowerCase().includes(query) ||
+        tags.toLowerCase().includes(query);
+
+      if (matchesCategory && matchesSearch) {
+        card.classList.remove('hidden');
+        visible++;
+      } else {
+        card.classList.add('hidden');
+      }
+    });
+
+    toolCount.textContent = `Showing ${visible} tool${visible !== 1 ? 's' : ''}`;
+    noResults.classList.toggle('hidden', visible > 0);
+    toolsGrid.classList.toggle('hidden', visible === 0);
+  }
+
+  categoryChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      categoryChips.forEach(c => {
+        c.classList.remove('active', 'border-green-500', 'bg-green-500/10', 'text-green-400');
+        c.classList.add('border-gray-700', 'text-gray-400');
+      });
+      chip.classList.add('active', 'border-green-500', 'bg-green-500/10', 'text-green-400');
+      chip.classList.remove('border-gray-700', 'text-gray-400');
+      activeCategory = chip.dataset.category || 'all';
+      filterTools();
+    });
+  });
+
+  searchInput.addEventListener('input', filterTools);
+</script>
