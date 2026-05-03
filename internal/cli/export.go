@@ -123,7 +123,7 @@ func init() {
 
 func runExport(cmd *cobra.Command, args []string) error {
 	sp := progress.New("Scanning installed tools...")
-	tools, _, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), exportRefreshFlag)
+	tools, _, scanInfo, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), exportRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
@@ -170,7 +170,7 @@ func runExportSave(cmd *cobra.Command, args []string) error {
 	}
 
 	sp := progress.New("Scanning tools...")
-	tools, _, err := svc.ScanOnly(cmd.Context())
+	tools, _, err := svcFrom(cmd).ScanOnly(cmd.Context())
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
@@ -243,7 +243,7 @@ func runExportDelete(cmd *cobra.Command, args []string) error {
 func runExportProfileSave(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	sp := progress.New("Scanning tools...")
-	tools, _, err := svc.ScanOnly(cmd.Context())
+	tools, _, err := svcFrom(cmd).ScanOnly(cmd.Context())
 	if err != nil {
 		sp.Fail(err.Error())
 		return err

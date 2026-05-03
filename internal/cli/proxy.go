@@ -121,7 +121,7 @@ func runProxyAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load catalog metadata to validate tool names (no PATH scan needed).
-	tools, _, err := svc.Catalog.LoadTools(cmd.Context())
+	tools, _, err := svcFrom(cmd).Catalog.LoadTools(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("loading catalog: %w", err)
 	}
@@ -177,7 +177,7 @@ func runProxyRemove(cmd *cobra.Command, args []string) error {
 
 	// Load catalog to resolve tool names → binary names.
 	resolveNames := func(name string) []string { return []string{name} }
-	if tools, _, loadErr := svc.Catalog.LoadTools(cmd.Context()); loadErr == nil {
+	if tools, _, loadErr := svcFrom(cmd).Catalog.LoadTools(cmd.Context()); loadErr == nil {
 		toolMap := registry.ToolMap(tools)
 		resolveNames = func(name string) []string {
 			if t, ok := toolMap[name]; ok && len(t.BinaryNames) > 0 {
@@ -281,7 +281,7 @@ func runProxyRun(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load catalog to check binary names and install if needed.
-	tools, _, catErr := svc.Catalog.LoadTools(cmd.Context())
+	tools, _, catErr := svcFrom(cmd).Catalog.LoadTools(cmd.Context())
 	if catErr != nil {
 		return fmt.Errorf("loading catalog: %w", catErr)
 	}
@@ -333,7 +333,7 @@ func runProxyRun(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "[clim] ✓ %s installed successfully\n\n", toolName)
 
 	// Invalidate scan cache after install.
-	_ = svc.InvalidateScanCache()
+	_ = svcFrom(cmd).InvalidateScanCache()
 
 	// Find the real binary now.
 	realPath = findRealBinary(toolName, dir)

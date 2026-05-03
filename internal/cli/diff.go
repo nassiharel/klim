@@ -70,7 +70,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 	// Load local tools.
 	sp := progress.New("Scanning installed tools...")
-	tools, _, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), diffRefreshFlag)
+	tools, _, scanInfo, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), diffRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err

@@ -52,7 +52,7 @@ func runShareGenerate(cmd *cobra.Command, args []string) error {
 	if out == OutputText {
 		fmt.Fprintln(os.Stderr, "Scanning installed tools...")
 	}
-	tools, _, err := svc.ScanOnly(cmd.Context())
+	tools, _, err := svcFrom(cmd).ScanOnly(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("scanning installed tools: %w", err)
 	}

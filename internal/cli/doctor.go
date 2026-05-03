@@ -52,7 +52,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	sp := progress.New("Running diagnostics...")
-	tools, _, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), doctorRefreshFlag)
+	tools, _, scanInfo, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), doctorRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err

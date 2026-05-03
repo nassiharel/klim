@@ -43,7 +43,7 @@ func runScore(cmd *cobra.Command, args []string) error {
 	}
 
 	sp := progress.New("Scanning...")
-	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), scoreRefreshFlag)
+	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), scoreRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
@@ -56,7 +56,7 @@ func runScore(cmd *cobra.Command, args []string) error {
 	// Run compliance if configured.
 	var compResult *compliance.Result
 	var compErrStr string
-	if policyPath := findPolicyPath(); policyPath != "" {
+	if policyPath := findPolicyPath(cfgFrom(cmd)); policyPath != "" {
 		policy, loadErr := compliance.LoadPolicy(policyPath)
 		if loadErr != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "  ⚠ Compliance policy error: %v\n", loadErr)

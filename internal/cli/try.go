@@ -52,7 +52,7 @@ func runTry(cmd *cobra.Command, args []string) error {
 
 	// Load catalog + scan PATH (no version resolution needed).
 	sp := progress.New("Loading catalog...")
-	tools, _, err := svc.ScanOnly(cmd.Context())
+	tools, _, err := svcFrom(cmd).ScanOnly(cmd.Context())
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
@@ -134,7 +134,7 @@ func runTry(cmd *cobra.Command, args []string) error {
 
 	// Cleanup prompt (unless --keep or was already installed).
 	if !alreadyInstalled && !tryKeepFlag {
-		doCleanup(*t, installSource)
+		doCleanup(cmd, *t, installSource)
 	}
 
 	if runErr != nil {
@@ -143,7 +143,7 @@ func runTry(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func doCleanup(t registry.Tool, installSource registry.InstallSource) {
+func doCleanup(cmd *cobra.Command, t registry.Tool, installSource registry.InstallSource) {
 	fmt.Fprint(os.Stderr, "Keep "+t.DisplayName+"? [Y/n]: ")
 	var answer string
 	_, _ = fmt.Fscan(os.Stdin, &answer)
@@ -175,5 +175,5 @@ func doCleanup(t registry.Tool, installSource registry.InstallSource) {
 		fmt.Fprintf(os.Stderr, "✓ %s removed.\n", t.DisplayName)
 	}
 
-	_ = svc.InvalidateScanCache()
+	_ = svcFrom(cmd).InvalidateScanCache()
 }

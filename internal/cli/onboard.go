@@ -71,7 +71,7 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 
 	// Load catalog + scan PATH (no version resolution needed).
 	sp := progress.New("Loading catalog...")
-	tools, _, err := svc.ScanOnly(cmd.Context())
+	tools, _, err := svcFrom(cmd).ScanOnly(cmd.Context())
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
@@ -149,7 +149,7 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	_ = svc.InvalidateScanCache()
+	_ = svcFrom(cmd).InvalidateScanCache()
 	fmt.Fprintf(os.Stderr, "\n%d installed, %d failed\n", installed, failed)
 	return nil
 }

@@ -64,7 +64,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "Manifest: %d tools (from %s/%s)\n", len(m.Tools), m.OS, m.Arch)
 
 	// Load registry and scan PATH to know what's already installed.
-	regTools, _, err := svc.ScanOnly(cmd.Context())
+	regTools, _, err := svcFrom(cmd).ScanOnly(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("scanning installed tools: %w", err)
 	}
@@ -90,7 +90,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	// Any install attempt may have changed what's on PATH, so invalidate
 	// the scan cache. Subsequent `clim list` / `clim export` runs will
 	// rescan and rewrite the cache instead of serving stale data.
-	if err := svc.InvalidateScanCache(); err != nil {
+	if err := svcFrom(cmd).InvalidateScanCache(); err != nil {
 		fmt.Fprintf(os.Stderr, "  ⚠ Failed to invalidate scan cache: %v\n", err)
 	}
 	fmt.Fprintf(os.Stderr, "\n──── Done: %d installed, %d failed, %d already present ────\n",

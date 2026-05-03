@@ -67,7 +67,7 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	}
 
 	sp := progress.New("Scanning installed tools...")
-	tools, _, scanInfo, err := svc.LoadAndResolveCached(cmd.Context(), auditRefreshFlag)
+	tools, _, scanInfo, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), auditRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
