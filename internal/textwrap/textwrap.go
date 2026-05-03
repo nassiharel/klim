@@ -11,11 +11,17 @@ import (
 	"github.com/mattn/go-runewidth"
 )
 
-// Wrap breaks text into lines no wider than maxWidth display columns.
-// Width is measured with go-runewidth so wide characters (CJK = 2
-// cols, emoji = 2 cols) and zero-width combining marks are accounted
-// for correctly. Splits on whitespace; a single word longer than
-// maxWidth is emitted on its own line (not hard-cut).
+// Wrap breaks text into lines that try to fit in maxWidth display
+// columns. Width is measured with go-runewidth so wide characters
+// (CJK = 2 cols, emoji = 2 cols) and zero-width combining marks are
+// accounted for correctly. Splits on whitespace boundaries.
+//
+// A single word longer than maxWidth is emitted on its own line
+// without being split, so the returned line CAN exceed maxWidth in
+// that one case — callers that need a hard width cap must hard-cut
+// such words separately. This is the conventional behavior for
+// word-wrap helpers and keeps URLs / hashes / long identifiers
+// readable.
 //
 // Returns nil for empty input (regardless of maxWidth). Returns the
 // input unchanged in a single-element slice when maxWidth <= 0 and

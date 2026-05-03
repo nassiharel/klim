@@ -103,40 +103,45 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	}
 	toolName := args[0]
 
-	// Two-phase scan: ScanOnly does a fast PATH walk against the
-	// catalog without spawning package-manager subprocesses, so we can
-	// validate the tool name and bail out early on typos. Only after
-	// the requested tool is found do we resolve its installed/latest
-	// versions via the single-tool RefreshTool path. The previous
-	// LoadAndResolveCached pre-resolved every tool in the catalog,
-	// which made `clim info <tool>` on a cold cache fan out to dozens
-	// of package-manager queries the user never asked for.
+	// Three phases:
+	//   1. LoadTools — catalog-only lookup, no PATH I/O at all. A typo
+	//      now exits without scanning the user's environment.
+	//   2. ScanOnly  — full PATH walk only after the name is valid;
+	//      we still need it to populate r.RelatedTools (which compares
+	//      every catalog tool's installed status by tag/category).
+	//   3. RefreshTool — single-tool PATH check + version resolution
+	//      for the requested tool only.
+	svc := svcFrom(cmd)
 	sp := progress.New("Resolving tool info...")
-	tools, _, err := svcFrom(cmd).ScanOnly(cmd.Context())
+	tools, _, err := svc.Catalog.LoadTools(cmd.Context())
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
 	}
-
-	toolMap := registry.ToolMap(tools)
-	t, ok := toolMap[toolName]
-	if !ok {
+	if _, ok := registry.ToolMap(tools)[toolName]; !ok {
 		// Mark the spinner failed before returning the typo error so
 		// users don't see a misleading "✓ Done" right above an
-		// "Error: tool ... not found" line. The scan itself succeeded
-		// — we just couldn't satisfy the user's lookup — so use Fail
-		// with a clear message rather than Done.
+		// "Error: tool ... not found" line.
 		sp.Fail(fmt.Sprintf("tool %q not found", toolName))
 		return notFoundError(toolName, closestToolName(tools, toolName))
 	}
 
+	// Name is valid — do the PATH scan. ScanOnly populates IsInstalled
+	// across the catalog so RelatedTools can filter to installed
+	// neighbors; we need this even for the single-tool detail page.
+	tools, _, err = svc.ScanOnly(cmd.Context())
+	if err != nil {
+		sp.Fail(err.Error())
+		return err
+	}
+	t := registry.ToolMap(tools)[toolName]
+
 	// Resolve only the requested tool's versions. RefreshTool runs an
-	// extra single-tool PATH check first (Finder.FindAll on a one-element
-	// slice) and only spawns package-manager queries when the tool turns
-	// out to be installed. The single-tool PATH check is fast, and most
-	// importantly we avoid the catalog-wide version-resolution fan-out
-	// that LoadAndResolveCached used to do on a cold cache.
-	resolved := svcFrom(cmd).RefreshTool(cmd.Context(), *t)
+	// extra single-tool Finder.FindAll first; if the tool turns out
+	// to be installed, it then spawns the package-manager queries
+	// for THIS tool only. The big perf win versus LoadAndResolveCached
+	// is skipping catalog-wide version resolution.
+	resolved := svc.RefreshTool(cmd.Context(), *t)
 	*t = resolved
 	sp.Done("Done")
 
@@ -183,9 +188,15 @@ func buildInfoReport(cmd *cobra.Command, t *registry.Tool, tools []registry.Tool
 
 	r.Packages = append(r.Packages, catalogPackagesFor(t.Packages)...)
 	if t.GitHubSlug != "" || t.GitHubInfo != nil {
-		gh := &infoGitHub{Slug: t.GitHubSlug, Topics: []string{}}
-		if t.GitHubSlug != "" {
-			gh.URL = "https://github.com/" + t.GitHubSlug
+		// Use the shared githubfmt.RepoURL helper so the slug is
+		// trimmed/normalized exactly the same way the TUI does it
+		// (extra-marketplace YAML can carry padded slugs that the
+		// runtime parser doesn't normalize). Slug stays as the raw
+		// value so consumers can see what the catalog actually wrote.
+		gh := &infoGitHub{
+			Slug:   t.GitHubSlug,
+			URL:    githubfmt.RepoURL(t.GitHubSlug),
+			Topics: []string{},
 		}
 		if t.GitHubInfo != nil {
 			gh.Stars = t.GitHubInfo.Stars
