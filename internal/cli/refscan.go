@@ -118,8 +118,14 @@ func CollectReferences(cmd *cobra.Command, toolName string) ([]Reference, []stri
 	var refs []Reference
 	var warnings []string
 
-	// 1) Local .clim.yaml in or above CWD.
-	cwd, _ := os.Getwd()
+	// 1) Local .clim.yaml in or above CWD. If we can't resolve the
+	// CWD (deleted/inaccessible directory, weird FS state) we skip
+	// the local-teamfile branch but record a warning so callers
+	// don't silently report fewer references than actually exist.
+	cwd, cwdErr := os.Getwd()
+	if cwdErr != nil {
+		warnings = append(warnings, fmt.Sprintf("could not determine working directory: %v (skipping local .clim.yaml lookup)", cwdErr))
+	}
 	var seenTeamPath string
 	if cwd != "" {
 		path := teamfile.Find(cwd)

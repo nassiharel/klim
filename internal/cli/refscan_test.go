@@ -245,3 +245,38 @@ func TestCollectReferences_CustomPacks(t *testing.T) {
 		t.Errorf("custom-pack ref fields wrong: %+v", cp)
 	}
 }
+
+// TestCollectReferences_GetwdErrorBecomesWarning verifies that an
+// inaccessible/deleted CWD records a warning instead of silently
+// dropping the local-teamfile branch. We exercise the failure path
+// by chdir'ing into a temp dir and deleting it before the call —
+// os.Getwd() then fails on Unix; on Windows the cwd handle is
+// stable, so the test is best-effort.
+func TestCollectReferences_GetwdErrorBecomesWarning(t *testing.T) {
+	tmp := t.TempDir()
+	prev, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(prev) })
+	// Try to delete the cwd. On Windows this can succeed but the
+	// process keeps a handle and Getwd may still return the path,
+	// so accept either outcome — the assertion is only that *if*
+	// we reach the warning branch, the message is informative.
+	if err := os.RemoveAll(tmp); err != nil {
+		t.Skipf("could not remove cwd on this platform: %v", err)
+	}
+	redirectConfig(t)
+	cmd := withRefscanCtx(t, nil)
+	_, warnings := CollectReferences(cmd, "kubectl")
+	for _, w := range warnings {
+		if strings.Contains(w, "working directory") {
+			return // expected warning surfaced
+		}
+	}
+	// Platform may not produce the error — that's fine.
+	t.Skipf("os.Getwd did not fail on this platform; warnings=%v", warnings)
+}

@@ -134,7 +134,15 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		sp.Fail(err.Error())
 		return err
 	}
-	t := registry.ToolMap(tools)[toolName]
+	// The catalog may have changed between LoadTools and ScanOnly
+	// (auto-refresh, extra-marketplace fetch, etc.). If the requested
+	// tool no longer appears, surface the same UsageError we'd return
+	// on the typo path rather than dereferencing a nil pointer.
+	t, ok := registry.ToolMap(tools)[toolName]
+	if !ok {
+		sp.Fail(fmt.Sprintf("tool %q not found", toolName))
+		return notFoundError(toolName, closestToolName(tools, toolName))
+	}
 
 	// Resolve only the requested tool's versions. RefreshTool runs an
 	// extra single-tool Finder.FindAll first; if the tool turns out
