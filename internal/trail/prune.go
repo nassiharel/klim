@@ -1,6 +1,7 @@
 package trail
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -85,10 +86,21 @@ func Prune(opts PruneOptions) (PruneResult, error) {
 
 	res.EntriesKept = len(kept)
 	res.EntriesRemoved = len(lf.Entries) - len(kept)
+	// Remember whether the log was successfully committed but HEAD
+	// failed to update, so we can still GC orphaned objects below.
+	// Treating *HeadWriteError as a hard failure would skip gcObjects
+	// even though the entry deletions are durable, leaving orphans on
+	// disk until the next prune.
+	var headErr error
 	if res.EntriesRemoved > 0 {
 		lf.Entries = kept
 		if err := saveLog(r, lf); err != nil {
-			return res, err
+			var hwe *HeadWriteError
+			if errors.As(err, &hwe) {
+				headErr = err
+			} else {
+				return res, err
+			}
 		}
 	}
 
@@ -98,6 +110,12 @@ func Prune(opts PruneOptions) (PruneResult, error) {
 	}
 	res.ObjectsKept = keptObjects
 	res.ObjectsRemoved = removedObjects
+	// Surface the HEAD write error after GC has done its work, so
+	// callers see both the partial success (entries + objects pruned)
+	// and the warning that HEAD is now stale.
+	if headErr != nil {
+		return res, headErr
+	}
 	return res, nil
 }
 

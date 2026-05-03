@@ -484,11 +484,19 @@ func runTrailPrune(_ *cobra.Command, _ []string) error {
 		opts.OlderThan = dur
 	}
 	res, err := trail.Prune(opts)
-	if err != nil {
+	// trail.Prune returns *HeadWriteError as a partial-success: log
+	// and objects are durable, only the informational HEAD pointer
+	// failed. Surface the result with a warning instead of reporting
+	// a hard failure that hides what actually got pruned.
+	var headErr *trail.HeadWriteError
+	if err != nil && !errors.As(err, &headErr) {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "✓ Pruned trail: %d entries kept (%d removed), %d objects kept (%d removed)\n",
 		res.EntriesKept, res.EntriesRemoved, res.ObjectsKept, res.ObjectsRemoved)
+	if headErr != nil {
+		fmt.Fprintf(os.Stderr, "  ⚠ HEAD pointer not updated (%v); the trail is still durable, the next capture will refresh it\n", err)
+	}
 	return nil
 }
 
