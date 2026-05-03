@@ -167,36 +167,6 @@ func (s *Server) downloadExport(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// pageConfig renders the read-only Config tab — the running clim
-// config as YAML. The TUI has a full editor today; we'll add an
-// editor in a follow-up. For now even read-only access is useful
-// because users can copy the YAML into ~/.config/clim/config.yaml as
-// a starting point.
-func (s *Server) pageConfig(w http.ResponseWriter, r *http.Request) {
-	view := buildConfigView(s)
-	s.renderPage(w, r, "config.html", pageData{
-		Title:     "Config",
-		ActiveTab: "config",
-		Data:      view,
-	})
-}
-
-type configView struct {
-	YAML  string
-	Error string
-}
-
-func buildConfigView(s *Server) configView {
-	if s.opts.Config == nil {
-		return configView{Error: "no config loaded"}
-	}
-	body, err := yaml.Marshal(s.opts.Config)
-	if err != nil {
-		return configView{Error: err.Error()}
-	}
-	return configView{YAML: string(body)}
-}
-
 // buildManifestTools maps a registry slice through manifest's
 // FromRegistryTool, dropping non-installed entries. Same rule
 // `clim export` uses — backups are about the user's actual current

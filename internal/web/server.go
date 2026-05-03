@@ -214,6 +214,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /backup/export.yaml", s.downloadExport)
 	s.mux.HandleFunc("GET /backup/saved/{name}", s.downloadSavedBackup)
 	s.mux.HandleFunc("GET /config", s.pageConfig)
+	s.mux.Handle("POST /config", csrfProtect(s, http.HandlerFunc(s.pageConfigSave)))
 
 	// JSON API.
 	s.mux.HandleFunc("GET /api/tools", s.apiTools)

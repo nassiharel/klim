@@ -727,5 +727,15 @@ func templateFuncs() template.FuncMap {
 			}
 			return pct
 		},
+		// first returns the first element of a string slice (or empty
+		// string when the slice is empty / nil). Useful for reading
+		// url.Values entries from the config form, which are always
+		// []string but always single-valued in our usage.
+		"first": func(xs []string) string {
+			if len(xs) == 0 {
+				return ""
+			}
+			return xs[0]
+		},
 	}
 }

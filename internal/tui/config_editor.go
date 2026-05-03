@@ -13,123 +13,35 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
-// configSettingType describes what kind of value a setting holds.
-type configSettingType int
+// configSetting and the SettingType constants are aliases for the
+// shared schema defined in internal/config. The TUI keeps its own
+// rendering helpers (currentValue, rawValue, settingLineOffset) but
+// the field definitions live in one place so the web UI stays in
+// sync.
+type configSetting = config.Setting
 
 const (
-	settingBool configSettingType = iota
-	settingString
-	settingInt
-	settingDuration
-	settingChoice
+	settingBool     = config.SettingBool
+	settingString   = config.SettingString
+	settingInt      = config.SettingInt
+	settingDuration = config.SettingDuration
+	settingChoice   = config.SettingChoice
 )
-
-// configSetting represents one editable config field.
-type configSetting struct {
-	section string // section header (Logging, Marketplace, etc.)
-	label   string // display name
-	key     string // unique key for identification
-	typ     configSettingType
-	choices []string // for settingChoice type
-
-	// Get/set through the config pointer.
-	getBool     func(*config.Config) bool
-	setBool     func(*config.Config, bool)
-	getString   func(*config.Config) string
-	setString   func(*config.Config, string)
-	getInt      func(*config.Config) int
-	setInt      func(*config.Config, int)
-	getDuration func(*config.Config) time.Duration
-	setDuration func(*config.Config, time.Duration)
-}
 
 // configSavedMsg is sent after config is saved to disk.
 type configSavedMsg struct {
 	err error
 }
 
-// allConfigSettings returns the list of editable settings.
+// allConfigSettings returns the list of editable settings (delegates
+// to the shared schema).
 func allConfigSettings() []configSetting {
-	return []configSetting{
-		// --- Logging ---
-		{section: "Logging", label: "Log Level", key: "log_level", typ: settingChoice,
-			choices:   []string{"debug", "info", "warn", "error"},
-			getString: func(c *config.Config) string { return c.Logging.Level },
-			setString: func(c *config.Config, v string) { c.Logging.Level = v },
-		},
-		{section: "", label: "Log to File", key: "log_file", typ: settingBool,
-			getBool: func(c *config.Config) bool { return c.Logging.File },
-			setBool: func(c *config.Config, v bool) { c.Logging.File = v },
-		},
-		{section: "", label: "Verbose Logging", key: "log_verbose", typ: settingBool,
-			getBool: func(c *config.Config) bool { return c.Logging.Verbose },
-			setBool: func(c *config.Config, v bool) { c.Logging.Verbose = v },
-		},
-		// --- Marketplace ---
-		{section: "Marketplace", label: "Catalog URL", key: "marketplace_url", typ: settingString,
-			getString: func(c *config.Config) string { return c.Marketplace.URL },
-			setString: func(c *config.Config, v string) { c.Marketplace.URL = v },
-		},
-		{section: "", label: "Auto Refresh", key: "auto_refresh", typ: settingBool,
-			getBool: func(c *config.Config) bool { return c.Marketplace.AutoRefresh },
-			setBool: func(c *config.Config, v bool) { c.Marketplace.AutoRefresh = v },
-		},
-		{section: "", label: "Refresh Interval", key: "refresh_interval", typ: settingDuration,
-			getDuration: func(c *config.Config) time.Duration { return c.Marketplace.RefreshInterval.Duration },
-			setDuration: func(c *config.Config, v time.Duration) { c.Marketplace.RefreshInterval = config.Duration{Duration: v} },
-		},
-		// --- Performance ---
-		{section: "Performance", label: "Concurrency", key: "concurrency", typ: settingInt,
-			getInt: func(c *config.Config) int { return c.Performance.Concurrency },
-			setInt: func(c *config.Config, v int) { c.Performance.Concurrency = v },
-		},
-		{section: "", label: "Command Timeout", key: "cmd_timeout", typ: settingDuration,
-			getDuration: func(c *config.Config) time.Duration { return c.Performance.CommandTimeout.Duration },
-			setDuration: func(c *config.Config, v time.Duration) { c.Performance.CommandTimeout = config.Duration{Duration: v} },
-		},
-		// --- UI ---
-		{section: "UI", label: "Default Tab", key: "default_tab", typ: settingChoice,
-			choices:   []string{"installed", "updates", "marketplace", "backup", "dashboard", "config"},
-			getString: func(c *config.Config) string { return c.UI.DefaultTab },
-			setString: func(c *config.Config, v string) { c.UI.DefaultTab = v },
-		},
-		{section: "", label: "Show Path", key: "show_path", typ: settingBool,
-			getBool: func(c *config.Config) bool { return c.UI.ShowPath },
-			setBool: func(c *config.Config, v bool) { c.UI.ShowPath = v },
-		},
-		{section: "", label: "Sidebar Right", key: "sidebar_right", typ: settingBool,
-			getBool: func(c *config.Config) bool { return c.UI.SidebarRight },
-			setBool: func(c *config.Config, v bool) { c.UI.SidebarRight = v },
-		},
-	}
+	return config.AllSettings()
 }
 
 // currentValue returns the display string for a setting.
-func (s configSetting) currentValue(cfg *config.Config) string {
-	switch s.typ {
-	case settingBool:
-		if s.getBool(cfg) {
-			return "true"
-		}
-		return "false"
-	case settingString:
-		v := s.getString(cfg)
-		if v == "" {
-			return "(default)"
-		}
-		return v
-	case settingInt:
-		v := s.getInt(cfg)
-		if v == 0 {
-			return "auto"
-		}
-		return strconv.Itoa(v)
-	case settingDuration:
-		return s.getDuration(cfg).String()
-	case settingChoice:
-		return s.getString(cfg)
-	}
-	return ""
+func currentValue(s configSetting, cfg *config.Config) string {
+	return s.Display(cfg)
 }
 
 // rawValue returns the underlying value for editing (not the display string).
@@ -141,8 +53,8 @@ func settingLineOffset(settings []configSetting, idx int) int {
 	line := 0
 	currentSection := ""
 	for i := 0; i <= idx && i < len(settings); i++ {
-		if settings[i].section != "" && settings[i].section != currentSection {
-			currentSection = settings[i].section
+		if settings[i].Section != "" && settings[i].Section != currentSection {
+			currentSection = settings[i].Section
 			line += 2 // blank line + section header
 		}
 		if i < idx {
@@ -150,23 +62,6 @@ func settingLineOffset(settings []configSetting, idx int) int {
 		}
 	}
 	return line
-}
-
-func (s configSetting) rawValue(cfg *config.Config) string {
-	switch s.typ {
-	case settingString:
-		return s.getString(cfg)
-	case settingInt:
-		v := s.getInt(cfg)
-		if v == 0 {
-			return ""
-		}
-		return strconv.Itoa(v)
-	case settingDuration:
-		return s.getDuration(cfg).String()
-	default:
-		return ""
-	}
 }
 
 func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -184,21 +79,21 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			val := strings.TrimSpace(m.configEditInput.Value())
 			if m.configCursor < len(settings) && m.cfg != nil {
 				s := settings[m.configCursor]
-				switch s.typ {
+				switch s.Type {
 				case settingString:
-					s.setString(m.cfg, val) // empty = default
+					s.SetString(m.cfg, val) // empty = default
 				case settingInt:
 					if val == "" {
-						s.setInt(m.cfg, 0) // 0 = auto
+						s.SetInt(m.cfg, 0) // 0 = auto
 					} else if v, err := strconv.Atoi(val); err == nil {
-						s.setInt(m.cfg, v)
+						s.SetInt(m.cfg, v)
 					} else {
 						m.statusMsg = "✗ Invalid number: " + val
 						return m, nil
 					}
 				case settingDuration:
 					if v, err := time.ParseDuration(val); err == nil {
-						s.setDuration(m.cfg, v)
+						s.SetDuration(m.cfg, v)
 					} else {
 						m.statusMsg = fmt.Sprintf("✗ Invalid duration: %s (use e.g. 30s, 24h)", val)
 						return m, nil
@@ -287,7 +182,7 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.configCursor > 0 {
 			m.configCursor--
 			// Skip section headers.
-			for m.configCursor > 0 && settings[m.configCursor].label == "" {
+			for m.configCursor > 0 && settings[m.configCursor].Label == "" {
 				m.configCursor--
 			}
 		} else if m.configScroll > 0 {
@@ -324,30 +219,30 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter", "space":
 		if m.configCursor < len(settings) && m.cfg != nil {
 			s := settings[m.configCursor]
-			switch s.typ {
+			switch s.Type {
 			case settingBool:
 				// Toggle.
-				s.setBool(m.cfg, !s.getBool(m.cfg))
+				s.SetBool(m.cfg, !s.GetBool(m.cfg))
 				m.statusMsg = "Modified (press S to save)"
 			case settingChoice:
 				// Cycle through choices. Fall back to first if current unknown.
-				current := s.getString(m.cfg)
+				current := s.GetString(m.cfg)
 				found := false
-				for i, c := range s.choices {
+				for i, c := range s.Choices {
 					if c == current {
-						s.setString(m.cfg, s.choices[(i+1)%len(s.choices)])
+						s.SetString(m.cfg, s.Choices[(i+1)%len(s.Choices)])
 						found = true
 						break
 					}
 				}
-				if !found && len(s.choices) > 0 {
-					s.setString(m.cfg, s.choices[0])
+				if !found && len(s.Choices) > 0 {
+					s.SetString(m.cfg, s.Choices[0])
 				}
 				m.statusMsg = "Modified (press S to save)"
 			case settingString, settingInt, settingDuration:
 				// Enter edit mode with raw value.
 				m.configEditing = true
-				m.configEditInput.SetValue(s.rawValue(m.cfg))
+				m.configEditInput.SetValue(s.Raw(m.cfg))
 				m.configEditInput.SetWidth(40)
 				return m, m.configEditInput.Focus()
 			}
@@ -423,8 +318,8 @@ func (m Model) renderConfigEditor() string {
 	currentSection := ""
 	for i, s := range settings {
 		// Section header.
-		if s.section != "" && s.section != currentSection {
-			currentSection = s.section
+		if s.Section != "" && s.Section != currentSection {
+			currentSection = s.Section
 			b.WriteString("\n  " + dashSection.Render(currentSection) + "\n")
 		}
 
@@ -433,14 +328,14 @@ func (m Model) renderConfigEditor() string {
 			cursor = "▸ "
 		}
 
-		label := dashLabel.Render(fixedWidth(s.label, 20))
+		label := dashLabel.Render(fixedWidth(s.Label, 20))
 		var value string
 
 		if m.cfg != nil {
-			val := s.currentValue(m.cfg)
-			switch s.typ {
+			val := s.Display(m.cfg)
+			switch s.Type {
 			case settingBool:
-				if s.getBool(m.cfg) {
+				if s.GetBool(m.cfg) {
 					value = upToDateStyle.Render("● true")
 				} else {
 					value = dimVersion.Render("○ false")

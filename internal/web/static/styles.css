@@ -388,3 +388,61 @@ table.kv td {
   font-weight: 600;
   margin-left: 0.3em;
 }
+
+/* --- Config form --- */
+.config-form { margin: 0; }
+.config-section {
+  font-size: 1rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 1.5rem 0 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+.config-row {
+  display: grid;
+  grid-template-columns: minmax(14em, 22em) 1fr;
+  gap: 1.25rem;
+  align-items: start;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.config-row:last-of-type { border-bottom: none; }
+.config-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: var(--text);
+  font-weight: 500;
+}
+.config-label small { font-weight: 400; }
+.config-input input[type="text"],
+.config-input input[type="number"],
+.config-input select {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  min-width: 18em;
+}
+.config-input input[type="number"] { min-width: 8em; }
+.config-input input[type="checkbox"] {
+  width: 1.2em;
+  height: 1.2em;
+  accent-color: var(--accent);
+}
+
+.flash {
+  border-left: 4px solid var(--accent);
+  margin-bottom: 1rem;
+}
+.flash-ok { border-color: var(--accent); }
+.flash-err { border-color: #d83a3a; }
+.flash-err pre {
+  white-space: pre-wrap;
+  margin: 0;
+  color: var(--text);
+}
