@@ -36,7 +36,8 @@ Examples:
 }
 
 func init() {
-	infoCmd.Flags().BoolVar(&infoRefresh, "refresh", false, "Force fresh scan (ignore cache)")
+	infoCmd.Flags().BoolVar(&infoRefresh, "refresh", false, "Deprecated no-op: clim info now always does a fresh scan for the requested tool")
+	_ = infoCmd.Flags().MarkHidden("refresh")
 	infoOutputFmt = addOutputFlag(infoCmd, OutputText, OutputJSON)
 	// Registered in root.go with command group.
 }
@@ -94,19 +95,34 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	}
 	toolName := args[0]
 
+	// Two-phase scan: ScanOnly does a fast PATH walk against the
+	// catalog without spawning package-manager subprocesses, so we can
+	// validate the tool name and bail out early on typos. Only after
+	// the requested tool is found do we resolve its installed/latest
+	// versions via the single-tool RefreshTool path. The previous
+	// LoadAndResolveCached pre-resolved every tool in the catalog,
+	// which made `clim info <tool>` on a cold cache fan out to dozens
+	// of package-manager queries the user never asked for.
 	sp := progress.New("Resolving tool info...")
-	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), infoRefresh)
+	tools, _, err := svcFrom(cmd).ScanOnly(cmd.Context())
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
 	}
-	sp.Done("Done")
 
 	toolMap := registry.ToolMap(tools)
 	t, ok := toolMap[toolName]
 	if !ok {
+		sp.Done("Done")
 		return notFoundError(toolName, closestToolName(tools, toolName))
 	}
+
+	// Resolve only the requested tool's versions. RefreshTool is a
+	// no-op for tools that aren't installed, so this is fast even for
+	// catalog-only entries the user is investigating.
+	resolved := svcFrom(cmd).RefreshTool(cmd.Context(), *t)
+	*t = resolved
+	sp.Done("Done")
 
 	report := buildInfoReport(cmd, t, tools)
 
@@ -389,7 +405,9 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 
 // formatInfoRef renders a Reference as a single human-readable line for
 // the text output of `clim info`. Both required and optional refs may
-// carry a version constraint — neither role drops it.
+// carry a version constraint — neither role drops it. Delegates the
+// role/constraint string to roleWithConstraint (shared with
+// formatWhyRef) so the two renderers can't drift again.
 func formatInfoRef(ref infoReference) string {
 	switch ref.Kind {
 	case "teamfile":
@@ -397,19 +415,13 @@ func formatInfoRef(ref infoReference) string {
 		if ref.Required {
 			role = "required"
 		}
-		if ref.Constraint != "" {
-			role += " " + ref.Constraint
-		}
-		return fmt.Sprintf(".clim.yaml (%s) — %s", role, ref.Path)
+		return fmt.Sprintf(".clim.yaml (%s) — %s", roleWithConstraint(role, ref.Constraint), ref.Path)
 	case "project":
 		role := "optional"
 		if ref.Required {
 			role = "required"
 		}
-		if ref.Constraint != "" {
-			role += " " + ref.Constraint
-		}
-		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, role, ref.Path)
+		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, roleWithConstraint(role, ref.Constraint), ref.Path)
 	case "pack":
 		if ref.DisplayName != "" {
 			return fmt.Sprintf("Pack %q (%s)", ref.DisplayName, ref.Name)
@@ -424,9 +436,9 @@ func formatInfoRef(ref infoReference) string {
 	return ref.Kind + " " + ref.Name
 }
 
-// formatStarCount and formatGitHubDate moved to internal/githubfmt so the
-// TUI detail view and `clim info` share one implementation. Tests for
-// the contract live in `internal/githubfmt/githubfmt_test.go`.
+// Star-count and date formatting live in internal/githubfmt so the TUI
+// detail view and `clim info` share one implementation. Tests for the
+// contract live in internal/githubfmt/githubfmt_test.go.
 
 // wordWrapStr wraps s into lines no wider than width characters. Pure-byte
 // width is fine for descriptions in the catalog (ASCII-dominant).

@@ -10,8 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nassiharel/clim/internal/custompacks"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/clim/internal/teamfile"
 )
 
 // stubCatalog is a minimal ToolCatalog that returns whatever tools were
@@ -163,5 +165,83 @@ func TestCollectReferences_PackMatch(t *testing.T) {
 	}
 	if pack.Name != "k8s-starter" || pack.DisplayName != "Kubernetes Starter" {
 		t.Errorf("wrong pack ref: %+v", pack)
+	}
+}
+
+// TestCollectReferences_RegisteredProjects covers the projects.yaml
+// branch: a registered project pin should be returned as Kind:"project"
+// with its constraint preserved.
+func TestCollectReferences_RegisteredProjects(t *testing.T) {
+	chdirTemp(t)
+	cfg := redirectConfig(t)
+
+	// Create a fake project on disk + a .clim.yaml inside it.
+	projDir := filepath.Join(cfg, "fake-project")
+	if err := os.MkdirAll(projDir, 0o755); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	tf := []byte("tools:\n  - name: kubectl\n    version: \">=1.28\"\n")
+	if err := os.WriteFile(filepath.Join(projDir, ".clim.yaml"), tf, 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+
+	// Register it via the public SaveProjects API.
+	if err := teamfile.SaveProjects([]teamfile.ProjectEntry{
+		{Name: "myapp", Path: projDir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := withRefscanCtx(t, nil)
+	refs, warnings := CollectReferences(cmd, "kubectl")
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", warnings)
+	}
+	var proj *Reference
+	for i := range refs {
+		if refs[i].Kind == "project" {
+			proj = &refs[i]
+			break
+		}
+	}
+	if proj == nil {
+		t.Fatalf("expected a project reference, got %+v", refs)
+	}
+	if proj.Name != "myapp" || !proj.Required || proj.Constraint != ">=1.28" {
+		t.Errorf("project ref fields wrong: %+v", proj)
+	}
+}
+
+// TestCollectReferences_CustomPacks covers the custom-packs branch:
+// a tool listed in a user-created pack should surface as
+// Kind:"custom_pack" with its display name preserved.
+func TestCollectReferences_CustomPacks(t *testing.T) {
+	chdirTemp(t)
+	redirectConfig(t)
+
+	// Create a custom-packs file pointing at the tool we'll query.
+	if err := custompacks.Save([]registry.Pack{
+		{Name: "my-stack", DisplayName: "My Stack", ToolNames: []string{"kubectl", "helm"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := withRefscanCtx(t, nil)
+	refs, warnings := CollectReferences(cmd, "kubectl")
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", warnings)
+	}
+	var cp *Reference
+	for i := range refs {
+		if refs[i].Kind == "custom_pack" {
+			cp = &refs[i]
+			break
+		}
+	}
+	if cp == nil {
+		t.Fatalf("expected a custom_pack reference, got %+v", refs)
+	}
+	if cp.Name != "my-stack" || cp.DisplayName != "My Stack" {
+		t.Errorf("custom-pack ref fields wrong: %+v", cp)
 	}
 }
