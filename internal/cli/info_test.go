@@ -2,38 +2,8 @@ package cli
 
 import "testing"
 
-func TestFormatStarCount(t *testing.T) {
-	cases := []struct {
-		in   int
-		want string
-	}{
-		// Under 1k unchanged.
-		{0, "0"},
-		{42, "42"},
-		{999, "999"},
-		// 1k–99.9k uses one decimal.
-		{1000, "1.0k"},
-		{1234, "1.2k"},
-		{12345, "12.3k"},
-		// 100k–999k uses integer k.
-		{100000, "100k"},
-		{500000, "500k"},
-		{999999, "999k"},
-		// 1M–9.9M uses one decimal.
-		{1000000, "1.0M"},
-		{1500000, "1.5M"},
-		{9999999, "10.0M"},
-		// 10M+ uses integer M (matches TUI's formatStars contract).
-		{10000000, "10M"},
-		{109000000, "109M"},
-	}
-	for _, c := range cases {
-		got := formatStarCount(c.in)
-		if got != c.want {
-			t.Errorf("formatStarCount(%d) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}
+// Star-count formatting tests live in internal/githubfmt; the CLI uses
+// that package directly so the contract is exercised there.
 
 func TestFormatInfoRef_PreservesConstraint(t *testing.T) {
 	// Optional teamfile pin must show its version constraint.

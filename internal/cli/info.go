@@ -3,13 +3,12 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"text/tabwriter"
-	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/nassiharel/clim/internal/githubfmt"
 	"github.com/nassiharel/clim/internal/progress"
 	"github.com/nassiharel/clim/internal/registry"
 )
@@ -265,7 +264,12 @@ func minInt(a, b int) int {
 // Warnings (if any) lead so the user can't miss them; the rest is
 // structured to match the TUI detail page.
 func renderInfoText(r infoReport, t *registry.Tool) {
-	w := os.Stdout
+	// Per docs/cli-conventions.md, human-readable prose belongs on
+	// stderr so that stdout stays free for pipe-friendly machine output
+	// (e.g. `clim info foo --output json | jq`). `clim info` is the
+	// only command in the codebase that previously wrote rendered text
+	// to stdout — this aligns it with `clim list`, `clim why`, etc.
+	w := os.Stderr
 
 	// Header line.
 	header := r.DisplayName
@@ -276,7 +280,7 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 		header += "  (" + r.Category + ")"
 	}
 	if r.GitHub != nil && r.GitHub.Stars > 0 {
-		header += "  ★ " + formatStarCount(r.GitHub.Stars)
+		header += "  ★ " + githubfmt.FormatStars(r.GitHub.Stars)
 	}
 	if r.UpdateAvailable {
 		header += "  ⬆ Update available"
@@ -336,10 +340,10 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 		}
 		stats := []string{}
 		if r.GitHub.Stars > 0 {
-			stats = append(stats, "★ "+formatStarCount(r.GitHub.Stars)+" stars")
+			stats = append(stats, "★ "+githubfmt.FormatStars(r.GitHub.Stars)+" stars")
 		}
 		if r.GitHub.Forks > 0 {
-			stats = append(stats, "⑂ "+formatStarCount(r.GitHub.Forks)+" forks")
+			stats = append(stats, "⑂ "+githubfmt.FormatStars(r.GitHub.Forks)+" forks")
 		}
 		if len(stats) > 0 {
 			_, _ = fmt.Fprintf(w, "    Stats:     %s\n", strings.Join(stats, "   "))
@@ -354,7 +358,7 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 			_, _ = fmt.Fprintf(w, "    Topics:    %s\n", strings.Join(r.GitHub.Topics, ", "))
 		}
 		if r.GitHub.LastPush != "" {
-			if d := formatGitHubDate(r.GitHub.LastPush); d != "" {
+			if d := githubfmt.FormatDate(r.GitHub.LastPush); d != "" {
 				_, _ = fmt.Fprintf(w, "    Last push: %s\n", d)
 			}
 		}
@@ -423,55 +427,9 @@ func formatInfoRef(ref infoReference) string {
 	return ref.Kind + " " + ref.Name
 }
 
-// formatStarCount renders star counts in human-friendly form:
-//
-//	0–999       => "42"
-//	1k–99.9k    => "12.3k"
-//	100k–999k   => "234k"
-//	1M+         => "1.2M" / "12M" / "123M"
-//
-// Matches the TUI's `formatStars` helper so `clim info` output stays in
-// sync with the detail page.
-func formatStarCount(n int) string {
-	switch {
-	case n >= 1000000:
-		if n >= 10000000 {
-			return strconv.Itoa(n/1000000) + "M"
-		}
-		return fmt.Sprintf("%.1fM", float64(n)/1000000)
-	case n >= 100000:
-		return strconv.Itoa(n/1000) + "k"
-	case n >= 1000:
-		return fmt.Sprintf("%.1fk", float64(n)/1000)
-	default:
-		return strconv.Itoa(n)
-	}
-}
-
-// formatGitHubDate renders an RFC3339 timestamp as a human-friendly delta
-// (e.g. "3 days ago"), falling back to the raw date if parsing fails.
-func formatGitHubDate(s string) string {
-	if s == "" {
-		return ""
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return s
-	}
-	d := time.Since(t)
-	switch {
-	case d < 24*time.Hour:
-		return "today"
-	case d < 7*24*time.Hour:
-		return fmt.Sprintf("%d day(s) ago", int(d.Hours()/24))
-	case d < 30*24*time.Hour:
-		return fmt.Sprintf("%d week(s) ago", int(d.Hours()/(24*7)))
-	case d < 365*24*time.Hour:
-		return fmt.Sprintf("%d month(s) ago", int(d.Hours()/(24*30)))
-	default:
-		return fmt.Sprintf("%d year(s) ago", int(d.Hours()/(24*365)))
-	}
-}
+// formatStarCount and formatGitHubDate moved to internal/githubfmt so the
+// TUI detail view and `clim info` share one implementation. Tests for
+// the contract live in `internal/githubfmt/githubfmt_test.go`.
 
 // wordWrapStr wraps s into lines no wider than width characters. Pure-byte
 // width is fine for descriptions in the catalog (ASCII-dominant).
