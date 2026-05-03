@@ -1,6 +1,7 @@
 package trail
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1188,6 +1189,80 @@ func TestLoadLog_RejectsMissingRequiredEntryFields(t *testing.T) {
 			}
 			if _, err := Log(LogOptions{}); err == nil {
 				t.Fatal("expected error for missing required entry field")
+			} else if !strings.Contains(err.Error(), tc.wantMessage) {
+				t.Fatalf("got: %v", err)
+			}
+		})
+	}
+}
+
+// TestLoadLog_RejectsMissingEntriesKey ensures a hand-edited log with
+// only schema_version (no top-level entries key) is rejected as
+// corruption rather than silently accepted as an empty trail. Hiding
+// existing history is worse than failing closed.
+func TestLoadLog_RejectsMissingEntriesKey(t *testing.T) {
+	dir := useTempDir(t)
+	if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "log.yaml")
+	tampered := fmt.Sprintf("schema_version: %d\n", SchemaVersion)
+	if err := os.WriteFile(logPath, []byte(tampered), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	if _, err := Log(LogOptions{}); err == nil {
+		t.Fatal("expected error for missing entries key")
+	} else if !strings.Contains(err.Error(), "missing entries") {
+		t.Fatalf("got: %v", err)
+	}
+}
+
+// TestDecodeSnapshot_RejectsMissingRequiredFields verifies that an
+// object file missing os/arch/tools is rejected. Hand-editing a
+// snapshot body to drop any of these would otherwise make show/diff
+// silently report a misleading empty environment.
+func TestDecodeSnapshot_RejectsMissingRequiredFields(t *testing.T) {
+	cases := []struct {
+		field       string
+		wantMessage string
+	}{
+		{field: "os", wantMessage: "missing os"},
+		{field: "arch", wantMessage: "missing arch"},
+		{field: "tools", wantMessage: "missing tools"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.field, func(t *testing.T) {
+			dir := useTempDir(t)
+			e, err := Capture(OpCapture, "", orderedTools())
+			if err != nil {
+				t.Fatal(err)
+			}
+			objPath := filepath.Join(dir, "objects", string(e.Object[:2]), string(e.Object[2:])+".yaml")
+			body, err := os.ReadFile(objPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var snapNode yaml.Node
+			if err := yaml.Unmarshal(body, &snapNode); err != nil {
+				t.Fatal(err)
+			}
+			root := snapNode.Content[0]
+			for i := 0; i < len(root.Content); i += 2 {
+				if root.Content[i].Value == tc.field {
+					root.Content = append(root.Content[:i], root.Content[i+2:]...)
+					break
+				}
+			}
+			tampered, err := yaml.Marshal(&snapNode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Re-write the object file. The hash mismatch is intentional
+			// here — we want to verify decodeSnapshot's required-field
+			// check fires, but readObject's hash check would fire first.
+			// Bypass it by calling decodeSnapshot directly.
+			if _, err := decodeSnapshot(tampered, e.Object); err == nil {
+				t.Fatal("expected error for missing required snapshot field")
 			} else if !strings.Contains(err.Error(), tc.wantMessage) {
 				t.Fatalf("got: %v", err)
 			}

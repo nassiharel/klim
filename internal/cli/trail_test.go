@@ -80,6 +80,12 @@ func TestTrailRefError_MalformedRefsAreUsageErrors(t *testing.T) {
 	cases := []error{
 		errors.New(`trail: invalid HEAD~ ref "HEAD~bogus"`),
 		errors.New(`trail: invalid @<index> ref "@-1"`),
+		errors.New(`trail: empty ref`),
+		errors.New(`trail: HEAD~999 is out of range (3 entries total)`),
+		errors.New(`trail: no entry with index 999`),
+		errors.New(`trail: ref "abc" not found`),
+		errors.New(`trail: ref "ab" is ambiguous (matches 2 distinct objects: ab1, ab2)`),
+		errors.New(`trail: label "v1.0" is ambiguous (matches 2 entries)`),
 	}
 	for _, err := range cases {
 		got := trailRefError(err)

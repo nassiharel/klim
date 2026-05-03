@@ -416,7 +416,16 @@ func runTrailShow(cmd *cobra.Command, args []string) error {
 		return printJSON(trailShowOutputJSON{Entry: *entry, Snapshot: snap})
 	}
 
-	fmt.Fprintf(os.Stderr, "Entry %s  (index %d)\n", entry.Object.Short(), entry.Index)
+	// Widen the header ref to the shortest unambiguous prefix across
+	// the current trail so the value the user reads here can be
+	// re-used with trail show / diff. Falling back to Short() on
+	// log-load failure keeps the output usable on a degraded store.
+	headerRef := entry.Object.Short()
+	if entries, lerr := trail.Log(trail.LogOptions{}); lerr == nil {
+		refLen := refPrefixLenForObject(entry.Object, entries)
+		headerRef = string(entry.Object[:refLen])
+	}
+	fmt.Fprintf(os.Stderr, "Entry %s  (index %d)\n", headerRef, entry.Index)
 	fmt.Fprintf(os.Stderr, "  Time:    %s\n", entry.Time.Local().Format(time.RFC3339))
 	fmt.Fprintf(os.Stderr, "  Op:      %s\n", entry.Operation)
 	if entry.Label != "" {
@@ -582,9 +591,17 @@ func trailRefError(err error) error {
 		return nil
 	}
 	msg := err.Error()
-	if strings.HasPrefix(msg, "trail: invalid HEAD~ ref ") ||
-		strings.HasPrefix(msg, "trail: invalid @<index> ref ") ||
-		strings.HasPrefix(msg, "trail: empty ref") {
+	// Anything stemming from user-supplied ref input (malformed syntax,
+	// out-of-range indices, unknown labels, ambiguous prefixes) is a
+	// usage error per docs/cli-conventions.md.
+	switch {
+	case strings.HasPrefix(msg, "trail: invalid HEAD~ ref "),
+		strings.HasPrefix(msg, "trail: invalid @<index> ref "),
+		strings.HasPrefix(msg, "trail: empty ref"),
+		strings.HasPrefix(msg, "trail: HEAD~"),
+		strings.HasPrefix(msg, "trail: no entry with index "),
+		strings.Contains(msg, "is ambiguous"),
+		strings.HasSuffix(msg, "not found"):
 		return &UsageError{Err: err}
 	}
 	return err

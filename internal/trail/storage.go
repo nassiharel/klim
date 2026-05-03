@@ -174,7 +174,40 @@ func decodeSnapshot(data []byte, id ObjectID) (*Snapshot, error) {
 		return nil, fmt.Errorf("trail object %s has unsupported schema version %d (this clim supports %d) — upgrade clim",
 			id.Short(), s.SchemaVersion, SchemaVersion)
 	}
+	// Required-field presence check at the YAML node level: zero-valued
+	// os/arch/tools could be legitimate (unlikely but theoretically
+	// possible empty toolchains), so we distinguish "field absent" from
+	// "field present and empty". A missing key always indicates a
+	// hand-edited object.
+	if err := validateSnapshotRequiredFields(data, id); err != nil {
+		return nil, err
+	}
 	return &s, nil
+}
+
+// validateSnapshotRequiredFields confirms every required top-level
+// snapshot key is present in the YAML. The struct decode path can't
+// distinguish "field absent" from "field present and empty", so we
+// inspect the raw nodes.
+func validateSnapshotRequiredFields(data []byte, id ObjectID) error {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return fmt.Errorf("parsing trail object %s: %w", id.Short(), err)
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("trail object %s is not a YAML mapping (corrupted or hand-edited?)", id.Short())
+	}
+	root := doc.Content[0]
+	present := make(map[string]struct{}, len(root.Content)/2)
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		present[root.Content[i].Value] = struct{}{}
+	}
+	for _, field := range []string{"os", "arch", "tools"} {
+		if _, ok := present[field]; !ok {
+			return fmt.Errorf("trail object %s is missing %s (corrupted or hand-edited?)", id.Short(), field)
+		}
+	}
+	return nil
 }
 
 // logFile is the on-disk shape of log.yaml.
@@ -302,29 +335,38 @@ func validateLogEntryRequiredFields(data []byte, path string) error {
 		return fmt.Errorf("parsing trail log %s: %w", path, err)
 	}
 	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
-		return nil
+		return fmt.Errorf("trail log %s is not a YAML mapping (corrupted or hand-edited?)", path)
 	}
 	root := doc.Content[0]
+	var entries *yaml.Node
 	for i := 0; i < len(root.Content)-1; i += 2 {
-		if root.Content[i].Value != "entries" {
+		if root.Content[i].Value == "entries" {
+			entries = root.Content[i+1]
+			break
+		}
+	}
+	// saveLog never omits entries (the field is not omitempty), so a
+	// log without the key was hand-edited and would otherwise silently
+	// hide existing history as an empty trail.
+	if entries == nil {
+		return fmt.Errorf("trail log %s is missing entries (corrupted or hand-edited?)", path)
+	}
+	if entries.Kind != yaml.SequenceNode {
+		// `entries: null` decodes as a scalar; legitimate empty lists
+		// serialize as `entries: []` (SequenceNode of length 0).
+		return fmt.Errorf("trail log %s entries is not a YAML sequence (corrupted or hand-edited?)", path)
+	}
+	for idx, entry := range entries.Content {
+		if entry.Kind != yaml.MappingNode {
 			continue
 		}
-		entries := root.Content[i+1]
-		if entries.Kind != yaml.SequenceNode {
-			return nil
+		fields := make(map[string]struct{}, len(entry.Content)/2)
+		for j := 0; j < len(entry.Content)-1; j += 2 {
+			fields[entry.Content[j].Value] = struct{}{}
 		}
-		for idx, entry := range entries.Content {
-			if entry.Kind != yaml.MappingNode {
-				continue
-			}
-			fields := make(map[string]struct{}, len(entry.Content)/2)
-			for j := 0; j < len(entry.Content)-1; j += 2 {
-				fields[entry.Content[j].Value] = struct{}{}
-			}
-			for _, field := range []string{"index", "object", "time", "op"} {
-				if _, ok := fields[field]; !ok {
-					return fmt.Errorf("trail log entry #%d is missing %s (corrupted or hand-edited?)", idx, field)
-				}
+		for _, field := range []string{"index", "object", "time", "op"} {
+			if _, ok := fields[field]; !ok {
+				return fmt.Errorf("trail log entry #%d is missing %s (corrupted or hand-edited?)", idx, field)
 			}
 		}
 	}
