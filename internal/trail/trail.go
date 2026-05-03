@@ -71,12 +71,13 @@ func (o ObjectID) IsValid() bool {
 // tools (by Name + Version + Source) hash to the same ObjectID, which
 // is why Tools must be sorted before marshalling.
 //
-// Note: Tool.Path is intentionally NOT part of the canonical content —
-// paths are machine-specific (e.g. `C:\Users\alice\...`), so including
-// them would prevent dedupe across machines and break future cross-host
-// scenarios (clim sync). Path lives on the Tool struct because it's
-// useful in `show` output for forensic / revert work, but it is hashed
-// only via the per-instance fields below.
+// Note: per-binary paths are NOT recorded in the trail at all. Paths
+// are machine-specific (e.g. `C:\Users\alice\...`), so storing them
+// would either prevent cross-machine dedupe or — worse — let stale
+// paths from the first capture survive deduped re-captures and
+// mislead `clim trail show`. Per-binary paths still live in the
+// regular catalog/scan output (`clim list`, `clim info`); the trail
+// captures only the env-defining content.
 type Snapshot struct {
 	SchemaVersion int    `yaml:"schema_version" json:"schema_version"`
 	OS            string `yaml:"os"             json:"os"`
@@ -84,14 +85,14 @@ type Snapshot struct {
 	Tools         []Tool `yaml:"tools"          json:"tools"`
 }
 
-// Tool is the trail-internal projection of a registry.Tool. Name +
-// Version + Source define content (and participate in hashing); Path is
-// metadata for inspection and is excluded from canonical hashing.
+// Tool is the trail-internal projection of a registry.Tool. Only the
+// content-defining fields (Name + Version + Source) are kept so the
+// stored body matches the canonical hash and remains correct under
+// dedupe and cross-machine sharing.
 type Tool struct {
 	Name    string `yaml:"name"              json:"name"`
 	Version string `yaml:"version,omitempty" json:"version,omitempty"`
 	Source  string `yaml:"source,omitempty"  json:"source,omitempty"`
-	Path    string `yaml:"path,omitempty"    json:"path,omitempty"`
 }
 
 // Operation kinds for entries.
@@ -134,7 +135,6 @@ func canonicalSnapshot(osName, arch string, tools []registry.Tool) Snapshot {
 		if primary != nil {
 			st.Version = primary.Version
 			st.Source = string(primary.Source)
-			st.Path = primary.Path
 		}
 		out.Tools = append(out.Tools, st)
 	}
@@ -157,37 +157,16 @@ func marshalSnapshot(s Snapshot) ([]byte, error) {
 	return data, nil
 }
 
-// hashSnapshot returns the ObjectID for a canonical Snapshot. Identical
-// environments produce identical hashes regardless of capture time AND
-// regardless of per-machine binary paths (Path is excluded from hashing
-// even though it's stored in the Snapshot body for inspection).
+// hashSnapshot returns the ObjectID for a canonical Snapshot. The body
+// bytes are exactly what's stored on disk under objects/<aa>/<bb...>.yaml,
+// so reading an object back and re-hashing the bytes yields the same
+// ObjectID — which is what `decodeSnapshot` relies on to verify
+// content-addressed integrity.
 func hashSnapshot(s Snapshot) (ObjectID, []byte, error) {
 	body, err := marshalSnapshot(s)
 	if err != nil {
 		return "", nil, err
 	}
-	hashed := stripPathsForHash(s)
-	hashedBody, err := marshalSnapshot(hashed)
-	if err != nil {
-		return "", nil, err
-	}
-	sum := sha256.Sum256(hashedBody)
+	sum := sha256.Sum256(body)
 	return ObjectID(hex.EncodeToString(sum[:])), body, nil
-}
-
-// stripPathsForHash returns a copy of s with Tool.Path zeroed so that
-// content hashing is path-independent. The returned value is only used
-// for hashing; storage retains the original (path-bearing) Snapshot.
-func stripPathsForHash(s Snapshot) Snapshot {
-	tools := make([]Tool, len(s.Tools))
-	for i, t := range s.Tools {
-		t.Path = ""
-		tools[i] = t
-	}
-	return Snapshot{
-		SchemaVersion: s.SchemaVersion,
-		OS:            s.OS,
-		Arch:          s.Arch,
-		Tools:         tools,
-	}
 }

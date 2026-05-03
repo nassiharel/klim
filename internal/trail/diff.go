@@ -29,17 +29,43 @@ type SourceChange struct {
 
 // Diff returns the change set going from snapshot a to snapshot b.
 // Snapshots are looked up by refSpec — see Resolve for accepted forms.
+//
+// Both lookups are performed under a single trail lock so the result is
+// consistent under concurrent writes (a concurrent prune that drops the
+// older object after we've resolved a but before we've resolved b would
+// otherwise corrupt the diff).
 func Diff(a, b string) (*DiffResult, error) {
-	snapA, _, err := Show(a)
+	r, err := resolveRoots()
 	if err != nil {
 		return nil, err
 	}
-	snapB, _, err := Show(b)
+	release, err := acquireLock(r.lock)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	snapA, err := resolveAndLoad(r, a)
+	if err != nil {
+		return nil, err
+	}
+	snapB, err := resolveAndLoad(r, b)
 	if err != nil {
 		return nil, err
 	}
 	out := diffSnapshots(snapA, snapB)
 	return &out, nil
+}
+
+// resolveAndLoad combines Resolve+readObject under an existing lock.
+// Both helpers re-read log.yaml/HEAD on each call, but the trail lock
+// is held by the caller for the duration of the operation.
+func resolveAndLoad(r fsRoots, refSpec string) (*Snapshot, error) {
+	entry, err := Resolve(refSpec)
+	if err != nil {
+		return nil, err
+	}
+	return readObject(r, entry.Object)
 }
 
 // diffSnapshots is the pure diff helper used by both Diff and capture

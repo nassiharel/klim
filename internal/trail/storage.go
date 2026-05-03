@@ -1,6 +1,8 @@
 package trail
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -79,13 +81,22 @@ func writeObject(r fsRoots, id ObjectID, body []byte) error {
 	return fileutil.AtomicWrite(path, body, 0o644)
 }
 
-// readObject loads the snapshot at id from disk. Returns os.ErrNotExist
-// (wrapped) when the object is missing.
+// readObject loads the snapshot at id from disk and verifies its integrity.
+// The stored bytes are re-hashed and compared against id; a mismatch means
+// the object file was corrupted or hand-edited and is rejected with a
+// pointer to the offending file. This is what makes the store actually
+// content-addressed (vs. just content-hashed-on-write).
 func readObject(r fsRoots, id ObjectID) (*Snapshot, error) {
 	path := r.objectPath(id)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading trail object %s: %w", id.Short(), err)
+	}
+	sum := sha256.Sum256(data)
+	got := ObjectID(hex.EncodeToString(sum[:]))
+	if got != id {
+		return nil, fmt.Errorf("trail object %s failed integrity check: stored bytes hash to %s (corrupted or hand-edited %s)",
+			id.Short(), got.Short(), path)
 	}
 	return decodeSnapshot(data, id)
 }
@@ -165,16 +176,35 @@ func saveLog(r fsRoots, lf *logFile) error {
 	return nil
 }
 
+// validOps is the closed set of operation kinds permitted in Entry.op.
+// Capture rejects anything else so a typo or arbitrary string can't
+// become permanent history data — the on-disk format keeps a small,
+// well-defined operation vocabulary.
+var validOps = map[string]struct{}{
+	OpCapture: {},
+	OpImport:  {},
+	OpInstall: {},
+	OpUpgrade: {},
+	OpRemove:  {},
+}
+
 // Capture writes a new Entry pointing at the canonical Snapshot of tools.
 // Two captures of an identical environment store one object and two entries.
 //
 // op identifies how the change was triggered (capture / import / install /
-// upgrade / remove). label is an optional user-provided tag — capture
-// fails if the label is already used by another entry, so labels stay
-// unique and `Resolve(<label>)` always points at one entry.
+// upgrade / remove) and must be one of the constants in this package;
+// arbitrary strings are rejected as a UsageError-equivalent.
+//
+// label is an optional user-provided tag — capture fails if the label
+// is already used by another entry, so labels stay unique and
+// `Resolve(<label>)` always points at one entry.
 func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 	if op == "" {
 		op = OpCapture
+	}
+	if _, ok := validOps[op]; !ok {
+		known := []string{OpCapture, OpImport, OpInstall, OpUpgrade, OpRemove}
+		return nil, fmt.Errorf("trail: invalid op %q (valid: %s)", op, strings.Join(known, ", "))
 	}
 	label = strings.TrimSpace(label)
 	r, err := resolveRoots()
@@ -191,18 +221,16 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 		return nil, err
 	}
 
-	// Acquire the lock BEFORE writing the object, so a concurrent prune
+	// Acquire the lock BEFORE any disk mutation, so a concurrent prune
 	// can't observe a freshly-written object as orphaned and GC it
-	// before this entry is appended.
+	// before this entry is appended. Also lets us validate the label
+	// against existing entries before writing the object — otherwise
+	// a duplicate-label rejection would leave an orphan object on disk.
 	release, err := acquireLock(r.lock)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
-
-	if err := writeObject(r, id, body); err != nil {
-		return nil, fmt.Errorf("writing trail object: %w", err)
-	}
 
 	lf, err := loadLog(r)
 	if err != nil {
@@ -216,6 +244,13 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 			}
 		}
 	}
+
+	// Write the object only after every pre-condition has been validated,
+	// so we never leave an orphan if the entry append is rejected.
+	if err := writeObject(r, id, body); err != nil {
+		return nil, fmt.Errorf("writing trail object: %w", err)
+	}
+
 	nextIdx := 0
 	if len(lf.Entries) > 0 {
 		nextIdx = lf.Entries[len(lf.Entries)-1].Index + 1

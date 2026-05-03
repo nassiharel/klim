@@ -447,3 +447,109 @@ func TestLoadLog_RejectsVersionlessLog(t *testing.T) {
 		t.Fatalf("expected missing-schema_version error, got %v", err)
 	}
 }
+
+// TestCapture_StoredBodyHasNoPaths verifies the on-disk Snapshot body
+// drops Tool.Path entirely. Storing paths in dedupe-shared bodies would
+// freeze the first capture's paths and mislead later trail show calls.
+func TestCapture_StoredBodyHasNoPaths(t *testing.T) {
+	dir := useTempDir(t)
+	tools := []registry.Tool{
+		fakeTool("git", "2.53.0", registry.SourceWinget, "C:\\Program Files\\Git\\cmd\\git.exe"),
+	}
+	e, err := Capture(OpCapture, "", tools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	objPath := filepath.Join(dir, "objects", string(e.Object[:2]), string(e.Object[2:])+".yaml")
+	body, err := os.ReadFile(objPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "path:") {
+		t.Fatalf("stored snapshot body contains a path: field — paths should be dropped:\n%s", body)
+	}
+	if strings.Contains(string(body), "git.exe") || strings.Contains(string(body), "/git") {
+		t.Fatalf("stored snapshot body contains a binary path:\n%s", body)
+	}
+}
+
+// TestCapture_RejectsInvalidOp verifies the closed-set validation on op.
+func TestCapture_RejectsInvalidOp(t *testing.T) {
+	useTempDir(t)
+	tools := orderedTools()
+	_, err := Capture("not-a-real-op", "", tools)
+	if err == nil || !strings.Contains(err.Error(), "invalid op") {
+		t.Fatalf("expected invalid-op error, got %v", err)
+	}
+	// Empty op should still default to OpCapture.
+	if _, err := Capture("", "", tools); err != nil {
+		t.Fatalf("empty op should default to capture, got %v", err)
+	}
+}
+
+// TestCapture_RejectedLabelLeavesNoOrphan verifies that when capture
+// fails the duplicate-label check, no orphan object is left behind.
+// The original bug: writeObject ran before label validation, so the
+// rejected capture wrote an object that needed a later prune to clean up.
+func TestCapture_RejectedLabelLeavesNoOrphan(t *testing.T) {
+	dir := useTempDir(t)
+
+	// First capture establishes the env + label.
+	if _, err := Capture(OpCapture, "shared", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second capture with the SAME label but DIFFERENT env. If the bug
+	// regresses, this would write a new object before failing on label.
+	otherTools := []registry.Tool{
+		fakeTool("only-tool", "9.9.9", registry.SourceBrew, "/anywhere"),
+	}
+	_, err := Capture(OpCapture, "shared", otherTools)
+	if err == nil {
+		t.Fatal("expected duplicate-label error, got nil")
+	}
+
+	// Count objects on disk; should be exactly 1 (the first capture's).
+	objects := 0
+	_ = filepath.WalkDir(filepath.Join(dir, "objects"), func(p string, d os.DirEntry, _ error) error {
+		if d != nil && !d.IsDir() && strings.HasSuffix(p, ".yaml") {
+			objects++
+		}
+		return nil
+	})
+	if objects != 1 {
+		t.Fatalf("expected 1 object after rejected dup-label capture, found %d (orphan from rejected capture?)", objects)
+	}
+}
+
+// TestReadObject_DetectsCorruption verifies the content-addressed
+// integrity check rejects a hand-edited object body whose hash no
+// longer matches its filename.
+func TestReadObject_DetectsCorruption(t *testing.T) {
+	dir := useTempDir(t)
+	e, err := Capture(OpCapture, "", orderedTools())
+	if err != nil {
+		t.Fatal(err)
+	}
+	objPath := filepath.Join(dir, "objects", string(e.Object[:2]), string(e.Object[2:])+".yaml")
+	original, err := os.ReadFile(objPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Append a comment line — strict YAML decode will still parse this,
+	// but the hash will no longer match the filename.
+	tampered := append([]byte(nil), original...)
+	tampered = append(tampered, []byte("# tampered\n")...)
+	if err := os.WriteFile(objPath, tampered, 0o644); err != nil { //nolint:gosec // G703: test writes to a path it constructed from t.TempDir(); no taint
+		t.Fatal(err)
+	}
+	_, err = Resolve("HEAD")
+	if err != nil {
+		t.Fatalf("Resolve still works (only reads log.yaml): %v", err)
+	}
+	if _, _, err := Show("HEAD"); err == nil {
+		t.Fatal("expected integrity-check error on tampered object body, got nil")
+	} else if !strings.Contains(err.Error(), "integrity check") {
+		t.Fatalf("expected 'integrity check' in error, got: %v", err)
+	}
+}

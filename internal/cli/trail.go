@@ -59,7 +59,7 @@ Pass --label to tag the entry for later reference (e.g. "before-upgrade").
 
 By default capture forces a fresh PATH scan so the recorded snapshot
 matches the toolchain you have right now (not whatever the scan cache
-last saw). Pass --no-refresh to use cached scan data — useful only
+last saw). Pass --refresh=false to use cached scan data — useful only
 when you've just run another clim command that already populated the
 cache and want to capture the exact same view.`,
 	Args: cobra.NoArgs,
@@ -173,6 +173,15 @@ func init() {
 // --- runners ---
 
 func runTrailCapture(cmd *cobra.Command, _ []string) error {
+	// Validate flags up-front so bad input exits with the documented
+	// usage code (2) rather than getting wrapped into a runtime error
+	// after a possibly-slow PATH scan.
+	if trailCaptureOp != "" {
+		if !isValidTrailOp(trailCaptureOp) {
+			return &UsageError{Err: fmt.Errorf("--op must be one of capture, import, install, upgrade, remove (got %q)", trailCaptureOp)}
+		}
+	}
+
 	sp := progress.New("Scanning installed tools...")
 	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), trailCaptureFresh)
 	if err != nil {
@@ -197,10 +206,25 @@ func runTrailCapture(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+// isValidTrailOp mirrors internal/trail.validOps for early CLI-side
+// validation. The trail package re-checks this so library-only callers
+// can't slip in an arbitrary value either.
+func isValidTrailOp(op string) bool {
+	switch op {
+	case trail.OpCapture, trail.OpImport, trail.OpInstall, trail.OpUpgrade, trail.OpRemove:
+		return true
+	}
+	return false
+}
+
 func runTrailLog(cmd *cobra.Command, _ []string) error {
 	out, err := trailLogOutput()
 	if err != nil {
 		return err
+	}
+
+	if trailLogLimit < 0 {
+		return &UsageError{Err: fmt.Errorf("--limit must be >= 0, got %d", trailLogLimit)}
 	}
 
 	opts := trail.LogOptions{Limit: trailLogLimit}
@@ -208,6 +232,9 @@ func runTrailLog(cmd *cobra.Command, _ []string) error {
 		dur, err := parseTrailDuration(trailLogSince)
 		if err != nil {
 			return &UsageError{Err: fmt.Errorf("--since: %w", err)}
+		}
+		if dur < 0 {
+			return &UsageError{Err: fmt.Errorf("--since must be a positive duration, got %q", trailLogSince)}
 		}
 		opts.Since = time.Now().Add(-dur)
 	}
@@ -277,10 +304,10 @@ func runTrailShow(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "  Tools:   %d  (os=%s arch=%s)\n\n", len(snap.Tools), snap.OS, snap.Arch)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "TOOL\tVERSION\tSOURCE\tPATH")
-	_, _ = fmt.Fprintln(w, "----\t-------\t------\t----")
+	_, _ = fmt.Fprintln(w, "TOOL\tVERSION\tSOURCE")
+	_, _ = fmt.Fprintln(w, "----\t-------\t------")
 	for _, t := range snap.Tools {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", t.Name, dashIfEmpty(t.Version), dashIfEmpty(t.Source), truncate(t.Path, 50))
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", t.Name, dashIfEmpty(t.Version), dashIfEmpty(t.Source))
 	}
 	_ = w.Flush()
 	return nil
@@ -342,7 +369,10 @@ func runTrailDiff(cmd *cobra.Command, args []string) error {
 }
 
 func runTrailPrune(_ *cobra.Command, _ []string) error {
-	if trailPruneKeep <= 0 && trailPruneOlderThan == "" {
+	if trailPruneKeep < 0 {
+		return &UsageError{Err: fmt.Errorf("--keep must be >= 0, got %d", trailPruneKeep)}
+	}
+	if trailPruneKeep == 0 && trailPruneOlderThan == "" {
 		return &UsageError{Err: errors.New("specify at least one of --keep or --older-than")}
 	}
 	opts := trail.PruneOptions{Keep: trailPruneKeep}
@@ -350,6 +380,9 @@ func runTrailPrune(_ *cobra.Command, _ []string) error {
 		dur, err := parseTrailDuration(trailPruneOlderThan)
 		if err != nil {
 			return &UsageError{Err: fmt.Errorf("--older-than: %w", err)}
+		}
+		if dur <= 0 {
+			return &UsageError{Err: fmt.Errorf("--older-than must be a positive duration, got %q", trailPruneOlderThan)}
 		}
 		opts.OlderThan = dur
 	}
