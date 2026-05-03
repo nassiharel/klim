@@ -165,20 +165,25 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 	return keptCount, removedCount, nil
 }
 
+// pathToID extracts the canonical 64-char object id from a relative
+// path of the exact form `<aa>/<bb...>.yaml` (where aa is exactly 2
+// hex chars and bb... is the remaining 62). Any other shape — root
+// level files, single-segment paths, three-or-more segments, or
+// segments whose lengths don't add up to 64 — returns the empty
+// ObjectID so the caller treats the file as garbage and removes it.
+// readObject only ever resolves the canonical path via objectPath;
+// this strict reverse mapping makes prune match.
 func pathToID(rel string) ObjectID {
 	rel = strings.TrimSuffix(rel, ".yaml")
 	rel = filepath.ToSlash(rel)
 	parts := strings.Split(rel, "/")
-	var id string
-	switch len(parts) {
-	case 1:
-		id = parts[0]
-	case 2:
-		id = parts[0] + parts[1]
-	default:
+	if len(parts) != 2 {
 		return ""
 	}
-	return ObjectID(strings.ToLower(id))
+	if len(parts[0]) != 2 || len(parts[1]) != 62 {
+		return ""
+	}
+	return ObjectID(strings.ToLower(parts[0] + parts[1]))
 }
 
 func pruneEmptyFanout(root string) {

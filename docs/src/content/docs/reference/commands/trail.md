@@ -78,8 +78,24 @@ $ clim trail show HEAD --output json
 }
 ```
 
-`diff` returns four collections — `added`, `removed`, `version_changed`,
-`source_changed` — always as arrays (`[]` when empty).
+`diff` returns four tool-keyed collections — `added`, `removed`,
+`version_changed`, `source_changed` — always as arrays (`[]` when
+empty). When the two snapshots come from different platforms it also
+emits an optional `platform_change` object with `from_os` / `to_os` /
+`from_arch` / `to_arch` so cross-machine diffs aren't reported as "no
+changes":
+
+```json
+"platform_change": {
+  "from_os": "linux",
+  "to_os": "darwin",
+  "from_arch": "amd64",
+  "to_arch": "arm64"
+}
+```
+
+The field is omitted entirely when both snapshots share the same OS
+and architecture.
 
 ## Storage layout
 

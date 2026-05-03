@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -1049,48 +1051,111 @@ func TestDiff_PlatformSameNoChange(t *testing.T) {
 
 // TestPrune_ANDFiltersWithClockSkew verifies that --keep and
 // --older-than combine with AND even when entry timestamps are not
-// monotonic with index. The single-pass reverse implementation could
-// admit an "old" entry that passed the time filter and waste a --keep
-// slot; the two-pass implementation must not.
+// monotonic with index. We construct a log where the timestamps are
+// REVERSED relative to indices: @0 has the newest time, @4 has the
+// oldest. Both pass the --older-than=24h filter; the --keep=2 budget
+// must then go to the 2 newest entries by INDEX (@3 and @4), not by
+// timestamp (which would pick @0 and @4 if a single-pass implementation
+// confused the orderings).
 func TestPrune_ANDFiltersWithClockSkew(t *testing.T) {
 	dir := useTempDir(t)
-	// Capture five entries with different tools so each has a unique object.
 	for i := 0; i < 5; i++ {
 		tools := []registry.Tool{fakeTool("toolA", "1.0."+string(rune('0'+i)), registry.SourceWinget, "/a")}
 		if _, err := Capture(OpCapture, "", tools); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Manually rewrite the log so entry @1's timestamp is in the
-	// future (simulating a clock jump). Without proper AND semantics,
-	// a Prune(--keep=2, --older-than=1h) would let @1 reach the
-	// keep-budget even though @4 should be the newest kept entry.
 	logPath := filepath.Join(dir, "log.yaml")
 	body, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Set @1.time to 1 second from now (well within the 1h window),
-	// so it passes the OlderThan filter (cutoff = now-1h, e.Time after cutoff).
-	// All other entries have e.Time around now too, so they all pass.
-	// The --keep=2 must apply to the time-filtered set's NEWEST 2,
-	// which by index are @3 and @4 — not @1 and @4.
-	_ = body // We do not actually need to mutate; the natural ordering exercises the path.
 
-	// Apply prune: keep newest 2, drop entries older than 1h.
-	if _, err := Prune(PruneOptions{Keep: 2, OlderThan: time.Hour}); err != nil {
+	// Decode + flip timestamps + re-encode under the lock.
+	var lf logFile
+	dec := yaml.NewDecoder(strings.NewReader(string(body)))
+	dec.KnownFields(true)
+	if err := dec.Decode(&lf); err != nil {
 		t.Fatal(err)
 	}
-	// Expect the surviving entries to be @3 and @4 (newest by index).
+	now := time.Now().UTC()
+	// Reverse timestamp order: @0 → now, @4 → 4 hours ago. All within
+	// the 24h --older-than window, so the time filter keeps every
+	// entry. The --keep=2 budget is the only thing trimming.
+	for i := range lf.Entries {
+		lf.Entries[i].Time = now.Add(time.Duration(-i) * time.Hour)
+	}
+	out, err := yaml.Marshal(&lf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(logPath, out, 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+
+	if _, err := Prune(PruneOptions{Keep: 2, OlderThan: 24 * time.Hour}); err != nil {
+		t.Fatal(err)
+	}
 	entries, err := Log(LogOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(entries) != 2 {
-		t.Fatalf("expected 2 entries after prune, got %d", len(entries))
+		t.Fatalf("expected 2 entries after prune, got %d (%+v)", len(entries), entries)
 	}
-	// Log returns newest-first.
-	if entries[0].Index != 4 || entries[1].Index != 3 {
-		t.Errorf("expected @4,@3 surviving; got @%d,@%d", entries[0].Index, entries[1].Index)
+	// Log returns newest-first BY POSITION (i.e. reverse insertion
+	// order), so the slice tail is the oldest by INDEX. We expect
+	// indices {4, 3} regardless of timestamp ordering.
+	gotIdx := []int{entries[0].Index, entries[1].Index}
+	if gotIdx[0] != 4 || gotIdx[1] != 3 {
+		t.Errorf("expected @4,@3 surviving (newest by index); got @%d,@%d (timestamp-ordered prune would pick @0 and @4)",
+			gotIdx[0], gotIdx[1])
+	}
+}
+
+// TestLoadLog_RejectsEmptyOp ensures Capture's writeLog never produces
+// a versionless op, so an empty op in log.yaml is corruption — not a
+// legitimate loadable state.
+func TestLoadLog_RejectsEmptyOp(t *testing.T) {
+	dir := useTempDir(t)
+	if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "log.yaml")
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := strings.Replace(string(body), "op: capture", "op: \"\"", 1)
+	if err := os.WriteFile(logPath, []byte(tampered), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	if _, err := Log(LogOptions{}); err == nil {
+		t.Fatal("expected error for empty op")
+	} else if !strings.Contains(err.Error(), "empty op") {
+		t.Fatalf("got: %v", err)
+	}
+}
+
+// TestPathToID_RejectsNonCanonicalLayouts guards the strict
+// fanout-aware reverse mapping. Anything other than <2hex>/<62hex>.yaml
+// must return "" so prune treats it as garbage.
+func TestPathToID_RejectsNonCanonicalLayouts(t *testing.T) {
+	cases := []string{
+		strings.Repeat("a", 64) + ".yaml",          // root-level (no fanout)
+		"ab/" + strings.Repeat("a", 60) + ".yaml",  // wrong tail length (60)
+		"a/" + strings.Repeat("a", 63) + ".yaml",   // wrong fanout length (1)
+		"abc/" + strings.Repeat("a", 61) + ".yaml", // wrong fanout length (3)
+		"a/b/c.yaml", // 3 segments
+	}
+	for _, p := range cases {
+		if id := pathToID(p); id != "" {
+			t.Errorf("pathToID(%q) = %q, want empty", p, id)
+		}
+	}
+	// Sanity: the canonical layout still works.
+	canonical := "ab/" + strings.Repeat("a", 62) + ".yaml"
+	if id := pathToID(canonical); !id.IsValid() {
+		t.Errorf("canonical layout rejected: %q → %q", canonical, id)
 	}
 }

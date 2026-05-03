@@ -64,7 +64,13 @@ By default capture forces a fresh PATH scan so the recorded snapshot
 matches the toolchain you have right now (not whatever the scan cache
 last saw). Pass --refresh=false to use cached scan data — useful only
 when you've just run another clim command that already populated the
-cache and want to capture the exact same view.`,
+cache and want to capture the exact same view.
+
+Examples:
+  clim trail capture                            # snapshot current state
+  clim trail capture --label before-upgrade     # tag for later reference
+  clim trail capture --op install               # mark this as an install delta
+  clim trail capture --refresh=false            # reuse the scan cache`,
 	Args: cobra.NoArgs,
 	RunE: runTrailCapture,
 }
@@ -84,7 +90,13 @@ var trailLogCmd = &cobra.Command{
 
   --limit N       cap output at N entries
   --since DUR     only entries newer than DUR ago (e.g. 7d, 24h, 30m)
-  --output text|json`,
+  --output text|json
+
+Examples:
+  clim trail log                          # all entries, newest first
+  clim trail log --limit 10               # most recent 10
+  clim trail log --since 7d               # the last week of activity
+  clim trail log --output json | jq .     # machine-readable, scriptable`,
 	Args: cobra.NoArgs,
 	RunE: runTrailLog,
 }
@@ -155,7 +167,12 @@ var trailPruneCmd = &cobra.Command{
   --older-than DUR  drop entries older than DUR (e.g. 30d, 12h)
 
 Both filters apply (AND). After log pruning, any object no entry
-references is deleted from disk.`,
+references is deleted from disk.
+
+Examples:
+  clim trail prune --keep 50                  # keep just the 50 newest
+  clim trail prune --older-than 90d           # drop anything older than 3 months
+  clim trail prune --keep 50 --older-than 90d # both — newest 50 of the last 90 days`,
 	Args: cobra.NoArgs,
 	RunE: runTrailPrune,
 }

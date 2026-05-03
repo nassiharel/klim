@@ -53,12 +53,24 @@ func resolveRoots() (fsRoots, error) {
 	}
 	dir, err := paths.TrailDir()
 	if err != nil {
-		return fsRoots{}, err
+		return fsRoots{}, fmt.Errorf("resolving trail dir: %w", err)
 	}
-	head, _ := paths.TrailHEAD()
-	log, _ := paths.TrailLog()
-	lock, _ := paths.TrailLock()
-	obj, _ := paths.TrailObjects()
+	head, err := paths.TrailHEAD()
+	if err != nil {
+		return fsRoots{}, fmt.Errorf("resolving trail HEAD path: %w", err)
+	}
+	log, err := paths.TrailLog()
+	if err != nil {
+		return fsRoots{}, fmt.Errorf("resolving trail log path: %w", err)
+	}
+	lock, err := paths.TrailLock()
+	if err != nil {
+		return fsRoots{}, fmt.Errorf("resolving trail lock path: %w", err)
+	}
+	obj, err := paths.TrailObjects()
+	if err != nil {
+		return fsRoots{}, fmt.Errorf("resolving trail objects path: %w", err)
+	}
 	return fsRoots{dir: dir, head: head, log: log, lock: lock, objects: obj}, nil
 }
 
@@ -262,9 +274,14 @@ func loadLog(r fsRoots) (*logFile, error) {
 			}
 			seenLabels[e.Label] = e.Index
 		}
-		// Op must be one of the recognised vocabulary. Capture rejects
-		// unknown values via ValidateOp; reading them back unchecked
-		// would let a hand-edited log carry arbitrary "op" strings.
+		// Op must be present AND one of the recognised vocabulary.
+		// ValidateOp accepts the empty string as the default, but
+		// saveLog always writes a non-empty op, so an empty op in
+		// log.yaml is corruption — the closed vocabulary contract
+		// requires every persisted entry to carry one.
+		if e.Operation == "" {
+			return nil, fmt.Errorf("trail log entry @%d has empty op (corrupted or hand-edited?)", e.Index)
+		}
 		if err := ValidateOp(e.Operation); err != nil {
 			return nil, fmt.Errorf("trail log entry @%d: %w", e.Index, err)
 		}
