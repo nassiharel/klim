@@ -39,10 +39,9 @@ func init() {
 //nolint:unused // kept for documentation
 type whyReference = Reference
 
-type whyPackageEntry struct {
-	Source string `json:"source"`
-	ID     string `json:"id"`
-}
+// whyPackageEntry is now an alias for the shared cli.PackageEntry so
+// `clim why` and `clim info` list the same package-manager sources.
+type whyPackageEntry = PackageEntry
 
 type whyReport struct {
 	Name         string            `json:"name"`
@@ -135,32 +134,14 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 	}
 	r.Warnings = append(r.Warnings, warnings...)
 
-	// Available packages.
-	r.AvailableVia = append(r.AvailableVia, collectPackageEntriesForWhy(t.Packages)...)
+	// Available packages: shared helper so `clim why` and `clim info`
+	// can't drift on which package managers they enumerate.
+	r.AvailableVia = append(r.AvailableVia, CollectPackageEntries(t.Packages)...)
 
 	// Related installed tools (same category/tags).
 	r.RelatedTools = relatedInstalledTools(toolName, t, tools)
 
 	return r
-}
-
-func collectPackageEntriesForWhy(pkgs registry.PackageIDs) []whyPackageEntry {
-	all := []whyPackageEntry{
-		{Source: "winget", ID: pkgs.Winget},
-		{Source: "choco", ID: pkgs.Choco},
-		{Source: "scoop", ID: pkgs.Scoop},
-		{Source: "brew", ID: pkgs.Brew},
-		{Source: "apt", ID: pkgs.Apt},
-		{Source: "snap", ID: pkgs.Snap},
-		{Source: "npm", ID: pkgs.NPM},
-	}
-	out := make([]whyPackageEntry, 0, len(all))
-	for _, e := range all {
-		if e.ID != "" {
-			out = append(out, e)
-		}
-	}
-	return out
 }
 
 func relatedInstalledTools(toolName string, t *registry.Tool, tools []registry.Tool) []string {
@@ -244,20 +225,17 @@ func renderWhyText(r whyReport) {
 func formatWhyRef(ref whyReference) string {
 	switch ref.Kind {
 	case "teamfile":
+		role := "optional"
 		if ref.Required {
-			constraint := ""
-			if ref.Constraint != "" {
-				constraint = " " + ref.Constraint
-			}
-			return fmt.Sprintf(".clim.yaml (required%s) — %s", constraint, ref.Path)
+			role = "required"
 		}
-		return ".clim.yaml (optional) — " + ref.Path
+		return fmt.Sprintf(".clim.yaml (%s) — %s", roleWithConstraint(role, ref.Constraint), ref.Path)
 	case "project":
 		role := "optional"
 		if ref.Required {
 			role = "required"
 		}
-		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, role, ref.Path)
+		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, roleWithConstraint(role, ref.Constraint), ref.Path)
 	case "pack":
 		if ref.DisplayName != "" {
 			return fmt.Sprintf("Pack %q (%s)", ref.DisplayName, ref.Name)
@@ -270,4 +248,16 @@ func formatWhyRef(ref whyReference) string {
 		return fmt.Sprintf("Custom pack %q", ref.Name)
 	}
 	return ref.Kind + " " + ref.Name
+}
+
+// roleWithConstraint joins the required/optional role label with an
+// optional version constraint so a teamfile or project pin like
+// `>=1.28` is preserved in the human output. Without this, an
+// optional-but-pinned reference would render as just "(optional)" and
+// silently drop the pin.
+func roleWithConstraint(role, constraint string) string {
+	if constraint == "" {
+		return role
+	}
+	return role + " " + constraint
 }

@@ -48,12 +48,6 @@ type infoInstance struct {
 	Source  string `json:"source,omitempty"`
 }
 
-// infoPackage represents one available package-manager ID.
-type infoPackage struct {
-	Source string `json:"source"`
-	ID     string `json:"id"`
-}
-
 // infoReference is now an alias for the shared cli.Reference type to keep
 // the existing JSON shape stable while the underlying scanner lives in
 // refscan.go (shared with `clim why`).
@@ -184,24 +178,16 @@ func buildInfoReport(cmd *cobra.Command, t *registry.Tool, tools []registry.Tool
 	return r
 }
 
+// infoPackage is now an alias for cli.PackageEntry to keep the JSON
+// shape stable while the canonical helper lives in refscan.go (shared
+// with `clim why`).
+type infoPackage = PackageEntry
+
 // catalogPackagesFor returns the populated package IDs in display order.
+// Delegates to the shared helper so `clim info` and `clim why` cannot
+// drift out of sync.
 func catalogPackagesFor(p registry.PackageIDs) []infoPackage {
-	all := []infoPackage{
-		{Source: "winget", ID: p.Winget},
-		{Source: "choco", ID: p.Choco},
-		{Source: "scoop", ID: p.Scoop},
-		{Source: "brew", ID: p.Brew},
-		{Source: "apt", ID: p.Apt},
-		{Source: "snap", ID: p.Snap},
-		{Source: "npm", ID: p.NPM},
-	}
-	out := make([]infoPackage, 0, len(all))
-	for _, e := range all {
-		if e.ID != "" {
-			out = append(out, e)
-		}
-	}
-	return out
+	return CollectPackageEntries(p)
 }
 
 // closestToolName returns a single suggestion for a misspelled tool name,

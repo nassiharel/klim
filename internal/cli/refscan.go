@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/clim/internal/custompacks"
+	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/teamfile"
 )
 
@@ -22,6 +23,37 @@ type Reference struct {
 	Path        string `yaml:"path,omitempty"                  json:"path,omitempty"`
 	Required    bool   `yaml:"required,omitempty"              json:"required,omitempty"`
 	Constraint  string `yaml:"version_constraint,omitempty"    json:"version_constraint,omitempty"`
+}
+
+// PackageEntry is one populated package-manager ID for a tool. Shared
+// between `clim why` (AvailableVia) and `clim info` (Packages) so the
+// list of supported sources cannot drift between the two commands the
+// next time a package manager is added or renamed.
+type PackageEntry struct {
+	Source string `json:"source"`
+	ID     string `json:"id"`
+}
+
+// CollectPackageEntries returns the populated PackageEntries for pkgs in
+// canonical display order. Empty IDs are skipped. Both `clim why` and
+// `clim info` consume this so they list the same sources every time.
+func CollectPackageEntries(pkgs registry.PackageIDs) []PackageEntry {
+	all := []PackageEntry{
+		{Source: "winget", ID: pkgs.Winget},
+		{Source: "choco", ID: pkgs.Choco},
+		{Source: "scoop", ID: pkgs.Scoop},
+		{Source: "brew", ID: pkgs.Brew},
+		{Source: "apt", ID: pkgs.Apt},
+		{Source: "snap", ID: pkgs.Snap},
+		{Source: "npm", ID: pkgs.NPM},
+	}
+	out := make([]PackageEntry, 0, len(all))
+	for _, e := range all {
+		if e.ID != "" {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // CollectReferences scans the four sources where a tool name can appear
