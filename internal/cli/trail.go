@@ -96,8 +96,20 @@ var trailShowOutput func() (OutputFormat, error)
 var trailShowCmd = &cobra.Command{
 	Use:   "show <ref>",
 	Short: "Display the toolchain at a specific entry",
-	Args:  requireArgs(1, "clim trail show <ref>"),
-	RunE:  runTrailShow,
+	Long: `Render the captured Snapshot at a specific trail entry: OS / Arch
+banner plus the full tool list (name, version, install source).
+
+A <ref> is anything Resolve accepts: HEAD or latest, HEAD~N, @<index>,
+a content hash (full or 7+ char prefix), or an entry's --label.
+
+Examples:
+  clim trail show HEAD              # newest capture
+  clim trail show HEAD~3            # 3 captures back
+  clim trail show before-upgrade    # by label
+  clim trail show abcdef0           # 7-char hash prefix
+  clim trail show HEAD --output json   # machine-readable for scripts`,
+	Args: requireArgs(1, "clim trail show <ref>"),
+	RunE: runTrailShow,
 }
 
 // --- clim trail diff ---
@@ -284,7 +296,7 @@ func runTrailLog(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return &UsageError{Err: fmt.Errorf("--since: %w", err)}
 		}
-		if dur < 0 {
+		if dur <= 0 {
 			return &UsageError{Err: fmt.Errorf("--since must be a positive duration, got %q", trailLogSince)}
 		}
 		opts.Since = time.Now().Add(-dur)
@@ -387,11 +399,20 @@ func runTrailDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	totalChanges := len(d.Added) + len(d.Removed) + len(d.VersionChanged) + len(d.SourceChanged)
+	if d.PlatformChange != nil {
+		totalChanges++
+	}
 	if totalChanges == 0 {
 		fmt.Fprintf(os.Stderr, "%s == %s (no changes)\n", a, b)
 		return nil
 	}
 	fmt.Fprintf(os.Stderr, "Diff %s → %s\n\n", a, b)
+	if d.PlatformChange != nil {
+		_, _ = fmt.Fprintln(os.Stdout, "  Platform changed:")
+		_, _ = fmt.Fprintf(os.Stdout, "    %s/%s → %s/%s\n",
+			d.PlatformChange.FromOS, d.PlatformChange.FromArch,
+			d.PlatformChange.ToOS, d.PlatformChange.ToArch)
+	}
 	if len(d.Added) > 0 {
 		_, _ = fmt.Fprintln(os.Stdout, "  Added:")
 		for _, t := range d.Added {

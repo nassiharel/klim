@@ -583,7 +583,10 @@ func summarize(r fsRoots, lf *logFile, current *Snapshot) (string, error) {
 		return "", err
 	}
 	d := diffSnapshots(prev, current)
-	parts := make([]string, 0, 4)
+	parts := make([]string, 0, 5)
+	if d.PlatformChange != nil {
+		parts = append(parts, "platform")
+	}
 	if len(d.Added) > 0 {
 		parts = append(parts, fmt.Sprintf("+%d", len(d.Added)))
 	}

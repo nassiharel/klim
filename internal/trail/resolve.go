@@ -18,15 +18,6 @@ import (
 //	<short>           7+ char object hash prefix (must be unambiguous)
 //	<label>           an explicit Entry.Label match (must be unique)
 //
-// Resolve maps a refSpec to an Entry. Supported forms:
-//
-//	HEAD              the newest entry
-//	HEAD~N            N entries back from HEAD (N >= 0)
-//	@<index>          exact entry index (0-based)
-//	<hash>            full 64-char object hash
-//	<short>           7+ char object hash prefix (must be unambiguous)
-//	<label>           an explicit Entry.Label match (must be unique)
-//
 // "latest" is accepted as an alias for HEAD for terminology comfort.
 //
 // Resolve acquires the trail lock to load log.yaml so a concurrent

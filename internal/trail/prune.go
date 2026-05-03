@@ -57,20 +57,31 @@ func Prune(opts PruneOptions) (PruneResult, error) {
 		cutoff = time.Now().Add(-opts.OlderThan)
 	}
 
-	// Decide kept entries newest-first so --keep N is intuitive.
-	kept := make([]Entry, 0, len(lf.Entries))
-	for i := len(lf.Entries) - 1; i >= 0; i-- {
-		e := lf.Entries[i]
+	// First pass (chronological): decide which entries pass the time
+	// filter. We do this before applying --keep so the two filters
+	// combine with AND (drop if too old, then keep newest N of the
+	// survivors) regardless of clock skew. A reverse-pass that
+	// applied both filters at once would let an old entry that
+	// happened to satisfy --since still consume a --keep slot when
+	// timestamps weren't monotonic with index — which can happen
+	// after a clock jump or when a synced trail mixes captures from
+	// different machines.
+	timeFiltered := make([]Entry, 0, len(lf.Entries))
+	for _, e := range lf.Entries {
 		if !cutoff.IsZero() && e.Time.Before(cutoff) {
 			continue
 		}
-		if opts.Keep > 0 && len(kept) >= opts.Keep {
-			continue
-		}
-		kept = append(kept, e)
+		timeFiltered = append(timeFiltered, e)
 	}
-	// Restore chronological order.
-	reverseEntries(kept)
+
+	// Second pass: keep the newest --keep entries from the
+	// time-filtered set. Walk newest-first by index (the entries are
+	// stored in monotonic-index order) so "newest" is well-defined
+	// even when timestamps disagree with indices.
+	kept := timeFiltered
+	if opts.Keep > 0 && len(timeFiltered) > opts.Keep {
+		kept = timeFiltered[len(timeFiltered)-opts.Keep:]
+	}
 
 	res.EntriesKept = len(kept)
 	res.EntriesRemoved = len(lf.Entries) - len(kept)
@@ -184,11 +195,5 @@ func pruneEmptyFanout(root string) {
 		if err == nil && len(children) == 0 {
 			_ = os.Remove(sub)
 		}
-	}
-}
-
-func reverseEntries(s []Entry) {
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
 	}
 }

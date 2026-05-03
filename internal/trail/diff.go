@@ -5,11 +5,26 @@ import "sort"
 // DiffResult describes the change set between two Snapshots.
 //
 // All four collections are tool-keyed and sorted by name for stable output.
+// Platform changes (OS or Arch) are surfaced explicitly so a diff between
+// captures from different machines doesn't silently report "no changes" —
+// trail history is explicitly designed to be sync/copy-friendly across
+// machines, so the diff must reflect the platform delta.
 type DiffResult struct {
-	Added          []Tool          `yaml:"added"            json:"added"`
-	Removed        []Tool          `yaml:"removed"          json:"removed"`
-	VersionChanged []VersionChange `yaml:"version_changed"  json:"version_changed"`
-	SourceChanged  []SourceChange  `yaml:"source_changed"   json:"source_changed"`
+	Added          []Tool          `yaml:"added"                     json:"added"`
+	Removed        []Tool          `yaml:"removed"                   json:"removed"`
+	VersionChanged []VersionChange `yaml:"version_changed"           json:"version_changed"`
+	SourceChanged  []SourceChange  `yaml:"source_changed"            json:"source_changed"`
+	PlatformChange *PlatformChange `yaml:"platform_change,omitempty" json:"platform_change,omitempty"`
+}
+
+// PlatformChange records the OS/Arch delta between two snapshots when at
+// least one of those fields differs. nil on DiffResult means the
+// platforms match.
+type PlatformChange struct {
+	FromOS   string `yaml:"from_os"   json:"from_os"`
+	ToOS     string `yaml:"to_os"     json:"to_os"`
+	FromArch string `yaml:"from_arch" json:"from_arch"`
+	ToArch   string `yaml:"to_arch"   json:"to_arch"`
 }
 
 // VersionChange records a tool whose version differs between two snapshots.
@@ -87,6 +102,14 @@ func diffSnapshots(a, b *Snapshot) DiffResult {
 	}
 	if a == nil && b == nil {
 		return out
+	}
+	if a != nil && b != nil {
+		if a.OS != b.OS || a.Arch != b.Arch {
+			out.PlatformChange = &PlatformChange{
+				FromOS: a.OS, ToOS: b.OS,
+				FromArch: a.Arch, ToArch: b.Arch,
+			}
+		}
 	}
 	aMap := indexBySource(a)
 	bMap := indexBySource(b)
