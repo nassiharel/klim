@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -68,12 +69,26 @@ func (r fsRoots) objectPath(id ObjectID) string {
 }
 
 // writeObject writes the snapshot body content-addressed by id, idempotently.
-// If the object already exists with the same hash, we do not rewrite it.
+//
+// If the object already exists on disk, we re-hash the stored bytes and
+// compare against id. A mismatch means a previous capture wrote a good
+// object that has since been corrupted or hand-edited; trusting the
+// filename alone would let a later capture of the same environment
+// silently point at the corrupted data, breaking `show <ref>` after a
+// successful `capture`. Failing here is the safe choice — the user can
+// delete the offending file and recapture.
 func writeObject(r fsRoots, id ObjectID, body []byte) error {
 	path := r.objectPath(id)
-	if _, err := os.Stat(path); err == nil {
-		// Already present. Trust the hash; do not re-verify content.
-		return nil
+	if existing, err := os.ReadFile(path); err == nil {
+		sum := sha256.Sum256(existing)
+		got := ObjectID(hex.EncodeToString(sum[:]))
+		if got == id {
+			return nil
+		}
+		return fmt.Errorf("trail object %s on disk has been corrupted: stored bytes hash to %s (delete %s and recapture)",
+			id.Short(), got.Short(), path)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspecting trail object %s: %w", id.Short(), err)
 	}
 	if err := fileutil.EnsureDir(path); err != nil {
 		return fmt.Errorf("creating object dir: %w", err)
@@ -176,6 +191,32 @@ func saveLog(r fsRoots, lf *logFile) error {
 	return nil
 }
 
+// reservedLabelReason returns a non-empty reason if label collides with a
+// built-in ref syntax accepted by Resolve (HEAD, latest, HEAD~N, @N, or a
+// hex prefix that would be interpreted as an object hash). Capture
+// rejects such labels because Resolve always interprets the reserved
+// form first, so the label could never be looked up. Empty return ⇒
+// label is safe to use.
+func reservedLabelReason(label string) string {
+	if label == "HEAD" || label == "latest" {
+		return "matches HEAD/latest"
+	}
+	if rest, ok := strings.CutPrefix(label, "HEAD~"); ok {
+		if n, err := strconv.Atoi(rest); err == nil && n >= 0 {
+			return "matches HEAD~N"
+		}
+	}
+	if rest, ok := strings.CutPrefix(label, "@"); ok {
+		if n, err := strconv.Atoi(rest); err == nil && n >= 0 {
+			return "matches @<index>"
+		}
+	}
+	if len(label) >= 7 && isHexPrefix(label) {
+		return "looks like an object hash prefix"
+	}
+	return ""
+}
+
 // validOps is the closed set of operation kinds permitted in Entry.op.
 // Capture rejects anything else so a typo or arbitrary string can't
 // become permanent history data — the on-disk format keeps a small,
@@ -207,6 +248,11 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 		return nil, fmt.Errorf("trail: invalid op %q (valid: %s)", op, strings.Join(known, ", "))
 	}
 	label = strings.TrimSpace(label)
+	if label != "" {
+		if reason := reservedLabelReason(label); reason != "" {
+			return nil, fmt.Errorf("trail: label %q conflicts with reserved ref syntax (%s); pick a different name", label, reason)
+		}
+	}
 	r, err := resolveRoots()
 	if err != nil {
 		return nil, err
@@ -333,12 +379,24 @@ func Log(opts LogOptions) ([]Entry, error) {
 }
 
 // Show returns the snapshot referenced by refSpec along with the matched entry.
+//
+// The ref resolution and object read happen under a single trail lock so a
+// concurrent `prune` cannot remove the just-resolved entry's object file
+// between Resolve and readObject — otherwise `clim trail show <ref>` could
+// fail with a missing-object error even though the ref was valid when the
+// command started.
 func Show(refSpec string) (*Snapshot, *Entry, error) {
-	entry, err := Resolve(refSpec)
+	r, err := resolveRoots()
 	if err != nil {
 		return nil, nil, err
 	}
-	r, err := resolveRoots()
+	release, err := acquireLock(r.lock)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer release()
+
+	entry, err := Resolve(refSpec)
 	if err != nil {
 		return nil, nil, err
 	}

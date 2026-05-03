@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/clim/internal/progress"
+	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/trail"
 )
 
@@ -182,13 +183,27 @@ func runTrailCapture(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	sp := progress.New("Scanning installed tools...")
-	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), trailCaptureFresh)
+	// Word the spinner so it matches what actually happens. With
+	// --refresh=true we always run a fresh PATH scan; with
+	// --refresh=false the service may either reuse the on-disk scan
+	// cache or fall through to a fresh scan if the cache is missing —
+	// only the returned ScanInfo can tell us which one happened.
+	startMsg := "Loading toolchain..."
+	if trailCaptureFresh {
+		startMsg = "Scanning installed tools..."
+	}
+	sp := progress.New(startMsg)
+	tools, _, scanInfo, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), trailCaptureFresh)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
 	}
-	sp.Done("Tools scanned")
+	switch {
+	case scanInfo != nil && scanInfo.Source == service.ScanSourceCache:
+		sp.Done(fmt.Sprintf("Reused scan cache (%s)", humanizeAge(scanInfo.CacheAt)))
+	default:
+		sp.Done("Tools scanned")
+	}
 
 	entry, err := trail.Capture(trailCaptureOp, trailCaptureLabel, tools)
 	if err != nil {
@@ -204,6 +219,24 @@ func runTrailCapture(cmd *cobra.Command, _ []string) error {
 	}
 	fmt.Fprintln(os.Stderr)
 	return nil
+}
+
+// humanizeAge renders how long ago t was, for short status messages.
+func humanizeAge(t time.Time) string {
+	if t.IsZero() {
+		return "fresh"
+	}
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "moments ago"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
 }
 
 // isValidTrailOp mirrors internal/trail.validOps for early CLI-side
@@ -362,7 +395,15 @@ func runTrailDiff(cmd *cobra.Command, args []string) error {
 	if len(d.SourceChanged) > 0 {
 		_, _ = fmt.Fprintln(os.Stdout, "  Source changed:")
 		for _, c := range d.SourceChanged {
-			_, _ = fmt.Fprintf(os.Stdout, "    ⇄ %s %s → %s\n", c.Name, c.From, c.To)
+			fromLabel := c.From
+			toLabel := c.To
+			if c.FromVersion != "" {
+				fromLabel = fmt.Sprintf("%s@%s", c.From, c.FromVersion)
+			}
+			if c.ToVersion != "" {
+				toLabel = fmt.Sprintf("%s@%s", c.To, c.ToVersion)
+			}
+			_, _ = fmt.Fprintf(os.Stdout, "    ⇄ %s %s → %s\n", c.Name, fromLabel, toLabel)
 		}
 	}
 	return nil
@@ -426,11 +467,18 @@ func humanAgo(t time.Time) string {
 	}
 }
 
+// truncate shortens s to fit in n display columns, replacing the dropped
+// suffix with "…". Operates on runes (not bytes), so non-ASCII labels and
+// summaries can never be cut mid-codepoint and emit malformed UTF-8.
 func truncate(s string, n int) string {
-	if n <= 1 || len(s) <= n {
+	if n <= 1 {
 		return s
 	}
-	return s[:n-1] + "…"
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[:n-1]) + "…"
 }
 
 func dashIfEmpty(s string) string {

@@ -20,11 +20,16 @@ type VersionChange struct {
 	Source string `yaml:"source,omitempty" json:"source,omitempty"`
 }
 
-// SourceChange records a tool that switched install source.
+// SourceChange records a tool that switched install source. When the tool
+// also bumped its version in the same step, FromVersion / ToVersion carry
+// that delta — recording only the source switch would under-report common
+// migrations like `winget@1.2 → brew@1.3`.
 type SourceChange struct {
-	Name string `yaml:"name" json:"name"`
-	From string `yaml:"from" json:"from"`
-	To   string `yaml:"to"   json:"to"`
+	Name        string `yaml:"name"                   json:"name"`
+	From        string `yaml:"from"                   json:"from"`
+	To          string `yaml:"to"                     json:"to"`
+	FromVersion string `yaml:"from_version,omitempty" json:"from_version,omitempty"`
+	ToVersion   string `yaml:"to_version,omitempty"   json:"to_version,omitempty"`
 }
 
 // Diff returns the change set going from snapshot a to snapshot b.
@@ -90,7 +95,11 @@ func diffSnapshots(a, b *Snapshot) DiffResult {
 			// Same name might exist under another source — treat as source change.
 			if other, otherKey := findByName(aMap, bt.Name); other != nil {
 				out.SourceChanged = append(out.SourceChanged, SourceChange{
-					Name: bt.Name, From: other.Source, To: bt.Source,
+					Name:        bt.Name,
+					From:        other.Source,
+					To:          bt.Source,
+					FromVersion: other.Version,
+					ToVersion:   bt.Version,
 				})
 				delete(aMap, otherKey) // mark consumed so it isn't reported as Removed
 				continue

@@ -553,3 +553,73 @@ func TestReadObject_DetectsCorruption(t *testing.T) {
 		t.Fatalf("expected 'integrity check' in error, got: %v", err)
 	}
 }
+
+// TestWriteObject_DetectsCorruptedReuse exercises the writeObject
+// integrity check: if a previous capture wrote a healthy object that
+// was later corrupted on disk, a subsequent capture of the same env
+// must not silently accept the bad bytes.
+func TestWriteObject_DetectsCorruptedReuse(t *testing.T) {
+	dir := useTempDir(t)
+	e, err := Capture(OpCapture, "", orderedTools())
+	if err != nil {
+		t.Fatal(err)
+	}
+	objPath := filepath.Join(dir, "objects", string(e.Object[:2]), string(e.Object[2:])+".yaml")
+	if err := os.WriteFile(objPath, []byte("garbage\n"), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	_, err = Capture(OpCapture, "second", orderedTools())
+	if err == nil {
+		t.Fatal("expected error capturing on top of corrupted object, got nil")
+	}
+	if !strings.Contains(err.Error(), "corrupted") {
+		t.Fatalf("expected 'corrupted' in error, got: %v", err)
+	}
+}
+
+// TestCapture_RejectsReservedLabel verifies that labels colliding with
+// Resolve's built-in ref syntax are rejected up front, so users can't
+// create entries that are unresolvable by name.
+func TestCapture_RejectsReservedLabel(t *testing.T) {
+	useTempDir(t)
+	cases := []string{"HEAD", "latest", "HEAD~0", "HEAD~5", "@0", "@42", "abcdef0", "DEADBEEF"}
+	for _, label := range cases {
+		_, err := Capture(OpCapture, label, orderedTools())
+		if err == nil {
+			t.Errorf("Capture(%q) accepted reserved label", label)
+			continue
+		}
+		if !strings.Contains(err.Error(), "reserved ref syntax") {
+			t.Errorf("Capture(%q): expected 'reserved ref syntax' in error, got: %v", label, err)
+		}
+	}
+}
+
+// TestDiff_SourceAndVersionChange verifies that when a tool migrates
+// between sources AND bumps its version in the same step, the diff
+// preserves the version delta on the SourceChange record.
+func TestDiff_SourceAndVersionChange(t *testing.T) {
+	useTempDir(t)
+	a := []registry.Tool{fakeTool("docker", "1.2", registry.SourceWinget, "/d")}
+	b := []registry.Tool{fakeTool("docker", "1.3", registry.SourceBrew, "/d")}
+	if _, err := Capture(OpCapture, "a", a); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Capture(OpCapture, "b", b); err != nil {
+		t.Fatal(err)
+	}
+	d, err := Diff("a", "b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.SourceChanged) != 1 {
+		t.Fatalf("SourceChanged = %+v", d.SourceChanged)
+	}
+	sc := d.SourceChanged[0]
+	if sc.FromVersion != "1.2" || sc.ToVersion != "1.3" {
+		t.Errorf("expected version delta 1.2 → 1.3, got %q → %q", sc.FromVersion, sc.ToVersion)
+	}
+	if len(d.VersionChanged) != 0 {
+		t.Errorf("did not expect a separate VersionChanged record: %+v", d.VersionChanged)
+	}
+}
