@@ -11,10 +11,10 @@ import (
 	"github.com/nassiharel/clim/internal/githubfmt"
 	"github.com/nassiharel/clim/internal/progress"
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/textwrap"
 )
 
 var (
-	infoRefresh   bool
 	infoOutputFmt func() (OutputFormat, error)
 )
 
@@ -29,15 +29,17 @@ This is the CLI counterpart to the TUI's tool detail page.
 
 Examples:
   clim info kubectl                 # human-readable table
-  clim info terraform --output json # machine-readable for scripts
-  clim info bat --refresh           # force a fresh PATH scan first`,
+  clim info terraform --output json # machine-readable for scripts`,
 	Args: requireArgs(1, "clim info <tool>"),
 	RunE: runInfo,
 }
 
 func init() {
-	infoCmd.Flags().BoolVar(&infoRefresh, "refresh", false, "Deprecated no-op: clim info now always does a fresh scan for the requested tool")
-	_ = infoCmd.Flags().MarkHidden("refresh")
+	// `clim info` does a fresh single-tool scan on every invocation
+	// (ScanOnly + RefreshTool — see runInfo), so there is no scan
+	// cache to bypass. We deliberately do NOT expose a --refresh
+	// flag: it would have no effect, and accepting one as a no-op
+	// would lie to scripts that pass it expecting a behavior change.
 	infoOutputFmt = addOutputFlag(infoCmd, OutputText, OutputJSON)
 	// Registered in root.go with command group.
 }
@@ -113,7 +115,12 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	toolMap := registry.ToolMap(tools)
 	t, ok := toolMap[toolName]
 	if !ok {
-		sp.Done("Done")
+		// Mark the spinner failed before returning the typo error so
+		// users don't see a misleading "✓ Done" right above an
+		// "Error: tool ... not found" line. The scan itself succeeded
+		// — we just couldn't satisfy the user's lookup — so use Fail
+		// with a clear message rather than Done.
+		sp.Fail(fmt.Sprintf("tool %q not found", toolName))
 		return notFoundError(toolName, closestToolName(tools, toolName))
 	}
 
@@ -440,28 +447,13 @@ func formatInfoRef(ref infoReference) string {
 // detail view and `clim info` share one implementation. Tests for the
 // contract live in internal/githubfmt/githubfmt_test.go.
 
-// wordWrapStr wraps s into lines no wider than width characters. Pure-byte
-// width is fine for descriptions in the catalog (ASCII-dominant).
+// wordWrapStr delegates to internal/textwrap.Wrap so `clim info` and
+// the TUI detail view wrap GitHub descriptions identically with full
+// display-width awareness (CJK / emoji / combining characters). The
+// previous local implementation measured raw bytes and would mis-wrap
+// non-ASCII content.
 func wordWrapStr(s string, width int) []string {
-	if width <= 0 {
-		return []string{s}
-	}
-	words := strings.Fields(s)
-	if len(words) == 0 {
-		return nil
-	}
-	var lines []string
-	current := words[0]
-	for _, word := range words[1:] {
-		if len(current)+1+len(word) > width {
-			lines = append(lines, current)
-			current = word
-		} else {
-			current += " " + word
-		}
-	}
-	lines = append(lines, current)
-	return lines
+	return textwrap.Wrap(s, width)
 }
 
 // dashIfEmpty returns "—" when s is empty so tables don't show empty cells.

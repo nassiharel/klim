@@ -19,15 +19,17 @@ clim info <tool> [flags]
 
 | Flag | Description |
 |------|-------------|
-| `--refresh` | Force a fresh scan (ignore cache) |
 | `--output` | `text` (default) or `json` |
+
+`clim info` always performs a fresh single-tool scan (it scans PATH
+once for the catalog and resolves package-manager versions only for
+the requested tool), so there is no cache to bypass.
 
 ## Examples
 
 ```bash
 clim info kubectl                     # human-readable
 clim info terraform --output json     # machine-readable for scripts
-clim info bat --refresh               # bypass cache
 ```
 
 ## Output
