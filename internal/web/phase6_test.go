@@ -149,11 +149,11 @@ func TestPageTool_RendersPMRowsAndRelated(t *testing.T) {
 func TestBuildDashboard_PopulatesAllSections(t *testing.T) {
 	tools := []registry.Tool{
 		{
-			Name:      "kubectl",
-			Category:  "Containers",
-			Tags:      []string{"kubernetes", "cli"},
-			Latest:    "1.31.0",
-			Instances: []registry.Instance{{Path: "/k", Version: "1.28.4", Source: registry.SourceBrew}},
+			Name:       "kubectl",
+			Category:   "Containers",
+			Tags:       []string{"kubernetes", "cli"},
+			Latest:     "1.31.0",
+			Instances:  []registry.Instance{{Path: "/k", Version: "1.28.4", Source: registry.SourceBrew}},
 			GitHubInfo: &registry.GitHubInfo{Stars: 1234, PushedAt: "2026-04-01T00:00:00Z"},
 		},
 		{

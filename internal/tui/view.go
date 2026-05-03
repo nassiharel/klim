@@ -2,12 +2,12 @@ package tui
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/mattn/go-runewidth"
 
+	"github.com/nassiharel/clim/internal/recommend"
 	"github.com/nassiharel/clim/internal/registry"
 )
 
@@ -918,71 +918,12 @@ func toolLabel(tool registry.Tool) string {
 	return tool.Name
 }
 
-// relatedTools returns up to 5 not-installed tools that share tags with the given tool,
-// enriched with display metadata.
+// relatedTools returns up to 5 not-installed tools that share tags
+// with the given tool. Delegates to recommend.Related so the same
+// scoring runs in the web UI's tool detail page; this method is kept
+// as a thin wrapper to minimise churn at TUI call sites.
 func (m Model) relatedTools(tool registry.Tool) []recommendation {
-	if len(tool.Tags) == 0 {
-		return nil
-	}
-	tagSet := make(map[string]struct{}, len(tool.Tags))
-	for _, tag := range tool.Tags {
-		tagSet[tag] = struct{}{}
-	}
-
-	var recs []recommendation
-	maxScore := 0
-	for i, t := range m.tools {
-		if t.Name == tool.Name || t.IsInstalled() {
-			continue
-		}
-		score := 0
-		for _, tag := range t.Tags {
-			if _, ok := tagSet[tag]; ok {
-				score++
-			}
-		}
-		if score == 0 {
-			continue
-		}
-		desc := ""
-		stars := 0
-		if t.GitHubInfo != nil {
-			desc = t.GitHubInfo.Description
-			stars = t.GitHubInfo.Stars
-		}
-		recs = append(recs, recommendation{
-			ToolIdx:     i,
-			Score:       score,
-			Category:    t.Category,
-			Description: desc,
-			Stars:       stars,
-		})
-		if score > maxScore {
-			maxScore = score
-		}
-	}
-
-	sort.Slice(recs, func(i, j int) bool {
-		if recs[i].Score != recs[j].Score {
-			return recs[i].Score > recs[j].Score
-		}
-		return m.tools[recs[i].ToolIdx].Name < m.tools[recs[j].ToolIdx].Name
-	})
-
-	if len(recs) > 5 {
-		recs = recs[:5]
-	}
-
-	// Compute matchPct.
-	if maxScore > 0 {
-		for i := range recs {
-			recs[i].MatchPct = recs[i].Score * 100 / maxScore
-			if recs[i].MatchPct < 1 {
-				recs[i].MatchPct = 1
-			}
-		}
-	}
-	return recs
+	return recommend.Related(tool, m.tools, 5)
 }
 
 // itemLabel returns display if non-empty, otherwise name.

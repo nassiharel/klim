@@ -106,6 +106,99 @@ func TestCompute_ReasonContainsToolNames(t *testing.T) {
 	}
 }
 
+func TestRelated_FocusTagsOnly(t *testing.T) {
+	pkg := registry.PackageIDs{Brew: "x", Winget: "x", Apt: "x"}
+	// Focus on jq. Both fx and yq share the "json" tag with jq.
+	// kubectl shares no tags with jq, so even though it's not installed
+	// it must not appear in jq's related list.
+	tools := []registry.Tool{
+		{
+			Name:      "jq",
+			Tags:      []string{"json", "cli"},
+			Instances: []registry.Instance{{Path: "/jq"}},
+		},
+		{Name: "fx", Tags: []string{"json", "tui"}, Packages: pkg},
+		{Name: "yq", Tags: []string{"json", "yaml"}, Packages: pkg},
+		{Name: "kubectl", Tags: []string{"kubernetes"}, Packages: pkg},
+	}
+	recs := Related(tools[0], tools, 5)
+	if len(recs) != 2 {
+		t.Fatalf("got %d recs, want 2 (fx, yq) — kubectl shares no tag with jq", len(recs))
+	}
+	got := []string{tools[recs[0].ToolIdx].Name, tools[recs[1].ToolIdx].Name}
+	for _, n := range got {
+		if n != "fx" && n != "yq" {
+			t.Errorf("unexpected related tool %q (kubectl should not appear)", n)
+		}
+	}
+}
+
+func TestRelated_IgnoresGlobalInstalledSet(t *testing.T) {
+	// Regression for the bug where /tools/jq showed different tools than
+	// the TUI's "You might also like": the web previously fed Compute()
+	// (which biases toward overall installed-tag frequency) then
+	// post-filtered. Related must score purely off the focus tool's
+	// tags so the order is identical regardless of what else is
+	// installed.
+	pkg := registry.PackageIDs{Brew: "x", Winget: "x", Apt: "x"}
+	tools := []registry.Tool{
+		{Name: "jq", Tags: []string{"json"}, Instances: []registry.Instance{{Path: "/jq"}}},
+		// fx shares 1 tag with jq.
+		{Name: "fx", Tags: []string{"json"}, Packages: pkg},
+		// yq shares 1 tag with jq AND has a "kubernetes" tag matching
+		// kubectl. Compute would boost yq because of the kubernetes
+		// overlap with installed kubectl. Related must NOT.
+		{Name: "yq", Tags: []string{"json", "kubernetes"}, Packages: pkg},
+		// kubectl is installed; it inflates the kubernetes tag freq
+		// in Compute but is irrelevant to Related (which only looks
+		// at the focus tool).
+		{Name: "kubectl", Tags: []string{"kubernetes"}, Instances: []registry.Instance{{Path: "/k"}}},
+	}
+	recs := Related(tools[0], tools, 5)
+	if len(recs) != 2 {
+		t.Fatalf("got %d recs, want 2", len(recs))
+	}
+	// fx and yq each match jq on exactly 1 tag, so they tie on score
+	// and are sorted alphabetically.
+	if tools[recs[0].ToolIdx].Name != "fx" || tools[recs[1].ToolIdx].Name != "yq" {
+		t.Errorf("got %s, %s; want fx, yq (alphabetical tiebreaker on equal score)",
+			tools[recs[0].ToolIdx].Name, tools[recs[1].ToolIdx].Name)
+	}
+	// Both should report 100% match since they share the same number
+	// of tags with the focus.
+	if recs[0].MatchPct != 100 || recs[1].MatchPct != 100 {
+		t.Errorf("expected both at 100%% match, got %d%% / %d%%", recs[0].MatchPct, recs[1].MatchPct)
+	}
+}
+
+func TestRelated_SkipsInstalledAndFocusItself(t *testing.T) {
+	pkg := registry.PackageIDs{Brew: "x", Winget: "x", Apt: "x"}
+	tools := []registry.Tool{
+		{Name: "jq", Tags: []string{"json"}, Instances: []registry.Instance{{Path: "/jq"}}},
+		// Already installed — must be skipped.
+		{Name: "fx", Tags: []string{"json"}, Instances: []registry.Instance{{Path: "/fx"}}},
+		// Same name as focus — must be skipped (defensive: prevents
+		// duplicate catalog entries from polluting the related list).
+		{Name: "jq", Tags: []string{"json"}, Packages: pkg},
+		// Eligible.
+		{Name: "yq", Tags: []string{"json"}, Packages: pkg},
+	}
+	recs := Related(tools[0], tools, 5)
+	if len(recs) != 1 || tools[recs[0].ToolIdx].Name != "yq" {
+		t.Fatalf("got %d recs (first=%v); want exactly yq", len(recs), recs)
+	}
+}
+
+func TestRelated_NoTagsReturnsNil(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "jq", Instances: []registry.Instance{{Path: "/jq"}}},
+		{Name: "yq", Tags: []string{"yaml"}, Packages: registry.PackageIDs{Brew: "yq"}},
+	}
+	if got := Related(tools[0], tools, 5); got != nil {
+		t.Errorf("focus with no tags should return nil, got %d", len(got))
+	}
+}
+
 func TestCompute_RespectsMaxCap(t *testing.T) {
 	// Build a fixture with one installed tool tagged "shared" and lots
 	// of candidate tools all tagged the same way. Compute should cap

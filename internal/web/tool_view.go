@@ -88,33 +88,22 @@ func mergedTagsAndTopics(t registry.Tool) []string {
 }
 
 // buildRelatedTools returns "you might also like" candidates for the
-// detail page. We feed Compute() the same catalog so the scoring
-// matches /foryou; then keep only entries that share at least one tag
-// or topic with the focus tool, and aren't already installed.
-//
-// Limit to 5 to keep the section a sensible "next thing to look at"
-// rather than a full search result.
+// detail page. We delegate to recommend.Related so the web UI shows
+// the same list as the TUI's tool detail page (same scoring: tag
+// overlap with the focus tool, ignoring the user's broader installed
+// set). Limited to 5 to keep the section a sensible "next thing to
+// look at".
 func buildRelatedTools(focus registry.Tool, tools []registry.Tool, favs map[string]bool) []relatedTool {
 	if len(tools) == 0 {
 		return nil
 	}
-	focusTags := tagSet(focus)
-	if len(focusTags) == 0 {
-		return nil
-	}
-	all := recommend.Compute(tools)
-	out := make([]relatedTool, 0, 5)
-	for _, r := range all {
+	recs := recommend.Related(focus, tools, 5)
+	out := make([]relatedTool, 0, len(recs))
+	for _, r := range recs {
 		if r.ToolIdx < 0 || r.ToolIdx >= len(tools) {
 			continue
 		}
 		t := tools[r.ToolIdx]
-		if strings.EqualFold(t.Name, focus.Name) {
-			continue
-		}
-		if !sharesTag(focusTags, t) {
-			continue
-		}
 		out = append(out, relatedTool{
 			Name:        t.Name,
 			DisplayName: t.DisplayName,
@@ -125,42 +114,6 @@ func buildRelatedTools(focus registry.Tool, tools []registry.Tool, favs map[stri
 			Reason:      r.Reason,
 			IsFavorite:  favs[t.Name],
 		})
-		if len(out) >= 5 {
-			break
-		}
 	}
 	return out
-}
-
-func tagSet(t registry.Tool) map[string]struct{} {
-	out := map[string]struct{}{}
-	for _, tag := range t.Tags {
-		if tag != "" {
-			out[strings.ToLower(tag)] = struct{}{}
-		}
-	}
-	if t.GitHubInfo != nil {
-		for _, topic := range t.GitHubInfo.Topics {
-			if topic != "" {
-				out[strings.ToLower(topic)] = struct{}{}
-			}
-		}
-	}
-	return out
-}
-
-func sharesTag(want map[string]struct{}, t registry.Tool) bool {
-	for _, tag := range t.Tags {
-		if _, ok := want[strings.ToLower(tag)]; ok {
-			return true
-		}
-	}
-	if t.GitHubInfo != nil {
-		for _, topic := range t.GitHubInfo.Topics {
-			if _, ok := want[strings.ToLower(topic)]; ok {
-				return true
-			}
-		}
-	}
-	return false
 }
