@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -11,10 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/custompacks"
 	"github.com/nassiharel/clim/internal/progress"
 	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/teamfile"
 )
 
 var (
@@ -58,15 +55,12 @@ type infoPackage struct {
 	ID     string `json:"id"`
 }
 
-// infoReference is where the tool is referenced (teamfile / project / pack).
-type infoReference struct {
-	Kind        string `json:"kind"`
-	Name        string `json:"name,omitempty"`
-	DisplayName string `json:"display_name,omitempty"`
-	Path        string `json:"path,omitempty"`
-	Required    bool   `json:"required,omitempty"`
-	Constraint  string `json:"version_constraint,omitempty"`
-}
+// infoReference is now an alias for the shared cli.Reference type to keep
+// the existing JSON shape stable while the underlying scanner lives in
+// refscan.go (shared with `clim why`).
+//
+//nolint:unused // kept as a documentation anchor; future code may reference it
+type infoReference = Reference
 
 // infoGitHub mirrors the catalog's GitHub metadata in CLI-shape.
 type infoGitHub struct {
@@ -84,20 +78,20 @@ type infoGitHub struct {
 
 // infoReport is the full JSON shape returned by `clim info <tool> --output json`.
 type infoReport struct {
-	Name            string          `json:"name"`
-	DisplayName     string          `json:"display_name,omitempty"`
-	Category        string          `json:"category,omitempty"`
-	Tags            []string        `json:"tags"`
-	Installed       bool            `json:"installed"`
-	UpdateAvailable bool            `json:"update_available"`
-	Latest          string          `json:"latest,omitempty"`
-	LatestSource    string          `json:"latest_source,omitempty"`
-	Instances       []infoInstance  `json:"instances"`
-	Packages        []infoPackage   `json:"packages"`
-	GitHub          *infoGitHub     `json:"github,omitempty"`
-	References      []infoReference `json:"references"`
-	RelatedTools    []string        `json:"related_tools"`
-	Warnings        []string        `json:"warnings"`
+	Name            string         `json:"name"`
+	DisplayName     string         `json:"display_name,omitempty"`
+	Category        string         `json:"category,omitempty"`
+	Tags            []string       `json:"tags"`
+	Installed       bool           `json:"installed"`
+	UpdateAvailable bool           `json:"update_available"`
+	Latest          string         `json:"latest,omitempty"`
+	LatestSource    string         `json:"latest_source,omitempty"`
+	Instances       []infoInstance `json:"instances"`
+	Packages        []infoPackage  `json:"packages"`
+	GitHub          *infoGitHub    `json:"github,omitempty"`
+	References      []Reference    `json:"references"`
+	RelatedTools    []string       `json:"related_tools"`
+	Warnings        []string       `json:"warnings"`
 }
 
 func runInfo(cmd *cobra.Command, args []string) error {
@@ -185,7 +179,12 @@ func buildInfoReport(cmd *cobra.Command, t *registry.Tool, tools []registry.Tool
 		r.GitHub = gh
 	}
 
-	r.References = collectInfoReferences(cmd, t.Name, &r)
+	refs, warnings := CollectReferences(cmd, t.Name)
+	if refs == nil {
+		refs = []Reference{}
+	}
+	r.References = refs
+	r.Warnings = append(r.Warnings, warnings...)
 	r.RelatedTools = relatedInstalledTools(t.Name, t, tools)
 	return r
 }
@@ -208,105 +207,6 @@ func catalogPackagesFor(p registry.PackageIDs) []infoPackage {
 		}
 	}
 	return out
-}
-
-// collectInfoReferences mirrors `clim why`'s reference scan. Warnings are
-// appended to r.Warnings rather than printed to stderr so JSON consumers
-// see the same signal.
-func collectInfoReferences(cmd *cobra.Command, toolName string, r *infoReport) []infoReference {
-	var refs []infoReference
-
-	// 1) Local .clim.yaml in or above CWD.
-	cwd, _ := os.Getwd()
-	var seenTeamPath string
-	if cwd != "" {
-		path := teamfile.Find(cwd)
-		if path != "" {
-			seenTeamPath = path
-			tf, err := teamfile.Parse(path)
-			if err != nil {
-				r.Warnings = append(r.Warnings, fmt.Sprintf("could not parse %s: %v", path, err))
-			} else {
-				for _, req := range tf.Tools {
-					if req.Name == toolName {
-						refs = append(refs, infoReference{
-							Kind: "teamfile", Path: path, Required: true, Constraint: req.Version,
-						})
-					}
-				}
-				for _, opt := range tf.Optional {
-					if opt.Name == toolName {
-						refs = append(refs, infoReference{
-							Kind: "teamfile", Path: path, Required: false, Constraint: opt.Version,
-						})
-					}
-				}
-			}
-		}
-	}
-
-	// 2) Registered projects.
-	projects, projErr := teamfile.LoadProjects()
-	if projErr != nil {
-		r.Warnings = append(r.Warnings, fmt.Sprintf("could not load project registry: %v", projErr))
-	}
-	for _, proj := range projects {
-		climPath := filepath.Join(proj.Path, ".clim.yaml")
-		if seenTeamPath != "" && filepath.Clean(climPath) == filepath.Clean(seenTeamPath) {
-			continue
-		}
-		tf, err := teamfile.Parse(climPath)
-		if err != nil {
-			r.Warnings = append(r.Warnings, fmt.Sprintf("could not parse %s: %v", climPath, err))
-			continue
-		}
-		for _, req := range tf.Tools {
-			if req.Name == toolName {
-				refs = append(refs, infoReference{
-					Kind: "project", Name: proj.Name, Path: climPath, Required: true, Constraint: req.Version,
-				})
-			}
-		}
-		for _, opt := range tf.Optional {
-			if opt.Name == toolName {
-				refs = append(refs, infoReference{
-					Kind: "project", Name: proj.Name, Path: climPath, Required: false, Constraint: opt.Version,
-				})
-			}
-		}
-	}
-
-	// 3) Marketplace packs.
-	packs, packErr := svcFrom(cmd).LoadPacks(cmd.Context())
-	if packErr != nil {
-		r.Warnings = append(r.Warnings, fmt.Sprintf("could not load packs: %v", packErr))
-	}
-	for _, pack := range packs {
-		for _, pToolName := range pack.ToolNames {
-			if pToolName == toolName {
-				refs = append(refs, infoReference{
-					Kind: "pack", Name: pack.Name, DisplayName: pack.DisplayName,
-				})
-			}
-		}
-	}
-
-	// 4) Custom packs.
-	if cp, cpErr := custompacks.Load(); cpErr != nil {
-		r.Warnings = append(r.Warnings, fmt.Sprintf("could not load custom packs: %v", cpErr))
-	} else {
-		for _, pack := range cp {
-			for _, pToolName := range pack.ToolNames {
-				if pToolName == toolName {
-					refs = append(refs, infoReference{
-						Kind: "custom_pack", Name: pack.Name, DisplayName: pack.DisplayName,
-					})
-				}
-			}
-		}
-	}
-
-	return refs
 }
 
 // closestToolName returns a single suggestion for a misspelled tool name,
@@ -486,21 +386,27 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 	}
 }
 
+// formatInfoRef renders a Reference as a single human-readable line for
+// the text output of `clim info`. Both required and optional refs may
+// carry a version constraint — neither role drops it.
 func formatInfoRef(ref infoReference) string {
 	switch ref.Kind {
 	case "teamfile":
+		role := "optional"
 		if ref.Required {
-			constraint := ""
-			if ref.Constraint != "" {
-				constraint = " " + ref.Constraint
-			}
-			return fmt.Sprintf(".clim.yaml (required%s) — %s", constraint, ref.Path)
+			role = "required"
 		}
-		return ".clim.yaml (optional) — " + ref.Path
+		if ref.Constraint != "" {
+			role += " " + ref.Constraint
+		}
+		return fmt.Sprintf(".clim.yaml (%s) — %s", role, ref.Path)
 	case "project":
 		role := "optional"
 		if ref.Required {
 			role = "required"
+		}
+		if ref.Constraint != "" {
+			role += " " + ref.Constraint
 		}
 		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, role, ref.Path)
 	case "pack":
@@ -517,9 +423,22 @@ func formatInfoRef(ref infoReference) string {
 	return ref.Kind + " " + ref.Name
 }
 
-// formatStarCount renders 1234 → "1.2k", 12345 → "12.3k", under 1000 unchanged.
+// formatStarCount renders star counts in human-friendly form:
+//
+//	0–999       => "42"
+//	1k–99.9k    => "12.3k"
+//	100k–999k   => "234k"
+//	1M+         => "1.2M" / "12M" / "123M"
+//
+// Matches the TUI's `formatStars` helper so `clim info` output stays in
+// sync with the detail page.
 func formatStarCount(n int) string {
 	switch {
+	case n >= 1000000:
+		if n >= 10000000 {
+			return strconv.Itoa(n/1000000) + "M"
+		}
+		return fmt.Sprintf("%.1fM", float64(n)/1000000)
 	case n >= 100000:
 		return strconv.Itoa(n/1000) + "k"
 	case n >= 1000:

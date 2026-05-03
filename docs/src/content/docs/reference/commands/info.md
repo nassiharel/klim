@@ -33,72 +33,66 @@ clim info bat --refresh               # bypass cache
 ## Output
 
 ```
-kubectl  (Containers)  ★ 109k  ⬆ Update available
-  Production-Grade Container Scheduling and Management
+kubectl  (Containers)  ★ 3.3k
+  Issue tracker and mirror of kubectl code
 
-  ✓ Installed: 1.28.4 (brew) at /usr/local/bin/kubectl
-  ⬆ Update available: 1.28.4 → 1.31.0
+  ✗ Not installed
 
   Available via:
-    winget   Kubernetes.kubectl
-    choco    kubernetes-cli
-    scoop    kubectl
-    brew     kubernetes-cli
-    apt      kubectl
+    winget  Kubernetes.kubectl
+    choco   kubernetes-cli
+    scoop   kubectl
+    brew    kubernetes-cli
+    snap    kubectl
 
   GitHub:
-    Repo:      https://github.com/kubernetes/kubernetes
-    Stats:     ★ 109k stars   ⑂ 39.2k forks
+    Repo:      https://github.com/kubernetes/kubectl
+    Stats:     ★ 3.3k stars   ⑂ 997 forks
     License:   Apache-2.0
-    Topics:    kubernetes, containers, orchestration
-    Last push: 2 day(s) ago
+    Topics:    k8s-sig-cli, k8s-staging
+    Last push: 1 week(s) ago
 
-  Tags: containers, k8s, devops
+  Tags: kubernetes, cli
 
   Referenced by:
     • .clim.yaml (required >=1.28) — /home/me/myproject/.clim.yaml
-    • Pack "K8s Essentials" (k8s-essentials)
+    • Pack "Kubernetes Starter" (k8s-starter)
 
-  Related installed tools: helm, k9s, istioctl
+  Related installed tools: kubectx
 ```
 
 ## JSON Output
 
-`--output json` returns the same data as a structured payload:
+`--output json` returns the same data as a structured payload. Real
+shape (taken from the live `kubectl` catalog entry):
 
 ```json
 {
   "name": "kubectl",
   "display_name": "kubectl",
   "category": "Containers",
-  "tags": ["containers", "k8s", "devops"],
-  "installed": true,
-  "update_available": true,
-  "latest": "1.31.0",
-  "instances": [
-    {"path": "/usr/local/bin/kubectl", "version": "1.28.4", "source": "brew"}
-  ],
+  "tags": ["kubernetes", "cli"],
+  "installed": false,
+  "update_available": false,
+  "instances": [],
   "packages": [
     {"source": "winget", "id": "Kubernetes.kubectl"},
-    {"source": "brew",   "id": "kubernetes-cli"}
+    {"source": "choco",  "id": "kubernetes-cli"},
+    {"source": "scoop",  "id": "kubectl"},
+    {"source": "brew",   "id": "kubernetes-cli"},
+    {"source": "snap",   "id": "kubectl"}
   ],
   "github": {
-    "slug": "kubernetes/kubernetes",
-    "url": "https://github.com/kubernetes/kubernetes",
-    "stars": 109000,
+    "slug": "kubernetes/kubectl",
+    "url": "https://github.com/kubernetes/kubectl",
+    "stars": 3300,
+    "forks": 997,
     "license": "Apache-2.0",
-    "topics": ["kubernetes", "containers", "orchestration"],
-    "last_push": "2026-05-01T..."
+    "topics": ["k8s-sig-cli", "k8s-staging"],
+    "last_push": "2026-04-26T..."
   },
-  "references": [
-    {
-      "kind": "teamfile",
-      "path": "/home/me/myproject/.clim.yaml",
-      "required": true,
-      "version_constraint": ">=1.28"
-    }
-  ],
-  "related_tools": ["helm", "k9s", "istioctl"],
+  "references": [],
+  "related_tools": [],
   "warnings": []
 }
 ```
