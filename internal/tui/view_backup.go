@@ -252,5 +252,3 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 }
 
 // --- Config tab ---
-
-// renderConfigView moved to view_config.go.

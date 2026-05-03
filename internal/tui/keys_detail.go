@@ -124,7 +124,6 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyPackDetail handles navigation in the pack detail view.
 
-// handleKeyDetail moved to keys_detail.go.
 func (m Model) handleKeyPackDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// While a pack operation is running: Esc cancels, s skips, q dismisses view.
 	if m.packInstalling {

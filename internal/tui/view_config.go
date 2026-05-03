@@ -88,8 +88,6 @@ func (m Model) renderConfigView() string {
 
 // --- Help ---
 
-// renderHelp moved to view_help.go.
-
 // --- Two-column layout builders ---
 
 // buildSidebarLines renders the filter sidebar as a slice of fixed-width strings.

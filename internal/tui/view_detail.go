@@ -50,7 +50,6 @@ func (m Model) renderDetailView(tool registry.Tool) string {
 // (everything except the footer). Extracted so computeDetailMaxScroll
 // can measure actual line count.
 
-// renderDetailView moved to view_detail.go.
 func (m Model) renderDetailBody(tool registry.Tool) string {
 	var b strings.Builder
 
@@ -113,7 +112,6 @@ func (m Model) renderDetailBody(tool registry.Tool) string {
 // so we clamp locally and just use the clamped value here. The next user
 // input re-renders and settles any over-scroll silently.
 
-// renderDetailBody moved to view_detail.go.
 func (m Model) layoutDetailWithScroll(body, footer string) string {
 	if m.height <= 0 {
 		return m.layoutWithFooter(body, footer)
@@ -165,7 +163,6 @@ func (m Model) layoutDetailWithScroll(body, footer string) string {
 // category pill, description, and an at-a-glance stats bar (stars, forks,
 // license, last push).
 
-// layoutDetailWithScroll moved to view_detail.go.
 func (m Model) renderHeroHeader(tool registry.Tool) string {
 	var b strings.Builder
 
@@ -227,7 +224,6 @@ func (m Model) renderHeroHeader(tool registry.Tool) string {
 // renderQuickStats renders the single-line summary of GitHub stats. Returns
 // "" when the tool has no enriched metadata.
 
-// renderHeroHeader moved to view_detail.go.
 func (m Model) renderQuickStats(tool registry.Tool) string {
 	info := tool.GitHubInfo
 	if info == nil {
@@ -258,7 +254,6 @@ func (m Model) renderQuickStats(tool registry.Tool) string {
 // latest, source and path, and (when present) the list of additional instances
 // plus actionable recommendations.
 
-// renderQuickStats moved to view_detail.go.
 func (m Model) renderInstalledStatus(tool registry.Tool) string {
 	var b strings.Builder
 	label := detailLabelStyle.Render
@@ -318,7 +313,6 @@ func (m Model) renderInstalledStatus(tool registry.Tool) string {
 // manager: availability dot, PM name, and package id.
 // Interactive: toolMenu cursor navigates PM rows. Enter to install/upgrade, x to remove.
 
-// renderInstalledStatus moved to view_detail.go.
 func (m Model) renderPackageManagers(tool registry.Tool) string {
 	pkgs := collectPackageEntries(tool.Packages)
 	if len(pkgs) == 0 {
@@ -412,7 +406,6 @@ func (m Model) renderPackageManagers(tool registry.Tool) string {
 // renderAboutSection renders consolidated metadata: binary names, platforms,
 // and a deduped list of tags + GitHub topics.
 
-// renderPackageManagers moved to view_detail.go.
 func (m Model) renderAboutSection(tool registry.Tool) string {
 	var b strings.Builder
 	label := detailLabelStyle.Render
@@ -467,7 +460,6 @@ func (m Model) renderAboutSection(tool registry.Tool) string {
 // and activity are surfaced in the hero quick-stats bar to avoid duplication.
 // Returns "" when the tool has no GitHub slug.
 
-// renderAboutSection moved to view_detail.go.
 func (m Model) renderCommunitySection(tool registry.Tool) string {
 	if tool.GitHubSlug == "" && tool.GitHubInfo == nil {
 		return ""
@@ -498,7 +490,6 @@ func (m Model) renderCommunitySection(tool registry.Tool) string {
 // metadata for the detail view. Returns "" when the tool has no GitHub slug
 // and no fetched info.
 
-// renderCommunitySection moved to view_detail.go.
 func (m Model) renderGitHubSection(tool registry.Tool) string {
 	if tool.GitHubSlug == "" && tool.GitHubInfo == nil {
 		return ""
@@ -564,7 +555,6 @@ func (m Model) renderGitHubSection(tool registry.Tool) string {
 // renderInstanceRecommendations analyzes multiple installations and gives
 // actionable advice: version conflicts, stale installs, PATH priority issues.
 
-// renderGitHubSection moved to view_detail.go.
 func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 	var tips []string
 	primary := tool.Instances[0]
@@ -652,7 +642,3 @@ func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 }
 
 // --- Backup tab ---
-
-// renderBackupView moved to view_backup.go.
-
-// renderBackupRow moved to view_backup.go.

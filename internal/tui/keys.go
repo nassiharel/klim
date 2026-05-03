@@ -52,7 +52,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyConfirmation handles y/n confirmation for tool actions.
 
-// handleKey moved to keys.go.
 func (m Model) handleKeyConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y":
@@ -71,7 +70,6 @@ func (m Model) handleKeyConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyImportPath handles text input for the import file path.
 
-// handleKeyConfirmation moved to keys.go.
 func (m Model) handleKeyImportPath(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -101,7 +99,6 @@ func (m Model) handleKeyImportPath(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyTokenInput handles text input for the share token.
 
-// handleKeyImportPath moved to keys.go.
 func (m Model) handleKeyTokenInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -131,7 +128,6 @@ func (m Model) handleKeyTokenInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyBackupConfirm handles the import plan review and item selection.
 
-// handleKeyTokenInput moved to keys.go.
 func (m Model) handleKeyBackupConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter", "y", "Y":
@@ -193,7 +189,6 @@ func (m Model) handleKeyBackupConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeySidebar handles navigation in the filter sidebar panel.
 
-// handleKeyBackupConfirm moved to keys.go.
 func (m Model) handleKeySidebar(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "f":
@@ -266,7 +261,6 @@ func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleKeyDefault handles keys when no modal is active — tabs, navigation, actions.
 
-// handleKeySidebar moved to keys.go.
 func (m Model) nextSelectableIdx(idx int) int {
 	for i := idx + 1; i < len(m.sidebarItems); i++ {
 		if !m.sidebarItems[i].isHeader {
@@ -278,7 +272,6 @@ func (m Model) nextSelectableIdx(idx int) int {
 
 // prevSelectableIdx returns the previous non-header index before idx, or idx if at start.
 
-// nextSelectableIdx moved to keys.go.
 func (m Model) prevSelectableIdx(idx int) int {
 	for i := idx - 1; i >= 0; i-- {
 		if !m.sidebarItems[i].isHeader {
@@ -287,5 +280,3 @@ func (m Model) prevSelectableIdx(idx int) int {
 	}
 	return idx
 }
-
-// handleKeyPackDetail moved to keys_detail.go.

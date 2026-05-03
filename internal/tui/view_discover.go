@@ -9,7 +9,6 @@ import (
 	"github.com/nassiharel/clim/internal/onboard"
 )
 
-// packDisplayIndex moved to view_packs.go.
 func (m Model) renderForYouList() string {
 	var b strings.Builder
 
@@ -68,7 +67,6 @@ func (m Model) renderForYouList() string {
 
 // renderOnboardList renders the role-based onboard sub-tab.
 
-// renderForYouList moved to view_discover.go.
 func (m Model) renderOnboardList() string {
 	var b strings.Builder
 
@@ -152,7 +150,6 @@ const (
 // renderRecCard renders a single 2-line recommendation card.
 // selected highlights both lines. compact omits row 2 (for inline use in detail views).
 
-// renderOnboardList moved to view_discover.go.
 func (m Model) renderRecCard(rec recommendation, selected, compact bool) string {
 	if rec.toolIdx >= len(m.tools) {
 		return ""
@@ -232,8 +229,6 @@ func (m Model) renderRecCard(rec recommendation, selected, compact bool) string 
 	return line1 + "\n" + line2
 }
 
-// renderPackDetailView moved to view_packs.go.
-
 // renderDiscoverSubTabs renders the [Tools] [Packs] [For You] sub-tab bar.
 func (m Model) renderDiscoverSubTabs() string {
 	labels := []struct {
@@ -255,5 +250,3 @@ func (m Model) renderDiscoverSubTabs() string {
 	}
 	return "  " + strings.Join(parts, " ")
 }
-
-// renderRecCard moved to view_discover.go.

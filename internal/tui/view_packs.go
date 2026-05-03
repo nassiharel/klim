@@ -155,7 +155,6 @@ func (m Model) renderPacksList() string {
 // packDisplayIndex returns the real pack index for the given display position,
 // accounting for the current sort mode.
 
-// renderPacksList moved to view_packs.go.
 func (m Model) packDisplayIndex(displayIdx int) int {
 	if m.packSortMode == 1 || len(m.packs) == 0 {
 		return displayIdx // name sort = natural order (already alpha from scan)
