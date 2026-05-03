@@ -5,9 +5,11 @@
   "private": true,
   "scripts": {
     "prebuild": "node scripts/generate-marketplace.mjs",
-    "dev": "node scripts/generate-marketplace.mjs && astro dev",
-    "start": "node scripts/generate-marketplace.mjs && astro dev",
-    "build": "node scripts/generate-marketplace.mjs && astro build",
+    "predev": "node scripts/generate-marketplace.mjs",
+    "prestart": "node scripts/generate-marketplace.mjs",
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"
   },

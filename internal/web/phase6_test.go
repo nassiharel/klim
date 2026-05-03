@@ -51,6 +51,46 @@ func TestLifecycle_NewConnectionCancelsPendingShutdown(t *testing.T) {
 	}
 }
 
+// TestLifecycle_MaybeShutdownReChecksConnsUnderLock is the regression
+// test for the PR #48 race the reviewer flagged: time.AfterFunc.Stop
+// returns false when the timer's callback has already started running,
+// so a re-register that lands during the firing window would otherwise
+// see the callback call cancel() despite the new connection.
+//
+// The fix moves the conns check inside the callback under the same
+// mutex unregister uses. This test invokes maybeShutdown directly
+// while conns > 0 to lock that behaviour in: a stale callback must
+// bail without firing cancel.
+func TestLifecycle_MaybeShutdownReChecksConnsUnderLock(t *testing.T) {
+	var fired atomic.Int32
+	cancel := func() { fired.Add(1) }
+	lc := newLifecycle(time.Hour, cancel)
+
+	// Simulate the race: a connection has been re-registered while
+	// a timer callback is mid-flight. Calling maybeShutdown directly
+	// stands in for "the callback ran".
+	lc.register() // conns=1
+	lc.maybeShutdown()
+	if fired.Load() != 0 {
+		t.Fatalf("maybeShutdown fired cancel with active connection (timer-race regression)")
+	}
+
+	// Sanity: with conns=0, maybeShutdown DOES fire cancel exactly once.
+	lc.unregister() // schedules a real timer; we don't want it to fire too — clear it.
+	lc.timer.Stop()
+	lc.maybeShutdown()
+	if fired.Load() != 1 {
+		t.Fatalf("maybeShutdown should fire when conns=0, got %d", fired.Load())
+	}
+
+	// And idempotence: a second invocation while stopped doesn't
+	// double-fire.
+	lc.maybeShutdown()
+	if fired.Load() != 1 {
+		t.Fatalf("maybeShutdown should be single-shot, got %d", fired.Load())
+	}
+}
+
 func TestApiLifecycleStream_TracksConnections(t *testing.T) {
 	srv, err := New(Options{
 		Service:            service.New(),

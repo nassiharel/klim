@@ -1,11 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 
-const TOOLS_DIR = path.resolve(import.meta.dirname, '../../marketplace/tools');
-const PACKS_DIR = path.resolve(import.meta.dirname, '../../marketplace/packs');
-const OUT = path.resolve(import.meta.dirname, '../src/data/marketplace.json');
+// import.meta.dirname is Node 20+ only. The Astro toolchain pinned in
+// our lockfile still runs on Node 18 in some CI images, so derive the
+// directory portably via fileURLToPath / path.dirname.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const TOOLS_DIR = path.resolve(__dirname, '../../marketplace/tools');
+const PACKS_DIR = path.resolve(__dirname, '../../marketplace/packs');
+const OUT = path.resolve(__dirname, '../src/data/marketplace.json');
 
 function loadYamlDir(dir) {
   return fs.readdirSync(dir)

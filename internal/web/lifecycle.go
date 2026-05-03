@@ -49,7 +49,10 @@ func (l *lifecycle) register() {
 }
 
 // unregister removes a connection. When the count hits zero, schedule
-// a shutdown trigger after the grace period.
+// a shutdown trigger after the grace period. The trigger goes through
+// maybeShutdown so a re-register that lands while the timer is
+// firing concurrently still cancels the shutdown — Stop() returning
+// false would otherwise let the callback run anyway.
 func (l *lifecycle) unregister() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -57,11 +60,26 @@ func (l *lifecycle) unregister() {
 		l.conns--
 	}
 	if l.conns == 0 && l.cancel != nil && !l.stopped.Load() {
-		l.timer = time.AfterFunc(l.grace, func() {
-			if l.stopped.CompareAndSwap(false, true) {
-				l.cancel()
-			}
-		})
+		l.timer = time.AfterFunc(l.grace, l.maybeShutdown)
+	}
+}
+
+// maybeShutdown is the deferred shutdown callback fired by the
+// per-grace timer. We re-check conns under the same mutex used by
+// register / unregister so a re-register that races the timer
+// firing wins: if conns > 0 by the time we hold the lock, we bail
+// without cancelling. This closes the race that time.AfterFunc.Stop
+// can't on its own (Stop returns false when the timer has already
+// started running its callback).
+func (l *lifecycle) maybeShutdown() {
+	l.mu.Lock()
+	shouldShutdown := l.conns == 0 && !l.stopped.Load()
+	if shouldShutdown {
+		l.stopped.Store(true)
+	}
+	l.mu.Unlock()
+	if shouldShutdown && l.cancel != nil {
+		l.cancel()
 	}
 }
 
