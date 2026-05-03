@@ -327,7 +327,10 @@ func hasTrailRemnants(r fsRoots) bool {
 //   - If log.yaml write succeeds but HEAD write fails → return a
 //     *HeadWriteError. The log is durable, so callers MUST NOT roll
 //     back the object — the entry already exists in the canonical
-//     record and a future capture (or any read) will refresh HEAD.
+//     record. HEAD will only be refreshed by the next successful
+//     write (the next saveLog call: capture, prune, etc.); read
+//     paths (Log/Resolve/Show/Diff) never touch HEAD, so the stale
+//     pointer persists across reads until then.
 //
 // Callers that don't care about the distinction can treat the error
 // as a generic failure; errors.As(&HeadWriteError) recovers the
@@ -514,7 +517,7 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 	// and predecessor against existing entries before writing the
 	// object — otherwise a rejected capture would leave an orphan
 	// object on disk.
-	release, err := acquireLock(r.lock)
+	release, err := acquireLock(r.lock, false)
 	if err != nil {
 		return nil, err
 	}
@@ -637,7 +640,7 @@ func Log(opts LogOptions) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	release, err := acquireLock(r.lock)
+	release, err := acquireLock(r.lock, true)
 	if err != nil {
 		return nil, err
 	}
@@ -672,7 +675,7 @@ func Show(refSpec string) (*Snapshot, *Entry, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	release, err := acquireLock(r.lock)
+	release, err := acquireLock(r.lock, true)
 	if err != nil {
 		return nil, nil, err
 	}

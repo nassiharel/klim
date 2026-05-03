@@ -1159,3 +1159,50 @@ func TestPathToID_RejectsNonCanonicalLayouts(t *testing.T) {
 		t.Errorf("canonical layout rejected: %q → %q", canonical, id)
 	}
 }
+
+// TestPathToID_RejectsMixedCaseFanout verifies that a hand-renamed
+// objects/AB/<62hex>.yaml is rejected even though writeObject only
+// ever creates lowercase fanout dirs. Otherwise prune would keep a
+// file readObject can't open.
+func TestPathToID_RejectsMixedCaseFanout(t *testing.T) {
+	hex := strings.Repeat("a", 62)
+	// Mixed-case fanout dir.
+	if id := pathToID("AB/" + hex + ".yaml"); id != "" {
+		t.Errorf("pathToID accepted mixed-case fanout: %q", id)
+	}
+	// Mixed-case body part.
+	if id := pathToID("ab/" + strings.Repeat("A", 62) + ".yaml"); id != "" {
+		t.Errorf("pathToID accepted mixed-case body: %q", id)
+	}
+}
+
+// TestPrune_FailsOnMissingKeptObject verifies that gcObjects fails
+// closed when a kept entry's object file is gone (manual deletion,
+// disk corruption, etc.). Otherwise prune would rewrite log.yaml
+// while keeping entries that show/diff can never load.
+func TestPrune_FailsOnMissingKeptObject(t *testing.T) {
+	dir := useTempDir(t)
+	for i := 0; i < 3; i++ {
+		tools := []registry.Tool{fakeTool("toolA", "1.0."+string(rune('0'+i)), registry.SourceWinget, "/a")}
+		if _, err := Capture(OpCapture, "", tools); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Delete the most recent entry's object file before prune runs.
+	entries, err := Log(LogOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newest := entries[0]
+	objPath := filepath.Join(dir, "objects", string(newest.Object[:2]), string(newest.Object[2:])+".yaml")
+	if err := os.Remove(objPath); err != nil {
+		t.Fatal(err)
+	}
+	_, err = Prune(PruneOptions{Keep: 2})
+	if err == nil {
+		t.Fatal("expected error when kept entry's object is missing")
+	}
+	if !strings.Contains(err.Error(), "missing object") {
+		t.Fatalf("expected 'missing object' in error, got: %v", err)
+	}
+}

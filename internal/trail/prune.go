@@ -42,7 +42,7 @@ func Prune(opts PruneOptions) (PruneResult, error) {
 	if err != nil {
 		return res, err
 	}
-	release, err := acquireLock(r.lock)
+	release, err := acquireLock(r.lock, false)
 	if err != nil {
 		return res, err
 	}
@@ -120,7 +120,9 @@ func Prune(opts PruneOptions) (PruneResult, error) {
 }
 
 // gcObjects walks objects/ and removes any file whose hash isn't referenced
-// by an entry in keep.
+// by an entry in keep. It also verifies that every kept entry's object
+// actually exists on disk — silently keeping references whose blobs are
+// missing would let prune report success while leaving show/diff broken.
 func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 	wanted := make(map[ObjectID]struct{}, len(keep))
 	for _, e := range keep {
@@ -128,7 +130,13 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 	}
 	keptCount := 0
 	removedCount := 0
+	seenWanted := make(map[ObjectID]struct{}, len(wanted))
 	if _, err := os.Stat(r.objects); os.IsNotExist(err) {
+		// No objects dir at all: every keep entry's blob is missing.
+		// Surface the first one so the caller fails closed.
+		for _, e := range keep {
+			return 0, 0, fmt.Errorf("trail: kept entry @%d references missing object %s (objects dir does not exist)", e.Index, e.Object.Short())
+		}
 		return 0, 0, nil
 	}
 	err := filepath.WalkDir(r.objects, func(path string, d os.DirEntry, walkErr error) error {
@@ -166,6 +174,7 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 			return nil
 		}
 		if _, want := wanted[id]; want {
+			seenWanted[id] = struct{}{}
 			keptCount++
 			return nil
 		}
@@ -177,6 +186,14 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 	})
 	if err != nil {
 		return keptCount, removedCount, err
+	}
+	// Every kept entry must have a corresponding object on disk —
+	// otherwise the post-prune log references a snapshot that
+	// show/diff can never load. Surface the first missing one.
+	for _, e := range keep {
+		if _, ok := seenWanted[e.Object]; !ok {
+			return keptCount, removedCount, fmt.Errorf("trail: kept entry @%d references missing object %s (run `clim trail prune --keep N` excluding it, or restore the file)", e.Index, e.Object.Short())
+		}
 	}
 	// Best-effort: prune empty fanout dirs.
 	pruneEmptyFanout(r.objects)
@@ -201,7 +218,16 @@ func pathToID(rel string) ObjectID {
 	if len(parts[0]) != 2 || len(parts[1]) != 62 {
 		return ""
 	}
-	return ObjectID(strings.ToLower(parts[0] + parts[1]))
+	// objectPath / readObject only ever look under the lowercase
+	// fanout, so we must reject mixed-case file names rather than
+	// silently lowercasing them. A hand-renamed `objects/AB/...`
+	// would otherwise be treated as a kept object that show/diff
+	// can never actually open.
+	id := ObjectID(parts[0] + parts[1])
+	if !id.IsValid() {
+		return ""
+	}
+	return id
 }
 
 func pruneEmptyFanout(root string) {

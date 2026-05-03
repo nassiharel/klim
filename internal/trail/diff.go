@@ -59,7 +59,7 @@ func Diff(a, b string) (*DiffResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	release, err := acquireLock(r.lock)
+	release, err := acquireLock(r.lock, true)
 	if err != nil {
 		return nil, err
 	}

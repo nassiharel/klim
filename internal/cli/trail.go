@@ -274,7 +274,7 @@ func runTrailCapture(cmd *cobra.Command, _ []string) error {
 	}
 	fmt.Fprintln(os.Stderr)
 	if headErr != nil {
-		fmt.Fprintf(os.Stderr, "  ⚠ HEAD pointer not updated (%v); the trail is still durable, the next capture will refresh it\n", headErr)
+		fmt.Fprintf(os.Stderr, "  ⚠ HEAD pointer not updated (%v); the trail is still durable, the next successful capture or prune will refresh it\n", headErr)
 	}
 	return nil
 }
@@ -495,7 +495,7 @@ func runTrailPrune(_ *cobra.Command, _ []string) error {
 	fmt.Fprintf(os.Stderr, "✓ Pruned trail: %d entries kept (%d removed), %d objects kept (%d removed)\n",
 		res.EntriesKept, res.EntriesRemoved, res.ObjectsKept, res.ObjectsRemoved)
 	if headErr != nil {
-		fmt.Fprintf(os.Stderr, "  ⚠ HEAD pointer not updated (%v); the trail is still durable, the next capture will refresh it\n", err)
+		fmt.Fprintf(os.Stderr, "  ⚠ HEAD pointer not updated (%v); the trail is still durable, the next successful capture or prune will refresh it\n", err)
 	}
 	return nil
 }
