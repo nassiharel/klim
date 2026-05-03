@@ -225,6 +225,9 @@ func loadLog(r fsRoots) (*logFile, error) {
 		return nil, fmt.Errorf("trail log has unsupported schema version %d (this clim supports %d) — upgrade clim",
 			lf.SchemaVersion, SchemaVersion)
 	}
+	if err := validateLogEntryRequiredFields(data, r.log); err != nil {
+		return nil, err
+	}
 	// Validate every entry's Object id, Index, and Label field. The
 	// log is the canonical history record, and Capture has always
 	// rejected reserved/control-character labels — accepting them at
@@ -244,6 +247,9 @@ func loadLog(r fsRoots) (*logFile, error) {
 		}
 		if e.Index < 0 {
 			return nil, fmt.Errorf("trail log entry has negative index %d (corrupted or hand-edited?)", e.Index)
+		}
+		if e.Time.IsZero() {
+			return nil, fmt.Errorf("trail log entry @%d is missing time (corrupted or hand-edited?)", e.Index)
 		}
 		if _, dup := seen[e.Index]; dup {
 			return nil, fmt.Errorf("trail log has duplicate entry index @%d (corrupted or hand-edited?)", e.Index)
@@ -288,6 +294,41 @@ func loadLog(r fsRoots) (*logFile, error) {
 		prevIdx = e.Index
 	}
 	return &lf, nil
+}
+
+func validateLogEntryRequiredFields(data []byte, path string) error {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return fmt.Errorf("parsing trail log %s: %w", path, err)
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil
+	}
+	root := doc.Content[0]
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		if root.Content[i].Value != "entries" {
+			continue
+		}
+		entries := root.Content[i+1]
+		if entries.Kind != yaml.SequenceNode {
+			return nil
+		}
+		for idx, entry := range entries.Content {
+			if entry.Kind != yaml.MappingNode {
+				continue
+			}
+			fields := make(map[string]struct{}, len(entry.Content)/2)
+			for j := 0; j < len(entry.Content)-1; j += 2 {
+				fields[entry.Content[j].Value] = struct{}{}
+			}
+			for _, field := range []string{"index", "object", "time", "op"} {
+				if _, ok := fields[field]; !ok {
+					return fmt.Errorf("trail log entry #%d is missing %s (corrupted or hand-edited?)", idx, field)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // hasTrailRemnants reports whether the trail dir contains state other

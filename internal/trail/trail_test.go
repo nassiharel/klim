@@ -1137,6 +1137,64 @@ func TestLoadLog_RejectsEmptyOp(t *testing.T) {
 	}
 }
 
+func TestLoadLog_RejectsMissingRequiredEntryFields(t *testing.T) {
+	cases := []struct {
+		name        string
+		wantMessage string
+	}{
+		{
+			name:        "index",
+			wantMessage: "missing index",
+		},
+		{
+			name:        "time",
+			wantMessage: "missing time",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := useTempDir(t)
+			if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
+				t.Fatal(err)
+			}
+			logPath := filepath.Join(dir, "log.yaml")
+			body, err := os.ReadFile(logPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var lfNode yaml.Node
+			if err := yaml.Unmarshal(body, &lfNode); err != nil {
+				t.Fatal(err)
+			}
+			root := lfNode.Content[0]
+			for i := 0; i < len(root.Content); i += 2 {
+				if root.Content[i].Value != "entries" {
+					continue
+				}
+				entry := root.Content[i+1].Content[0]
+				for j := 0; j < len(entry.Content); j += 2 {
+					if entry.Content[j].Value == tc.name {
+						entry.Content = append(entry.Content[:j], entry.Content[j+2:]...)
+						break
+					}
+				}
+			}
+			tampered, err := yaml.Marshal(&lfNode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(logPath, tampered, 0o644); err != nil { //nolint:gosec
+				t.Fatal(err)
+			}
+			if _, err := Log(LogOptions{}); err == nil {
+				t.Fatal("expected error for missing required entry field")
+			} else if !strings.Contains(err.Error(), tc.wantMessage) {
+				t.Fatalf("got: %v", err)
+			}
+		})
+	}
+}
+
 // TestPathToID_RejectsNonCanonicalLayouts guards the strict
 // fanout-aware reverse mapping. Anything other than <2hex>/<62hex>.yaml
 // must return "" so prune treats it as garbage.

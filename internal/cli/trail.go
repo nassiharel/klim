@@ -265,7 +265,12 @@ func runTrailCapture(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "✓ Captured %s (%s)", entry.Object.Short(), entry.Operation)
+	ref := string(entry.Object)
+	if entries, err := trail.Log(trail.LogOptions{}); err == nil {
+		refLen := refPrefixLenForObject(entry.Object, entries)
+		ref = string(entry.Object[:refLen])
+	}
+	fmt.Fprintf(os.Stderr, "✓ Captured %s (%s)", ref, entry.Operation)
 	if entry.Label != "" {
 		fmt.Fprintf(os.Stderr, " — %s", entry.Label)
 	}
@@ -404,7 +409,7 @@ func runTrailShow(cmd *cobra.Command, args []string) error {
 	}
 	snap, entry, err := trail.Show(args[0])
 	if err != nil {
-		return err
+		return trailRefError(err)
 	}
 
 	if out == OutputJSON {
@@ -444,7 +449,7 @@ func runTrailDiff(cmd *cobra.Command, args []string) error {
 	}
 	d, err := trail.Diff(a, b)
 	if err != nil {
-		return err
+		return trailRefError(err)
 	}
 	if out == OutputJSON {
 		return printJSON(map[string]any{
@@ -557,6 +562,8 @@ func parseTrailDuration(s string) (time.Duration, error) {
 func humanAgo(t time.Time) string {
 	d := time.Since(t)
 	switch {
+	case d < 0:
+		return t.Local().Format("2006-01-02 15:04")
 	case d < time.Minute:
 		return "just now"
 	case d < time.Hour:
@@ -568,6 +575,33 @@ func humanAgo(t time.Time) string {
 	default:
 		return t.Local().Format("2006-01-02")
 	}
+}
+
+func trailRefError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if strings.HasPrefix(msg, "trail: invalid HEAD~ ref ") ||
+		strings.HasPrefix(msg, "trail: invalid @<index> ref ") ||
+		strings.HasPrefix(msg, "trail: empty ref") {
+		return &UsageError{Err: err}
+	}
+	return err
+}
+
+func refPrefixLenForObject(id trail.ObjectID, entries []trail.Entry) int {
+	found := false
+	for _, e := range entries {
+		if e.Object == id {
+			found = true
+			break
+		}
+	}
+	if !found {
+		entries = append(entries, trail.Entry{Object: id})
+	}
+	return uniquePrefixLen(entries)
 }
 
 // truncate shortens s to fit in n display columns (terminal cells),
@@ -599,11 +633,4 @@ func truncate(s string, n int) string {
 	}
 	b.WriteRune('…')
 	return b.String()
-}
-
-func dashIfEmpty(s string) string {
-	if s == "" {
-		return "—"
-	}
-	return s
 }
