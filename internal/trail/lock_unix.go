@@ -12,37 +12,25 @@ import (
 	"github.com/nassiharel/clim/internal/fileutil"
 )
 
-// acquireLock takes an exclusive advisory lock on path. It blocks until the
-// lock is held and returns a release func that unlocks and closes the FD.
+// acquireLock takes an advisory lock on path. It blocks until the lock
+// is held and returns a release func that unlocks and closes the FD.
 //
 // Uses flock(2) on Unix. Inherently advisory: cooperating processes only.
 //
-// readOnly=true opens the lock file with O_RDONLY and never tries to
-// create it. Read paths (Log/Resolve/Show/Diff) pass readOnly=true so
-// they don't need write permission on the trail directory and don't
-// silently materialise log.lock on first read of a populated trail
-// (which would otherwise break read-only / root-owned config dirs).
-// Write paths (Capture/Prune) pass readOnly=false because they will
-// create the lock if no other process has yet.
+// readOnly=true asks for a shared (LOCK_SH) lock so multiple readers
+// don't block each other; readOnly=false uses LOCK_EX. In both cases
+// the lock file is created with O_CREATE if it doesn't exist — that's
+// required for cross-process correctness, because a read that found
+// the file missing and skipped locking could race a concurrent first
+// writer. The trade-off (read-only commands need write permission on
+// the trail dir on first invocation) is intentional: race-free
+// coordination wins over the read-only-config-dir edge case.
 func acquireLock(path string, readOnly bool) (func(), error) {
-	flags := os.O_CREATE | os.O_RDWR
-	mode := os.FileMode(0o600)
-	if readOnly {
-		flags = os.O_RDONLY
+	if err := fileutil.EnsureDir(path); err != nil {
+		return nil, fmt.Errorf("creating lock dir: %w", err)
 	}
-	if !readOnly {
-		if err := fileutil.EnsureDir(path); err != nil {
-			return nil, fmt.Errorf("creating lock dir: %w", err)
-		}
-	}
-	f, err := os.OpenFile(path, flags, mode) //nolint:gosec // G302: advisory lock file, perms intentionally restrictive
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // G302: advisory lock file
 	if err != nil {
-		// Read-only inspection of a trail that was never written to
-		// has nothing to lock against, so a missing log.lock is
-		// benign — return a no-op release.
-		if readOnly && os.IsNotExist(err) {
-			return func() {}, nil
-		}
 		return nil, fmt.Errorf("opening lock %s: %w", path, err)
 	}
 	lockOp := unix.LOCK_EX

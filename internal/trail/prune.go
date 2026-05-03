@@ -86,6 +86,20 @@ func Prune(opts PruneOptions) (PruneResult, error) {
 
 	res.EntriesKept = len(kept)
 	res.EntriesRemoved = len(lf.Entries) - len(kept)
+
+	// VALIDATE BEFORE COMMITTING. Every kept entry must have a
+	// usable (present + content-correct) object on disk. Verifying
+	// up front means a corrupted/missing object can't trick prune
+	// into rewriting log.yaml with references show/diff can never
+	// load. readObject re-hashes the stored bytes against the id,
+	// so this catches both ENOENT and silent on-disk corruption.
+	for _, e := range kept {
+		if _, err := readObject(r, e.Object); err != nil {
+			return res, fmt.Errorf("trail: kept entry @%d (%s) is unusable, refusing to prune: %w",
+				e.Index, e.Object.Short(), err)
+		}
+	}
+
 	// Remember whether the log was successfully committed but HEAD
 	// failed to update, so we can still GC orphaned objects below.
 	// Treating *HeadWriteError as a hard failure would skip gcObjects
@@ -119,10 +133,11 @@ func Prune(opts PruneOptions) (PruneResult, error) {
 	return res, nil
 }
 
-// gcObjects walks objects/ and removes any file whose hash isn't referenced
-// by an entry in keep. It also verifies that every kept entry's object
-// actually exists on disk — silently keeping references whose blobs are
-// missing would let prune report success while leaving show/diff broken.
+// gcObjects walks objects/ and removes any file whose hash isn't
+// referenced by an entry in keep. The pre-saveLog validation in Prune
+// has already verified that every kept entry's object exists and
+// hashes correctly, so this function only handles the cleanup half:
+// orphans, garbage names, and non-yaml files.
 func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 	wanted := make(map[ObjectID]struct{}, len(keep))
 	for _, e := range keep {
@@ -130,13 +145,7 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 	}
 	keptCount := 0
 	removedCount := 0
-	seenWanted := make(map[ObjectID]struct{}, len(wanted))
 	if _, err := os.Stat(r.objects); os.IsNotExist(err) {
-		// No objects dir at all: every keep entry's blob is missing.
-		// Surface the first one so the caller fails closed.
-		for _, e := range keep {
-			return 0, 0, fmt.Errorf("trail: kept entry @%d references missing object %s (objects dir does not exist)", e.Index, e.Object.Short())
-		}
 		return 0, 0, nil
 	}
 	err := filepath.WalkDir(r.objects, func(path string, d os.DirEntry, walkErr error) error {
@@ -150,9 +159,7 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 		// content-addressed files is garbage — clim owns this dir
 		// (see writeObject) and the only valid layout is
 		// <aa>/<bb...>.yaml where the full filename is a 64-char
-		// hex Object ID. Garbage gets removed so trail prune
-		// actually GCs the store as advertised, instead of leaving
-		// stray files behind forever.
+		// hex Object ID.
 		if !strings.HasSuffix(path, ".yaml") {
 			if rmErr := os.Remove(path); rmErr != nil { //nolint:gosec
 				return fmt.Errorf("removing unrecognized file %s: %w", path, rmErr)
@@ -160,7 +167,6 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 			removedCount++
 			return nil
 		}
-		// Reconstruct id from <objects>/<aa>/<rest>.yaml.
 		rel, err := filepath.Rel(r.objects, path)
 		if err != nil {
 			return err
@@ -174,7 +180,6 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 			return nil
 		}
 		if _, want := wanted[id]; want {
-			seenWanted[id] = struct{}{}
 			keptCount++
 			return nil
 		}
@@ -186,14 +191,6 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 	})
 	if err != nil {
 		return keptCount, removedCount, err
-	}
-	// Every kept entry must have a corresponding object on disk —
-	// otherwise the post-prune log references a snapshot that
-	// show/diff can never load. Surface the first missing one.
-	for _, e := range keep {
-		if _, ok := seenWanted[e.Object]; !ok {
-			return keptCount, removedCount, fmt.Errorf("trail: kept entry @%d references missing object %s (run `clim trail prune --keep N` excluding it, or restore the file)", e.Index, e.Object.Short())
-		}
 	}
 	// Best-effort: prune empty fanout dirs.
 	pruneEmptyFanout(r.objects)

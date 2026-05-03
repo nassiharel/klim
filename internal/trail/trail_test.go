@@ -1202,8 +1202,17 @@ func TestPrune_FailsOnMissingKeptObject(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when kept entry's object is missing")
 	}
-	if !strings.Contains(err.Error(), "missing object") {
-		t.Fatalf("expected 'missing object' in error, got: %v", err)
+	if !strings.Contains(err.Error(), "unusable, refusing to prune") {
+		t.Fatalf("expected 'unusable, refusing to prune' in error, got: %v", err)
+	}
+	// And the old log.yaml must still be intact — pre-saveLog
+	// validation means the rewrite never happened.
+	entries2, err := Log(LogOptions{})
+	if err != nil {
+		t.Fatalf("log unreadable after refused prune: %v", err)
+	}
+	if len(entries2) != 3 {
+		t.Errorf("log was rewritten despite refused prune: have %d entries, want 3", len(entries2))
 	}
 }
 
@@ -1232,5 +1241,45 @@ func TestCapture_RejectsHEADTildeAndAtPrefixesEvenWhenInvalid(t *testing.T) {
 		if !strings.Contains(err.Error(), "reserved ref syntax") {
 			t.Errorf("Capture(%q): expected 'reserved ref syntax' in error, got: %v", label, err)
 		}
+	}
+}
+
+// TestPrune_FailsOnCorruptedKeptObject verifies that prune validates
+// the CONTENT of every kept entry's object, not just its presence.
+// A corrupted-but-present blob would otherwise survive pruning and
+// the command would report success even though show/diff cannot
+// open the entry.
+func TestPrune_FailsOnCorruptedKeptObject(t *testing.T) {
+	dir := useTempDir(t)
+	for i := 0; i < 3; i++ {
+		tools := []registry.Tool{fakeTool("toolA", "1.0."+string(rune('0'+i)), registry.SourceWinget, "/a")}
+		if _, err := Capture(OpCapture, "", tools); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Corrupt one of the kept entries' objects in place.
+	entries, err := Log(LogOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newest := entries[0]
+	objPath := filepath.Join(dir, "objects", string(newest.Object[:2]), string(newest.Object[2:])+".yaml")
+	if err := os.WriteFile(objPath, []byte("garbage\n"), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	_, err = Prune(PruneOptions{Keep: 2})
+	if err == nil {
+		t.Fatal("expected error on corrupted kept object")
+	}
+	if !strings.Contains(err.Error(), "unusable, refusing to prune") {
+		t.Fatalf("got: %v", err)
+	}
+	// Log.yaml must still have all 3 entries (rewrite was refused).
+	entries2, err := Log(LogOptions{})
+	if err != nil {
+		t.Fatalf("log unreadable: %v", err)
+	}
+	if len(entries2) != 3 {
+		t.Errorf("expected 3 entries (rewrite refused), got %d", len(entries2))
 	}
 }

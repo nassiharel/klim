@@ -14,7 +14,6 @@ import (
 // LockFileEx flags (Windows).
 const (
 	lockfileExclusiveLock = 0x00000002
-	lockfileFailImmediate = 0x00000001 //nolint:unused // reserved for future try-lock paths
 )
 
 var (
@@ -24,29 +23,23 @@ var (
 )
 
 // acquireLock takes a lock on path using LockFileEx. The lock covers
-// the entire file region; other processes attempting to lock the same
-// file block until release.
+// the entire file region.
 //
-// readOnly=true opens the lock file with O_RDONLY and asks for a
-// shared (read) lock — multiple read paths can inspect the trail
-// concurrently, and none of them need write permission on the trail
-// dir or will materialise log.lock if it didn't exist already.
+// readOnly=true asks for a shared (non-exclusive) lock so multiple
+// readers don't block each other; readOnly=false uses
+// LOCKFILE_EXCLUSIVE_LOCK. In both cases the lock file is created
+// with O_CREATE if it doesn't exist — that's required for cross-
+// process correctness, because a read that found the file missing
+// and skipped locking could race a concurrent first writer. The
+// trade-off (read-only commands need write permission on the trail
+// dir on first invocation) is intentional: race-free coordination
+// wins over the read-only-config-dir edge case.
 func acquireLock(path string, readOnly bool) (func(), error) {
-	flags := os.O_CREATE | os.O_RDWR
-	mode := os.FileMode(0o600)
-	if readOnly {
-		flags = os.O_RDONLY
-	} else {
-		if err := fileutil.EnsureDir(path); err != nil {
-			return nil, fmt.Errorf("creating lock dir: %w", err)
-		}
+	if err := fileutil.EnsureDir(path); err != nil {
+		return nil, fmt.Errorf("creating lock dir: %w", err)
 	}
-	f, err := os.OpenFile(path, flags, mode) //nolint:gosec // G302: advisory lock file
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // G302: advisory lock file
 	if err != nil {
-		// No lock file yet on a read path = nothing to lock against.
-		if readOnly && os.IsNotExist(err) {
-			return func() {}, nil
-		}
 		return nil, fmt.Errorf("opening lock %s: %w", path, err)
 	}
 
