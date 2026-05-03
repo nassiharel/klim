@@ -72,3 +72,31 @@ func ShimsDir() (string, error) {
 func CompliancePolicy() (string, error) {
 	return Join("compliance", "policy.yaml")
 }
+
+// TrailDir returns the path to the trail (env-history) directory.
+func TrailDir() (string, error) {
+	return Join("trail")
+}
+
+// TrailHEAD returns the path to the trail HEAD file (single-line index pointer).
+func TrailHEAD() (string, error) {
+	return Join("trail", "HEAD")
+}
+
+// TrailLog returns the path to the trail log file (ordered list of entries).
+func TrailLog() (string, error) {
+	return Join("trail", "log.yaml")
+}
+
+// TrailLock returns the path to the trail advisory lock file.
+// The lock guards read-modify-write on TrailLog and TrailHEAD across processes.
+func TrailLock() (string, error) {
+	return Join("trail", "log.lock")
+}
+
+// TrailObjects returns the path to the trail content-addressed objects directory.
+// Snapshots live under TrailObjects()/<aa>/<bb...>.yaml where the leading two
+// hex chars provide directory fanout to keep any single dir small.
+func TrailObjects() (string, error) {
+	return Join("trail", "objects")
+}

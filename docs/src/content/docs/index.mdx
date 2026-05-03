@@ -25,7 +25,13 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     A rich terminal UI with 8 tabs — browse tools, batch upgrade, manage favorites, and more. [TUI guide →](/guides/tui-overview/)
   </Card>
   <Card title="CLI Reference" icon="document">
-    Full reference for all commands: list, export, import, check, share, and more. [Commands →](/reference/commands/list/)
+    Full reference for all commands: list, info, export, import, check, share, and more. [Commands →](/reference/commands/list/)
+  </Card>
+  <Card title="Tool Detail" icon="information">
+    `clim info <tool>` shows every install location, every package source, GitHub stats, and references — the CLI counterpart of the TUI detail page. [info →](/reference/commands/info/)
+  </Card>
+  <Card title="Toolchain History" icon="seti:clock">
+    `clim trail` records every captured state of your environment. Capture, diff, and prune git-style. [trail →](/reference/commands/trail/)
   </Card>
   <Card title="Team Manifests" icon="setting">
     Define required tools in `.clim.yaml` for your project. CI-ready validation. [Learn more →](/guides/team-manifests/)

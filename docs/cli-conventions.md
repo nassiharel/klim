@@ -36,8 +36,8 @@ Every command that produces structured data accepts:
 
 Currently supports JSON: `audit`, `check`, `compliance check`, `diff`,
 `doctor`, `info`, `list`, `score`, `search`, `share`, `tools path`,
-`watch`, `why`, and `config marketplace list`. (`export` already emits
-YAML by design.)
+`trail log`, `trail show`, `trail diff`, `watch`, `why`, and `config
+marketplace list`. (`export` already emits YAML by design.)
 
 ## Exit codes
 

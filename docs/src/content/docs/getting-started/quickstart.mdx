@@ -63,17 +63,27 @@ For non-interactive usage (scripts, CI), use subcommands directly:
    clim list
    ```
 
-2. **Export your toolchain:**
+2. **Inspect a single tool:**
+   ```bash
+   clim info kubectl
+   ```
+
+3. **Export your toolchain:**
    ```bash
    clim export > my-tools.yaml
    ```
 
-3. **Import on another machine:**
+4. **Import on another machine:**
    ```bash
    clim import my-tools.yaml
    ```
 
-4. **Check for clim updates:**
+5. **Capture your environment for later comparison:**
+   ```bash
+   clim trail capture --label before-upgrade
+   ```
+
+6. **Check for clim updates:**
    ```bash
    clim update --check
    ```
@@ -99,6 +109,24 @@ For non-interactive usage (scripts, CI), use subcommands directly:
 1. Export your toolchain: `clim export > .clim.yaml`
 2. Commit `.clim.yaml` to your repository
 3. Team members run: `clim check` to verify they have all required tools
+
+### Track Toolchain Changes Over Time
+
+`clim trail` is git-style history for your environment. Capture, diff, and roll forward across upgrades:
+
+1. Capture before risky changes: `clim trail capture --label before-kubectl-upgrade`
+2. Make your changes (`brew upgrade kubectl`, etc.)
+3. Capture again: `clim trail capture`
+4. See exactly what changed: `clim trail diff before-kubectl-upgrade`
+
+### Inspect a Single Tool
+
+`clim info <tool>` is the CLI counterpart of the TUI's tool detail page — every install location, every available package source, GitHub stats, project / pack references, and related installed tools:
+
+```bash
+clim info terraform
+clim info terraform --output json   # for scripts
+```
 
 ## Next Steps
 

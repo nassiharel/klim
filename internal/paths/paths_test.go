@@ -40,6 +40,11 @@ func TestAllPaths(t *testing.T) {
 		{"BackupsDir", BackupsDir, "backups"},
 		{"LogFile", LogFile, "clim.log"},
 		{"CompliancePolicy", CompliancePolicy, "policy.yaml"},
+		{"TrailDir", TrailDir, "trail"},
+		{"TrailHEAD", TrailHEAD, "HEAD"},
+		{"TrailLog", TrailLog, "log.yaml"},
+		{"TrailLock", TrailLock, "log.lock"},
+		{"TrailObjects", TrailObjects, "objects"},
 	}
 	for _, tc := range fns {
 		t.Run(tc.name, func(t *testing.T) {

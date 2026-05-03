@@ -72,12 +72,19 @@ export default defineConfig({
             {
               label: 'Tools',
               items: [
+                { label: 'info', slug: 'reference/commands/info' },
                 { label: 'search', slug: 'reference/commands/search' },
                 { label: 'diff', slug: 'reference/commands/diff' },
                 { label: 'onboard', slug: 'reference/commands/onboard' },
                 { label: 'try', slug: 'reference/commands/try' },
                 { label: 'watch', slug: 'reference/commands/watch' },
                 { label: 'why', slug: 'reference/commands/why' },
+              ],
+            },
+            {
+              label: 'History',
+              items: [
+                { label: 'trail', slug: 'reference/commands/trail' },
               ],
             },
             {
