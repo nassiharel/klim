@@ -928,3 +928,87 @@ func TestDisambiguatedHashes_DistinctSevenChar(t *testing.T) {
 		}
 	}
 }
+
+// TestLoadLog_RejectsDuplicateLabels verifies the cross-entry label
+// uniqueness check: a hand-edited log with two entries claiming the
+// same label must fail closed at load time, not silently produce
+// ambiguous Resolve(<label>) results later.
+func TestLoadLog_RejectsDuplicateLabels(t *testing.T) {
+	dir := useTempDir(t)
+	if _, err := Capture(OpCapture, "alpha", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+	tools2 := append(orderedTools(), fakeTool("x", "1.0", registry.SourceBrew, "/x"))
+	if _, err := Capture(OpCapture, "beta", tools2); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "log.yaml")
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := strings.Replace(string(body), "label: beta", "label: alpha", 1)
+	if err := os.WriteFile(logPath, []byte(tampered), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	if _, err := Log(LogOptions{}); err == nil {
+		t.Fatal("expected duplicate-label error")
+	} else if !strings.Contains(err.Error(), "duplicate label") {
+		t.Fatalf("got: %v", err)
+	}
+}
+
+// TestLoadLog_RejectsUnknownOp verifies that loadLog re-runs ValidateOp
+// on every entry — Capture rejects unknown ops, so a hand-edited log
+// with a bogus op must fail closed too.
+func TestLoadLog_RejectsUnknownOp(t *testing.T) {
+	dir := useTempDir(t)
+	if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "log.yaml")
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := strings.Replace(string(body), "op: capture", "op: unknown_op", 1)
+	if err := os.WriteFile(logPath, []byte(tampered), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	if _, err := Log(LogOptions{}); err == nil {
+		t.Fatal("expected invalid-op error")
+	} else if !strings.Contains(err.Error(), "invalid op") {
+		t.Fatalf("got: %v", err)
+	}
+}
+
+// TestPrune_RemovesGarbageFiles verifies that Prune cleans up files
+// under objects/ that don't match the canonical layout, not just
+// orphaned-but-correctly-named entries.
+func TestPrune_RemovesGarbageFiles(t *testing.T) {
+	dir := useTempDir(t)
+	if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+	garbageDir := filepath.Join(dir, "objects", "zz")
+	if err := os.MkdirAll(garbageDir, 0o755); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	garbage := filepath.Join(garbageDir, "not-an-object.txt")
+	if err := os.WriteFile(garbage, []byte("noise"), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	bogusYAML := filepath.Join(garbageDir, "bogus.yaml")
+	if err := os.WriteFile(bogusYAML, []byte("some: yaml"), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	if _, err := Prune(PruneOptions{Keep: 100}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(garbage); !os.IsNotExist(err) {
+		t.Errorf("expected non-yaml garbage to be removed, stat err=%v", err)
+	}
+	if _, err := os.Stat(bogusYAML); !os.IsNotExist(err) {
+		t.Errorf("expected malformed object file to be removed, stat err=%v", err)
+	}
+}

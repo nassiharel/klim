@@ -34,8 +34,8 @@ Subcommands:
   diff      Compare two entries (or one entry vs HEAD)
   prune     Trim the trail and garbage-collect orphan objects
 
-A <ref> can be: HEAD, HEAD~N, @<index>, a content hash (full or 7+ char
-prefix), or an entry's --label.`,
+A <ref> can be: HEAD (or latest, an alias), HEAD~N, @<index>, a content
+hash (full or 7+ char prefix), or an entry's --label.`,
 }
 
 // --- clim trail capture ---
@@ -212,16 +212,28 @@ func runTrailCapture(cmd *cobra.Command, _ []string) error {
 	}
 
 	entry, err := trail.Capture(trailCaptureOp, trailCaptureLabel, tools)
+	// trail.Capture returns a non-nil entry even on *headWriteError
+	// (log.yaml is durable; only the informational HEAD pointer
+	// failed). Treating that as a failed capture would have the user
+	// retry and create a duplicate entry, so we accept the entry,
+	// surface a warning, and continue.
+	var headErr error
 	if err != nil {
-		// Duplicate-label collisions are user-input errors that can
-		// only be detected under the trail lock (post-scan), so they
-		// surface here. Map them to UsageError so the exit code is 2
-		// (malformed input) per docs/cli-conventions.md, not 1.
-		var dup *trail.LabelInUseError
-		if errors.As(err, &dup) {
-			return &UsageError{Err: err}
+		var hwe *trail.HeadWriteError
+		if errors.As(err, &hwe) && entry != nil {
+			headErr = err
+		} else {
+			// Duplicate-label collisions are user-input errors that
+			// can only be detected under the trail lock (post-scan),
+			// so they surface here. Map them to UsageError so the
+			// exit code is 2 (malformed input) per
+			// docs/cli-conventions.md, not 1.
+			var dup *trail.LabelInUseError
+			if errors.As(err, &dup) {
+				return &UsageError{Err: err}
+			}
+			return fmt.Errorf("capturing trail entry: %w", err)
 		}
-		return fmt.Errorf("capturing trail entry: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Captured %s (%s)", entry.Object.Short(), entry.Operation)
@@ -232,6 +244,9 @@ func runTrailCapture(cmd *cobra.Command, _ []string) error {
 		fmt.Fprintf(os.Stderr, "  [%s]", entry.Summary)
 	}
 	fmt.Fprintln(os.Stderr)
+	if headErr != nil {
+		fmt.Fprintf(os.Stderr, "  ⚠ HEAD pointer not updated (%v); the trail is still durable, the next capture will refresh it\n", headErr)
+	}
 	return nil
 }
 

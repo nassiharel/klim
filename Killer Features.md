@@ -24,6 +24,8 @@ Killer Features — Ranked by Impact
 
 🔔 **`clim watch` — Update Monitor** ✅ SHIPPED — `clim watch` does a fresh scan and reports all available updates. `--json` for machine-readable output. Designed for cron/Task Scheduler integration. Always forces a fresh scan for authoritative results.
 
+🏎️ **`clim benchmark` — PM Speed Comparison** — `clim benchmark terraform` → "scoop: install 4.2s, query 0.8s ★ fastest / winget: install 12.1s, query 2.3s". Recommendation: "Switch terraform to scoop for 2.9x faster installs."
+
 🧪 **`clim try` — Tool Playground** ✅ SHIPPED — `clim try bat -- README.md` installs a tool, runs it with args, then asks "Keep or remove?". `--keep` flag to skip the prompt. If already installed, just runs it. Cleanup uses the correct PM remove command.
 
 ## 🧠 Tier 3 — Visionary / Long-term

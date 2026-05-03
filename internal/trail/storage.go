@@ -223,6 +223,7 @@ func loadLog(r fsRoots) (*logFile, error) {
 	// uses it as a filesystem path fragment; entry indices form the
 	// @<index> ref form which must stay unique and monotonic.
 	seen := make(map[int]struct{}, len(lf.Entries))
+	seenLabels := make(map[string]int, len(lf.Entries)) // label → first index
 	prevIdx := -1
 	for i := range lf.Entries {
 		e := &lf.Entries[i]
@@ -248,6 +249,23 @@ func loadLog(r fsRoots) (*logFile, error) {
 				e.Index, e.Label)
 		}
 		if err := ValidateLabel(e.Label); err != nil {
+			return nil, fmt.Errorf("trail log entry @%d: %w", e.Index, err)
+		}
+		// Cross-entry uniqueness for non-empty labels. Capture
+		// rejects duplicates under the trail lock, so a duplicate in
+		// log.yaml is a hand-edit/corruption — not something
+		// Resolve(<label>) should silently disambiguate later.
+		if e.Label != "" {
+			if other, dup := seenLabels[e.Label]; dup {
+				return nil, fmt.Errorf("trail log has duplicate label %q (entries @%d and @%d, corrupted or hand-edited?)",
+					e.Label, other, e.Index)
+			}
+			seenLabels[e.Label] = e.Index
+		}
+		// Op must be one of the recognised vocabulary. Capture rejects
+		// unknown values via ValidateOp; reading them back unchecked
+		// would let a hand-edited log carry arbitrary "op" strings.
+		if err := ValidateOp(e.Operation); err != nil {
 			return nil, fmt.Errorf("trail log entry @%d: %w", e.Index, err)
 		}
 		seen[e.Index] = struct{}{}
@@ -290,12 +308,12 @@ func hasTrailRemnants(r fsRoots) bool {
 //     Callers may roll back the just-written object: nothing is
 //     committed yet.
 //   - If log.yaml write succeeds but HEAD write fails → return a
-//     *headWriteError. The log is durable, so callers MUST NOT roll
+//     *HeadWriteError. The log is durable, so callers MUST NOT roll
 //     back the object — the entry already exists in the canonical
 //     record and a future capture (or any read) will refresh HEAD.
 //
 // Callers that don't care about the distinction can treat the error
-// as a generic failure; errors.As(&headWriteError) recovers the
+// as a generic failure; errors.As(&HeadWriteError) recovers the
 // classification.
 func saveLog(r fsRoots, lf *logFile) error {
 	if lf.SchemaVersion == 0 {
@@ -313,18 +331,18 @@ func saveLog(r fsRoots, lf *logFile) error {
 		head = lf.Entries[len(lf.Entries)-1].Index
 	}
 	if err := fileutil.AtomicWrite(r.head, []byte(fmt.Sprintf("%d\n", head)), 0o644); err != nil {
-		return &headWriteError{err: fmt.Errorf("writing trail HEAD: %w", err)}
+		return &HeadWriteError{err: fmt.Errorf("writing trail HEAD: %w", err)}
 	}
 	return nil
 }
 
-// headWriteError signals that log.yaml was committed successfully but
+// HeadWriteError signals that log.yaml was committed successfully but
 // the HEAD pointer file failed to update. The trail is durable; the
 // caller must not roll back the new object.
-type headWriteError struct{ err error }
+type HeadWriteError struct{ err error }
 
-func (e *headWriteError) Error() string { return e.err.Error() }
-func (e *headWriteError) Unwrap() error { return e.err }
+func (e *HeadWriteError) Error() string { return e.err.Error() }
+func (e *HeadWriteError) Unwrap() error { return e.err }
 
 // ValidateLabel performs the structural label checks Capture would
 // otherwise apply only after loading the trail. Exposed so CLI runners
@@ -533,7 +551,7 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 		return nil, fmt.Errorf("writing trail object: %w", err)
 	}
 	if err := saveLog(r, lf); err != nil {
-		var hwe *headWriteError
+		var hwe *HeadWriteError
 		if errors.As(err, &hwe) {
 			// log.yaml is durable — the entry is committed. Don't
 			// roll back the object; the only loss is the HEAD pointer

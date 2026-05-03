@@ -109,7 +109,18 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 		if d.IsDir() {
 			return nil
 		}
+		// Anything under objects/ that doesn't look like one of our
+		// content-addressed files is garbage — clim owns this dir
+		// (see writeObject) and the only valid layout is
+		// <aa>/<bb...>.yaml where the full filename is a 64-char
+		// hex Object ID. Garbage gets removed so trail prune
+		// actually GCs the store as advertised, instead of leaving
+		// stray files behind forever.
 		if !strings.HasSuffix(path, ".yaml") {
+			if rmErr := os.Remove(path); rmErr != nil { //nolint:gosec
+				return fmt.Errorf("removing unrecognized file %s: %w", path, rmErr)
+			}
+			removedCount++
 			return nil
 		}
 		// Reconstruct id from <objects>/<aa>/<rest>.yaml.
@@ -119,6 +130,10 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 		}
 		id := pathToID(rel)
 		if !id.IsValid() {
+			if rmErr := os.Remove(path); rmErr != nil { //nolint:gosec
+				return fmt.Errorf("removing malformed object file %s: %w", path, rmErr)
+			}
+			removedCount++
 			return nil
 		}
 		if _, want := wanted[id]; want {
