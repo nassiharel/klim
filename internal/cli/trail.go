@@ -339,10 +339,20 @@ func runTrailLog(cmd *cobra.Command, _ []string) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "INDEX\tREF\tWHEN\tOP\tLABEL\tSUMMARY")
 	_, _ = fmt.Fprintln(w, "-----\t---\t----\t--\t-----\t-------")
+	// Pre-compute the shortest unique prefix per object so the REF
+	// column shows something the user can copy back into trail show
+	// / diff without hitting an ambiguous-ref error. If two objects
+	// share a 7-char prefix we widen ALL refs of those distinct
+	// objects to the disambiguating length.
+	refLen := uniquePrefixLen(entries)
 	for _, e := range entries {
+		ref := string(e.Object)
+		if refLen < len(ref) {
+			ref = ref[:refLen]
+		}
 		_, _ = fmt.Fprintf(w, "@%d\t%s\t%s\t%s\t%s\t%s\n",
 			e.Index,
-			e.Object.Short(),
+			ref,
 			humanAgo(e.Time),
 			e.Operation,
 			truncate(e.Label, 24),
@@ -351,6 +361,35 @@ func runTrailLog(cmd *cobra.Command, _ []string) error {
 	}
 	_ = w.Flush()
 	return nil
+}
+
+// uniquePrefixLen returns the smallest prefix length n in [7, 64] such
+// that every distinct Object across entries has a unique n-char prefix.
+// All entries share that same width so the REF column stays aligned.
+func uniquePrefixLen(entries []trail.Entry) int {
+	objs := make(map[trail.ObjectID]struct{}, len(entries))
+	for _, e := range entries {
+		objs[e.Object] = struct{}{}
+	}
+	for n := 7; n <= 64; n++ {
+		seen := make(map[string]struct{}, len(objs))
+		collision := false
+		for o := range objs {
+			s := string(o)
+			if len(s) > n {
+				s = s[:n]
+			}
+			if _, dup := seen[s]; dup {
+				collision = true
+				break
+			}
+			seen[s] = struct{}{}
+		}
+		if !collision {
+			return n
+		}
+	}
+	return 64
 }
 
 type trailShowOutputJSON struct {

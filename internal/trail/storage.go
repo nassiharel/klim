@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -293,25 +292,37 @@ func loadLog(r fsRoots) (*logFile, error) {
 
 // hasTrailRemnants reports whether the trail dir contains state other
 // than log.yaml. Used to distinguish "fresh install" from "log got
-// lost". HEAD or any non-empty objects/ subtree counts as evidence the
-// store was once populated. An unreadable objects/ directory (perms,
-// transient IO) is treated as "remnants exist" — failing closed is
-// safer than silently letting a fresh history start over a possibly-
-// populated but unreadable store.
+// lost". HEAD or any actual snapshot file under objects/ counts as
+// evidence the store was once populated; empty fanout directories
+// don't, because they can be left behind by a saveLog rollback that
+// cleaned up its blob but couldn't tear down its parent dir
+// (writeObject creates `objects/<aa>/`, then removes only the file
+// on rollback). An unreadable objects/ directory (perms, transient
+// IO) is treated as "remnants exist" — failing closed is safer than
+// silently letting a fresh history start over a populated-but-
+// unreadable store.
 func hasTrailRemnants(r fsRoots) bool {
 	if _, err := os.Stat(r.head); err == nil {
 		return true
 	}
-	entries, err := os.ReadDir(r.objects)
+	hasFile := false
+	err := filepath.WalkDir(r.objects, func(_ string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !d.IsDir() {
+			hasFile = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
 	if err != nil {
-		// Distinguish "objects/ doesn't exist yet" (real fresh install)
-		// from any other error (likely real remnants we can't see).
 		if errors.Is(err, os.ErrNotExist) {
 			return false
 		}
 		return true
 	}
-	return len(entries) > 0
+	return hasFile
 }
 
 // saveLog writes log.yaml (and best-effort HEAD) under the trail lock.
@@ -441,15 +452,15 @@ func reservedLabelReason(label string) string {
 	if label == "HEAD" || label == "latest" {
 		return "matches HEAD/latest"
 	}
-	if rest, ok := strings.CutPrefix(label, "HEAD~"); ok {
-		if n, err := strconv.Atoi(rest); err == nil && n >= 0 {
-			return "matches HEAD~N"
-		}
+	// resolveSpec treats ANY HEAD~* / @* string as ref syntax — even
+	// HEAD~bogus and @foo, which produce invalid-ref errors. Reject
+	// the whole prefix here so labels like that don't load
+	// successfully but become unresolvable later.
+	if strings.HasPrefix(label, "HEAD~") {
+		return "matches HEAD~ ref syntax"
 	}
-	if rest, ok := strings.CutPrefix(label, "@"); ok {
-		if n, err := strconv.Atoi(rest); err == nil && n >= 0 {
-			return "matches @<index>"
-		}
+	if strings.HasPrefix(label, "@") {
+		return "matches @<index> ref syntax"
 	}
 	if len(label) >= 7 && isHexPrefix(label) {
 		return "looks like an object hash prefix"

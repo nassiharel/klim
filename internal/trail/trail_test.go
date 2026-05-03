@@ -1206,3 +1206,31 @@ func TestPrune_FailsOnMissingKeptObject(t *testing.T) {
 		t.Fatalf("expected 'missing object' in error, got: %v", err)
 	}
 }
+
+// TestCapture_RejectsHEADTildeAndAtPrefixesEvenWhenInvalid verifies
+// that labels matching the HEAD~* / @* prefix are rejected even when
+// the suffix isn't a non-negative integer. resolveSpec treats the
+// prefix as ref syntax regardless and would later return
+// invalid-HEAD~ / invalid-@ instead of falling through to the label
+// branch — so a label like HEAD~bogus would be unresolvable.
+func TestCapture_RejectsHEADTildeAndAtPrefixesEvenWhenInvalid(t *testing.T) {
+	useTempDir(t)
+	cases := []string{
+		"HEAD~bogus",
+		"HEAD~",
+		"HEAD~-1",
+		"@foo",
+		"@",
+		"@-1",
+	}
+	for _, label := range cases {
+		_, err := Capture(OpCapture, label, orderedTools())
+		if err == nil {
+			t.Errorf("Capture(%q) accepted reserved-prefix label", label)
+			continue
+		}
+		if !strings.Contains(err.Error(), "reserved ref syntax") {
+			t.Errorf("Capture(%q): expected 'reserved ref syntax' in error, got: %v", label, err)
+		}
+	}
+}
