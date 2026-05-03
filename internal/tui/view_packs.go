@@ -345,5 +345,3 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 	footer := "  " + dim("↑↓") + " navigate   " + dim("Enter") + " tool detail   " + dim("i") + " install   " + dim("x") + " remove   " + dim("Esc") + " back"
 	return m.layoutWithFooter(b.String(), footer)
 }
-
-// --- Header ---

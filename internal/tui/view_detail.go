@@ -640,5 +640,3 @@ func (m Model) renderInstanceRecommendations(tool registry.Tool) string {
 	b.WriteString("\n")
 	return b.String()
 }
-
-// --- Backup tab ---

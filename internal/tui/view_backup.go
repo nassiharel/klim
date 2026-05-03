@@ -250,5 +250,3 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 
 	return line
 }
-
-// --- Config tab ---

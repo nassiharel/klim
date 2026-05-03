@@ -85,9 +85,3 @@ func (m Model) renderConfigView() string {
 
 	return b.String()
 }
-
-// --- Help ---
-
-// --- Two-column layout builders ---
-
-// buildSidebarLines renders the filter sidebar as a slice of fixed-width strings.
