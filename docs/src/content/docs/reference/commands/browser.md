@@ -49,11 +49,11 @@ expose an unauthenticated server on a LAN.
 | `/dashboard` | Aggregate stats: counts, top categories, sample of pending updates. |
 | `/trail` | Trail entry list. |
 | `/trail/<ref>` | Snapshot at the given trail ref. |
+| `/backup` | Export YAML download, share token, and manifest preview. |
+| `/backup/export.yaml` | Direct YAML download (used by the Export button). |
+| `/config` | Read-only YAML dump of the running configuration. |
 | `/jobs/<id>` | Live progress for an Install / Upgrade / Remove job (SSE-streamed). |
-| `/healthz` | Liveness probe (`200 ok`). |
-
-The Backup and Config tabs render "Coming soon" placeholders in this
-release; the same data is available in the TUI today.
+| `/healthz` | Liveness probe (`200 ok`). Always unauthenticated. |
 
 ## Actions and live progress
 
@@ -108,7 +108,17 @@ curl -s http://127.0.0.1:7777/api/dashboard | jq .updates_available
 ## Security
 
 - Loopback-only by default. `--insecure-bind` is required for any
-  other interface and prints a warning at startup.
+  other interface.
+- **`--insecure-bind` automatically enables bearer-token
+  authentication.** clim generates a 32-byte token at startup and
+  prints a `?token=<token>` URL to stderr. Visiting that URL once sets
+  a session cookie; the token is also accepted via
+  `Authorization: Bearer <token>` for scripts. `/healthz` stays open
+  for liveness probes.
+- Only one Install / Upgrade / Remove job runs per tool at a time.
+  Submitting a second action for a tool that already has a running
+  job redirects to the existing job's progress page (HTTP 303 for the
+  HTML form path, HTTP 409 with `redirect_to` for the JSON API).
 - All HTML is rendered through Go's `html/template`, which escapes
   values by default.
 - State-changing endpoints (favorite toggle, install / upgrade /

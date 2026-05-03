@@ -45,23 +45,43 @@ func init() {
 }
 
 func runBrowser(cmd *cobra.Command, _ []string) error {
+	authToken := ""
+	// Auto-generate a bearer token for non-loopback binds. Without
+	// auth, any device on the LAN that can reach the listener can
+	// install / upgrade / remove tools. Loopback stays unauthenticated
+	// so the default `clim browser` invocation behaves the same as the
+	// TUI.
+	if browserInsecureBind && !isLoopbackAddr(browserBind) {
+		var err error
+		authToken, err = web.GenerateAuthToken()
+		if err != nil {
+			return fmt.Errorf("generating auth token: %w", err)
+		}
+	}
+
 	srv, err := web.New(web.Options{
 		Bind:         browserBind,
 		Port:         browserPort,
 		InsecureBind: browserInsecureBind,
+		AuthToken:    authToken,
 		Service:      svcFrom(cmd),
+		Config:       cfgFrom(cmd),
 	})
 	if err != nil {
 		return err
 	}
 	url := srv.URL()
+	authed := srv.AuthedURL()
 	fmt.Fprintf(os.Stderr, "clim browser listening on %s\n", url)
-	if browserInsecureBind && browserBind != "127.0.0.1" && browserBind != "localhost" {
-		fmt.Fprintln(os.Stderr, "  ⚠ bound to a non-loopback address; the server has NO authentication")
+	if authToken != "" {
+		fmt.Fprintf(os.Stderr, "  ⚠ bound to a non-loopback address; auth token required\n")
+		fmt.Fprintf(os.Stderr, "  open: %s\n", authed)
+	} else if browserInsecureBind && browserBind != "127.0.0.1" && browserBind != "localhost" {
+		fmt.Fprintln(os.Stderr, "  ⚠ bound to a non-loopback address with NO authentication")
 	}
 	if !browserNoOpen {
-		if err := web.OpenBrowser(url); err != nil {
-			fmt.Fprintf(os.Stderr, "  (could not auto-open browser: %v — visit %s manually)\n", err, url)
+		if err := web.OpenBrowser(authed); err != nil {
+			fmt.Fprintf(os.Stderr, "  (could not auto-open browser: %v — visit %s manually)\n", err, authed)
 		}
 	}
 	fmt.Fprintln(os.Stderr, "  press Ctrl-C to stop")
@@ -71,4 +91,14 @@ func runBrowser(cmd *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return srv.Serve(ctx)
+}
+
+// isLoopbackAddr is the CLI-side mirror of internal/web.isLoopback,
+// used only to decide whether to generate an auth token.
+func isLoopbackAddr(host string) bool {
+	switch host {
+	case "", "127.0.0.1", "localhost", "::1":
+		return true
+	}
+	return false
 }

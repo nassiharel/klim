@@ -198,15 +198,19 @@ func TestServer_DashboardPage(t *testing.T) {
 	}
 }
 
-func TestServer_StubPages(t *testing.T) {
+// TestServer_NoStubsRemain locks in that we've stopped shipping
+// "Coming soon" placeholders. If you re-stub a tab in the future,
+// that's a regression worth catching.
+func TestServer_NoStubsRemain(t *testing.T) {
 	ts, _ := startTestServer(t)
-	for _, path := range []string{"/backup", "/config"} {
+	for _, path := range []string{"/", "/updates", "/discover", "/favorites", "/dashboard", "/trail", "/backup", "/config"} {
 		resp, body := get(t, ts.URL+path)
 		if resp.StatusCode != 200 {
 			t.Errorf("%s: status %d", path, resp.StatusCode)
+			continue
 		}
-		if !strings.Contains(body, "Coming soon") {
-			t.Errorf("%s: expected stub copy, got:\n%s", path, body)
+		if strings.Contains(body, "Coming soon") {
+			t.Errorf("%s: still rendering the Coming soon stub:\n%s", path, body)
 		}
 	}
 }

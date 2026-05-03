@@ -133,22 +133,42 @@ func (execExecutor) Run(ctx context.Context, args []string) (<-chan string, <-ch
 // jobManager owns the live Job catalog and SSE subscriber registry.
 // Methods are safe for concurrent use.
 type jobManager struct {
-	mu   sync.Mutex
-	jobs map[string]*Job
-	subs map[string][]chan jobEvent
-	exec Executor
+	mu      sync.Mutex
+	jobs    map[string]*Job
+	subs    map[string][]chan jobEvent
+	running map[string]string // tool name → running job ID
+	exec    Executor
 }
 
 func newJobManager(exec Executor) *jobManager {
 	return &jobManager{
-		jobs: make(map[string]*Job),
-		subs: make(map[string][]chan jobEvent),
-		exec: exec,
+		jobs:    make(map[string]*Job),
+		subs:    make(map[string][]chan jobEvent),
+		running: make(map[string]string),
+		exec:    exec,
 	}
+}
+
+// ErrJobInProgress means a job is already running for the same tool.
+// Callers should surface the existing job ID so the user can watch it
+// rather than starting a duplicate.
+type ErrJobInProgress struct {
+	Tool        string
+	ExistingID  string
+	ExistingFor JobAction
+}
+
+func (e *ErrJobInProgress) Error() string {
+	return fmt.Sprintf("a %s job for %q is already running (id %s)", e.ExistingFor, e.Tool, e.ExistingID)
 }
 
 // Start spawns a new job. The returned Job is a snapshot safe for
 // callers to read; further updates land in the Manager-owned object.
+//
+// Returns *ErrJobInProgress if the same tool already has a running
+// job — running two package-manager actions on the same tool at once
+// fights with most managers' internal locks, so we surface the
+// existing job ID and let the caller redirect the user to it.
 func (m *jobManager) Start(ctx context.Context, action JobAction, tool, source string, args []string) (*Job, error) {
 	if len(args) == 0 {
 		return nil, errors.New("jobManager.Start: empty command args")
@@ -156,6 +176,16 @@ func (m *jobManager) Start(ctx context.Context, action JobAction, tool, source s
 	id, err := newJobID()
 	if err != nil {
 		return nil, err
+	}
+	m.mu.Lock()
+	if existingID, busy := m.running[tool]; busy {
+		existing := m.jobs[existingID]
+		m.mu.Unlock()
+		var existingFor JobAction
+		if existing != nil {
+			existingFor = existing.Action
+		}
+		return nil, &ErrJobInProgress{Tool: tool, ExistingID: existingID, ExistingFor: existingFor}
 	}
 	job := &Job{
 		ID:        id,
@@ -167,8 +197,8 @@ func (m *jobManager) Start(ctx context.Context, action JobAction, tool, source s
 		StartedAt: time.Now().UTC(),
 		Output:    []string{},
 	}
-	m.mu.Lock()
 	m.jobs[id] = job
+	m.running[tool] = id
 	m.mu.Unlock()
 	go m.run(ctx, job)
 	return job.snapshot(), nil
@@ -196,6 +226,10 @@ func (m *jobManager) run(ctx context.Context, job *Job) {
 	} else {
 		job.Status = JobStatusSuccess
 		job.ExitCode = 0
+	}
+	// Release the per-tool slot so a follow-up action can run.
+	if cur, ok := m.running[job.Tool]; ok && cur == job.ID {
+		delete(m.running, job.Tool)
 	}
 	m.mu.Unlock()
 	m.broadcast(job.ID, jobEvent{Type: "done"})

@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/service"
 )
 
@@ -34,9 +35,17 @@ type Options struct {
 	// any non-loopback Bind value is refused so users don't accidentally
 	// expose an unauthenticated server on a LAN.
 	InsecureBind bool
+	// AuthToken, when non-empty, enables bearer-token authentication
+	// for every request except /healthz. Required for non-loopback
+	// binds; the CLI auto-generates one if InsecureBind is set without
+	// an explicit token. Loopback binds leave this empty by default
+	// because the threat model matches the TUI's.
+	AuthToken string
 	// Service is the resolved tool service this server reads from.
 	// Required.
 	Service *service.ToolService
+	// Config, if non-nil, is rendered on the read-only Config tab.
+	Config *config.Config
 	// Logger receives structured server-side events. Optional; defaults
 	// to slog.Default().
 	Logger *slog.Logger
@@ -91,11 +100,19 @@ func New(opts Options) (*Server, error) {
 	}
 	s.routes()
 	s.httpsrv = &http.Server{
-		Handler:           withRecover(opts.Logger, withAccessLog(opts.Logger, s.mux)),
+		Handler:           withRecover(opts.Logger, withAccessLog(opts.Logger, authMiddleware(s, s.mux))),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	return s, nil
 }
+
+// AuthToken returns the server's auth token (empty if auth is disabled).
+// Exposed so the CLI can print the token alongside the URL.
+func (s *Server) AuthToken() string { return s.opts.AuthToken }
+
+// AuthedURL returns the URL with the token query parameter appended
+// (or the plain URL if no token is required).
+func (s *Server) AuthedURL() string { return authedURL(s.URL(), s.opts.AuthToken) }
 
 // URL returns the http://host:port URL the server is listening on.
 // Safe to call before Serve.
@@ -161,9 +178,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /dashboard", s.pageDashboard)
 	s.mux.HandleFunc("GET /trail", s.pageTrail)
 	s.mux.HandleFunc("GET /trail/{ref...}", s.pageTrailShow)
-	// Stubbed tabs (Phase 3 scope).
-	s.mux.HandleFunc("GET /backup", s.pageStub("Backup"))
-	s.mux.HandleFunc("GET /config", s.pageStub("Config"))
+	// Stubbed tabs (Phase 5+ scope).
+	s.mux.HandleFunc("GET /backup", s.pageBackup)
+	s.mux.HandleFunc("GET /config", s.pageConfig)
+	s.mux.HandleFunc("GET /backup/export.yaml", s.downloadExport)
 
 	// JSON API.
 	s.mux.HandleFunc("GET /api/tools", s.apiTools)

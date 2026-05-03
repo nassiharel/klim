@@ -1,0 +1,33 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>Backup &amp; Share</h1>
+  <p class="muted">{{$d.Count}} installed tool{{if ne $d.Count 1}}s{{end}}.</p>
+</section>
+
+<section class="card">
+  <h2>Export</h2>
+  <p>Download a YAML manifest of every installed tool. Restore on another machine with <code>clim import &lt;file&gt;</code>.</p>
+  <p><a class="btn-primary inline-link" href="/backup/export.yaml" download>Download clim-export.yaml</a></p>
+</section>
+
+{{if $d.ShareToken}}
+<section class="card">
+  <h2>Share token</h2>
+  <p>Compact, copy-pasteable token. Recipient runs <code>clim open &lt;token&gt;</code> to install the same tools.</p>
+  <pre class="log">{{$d.ShareToken}}</pre>
+</section>
+{{else if $d.ShareErr}}
+<section class="card">
+  <h2>Share token</h2>
+  <p class="muted">{{$d.ShareErr}}</p>
+</section>
+{{end}}
+
+{{if $d.YAML}}
+<section class="card">
+  <h2>Manifest preview</h2>
+  <pre class="log">{{$d.YAML}}</pre>
+</section>
+{{end}}
+{{end}}

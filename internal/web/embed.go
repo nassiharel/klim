@@ -31,6 +31,8 @@ var pageTemplates = []string{
 	"trail.html",
 	"snapshot.html",
 	"job.html",
+	"backup.html",
+	"config.html",
 	"stub.html",
 }
 

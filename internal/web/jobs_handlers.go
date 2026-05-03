@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -92,7 +93,8 @@ func (s *Server) startActionJob(ctx context.Context, action JobAction, name stri
 }
 
 // apiJobsCreate creates a new job from a JSON body. Returns the job
-// snapshot.
+// snapshot. Returns 409 Conflict with the existing job ID when a job
+// for the same tool is already running.
 func (s *Server) apiJobsCreate(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Action JobAction `json:"action"`
@@ -104,6 +106,17 @@ func (s *Server) apiJobsCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	job, err := s.startActionJob(r.Context(), body.Action, body.Tool)
 	if err != nil {
+		var inProg *ErrJobInProgress
+		if errors.As(err, &inProg) {
+			w.Header().Set("Location", "/jobs/"+inProg.ExistingID)
+			s.writeJSON(w, http.StatusConflict, map[string]any{
+				"error":           err.Error(),
+				"existing_job_id": inProg.ExistingID,
+				"existing_action": inProg.ExistingFor,
+				"redirect_to":     "/jobs/" + inProg.ExistingID,
+			})
+			return
+		}
 		status := http.StatusBadRequest
 		if isNotFound(err) {
 			status = http.StatusNotFound
@@ -117,11 +130,18 @@ func (s *Server) apiJobsCreate(w http.ResponseWriter, r *http.Request) {
 
 // pageStartJob handles the HTML form POST from the tool detail page.
 // On success it 303s to the job page where the user watches progress.
+// When a job for the same tool is already running, redirects to that
+// existing job rather than starting a duplicate.
 func (s *Server) pageStartJob(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	action := JobAction(strings.ToLower(r.PathValue("action")))
 	job, err := s.startActionJob(r.Context(), action, name)
 	if err != nil {
+		var inProg *ErrJobInProgress
+		if errors.As(err, &inProg) {
+			http.Redirect(w, r, "/jobs/"+inProg.ExistingID, http.StatusSeeOther)
+			return
+		}
 		status := http.StatusBadRequest
 		if isNotFound(err) {
 			status = http.StatusNotFound
