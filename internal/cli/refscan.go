@@ -25,6 +25,52 @@ type Reference struct {
 	Constraint  string `yaml:"version_constraint,omitempty"    json:"version_constraint,omitempty"`
 }
 
+// FormatReference renders a Reference as a single human-readable line
+// for the text output of `clim info` and `clim why`. Both surfaces
+// consume this directly so the surrounding wording — and any new
+// Reference.Kind that gets added — stays in lockstep across the two
+// commands. Required + optional refs both preserve their version
+// constraint via roleWithConstraint.
+func FormatReference(ref Reference) string {
+	switch ref.Kind {
+	case "teamfile":
+		role := "optional"
+		if ref.Required {
+			role = "required"
+		}
+		return fmt.Sprintf(".clim.yaml (%s) — %s", roleWithConstraint(role, ref.Constraint), ref.Path)
+	case "project":
+		role := "optional"
+		if ref.Required {
+			role = "required"
+		}
+		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, roleWithConstraint(role, ref.Constraint), ref.Path)
+	case "pack":
+		if ref.DisplayName != "" {
+			return fmt.Sprintf("Pack %q (%s)", ref.DisplayName, ref.Name)
+		}
+		return fmt.Sprintf("Pack %q", ref.Name)
+	case "custom_pack":
+		if ref.DisplayName != "" {
+			return fmt.Sprintf("Custom pack %q (%s)", ref.DisplayName, ref.Name)
+		}
+		return fmt.Sprintf("Custom pack %q", ref.Name)
+	}
+	return ref.Kind + " " + ref.Name
+}
+
+// roleWithConstraint joins the required/optional role label with an
+// optional version constraint so a teamfile or project pin like
+// `>=1.28` is preserved in the human output. Without this, an
+// optional-but-pinned reference would render as just "(optional)" and
+// silently drop the pin.
+func roleWithConstraint(role, constraint string) string {
+	if constraint == "" {
+		return role
+	}
+	return role + " " + constraint
+}
+
 // PackageEntry is one populated package-manager ID for a tool. Shared
 // between `clim why` (AvailableVia) and `clim info` (Packages) so the
 // list of supported sources cannot drift between the two commands the

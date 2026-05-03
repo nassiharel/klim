@@ -197,7 +197,7 @@ func renderWhyText(r whyReport) {
 	if len(r.References) > 0 {
 		fmt.Fprintf(os.Stderr, "  Referenced by:\n")
 		for _, ref := range r.References {
-			fmt.Fprintf(os.Stderr, "    • %s\n", formatWhyRef(ref))
+			fmt.Fprintf(os.Stderr, "    • %s\n", FormatReference(ref))
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "  No project or pack references found.\n")
@@ -222,42 +222,5 @@ func renderWhyText(r whyReport) {
 	}
 }
 
-func formatWhyRef(ref whyReference) string {
-	switch ref.Kind {
-	case "teamfile":
-		role := "optional"
-		if ref.Required {
-			role = "required"
-		}
-		return fmt.Sprintf(".clim.yaml (%s) — %s", roleWithConstraint(role, ref.Constraint), ref.Path)
-	case "project":
-		role := "optional"
-		if ref.Required {
-			role = "required"
-		}
-		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, roleWithConstraint(role, ref.Constraint), ref.Path)
-	case "pack":
-		if ref.DisplayName != "" {
-			return fmt.Sprintf("Pack %q (%s)", ref.DisplayName, ref.Name)
-		}
-		return fmt.Sprintf("Pack %q", ref.Name)
-	case "custom_pack":
-		if ref.DisplayName != "" {
-			return fmt.Sprintf("Custom pack %q (%s)", ref.DisplayName, ref.Name)
-		}
-		return fmt.Sprintf("Custom pack %q", ref.Name)
-	}
-	return ref.Kind + " " + ref.Name
-}
-
-// roleWithConstraint joins the required/optional role label with an
-// optional version constraint so a teamfile or project pin like
-// `>=1.28` is preserved in the human output. Without this, an
-// optional-but-pinned reference would render as just "(optional)" and
-// silently drop the pin.
-func roleWithConstraint(role, constraint string) string {
-	if constraint == "" {
-		return role
-	}
-	return role + " " + constraint
-}
+// formatWhyRef has been replaced by the shared cli.FormatReference
+// helper in refscan.go.

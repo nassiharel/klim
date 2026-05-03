@@ -13,28 +13,28 @@ func TestFormatWhyRef_PreservesConstraint(t *testing.T) {
 		want string
 	}{
 		{
-			whyReference{Kind: "teamfile", Path: "/p/.clim.yaml", Required: true, Constraint: ">=1.28"},
+			Reference{Kind: "teamfile", Path: "/p/.clim.yaml", Required: true, Constraint: ">=1.28"},
 			".clim.yaml (required >=1.28) — /p/.clim.yaml",
 		},
 		{
-			whyReference{Kind: "teamfile", Path: "/p/.clim.yaml", Required: false, Constraint: "~3.12"},
+			Reference{Kind: "teamfile", Path: "/p/.clim.yaml", Required: false, Constraint: "~3.12"},
 			".clim.yaml (optional ~3.12) — /p/.clim.yaml",
 		},
 		{
-			whyReference{Kind: "project", Name: "myapp", Path: "/p/.clim.yaml", Required: false, Constraint: "~1.5"},
+			Reference{Kind: "project", Name: "myapp", Path: "/p/.clim.yaml", Required: false, Constraint: "~1.5"},
 			`Project "myapp" (optional ~1.5) — /p/.clim.yaml`,
 		},
 		{
-			whyReference{Kind: "project", Name: "myapp", Path: "/p/.clim.yaml", Required: true, Constraint: ">=2.0"},
+			Reference{Kind: "project", Name: "myapp", Path: "/p/.clim.yaml", Required: true, Constraint: ">=2.0"},
 			`Project "myapp" (required >=2.0) — /p/.clim.yaml`,
 		},
 		{
-			whyReference{Kind: "teamfile", Path: "/p/.clim.yaml", Required: true},
+			Reference{Kind: "teamfile", Path: "/p/.clim.yaml", Required: true},
 			".clim.yaml (required) — /p/.clim.yaml",
 		},
 	}
 	for _, c := range cases {
-		got := formatWhyRef(c.ref)
+		got := FormatReference(c.ref)
 		if got != c.want {
 			t.Errorf("ref=%+v\n  got:  %s\n  want: %s", c.ref, got, c.want)
 		}

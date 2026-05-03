@@ -394,7 +394,7 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 	if len(r.References) > 0 {
 		_, _ = fmt.Fprintln(w, "  Referenced by:")
 		for _, ref := range r.References {
-			_, _ = fmt.Fprintf(w, "    • %s\n", formatInfoRef(ref))
+			_, _ = fmt.Fprintf(w, "    • %s\n", FormatReference(ref))
 		}
 		_, _ = fmt.Fprintln(w, "")
 	}
@@ -410,38 +410,10 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 	}
 }
 
-// formatInfoRef renders a Reference as a single human-readable line for
-// the text output of `clim info`. Both required and optional refs may
-// carry a version constraint — neither role drops it. Delegates the
-// role/constraint string to roleWithConstraint (shared with
-// formatWhyRef) so the two renderers can't drift again.
-func formatInfoRef(ref infoReference) string {
-	switch ref.Kind {
-	case "teamfile":
-		role := "optional"
-		if ref.Required {
-			role = "required"
-		}
-		return fmt.Sprintf(".clim.yaml (%s) — %s", roleWithConstraint(role, ref.Constraint), ref.Path)
-	case "project":
-		role := "optional"
-		if ref.Required {
-			role = "required"
-		}
-		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, roleWithConstraint(role, ref.Constraint), ref.Path)
-	case "pack":
-		if ref.DisplayName != "" {
-			return fmt.Sprintf("Pack %q (%s)", ref.DisplayName, ref.Name)
-		}
-		return fmt.Sprintf("Pack %q", ref.Name)
-	case "custom_pack":
-		if ref.DisplayName != "" {
-			return fmt.Sprintf("Custom pack %q (%s)", ref.DisplayName, ref.Name)
-		}
-		return fmt.Sprintf("Custom pack %q", ref.Name)
-	}
-	return ref.Kind + " " + ref.Name
-}
+// formatInfoRef and formatWhyRef have been replaced by the shared
+// cli.FormatReference helper in refscan.go. Both `clim info` and
+// `clim why` call FormatReference directly so any new Reference.Kind
+// or wording change is a one-place edit.
 
 // Star-count and date formatting live in internal/githubfmt so the TUI
 // detail view and `clim info` share one implementation. Tests for the

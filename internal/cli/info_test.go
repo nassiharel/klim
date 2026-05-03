@@ -35,7 +35,7 @@ func TestNotFoundError_IsUsageError(t *testing.T) {
 
 func TestFormatInfoRef_PreservesConstraint(t *testing.T) {
 	// Optional teamfile pin must show its version constraint.
-	got := formatInfoRef(infoReference{
+	got := FormatReference(Reference{
 		Kind: "teamfile", Path: "/home/me/.clim.yaml",
 		Required: false, Constraint: ">=1.28",
 	})
@@ -45,7 +45,7 @@ func TestFormatInfoRef_PreservesConstraint(t *testing.T) {
 	}
 
 	// Required teamfile pin: same constraint format.
-	got = formatInfoRef(infoReference{
+	got = FormatReference(Reference{
 		Kind: "teamfile", Path: "/home/me/.clim.yaml",
 		Required: true, Constraint: ">=1.28",
 	})
@@ -55,7 +55,7 @@ func TestFormatInfoRef_PreservesConstraint(t *testing.T) {
 	}
 
 	// Project optional with constraint — both role and constraint must appear.
-	got = formatInfoRef(infoReference{
+	got = FormatReference(Reference{
 		Kind: "project", Name: "myapp", Path: "/projects/myapp/.clim.yaml",
 		Required: false, Constraint: "~1.5",
 	})
@@ -65,7 +65,7 @@ func TestFormatInfoRef_PreservesConstraint(t *testing.T) {
 	}
 
 	// Empty constraint: role appears alone, no trailing space.
-	got = formatInfoRef(infoReference{
+	got = FormatReference(Reference{
 		Kind: "teamfile", Path: "/home/me/.clim.yaml", Required: true,
 	})
 	want = ".clim.yaml (required) — /home/me/.clim.yaml"
