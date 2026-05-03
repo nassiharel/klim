@@ -1,0 +1,49 @@
+{{define "content"}}
+{{$j := .Data}}
+<section class="page-header">
+  <a href="/tools/{{$j.Tool}}" class="back">← {{$j.Tool}}</a>
+  <h1>{{$j.Action}} {{$j.Tool}}</h1>
+  <p class="muted">via <code>{{$j.Source}}</code> · job <code>{{$j.ID}}</code></p>
+</section>
+
+<section class="card">
+  <p>
+    Command: <code>{{join $j.Cmd " "}}</code>
+  </p>
+  <p>
+    Status: <span id="job-status" class="badge {{if eq $j.Status "running"}}update{{else if eq $j.Status "success"}}ok{{else}}muted{{end}}">{{$j.Status}}</span>
+    {{if eq $j.Status "failed"}}<span class="muted small">exit {{$j.ExitCode}}{{if $j.Err}} · {{$j.Err}}{{end}}</span>{{end}}
+  </p>
+</section>
+
+<section class="card">
+  <h2>Output</h2>
+  <pre id="job-output" class="log">{{range $j.Output}}{{.}}
+{{end}}</pre>
+</section>
+
+<script>
+(function() {
+  var status = document.getElementById('job-status');
+  var output = document.getElementById('job-output');
+  if (!status || !output) return;
+  if (status.textContent.trim() !== 'running') return;
+  // Replace existing replayed output with the SSE stream's history so
+  // we don't double-print when the EventSource backfills.
+  output.textContent = '';
+  var src = new EventSource('/api/jobs/{{$j.ID}}/stream');
+  src.addEventListener('line', function(ev) {
+    output.textContent += ev.data + '\n';
+    output.scrollTop = output.scrollHeight;
+  });
+  src.addEventListener('done', function(ev) {
+    status.textContent = ev.data;
+    status.className = 'badge ' + (ev.data === 'success' ? 'ok' : 'muted');
+    src.close();
+  });
+  src.onerror = function() {
+    // Browsers retry automatically; we don't need to do anything.
+  };
+})();
+</script>
+{{end}}

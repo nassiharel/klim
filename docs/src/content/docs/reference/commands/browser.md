@@ -42,17 +42,33 @@ expose an unauthenticated server on a LAN.
 | Path | Renders |
 |------|---------|
 | `/` | Installed tools, with category and source filters. |
-| `/tools/<name>` | Per-tool detail (CLI-info equivalent). |
+| `/tools/<name>` | Per-tool detail with **Install / Upgrade / Remove** buttons. |
 | `/updates` | Outdated tools with current → latest version comparison. |
 | `/discover` | Full marketplace catalog with category, tag, and free-text filters. |
 | `/favorites` | Your favorited tools, with toggle action on each row. |
 | `/dashboard` | Aggregate stats: counts, top categories, sample of pending updates. |
 | `/trail` | Trail entry list. |
 | `/trail/<ref>` | Snapshot at the given trail ref. |
+| `/jobs/<id>` | Live progress for an Install / Upgrade / Remove job (SSE-streamed). |
 | `/healthz` | Liveness probe (`200 ok`). |
 
 The Backup and Config tabs render "Coming soon" placeholders in this
 release; the same data is available in the TUI today.
+
+## Actions and live progress
+
+The Tool detail page exposes the same Install / Upgrade / Remove
+actions as the TUI. Submitting a button creates a job and redirects
+to `/jobs/<id>`, which streams the package manager's combined
+stdout / stderr line-by-line via Server-Sent Events. The page also
+falls back to the snapshot endpoint if the browser doesn't support
+SSE.
+
+The action chooses a package manager automatically:
+- **Install** uses the best available source for your OS (the same
+  rule `clim list` uses for its install commands).
+- **Upgrade** and **Remove** prefer the source the tool is already
+  installed from.
 
 ## JSON API
 
@@ -69,6 +85,9 @@ read both indistinguishably.
 | `/api/trail/<ref>` | GET | `{ "entry": ..., "snapshot": ... }`. |
 | `/api/favorites` | GET | Your current favorite tool names (sorted). |
 | `/api/favorites/<name>/toggle` | POST | Flip the favorite state; returns `{ "name", "favorite" }`. |
+| `/api/jobs` | POST | Body: `{ "action": "install"\|"upgrade"\|"remove", "tool": "<name>" }`. Returns `202 Accepted` + the job snapshot. |
+| `/api/jobs/<id>` | GET | JSON snapshot of the job. |
+| `/api/jobs/<id>/stream` | GET | Server-Sent Events stream of the job's output (replays history on connect). |
 
 State-changing endpoints (POST) require an `Origin` or `Referer` header
 that matches the host serving the request. This blocks CSRF and DNS
@@ -92,14 +111,15 @@ curl -s http://127.0.0.1:7777/api/dashboard | jq .updates_available
   other interface and prints a warning at startup.
 - All HTML is rendered through Go's `html/template`, which escapes
   values by default.
-- State-changing endpoints (favorite toggle today; install / upgrade /
-  remove in the future) require an `Origin` or `Referer` header
-  matching the request's `Host`. This blocks CSRF and DNS-rebinding
-  attacks even when the server is reachable over loopback. Browsers
-  send the header automatically for in-page navigation.
-- Mutating endpoints in this release are limited to favoriting. Tool
-  install / upgrade / remove are tracked for a future release and will
-  require explicit confirmation in the UI.
+- State-changing endpoints (favorite toggle, install / upgrade /
+  remove jobs) require an `Origin` or `Referer` header matching the
+  request's `Host`. This blocks CSRF and DNS-rebinding attacks even
+  when the server is reachable over loopback. Browsers send the
+  header automatically for in-page navigation.
+- Action jobs (install / upgrade / remove) shell out to the user's
+  package managers using the same templates `clim list` uses. clim
+  itself does not run anything as root; sudo prompts behave the same
+  way they do from the terminal.
 
 ## See Also
 

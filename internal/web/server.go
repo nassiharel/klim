@@ -48,6 +48,7 @@ type Server struct {
 	mux      *http.ServeMux
 	tpls     map[string]*template.Template
 	loader   loader
+	jobs     *jobManager
 	httpsrv  *http.Server
 	listener net.Listener
 }
@@ -85,6 +86,7 @@ func New(opts Options) (*Server, error) {
 		mux:      http.NewServeMux(),
 		tpls:     tpls,
 		loader:   newServiceLoader(opts.Service),
+		jobs:     newJobManager(newExecExecutor()),
 		listener: ln,
 	}
 	s.routes()
@@ -174,6 +176,15 @@ func (s *Server) routes() {
 	// reloads; the JSON variant is also reachable for scripts.
 	s.mux.Handle("POST /api/favorites/{name}/toggle", csrfProtect(s, http.HandlerFunc(s.apiFavoritesToggle)))
 	s.mux.Handle("POST /favorites/{name}/toggle", csrfProtect(s, http.HandlerFunc(s.pageFavoritesToggle)))
+
+	// Action jobs (install / upgrade / remove). The HTML form variant
+	// POSTs to /tools/{name}/{action} and 303s to /jobs/{id}; the JSON
+	// API equivalent posts to /api/jobs and returns the job snapshot.
+	s.mux.Handle("POST /api/jobs", csrfProtect(s, http.HandlerFunc(s.apiJobsCreate)))
+	s.mux.Handle("POST /tools/{name}/{action}", csrfProtect(s, http.HandlerFunc(s.pageStartJob)))
+	s.mux.HandleFunc("GET /jobs/{id}", s.pageJob)
+	s.mux.HandleFunc("GET /api/jobs/{id}", s.apiJobsGet)
+	s.mux.HandleFunc("GET /api/jobs/{id}/stream", s.apiJobsStream)
 }
 
 func isLoopback(host string) bool {
@@ -234,4 +245,14 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
+}
+
+// Flush forwards to the underlying ResponseWriter when it supports
+// flushing. Required so SSE streams (which need to push partial
+// responses past the buffer) keep working through the access-log
+// middleware wrapper.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }

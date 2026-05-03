@@ -251,3 +251,50 @@ table.kv td {
 .iconbtn:hover { color: var(--text); }
 
 .small { font-size: 0.85rem; }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.actions .inline { display: inline-flex; }
+.btn-primary,
+.btn-danger {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-primary:hover,
+.btn-danger:hover { filter: brightness(1.1); }
+.btn-danger { background: #d83a3a; }
+.actions .btn-link {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.actions .btn-link:hover { color: var(--text); border-color: var(--text); }
+
+.log {
+  background: #0a0e14;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  margin: 0;
+  max-height: 480px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #d6deeb;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

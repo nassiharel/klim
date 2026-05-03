@@ -13,6 +13,26 @@
     <tr><th>Installed</th><td>{{if $d.Installed}}<span class="badge ok">yes</span>{{else}}<span class="badge muted">no</span>{{end}}</td></tr>
     <tr><th>Latest</th><td><code>{{dash $d.Latest}}</code>{{if $t.LatestFrom}} <span class="muted">(via {{$t.LatestFrom}})</span>{{end}}</td></tr>
   </table>
+
+  <div class="actions">
+    {{if $d.Installed}}
+      {{if updateAvailable $t}}
+        <form method="POST" action="/tools/{{$t.Name}}/upgrade" class="inline">
+          <button type="submit" class="btn-primary">⬆ Upgrade</button>
+        </form>
+      {{end}}
+      <form method="POST" action="/tools/{{$t.Name}}/remove" class="inline">
+        <button type="submit" class="btn-danger" onclick="return confirm('Remove {{$t.Name}}?')">✗ Remove</button>
+      </form>
+    {{else}}
+      <form method="POST" action="/tools/{{$t.Name}}/install" class="inline">
+        <button type="submit" class="btn-primary">↓ Install</button>
+      </form>
+    {{end}}
+    <form method="POST" action="/favorites/{{$t.Name}}/toggle" class="inline">
+      <button type="submit" class="btn-link">★ Toggle favorite</button>
+    </form>
+  </div>
 </section>
 
 {{if $t.Instances}}
@@ -42,3 +62,4 @@
 </section>
 {{end}}
 {{end}}
+

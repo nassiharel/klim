@@ -30,6 +30,7 @@ var pageTemplates = []string{
 	"dashboard.html",
 	"trail.html",
 	"snapshot.html",
+	"job.html",
 	"stub.html",
 }
 
