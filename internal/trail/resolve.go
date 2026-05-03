@@ -124,17 +124,17 @@ func resolveSpec(lf *logFile, refSpec string) (*Entry, error) {
 			// Unreachable given matches != nil.
 			return matches[len(matches)-1], nil
 		default:
-			short := make([]string, 0, len(seenObject))
-			for id := range seenObject {
-				short = append(short, id.Short())
-			}
-			// Sort so the ambiguous-ref message is stable across
-			// runs — Go's map iteration order is randomized, and
-			// without sorting users would see a different ordering
-			// each time they retried the same broken ref.
-			sort.Strings(short)
+			// Render each candidate using a long-enough prefix to
+			// disambiguate. Short() is always 7 chars, but if two
+			// distinct objects share that prefix it'd print the same
+			// short hash twice and give the user no usable
+			// disambiguation. Find the smallest prefix length L >= 7
+			// such that all candidates have distinct prefixes; fall
+			// back to the full 64-char hash if even that's needed.
+			labels := disambiguatedHashes(seenObject)
+			sort.Strings(labels)
 			return nil, fmt.Errorf("trail: ref %q is ambiguous (matches %d distinct objects: %s)",
-				refSpec, len(seenObject), strings.Join(short, ", "))
+				refSpec, len(seenObject), strings.Join(labels, ", "))
 		}
 	}
 
@@ -170,6 +170,45 @@ func isHexPrefix(s string) bool {
 		}
 	}
 	return true
+}
+
+// disambiguatedHashes renders each ObjectID with the shortest prefix
+// that's unique across the set, with a minimum of 7 chars (the
+// canonical Short() length). Falls back to full 64-char IDs only when
+// even those collide — which is impossible for distinct object IDs by
+// construction, but is the safe fallback if the input ever contained
+// duplicates.
+func disambiguatedHashes(set map[ObjectID]struct{}) []string {
+	ids := make([]ObjectID, 0, len(set))
+	for id := range set {
+		ids = append(ids, id)
+	}
+	for n := 7; n <= 64; n++ {
+		seen := make(map[string]struct{}, len(ids))
+		out := make([]string, 0, len(ids))
+		collision := false
+		for _, id := range ids {
+			pref := string(id)
+			if len(pref) > n {
+				pref = pref[:n]
+			}
+			if _, dup := seen[pref]; dup {
+				collision = true
+				break
+			}
+			seen[pref] = struct{}{}
+			out = append(out, pref)
+		}
+		if !collision {
+			return out
+		}
+	}
+	// Defensive: full hashes still collide. Render them anyway.
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, string(id))
+	}
+	return out
 }
 
 // readHEAD reads the integer pointer in HEAD, or returns -1 when missing.

@@ -854,3 +854,77 @@ func TestCapture_NoOrphanWhenSummarizeFails(t *testing.T) {
 		t.Errorf("expected 1 object on disk (the corrupted predecessor), found %d", count)
 	}
 }
+
+// TestLoadLog_RejectsCorruptedLabel verifies that a hand-edited log
+// with a reserved or control-character label fails closed at load
+// time rather than silently producing entries that Resolve(<label>)
+// can never reach.
+func TestLoadLog_RejectsCorruptedLabel(t *testing.T) {
+	dir := useTempDir(t)
+	if _, err := Capture(OpCapture, "ok", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "log.yaml")
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := strings.Replace(string(body), "label: ok", "label: HEAD", 1)
+	if err := os.WriteFile(logPath, []byte(tampered), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	if _, err := Log(LogOptions{}); err == nil {
+		t.Fatal("expected error for reserved label in log")
+	} else if !strings.Contains(err.Error(), "reserved ref syntax") {
+		t.Fatalf("got: %v", err)
+	}
+
+	// Same regression with a tab character.
+	tampered = strings.Replace(string(body), "label: ok", "label: \"with\\ttab\"", 1)
+	if err := os.WriteFile(logPath, []byte(tampered), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	if _, err := Log(LogOptions{}); err == nil {
+		t.Fatal("expected error for tab in label")
+	} else if !strings.Contains(err.Error(), "tabs") && !strings.Contains(err.Error(), "control") {
+		t.Fatalf("got: %v", err)
+	}
+}
+
+// TestDisambiguatedHashes_HandlesPrefixCollision asserts the
+// ambiguous-hash error renders enough characters to actually
+// disambiguate when two object IDs share a 7-char prefix. Otherwise
+// the user would see the same Short() twice with no way to retry.
+func TestDisambiguatedHashes_HandlesPrefixCollision(t *testing.T) {
+	a := ObjectID(strings.Repeat("a", 7) + strings.Repeat("0", 57))
+	b := ObjectID(strings.Repeat("a", 7) + "1" + strings.Repeat("0", 56))
+	set := map[ObjectID]struct{}{a: {}, b: {}}
+	got := disambiguatedHashes(set)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 entries, got %d: %v", len(got), got)
+	}
+	// Each must be at least 8 chars (>= 7 + 1 to disambiguate).
+	for _, s := range got {
+		if len(s) < 8 {
+			t.Errorf("entry %q is shorter than the disambiguating prefix", s)
+		}
+	}
+	// And they must be different.
+	if got[0] == got[1] {
+		t.Errorf("disambiguated entries collide: %v", got)
+	}
+}
+
+// TestDisambiguatedHashes_DistinctSevenChar uses Short() for objects
+// whose 7-char prefixes are already unique.
+func TestDisambiguatedHashes_DistinctSevenChar(t *testing.T) {
+	a := ObjectID("abcdef0" + strings.Repeat("0", 57))
+	b := ObjectID("9876543" + strings.Repeat("0", 57))
+	set := map[ObjectID]struct{}{a: {}, b: {}}
+	got := disambiguatedHashes(set)
+	for _, s := range got {
+		if len(s) != 7 {
+			t.Errorf("expected 7-char Short, got %q (len %d)", s, len(s))
+		}
+	}
+}
