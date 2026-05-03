@@ -623,3 +623,59 @@ func TestDiff_SourceAndVersionChange(t *testing.T) {
 		t.Errorf("did not expect a separate VersionChanged record: %+v", d.VersionChanged)
 	}
 }
+
+// TestCapture_RejectsControlCharLabels guards against tabs / newlines /
+// other control runes in labels. Such characters would corrupt the
+// `clim trail log` tabwriter output (tabs split columns, newlines inject
+// extra rows) or break terminal rendering of `clim trail show`.
+func TestCapture_RejectsControlCharLabels(t *testing.T) {
+useTempDir(t)
+cases := []string{
+"with\ttab",
+"with\nnewline",
+"with\rcarriage",
+"bell\x07char",
+}
+for _, label := range cases {
+_, err := Capture(OpCapture, label, orderedTools())
+if err == nil {
+t.Errorf("Capture(%q) accepted control-character label", label)
+continue
+}
+if !strings.Contains(err.Error(), "invalid label") {
+t.Errorf("Capture(%q): expected 'invalid label' in error, got: %v", label, err)
+}
+}
+}
+
+// TestDecodeSnapshot_VersionlessIsCorruption ensures a snapshot file
+// with a missing schema_version surfaces as "corrupted or hand-edited"
+// rather than the generic "upgrade clim" message — we have never
+// written versionless snapshots, so the latter would mislead users.
+func TestDecodeSnapshot_VersionlessIsCorruption(t *testing.T) {
+body := []byte("tools: []\nos: linux\narch: amd64\n")
+_, err := decodeSnapshot(body, ObjectID(strings.Repeat("0", 64)))
+if err == nil {
+t.Fatal("expected error decoding versionless snapshot")
+}
+if !strings.Contains(err.Error(), "missing schema_version") {
+t.Errorf("expected 'missing schema_version' message, got: %v", err)
+}
+if strings.Contains(err.Error(), "upgrade clim") {
+t.Errorf("error should not say 'upgrade clim'; got: %v", err)
+}
+}
+
+// TestDecodeSnapshot_FutureVersionStillSaysUpgrade verifies the genuine
+// forward-compat path is preserved: schema_version > current means a
+// newer clim wrote this file.
+func TestDecodeSnapshot_FutureVersionStillSaysUpgrade(t *testing.T) {
+body := []byte("schema_version: 9999\ntools: []\nos: linux\narch: amd64\n")
+_, err := decodeSnapshot(body, ObjectID(strings.Repeat("0", 64)))
+if err == nil {
+t.Fatal("expected error")
+}
+if !strings.Contains(err.Error(), "upgrade clim") {
+t.Errorf("expected 'upgrade clim' for future version, got: %v", err)
+}
+}

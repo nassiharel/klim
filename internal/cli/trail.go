@@ -41,8 +41,9 @@ prefix), or an entry's --label.`,
 
 // trailCaptureFresh controls whether `clim trail capture` does a fresh
 // PATH scan (default true) or reuses the on-disk scan cache. Default is
-// true so captures match the user's current toolchain; --no-refresh
-// opts into cached behavior for back-to-back clim commands.
+// true so captures match the user's current toolchain; pass
+// `--refresh=false` to opt into cached behavior for back-to-back clim
+// commands.
 var (
 	trailCaptureLabel string
 	trailCaptureOp    string

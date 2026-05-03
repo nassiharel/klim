@@ -62,11 +62,14 @@ func Diff(a, b string) (*DiffResult, error) {
 	return &out, nil
 }
 
-// resolveAndLoad combines Resolve+readObject under an existing lock.
-// Both helpers re-read log.yaml/HEAD on each call, but the trail lock
-// is held by the caller for the duration of the operation.
+// resolveAndLoad combines resolveSpec+readObject under an existing lock.
+// Caller must hold the trail lock.
 func resolveAndLoad(r fsRoots, refSpec string) (*Snapshot, error) {
-	entry, err := Resolve(refSpec)
+	lf, err := loadLog(r)
+	if err != nil {
+		return nil, err
+	}
+	entry, err := resolveSpec(lf, refSpec)
 	if err != nil {
 		return nil, err
 	}

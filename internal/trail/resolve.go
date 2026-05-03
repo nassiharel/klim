@@ -17,20 +17,48 @@ import (
 //	<short>           7+ char object hash prefix (must be unambiguous)
 //	<label>           an explicit Entry.Label match (must be unique)
 //
+// Resolve maps a refSpec to an Entry. Supported forms:
+//
+//	HEAD              the newest entry
+//	HEAD~N            N entries back from HEAD (N >= 0)
+//	@<index>          exact entry index (0-based)
+//	<hash>            full 64-char object hash
+//	<short>           7+ char object hash prefix (must be unambiguous)
+//	<label>           an explicit Entry.Label match (must be unique)
+//
 // "latest" is accepted as an alias for HEAD for terminology comfort.
+//
+// Resolve acquires the trail lock to load log.yaml so a concurrent
+// capture/prune can't observe the lock-free read mid-rename and report
+// a transient empty trail. Internal callers that already hold the lock
+// (e.g. Show, Diff) must use resolveSpec directly to avoid deadlock.
 func Resolve(refSpec string) (*Entry, error) {
 	refSpec = strings.TrimSpace(refSpec)
 	if refSpec == "" {
 		return nil, errors.New("trail: empty ref")
 	}
-
 	r, err := resolveRoots()
 	if err != nil {
 		return nil, err
 	}
+	release, err := acquireLock(r.lock)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	lf, err := loadLog(r)
 	if err != nil {
 		return nil, err
+	}
+	return resolveSpec(lf, refSpec)
+}
+
+// resolveSpec is Resolve's pure, lock-free core. The caller must hold
+// the trail lock and have loaded lf already.
+func resolveSpec(lf *logFile, refSpec string) (*Entry, error) {
+	refSpec = strings.TrimSpace(refSpec)
+	if refSpec == "" {
+		return nil, errors.New("trail: empty ref")
 	}
 	if len(lf.Entries) == 0 {
 		return nil, errors.New("trail: no entries (run `clim trail capture` to create one)")

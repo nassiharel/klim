@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 
@@ -125,6 +126,13 @@ func decodeSnapshot(data []byte, id ObjectID) (*Snapshot, error) {
 	if err := dec.Decode(&s); err != nil {
 		return nil, fmt.Errorf("parsing trail object %s: %w", id.Short(), err)
 	}
+	// SchemaVersion == 0 means the field was missing; we have never
+	// written versionless objects, so this is corruption / hand-edit
+	// rather than a forward-compat issue. Distinguish the message so
+	// users aren't told to "upgrade clim" when nothing newer can fix it.
+	if s.SchemaVersion == 0 {
+		return nil, fmt.Errorf("trail object %s is missing schema_version (corrupted or hand-edited?)", id.Short())
+	}
 	if s.SchemaVersion != SchemaVersion {
 		return nil, fmt.Errorf("trail object %s has unsupported schema version %d (this clim supports %d) — upgrade clim",
 			id.Short(), s.SchemaVersion, SchemaVersion)
@@ -191,6 +199,25 @@ func saveLog(r fsRoots, lf *logFile) error {
 	return nil
 }
 
+// invalidLabelReason rejects labels that would corrupt the human-readable
+// `clim trail log` table or `clim trail show` output: tabs and newlines
+// would split columns / inject extra lines, and other control runes can
+// produce malformed terminal output. Returning a non-empty string ⇒
+// reject; empty ⇒ label is structurally OK (further checks may apply).
+func invalidLabelReason(label string) string {
+	for _, r := range label {
+		switch {
+		case r == '\t':
+			return "labels must not contain tabs"
+		case r == '\n' || r == '\r':
+			return "labels must not contain line breaks"
+		case unicode.IsControl(r):
+			return fmt.Sprintf("labels must not contain control character %U", r)
+		}
+	}
+	return ""
+}
+
 // reservedLabelReason returns a non-empty reason if label collides with a
 // built-in ref syntax accepted by Resolve (HEAD, latest, HEAD~N, @N, or a
 // hex prefix that would be interpreted as an object hash). Capture
@@ -249,6 +276,9 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 	}
 	label = strings.TrimSpace(label)
 	if label != "" {
+		if reason := invalidLabelReason(label); reason != "" {
+			return nil, fmt.Errorf("trail: invalid label %q: %s", label, reason)
+		}
 		if reason := reservedLabelReason(label); reason != "" {
 			return nil, fmt.Errorf("trail: label %q conflicts with reserved ref syntax (%s); pick a different name", label, reason)
 		}
@@ -317,8 +347,10 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 }
 
 // summarize builds a one-line description of how this entry differs from
-// the previous one. Empty for the first entry. Uses pre-computed roots so
-// tests' overrideRoot is honored.
+// the previous one. For the first entry (no predecessor) it returns
+// "<n> tool(s)" so users can tell the trail head from a glance instead
+// of seeing an empty Summary column. Uses pre-computed roots so tests'
+// overrideRoot is honored.
 func summarize(r fsRoots, lf *logFile, current *Snapshot) string {
 	if len(lf.Entries) == 0 {
 		return fmt.Sprintf("%d tool(s)", len(current.Tools))
@@ -355,11 +387,19 @@ type LogOptions struct {
 }
 
 // Log returns entries newest-first, optionally filtered.
+//
+// Acquires the trail lock to read log.yaml so a concurrent capture/prune
+// can't catch us mid-rename and report a transient empty history.
 func Log(opts LogOptions) ([]Entry, error) {
 	r, err := resolveRoots()
 	if err != nil {
 		return nil, err
 	}
+	release, err := acquireLock(r.lock)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	lf, err := loadLog(r)
 	if err != nil {
 		return nil, err
@@ -396,7 +436,11 @@ func Show(refSpec string) (*Snapshot, *Entry, error) {
 	}
 	defer release()
 
-	entry, err := Resolve(refSpec)
+	lf, err := loadLog(r)
+	if err != nil {
+		return nil, nil, err
+	}
+	entry, err := resolveSpec(lf, refSpec)
 	if err != nil {
 		return nil, nil, err
 	}
