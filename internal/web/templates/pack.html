@@ -10,7 +10,7 @@
 
 <section class="card">
   <h2>Tools</h2>
-  <p class="muted">{{len $p.ToolNames}} total · {{$d.MissingCount}} missing</p>
+  <p class="muted">{{len $p.ToolNames}} total · {{$d.MissingCount}} missing{{if $d.UnknownCount}} · {{$d.UnknownCount}} unknown{{end}}</p>
   <table class="grid">
     <thead>
       <tr>

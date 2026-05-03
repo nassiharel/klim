@@ -100,6 +100,62 @@ func TestApiLifecycleStream_TracksConnections(t *testing.T) {
 	}
 }
 
+func TestServer_JobContextCancelsOnShutdown(t *testing.T) {
+	// Regression for the PR #48 review: jobs used to run under
+	// context.Background() and would not be cancelled when the
+	// server shut down, orphaning long-running install subprocesses
+	// past clim's own exit. Fixed by deriving a server-lifetime
+	// jobCtx from Serve's parent ctx; this test confirms that
+	// cancelling Serve's ctx propagates to jobCtx.
+	srv, err := New(Options{
+		Service: service.New(),
+		Bind:    "127.0.0.1",
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	srv.loader = &fixtureLoader{tools: fixtureToolWithPackages(), favs: map[string]bool{}}
+	t.Cleanup(func() { _ = srv.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Run Serve in the background; it'll exit cleanly when we cancel ctx.
+	done := make(chan struct{})
+	go func() {
+		_ = srv.Serve(ctx)
+		close(done)
+	}()
+	// Wait until Serve has installed its jobCtx (replacement happens
+	// at the top of Serve, before its goroutine spins up).
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		jctx := srv.jobContext()
+		if jctx != nil && jctx != context.Background() {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// The job context must be alive at this point.
+	jctx := srv.jobContext()
+	select {
+	case <-jctx.Done():
+		t.Fatal("job context was already cancelled before server shutdown")
+	default:
+	}
+
+	// Trigger shutdown.
+	cancel()
+	// jobCtx should fire promptly — Serve's parent cancellation
+	// propagates through context.WithCancel.
+	select {
+	case <-jctx.Done():
+		// good
+	case <-time.After(2 * time.Second):
+		t.Fatal("job context did not cancel after server shutdown")
+	}
+	<-done
+}
+
 func TestPageTool_RendersPMRowsAndRelated(t *testing.T) {
 	allOSPkgs := registry.PackageIDs{Brew: "kubectl", Winget: "Kubernetes.kubectl", Apt: "kubectl"}
 	tools := []registry.Tool{

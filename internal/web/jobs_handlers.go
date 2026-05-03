@@ -84,12 +84,24 @@ func (s *Server) startActionJob(ctx context.Context, action JobAction, name stri
 	if err != nil {
 		return nil, err
 	}
-	// We deliberately use a context.Background() for the long-running
-	// job rather than ctx — the HTTP request that triggered the job
-	// usually finishes (303 redirect) long before the package manager
+	// Run the job under the server's lifetime context, NOT the per-
+	// request ctx. The HTTP request that triggered the job finishes
+	// (303 redirect) long before a real package-manager subprocess
 	// does, and we don't want the redirect's request cancellation to
-	// kill the install.
-	return s.jobs.Start(context.Background(), action, tool.Name, source, args)
+	// kill the install. The server-lifetime jobCtx still cancels on
+	// Ctrl-C / SIGTERM / auto-shutdown so jobs aren't orphaned past
+	// clim's own exit.
+	return s.jobs.Start(s.jobContext(), action, tool.Name, source, args)
+}
+
+// jobContext returns the server-lifetime context jobs run under.
+// Falls back to a fresh Background when no context has been wired up
+// yet (tests that drive the manager directly without calling Serve).
+func (s *Server) jobContext() context.Context {
+	if s.jobCtx != nil {
+		return s.jobCtx
+	}
+	return context.Background()
 }
 
 // apiJobsCreate creates a new job from a JSON body. Returns the job

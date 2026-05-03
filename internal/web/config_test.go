@@ -145,6 +145,65 @@ func TestPageConfigSave_ValidationErrorPreservesInputAndDoesNotPersist(t *testin
 	}
 }
 
+func TestPageConfigSave_CheckboxCanTurnBoolOn(t *testing.T) {
+	// Regression for the PR #48 review: a hidden "false" + the
+	// checkbox's "true" both got submitted, and Go's r.FormValue
+	// returns the FIRST value, so the bool was permanently stuck at
+	// false. The hidden input has been removed; an unchecked checkbox
+	// submits nothing (=false via SetFromString); a checked one
+	// submits exactly "true".
+	ts, cfg := startConfigServer(t)
+	cfg.UI.ShowPath = false
+
+	// Simulate "checked": form sends only the true value.
+	form := url.Values{}
+	for _, s := range config.AllSettings() {
+		form.Set(s.Key, s.Raw(cfg))
+	}
+	form.Set("ui_show_path", "true")
+	resp, body := postFormSameOrigin(t, ts.URL, "/config", form)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("status: %d body=%s", resp.StatusCode, body)
+	}
+	if !cfg.UI.ShowPath {
+		t.Fatalf("UI.ShowPath should be true after submitting checked=true")
+	}
+
+	// Simulate "unchecked": form sends nothing for the key.
+	form2 := url.Values{}
+	for _, s := range config.AllSettings() {
+		if s.Key == "ui_show_path" {
+			continue // omit entirely
+		}
+		form2.Set(s.Key, s.Raw(cfg))
+	}
+	resp2, body2 := postFormSameOrigin(t, ts.URL, "/config", form2)
+	if resp2.StatusCode != http.StatusSeeOther {
+		t.Fatalf("status: %d body=%s", resp2.StatusCode, body2)
+	}
+	if cfg.UI.ShowPath {
+		t.Fatalf("UI.ShowPath should be false after submitting form without the key (unchecked checkbox)")
+	}
+}
+
+func TestPageConfig_RendersNoHiddenFalseForBools(t *testing.T) {
+	// Belt-and-braces: the form template must NOT render a
+	// <input type="hidden" name="<key>" value="false"> shadow input
+	// for boolean fields, otherwise the bug above would be back.
+	ts, _ := startConfigServer(t)
+	resp, body := get(t, ts.URL+"/config")
+	if resp.StatusCode != 200 {
+		t.Fatalf("status: %d", resp.StatusCode)
+	}
+	if strings.Contains(body, `type="hidden" name="ui_show_path"`) {
+		t.Errorf("config form rendered a hidden boolean shadow input — re-introduces the FormValue first-value bug")
+	}
+	// The checkbox itself must still be present.
+	if !strings.Contains(body, `type="checkbox" name="ui_show_path"`) {
+		t.Errorf("config form is missing the bool checkbox")
+	}
+}
+
 func TestPageConfigSave_RejectsCrossOrigin(t *testing.T) {
 	ts, _ := startConfigServer(t)
 	c := &http.Client{}

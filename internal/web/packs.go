@@ -31,10 +31,18 @@ type packRow struct {
 // the pack against the catalog so the user can see installed status
 // up-front instead of clicking each one.
 type packDetailView struct {
-	Pack         registry.Pack
-	IsCustom     bool
-	Tools        []packToolRow
+	Pack     registry.Pack
+	IsCustom bool
+	Tools    []packToolRow
+	// MissingCount counts pack entries that are in the catalog but
+	// not installed locally — i.e. the ones the user could click
+	// "Install" on. UnknownCount tracks entries the catalog doesn't
+	// know about (typo in the pack file or a tool that's been
+	// removed since the pack was authored). They're displayed
+	// separately so "5 missing" never quietly includes 2 garbage
+	// entries.
 	MissingCount int
+	UnknownCount int
 }
 
 type packToolRow struct {
@@ -87,15 +95,20 @@ func (s *Server) pagePack(w http.ResponseWriter, r *http.Request) {
 	}
 	byName := registry.ToolMap(tools)
 	rows := make([]packToolRow, 0, len(pack.ToolNames))
-	missing := 0
+	missing, unknown := 0, 0
 	for _, n := range pack.ToolNames {
 		row := packToolRow{Name: n}
 		if t, ok := byName[n]; ok {
 			row.Tool = t
 			row.Installed = t.IsInstalled()
-		}
-		if !row.Installed {
-			missing++
+			if !row.Installed {
+				missing++
+			}
+		} else {
+			// Catalog doesn't know this tool — count it under "unknown"
+			// so the header doesn't conflate "missing but installable"
+			// with "garbage entry".
+			unknown++
 		}
 		rows = append(rows, row)
 	}
@@ -107,6 +120,7 @@ func (s *Server) pagePack(w http.ResponseWriter, r *http.Request) {
 			IsCustom:     isCustom,
 			Tools:        rows,
 			MissingCount: missing,
+			UnknownCount: unknown,
 		},
 	})
 }

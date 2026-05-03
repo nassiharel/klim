@@ -32,7 +32,12 @@
       </label>
       <div class="config-input">
         {{if eq $s.Type 0}}{{/* Bool */}}
-          <input type="hidden" name="{{$s.Key}}" value="false">
+          {{/* Unchecked checkboxes submit nothing; SetFromString
+             treats the empty value as false. We do NOT add a hidden
+             "false" shadow input because Go's r.FormValue returns the
+             FIRST submitted value for a key, and a hidden field
+             placed before the checkbox would always win — making it
+             impossible to turn a boolean ON. */}}
           <input id="cfg-{{$s.Key}}" type="checkbox" name="{{$s.Key}}" value="true" {{if eq $value "true"}}checked{{end}}>
         {{else if eq $s.Type 1}}{{/* String */}}
           <input id="cfg-{{$s.Key}}" type="text" name="{{$s.Key}}" value="{{$value}}" placeholder="(default)">

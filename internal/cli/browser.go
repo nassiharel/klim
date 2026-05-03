@@ -26,16 +26,25 @@ var browserCmd = &cobra.Command{
 	Long: `clim browser starts a local HTTP server and opens it in your default browser.
 
 The server binds to 127.0.0.1 by default and refuses non-loopback bind
-addresses unless --insecure-bind is set. The web UI mirrors the TUI's
-read-only views (Installed, Tool detail, Dashboard, Trail) and exposes a
-JSON API at /api/* with the same shape as the corresponding CLI
-subcommands' --output json payloads.
+addresses unless --insecure-bind is set. When --insecure-bind exposes
+the server on the network, clim auto-generates a 32-byte bearer token
+and prints a ?token=<token> URL — the token is required (cookie or
+Authorization: Bearer header) for every request other than /healthz.
+
+The web UI mirrors the TUI's tabs (Installed, Updates, Discover,
+Packs, For You, Favorites, Projects, Backup, Dashboard, Trail, Config)
+and exposes a JSON API at /api/* with the same shape as the
+corresponding CLI subcommands' --output json payloads.
+
+By default the server shuts itself down 10 seconds after the last
+browser tab closes; pass --keep-alive to keep it running.
 
 Examples:
-  clim browser                       # auto-pick a free port, open browser
-  clim browser --port 7777           # bind a specific port
-  clim browser --no-open             # don't auto-launch the browser
-  clim browser --bind 0.0.0.0 --insecure-bind   # share on LAN (no auth!)`,
+  clim browser                                  # auto-pick a free port, open browser
+  clim browser --port 7777                      # bind a specific port
+  clim browser --no-open                        # don't auto-launch the browser
+  clim browser --keep-alive                     # don't auto-shutdown when tabs close
+  clim browser --bind 0.0.0.0 --insecure-bind   # expose to LAN (token-authenticated)`,
 	RunE: runBrowser,
 }
 
@@ -43,7 +52,7 @@ func init() {
 	browserCmd.Flags().IntVar(&browserPort, "port", 0, "listen port (0 = pick a free one)")
 	browserCmd.Flags().StringVar(&browserBind, "bind", "127.0.0.1", "bind address")
 	browserCmd.Flags().BoolVar(&browserNoOpen, "no-open", false, "do not open the browser automatically")
-	browserCmd.Flags().BoolVar(&browserInsecureBind, "insecure-bind", false, "allow non-loopback bind addresses (no auth — use with caution)")
+	browserCmd.Flags().BoolVar(&browserInsecureBind, "insecure-bind", false, "allow non-loopback bind addresses (auto-generates a bearer token)")
 	browserCmd.Flags().BoolVar(&browserKeepAlive, "keep-alive", false, "keep the server running after the last browser tab closes (default: shut down)")
 }
 
@@ -81,7 +90,12 @@ func runBrowser(cmd *cobra.Command, _ []string) error {
 	if authToken != "" {
 		fmt.Fprintf(os.Stderr, "  ⚠ bound to a non-loopback address; auth token required\n")
 		fmt.Fprintf(os.Stderr, "  open: %s\n", authed)
-	} else if browserInsecureBind && browserBind != "127.0.0.1" && browserBind != "localhost" {
+	} else if browserInsecureBind && !isLoopbackAddr(browserBind) {
+		// Defensive: reach this only if a future change generates
+		// no token but still allows non-loopback bind. Reuse the
+		// shared isLoopbackAddr so all loopback spellings (including
+		// ::1) are treated identically to the auth-token decision
+		// just above.
 		fmt.Fprintln(os.Stderr, "  ⚠ bound to a non-loopback address with NO authentication")
 	}
 	if !browserNoOpen {

@@ -70,6 +70,34 @@ func TestPagePack_DetailShowsToolStatusAndInstallButton(t *testing.T) {
 	}
 }
 
+// TestPagePack_DistinguishesMissingFromUnknown is the regression test
+// for PR #48 review: pack detail used to count "not in catalog" rows
+// as missing, conflating user-installable gaps with broken pack
+// entries. The fixed handler tracks them separately.
+func TestPagePack_DistinguishesMissingFromUnknown(t *testing.T) {
+	// kubectl is installed (fixtureToolWithPackages), terraform is in
+	// the catalog but not installed, "ghost-tool" isn't in the
+	// catalog at all.
+	ts := startServerWithFixtures(t, []registry.Pack{
+		{Name: "mixed", ToolNames: []string{"kubectl", "terraform", "ghost-tool"}},
+	})
+	resp, body := get(t, ts.URL+"/packs/mixed")
+	if resp.StatusCode != 200 {
+		t.Fatalf("status: %d", resp.StatusCode)
+	}
+	// Expect "1 missing" (terraform) and "1 unknown" (ghost-tool).
+	if !strings.Contains(body, "1 missing") {
+		t.Errorf("expected '1 missing' in pack header, got:\n%s", body)
+	}
+	if !strings.Contains(body, "1 unknown") {
+		t.Errorf("expected '1 unknown' in pack header (ghost-tool), got:\n%s", body)
+	}
+	// Ghost-tool row must render as 'not in catalog'.
+	if !strings.Contains(body, "not in catalog") {
+		t.Errorf("expected ghost-tool to render as 'not in catalog'")
+	}
+}
+
 func TestPagePack_404OnUnknownPack(t *testing.T) {
 	ts := startServerWithFixtures(t, nil)
 	resp, _ := get(t, ts.URL+"/packs/this-pack-does-not-exist")

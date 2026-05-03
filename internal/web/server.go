@@ -71,6 +71,14 @@ type Server struct {
 	lifecycle *lifecycle
 	httpsrv   *http.Server
 	listener  net.Listener
+	// jobCtx scopes long-running package-manager subprocesses to the
+	// server's lifetime. Serve replaces it with a child of its
+	// caller-supplied context so jobs are cancelled on Ctrl-C / auto-
+	// shutdown rather than orphaned. Until Serve runs, jobs use a
+	// plain Background context (e.g. tests that drive the manager
+	// directly).
+	jobCtx    context.Context
+	jobCancel context.CancelFunc
 }
 
 // New constructs a Server. The TCP listener is bound here so the caller
@@ -109,6 +117,10 @@ func New(opts Options) (*Server, error) {
 		jobs:     newJobManager(newExecExecutor()),
 		listener: ln,
 	}
+	// Default job context until Serve takes over. Serve replaces this
+	// with a child of its own ctx so shutting down the server cancels
+	// any package-manager subprocesses still running.
+	s.jobCtx, s.jobCancel = context.WithCancel(context.Background())
 	s.routes()
 	s.httpsrv = &http.Server{
 		Handler:           withRecover(opts.Logger, withAccessLog(opts.Logger, authMiddleware(s, s.mux))),
@@ -155,7 +167,22 @@ func (s *Server) EnableAutoShutdown(cancel context.CancelFunc) {
 // Serve runs the HTTP server until ctx is cancelled. It performs a
 // graceful shutdown on cancellation; in-flight requests are given a
 // short grace period to finish.
+//
+// All running package-manager jobs are also cancelled on shutdown by
+// way of the jobCtx that Serve installs as a child of ctx — this
+// stops orphaning long install/upgrade subprocesses past clim's own
+// exit.
 func (s *Server) Serve(ctx context.Context) error {
+	// Tear down the placeholder Background context set up in New and
+	// replace it with one that's a child of the caller's ctx. Jobs
+	// started after Serve runs will be cancelled when the server
+	// shuts down (Ctrl-C, SIGTERM, or auto-shutdown).
+	if s.jobCancel != nil {
+		s.jobCancel()
+	}
+	s.jobCtx, s.jobCancel = context.WithCancel(ctx)
+	defer s.jobCancel()
+
 	errCh := make(chan error, 1)
 	go func() {
 		err := s.httpsrv.Serve(s.listener)
