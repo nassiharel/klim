@@ -445,3 +445,71 @@ func TestComputeRecommendations_ReasonContainsToolNames(t *testing.T) {
 		t.Errorf("reason %q should mention kubectl", recs[0].reason)
 	}
 }
+
+func TestPackDisplayIndex_NameSortMatchesRender(t *testing.T) {
+	// Regression for PR #45: when packSortMode == 1 (name sort), packDisplayIndex
+	// must return the index that maps the sorted display position back to the
+	// real m.packs slot. Otherwise pressing Enter opens the wrong pack.
+	//
+	// m.packs is loaded sorted by Name (slug) — here that's "alpha", "bravo",
+	// "charlie". DisplayName sort should reorder to "Apple", "Banana", "Cherry"
+	// = 0,1,2 in this case, but the slug order is "alpha","bravo","charlie"
+	// which displays as "Apple","Banana","Cherry"... we deliberately make
+	// DisplayName order differ from Name order.
+	m := Model{
+		packSortMode: 1, // name sort (case-insensitive by DisplayName)
+		packs: []registry.Pack{
+			{Name: "a-slug", DisplayName: "Zebra"},
+			{Name: "b-slug", DisplayName: "Apple"},
+			{Name: "c-slug", DisplayName: "Mango"},
+		},
+	}
+	// Sorted by DisplayName (case-insensitive): Apple(1), Mango(2), Zebra(0).
+	cases := []struct {
+		displayIdx int
+		wantReal   int
+		wantName   string
+	}{
+		{0, 1, "b-slug"},
+		{1, 2, "c-slug"},
+		{2, 0, "a-slug"},
+	}
+	for _, c := range cases {
+		got := m.packDisplayIndex(c.displayIdx)
+		if got != c.wantReal {
+			t.Errorf("packDisplayIndex(%d) = %d (%s), want %d (%s)",
+				c.displayIdx, got, m.packs[got].Name, c.wantReal, c.wantName)
+		}
+	}
+}
+
+func TestPackDisplayIndex_StatusSortMatchesRender(t *testing.T) {
+	// Status sort: complete > partial > not-installed, ties broken by display name.
+	// We construct three packs where the status order differs from natural order.
+	m := Model{
+		packSortMode: 0, // status sort
+		packs: []registry.Pack{
+			{Name: "a", DisplayName: "A", ToolNames: []string{"git"}},         // complete (1/1)
+			{Name: "b", DisplayName: "B", ToolNames: []string{"missing"}},     // not installed
+			{Name: "c", DisplayName: "C", ToolNames: []string{"git", "miss"}}, // partial (1/2)
+		},
+		tools: []registry.Tool{
+			{Name: "git", Instances: []registry.Instance{{Path: "/usr/bin/git", Version: "1"}}},
+		},
+	}
+	// Expected display order: complete(0), partial(2), not-installed(1).
+	cases := []struct {
+		displayIdx int
+		wantReal   int
+	}{
+		{0, 0}, // A — complete
+		{1, 2}, // C — partial
+		{2, 1}, // B — not installed
+	}
+	for _, c := range cases {
+		got := m.packDisplayIndex(c.displayIdx)
+		if got != c.wantReal {
+			t.Errorf("packDisplayIndex(%d) = %d, want %d", c.displayIdx, got, c.wantReal)
+		}
+	}
+}

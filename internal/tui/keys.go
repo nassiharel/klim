@@ -223,8 +223,6 @@ func (m Model) handleKeySidebar(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// nextSelectableIdx returns the next non-header index after idx, or idx if at end.
-
 // handleKeyFilter handles the search/filter text input mode.
 // The search box is focused — typing goes into it. Tab cycles categories.
 func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -259,8 +257,8 @@ func (m Model) handleKeyFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleKeyDefault handles keys when no modal is active — tabs, navigation, actions.
-
+// nextSelectableIdx returns the next non-header sidebar index after idx,
+// or idx if at end.
 func (m Model) nextSelectableIdx(idx int) int {
 	for i := idx + 1; i < len(m.sidebarItems); i++ {
 		if !m.sidebarItems[i].isHeader {
@@ -270,8 +268,8 @@ func (m Model) nextSelectableIdx(idx int) int {
 	return idx
 }
 
-// prevSelectableIdx returns the previous non-header index before idx, or idx if at start.
-
+// prevSelectableIdx returns the previous non-header sidebar index before
+// idx, or idx if at start.
 func (m Model) prevSelectableIdx(idx int) int {
 	for i := idx - 1; i >= 0; i-- {
 		if !m.sidebarItems[i].isHeader {

@@ -10,6 +10,76 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
+// packSortOrder returns the indices into m.packs in display order, accounting
+// for the current packSortMode. Used by both renderPacksList (for rendering)
+// and packDisplayIndex (for resolving cursor → real pack index on Enter).
+//
+// Modes:
+//   - 0 (default): status sort — complete > partial (desc %) > not-installed,
+//     ties broken by display name.
+//   - 1: name sort — case-insensitive by display name.
+func (m Model) packSortOrder() []int {
+	order := make([]int, len(m.packs))
+	for i := range order {
+		order[i] = i
+	}
+	if len(m.packs) == 0 {
+		return order
+	}
+
+	if m.packSortMode == 1 {
+		sort.SliceStable(order, func(a, b int) bool {
+			return strings.ToLower(m.packs[order[a]].DisplayName) < strings.ToLower(m.packs[order[b]].DisplayName)
+		})
+		return order
+	}
+
+	// Status sort: precompute install counts.
+	toolMap := registry.InstalledSet(m.tools)
+	installed := make([]int, len(m.packs))
+	for i, pack := range m.packs {
+		for _, name := range pack.ToolNames {
+			if toolMap[name] {
+				installed[i]++
+			}
+		}
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		ai, bi := order[a], order[b]
+		aTotal, bTotal := len(m.packs[ai].ToolNames), len(m.packs[bi].ToolNames)
+		aInst, bInst := installed[ai], installed[bi]
+		aComplete := aTotal > 0 && aInst == aTotal
+		bComplete := bTotal > 0 && bInst == bTotal
+		aPartial := aInst > 0 && !aComplete
+		bPartial := bInst > 0 && !bComplete
+
+		aRank := 2
+		if aComplete {
+			aRank = 0
+		} else if aPartial {
+			aRank = 1
+		}
+		bRank := 2
+		if bComplete {
+			bRank = 0
+		} else if bPartial {
+			bRank = 1
+		}
+		if aRank != bRank {
+			return aRank < bRank
+		}
+		if aPartial && bPartial && aTotal > 0 && bTotal > 0 {
+			aPct := aInst * 100 / aTotal
+			bPct := bInst * 100 / bTotal
+			if aPct != bPct {
+				return aPct > bPct
+			}
+		}
+		return strings.ToLower(m.packs[ai].DisplayName) < strings.ToLower(m.packs[bi].DisplayName)
+	})
+	return order
+}
+
 // renderPacksList renders the list of packs for the Packs sub-tab.
 func (m Model) renderPacksList() string {
 	var b strings.Builder
@@ -20,14 +90,9 @@ func (m Model) renderPacksList() string {
 	}
 
 	toolMap := registry.InstalledSet(m.tools)
+	packOrder := m.packSortOrder()
 
-	// Build sorted index based on packSortMode.
-	packOrder := make([]int, len(m.packs))
-	for i := range packOrder {
-		packOrder[i] = i
-	}
-
-	// Compute install counts for sorting.
+	// Compute install counts for the status column.
 	packInstalled := make([]int, len(m.packs))
 	for i, pack := range m.packs {
 		for _, name := range pack.ToolNames {
@@ -35,48 +100,6 @@ func (m Model) renderPacksList() string {
 				packInstalled[i]++
 			}
 		}
-	}
-
-	if m.packSortMode == 1 {
-		// Sort by name.
-		sort.SliceStable(packOrder, func(a, b int) bool {
-			return strings.ToLower(m.packs[packOrder[a]].DisplayName) < strings.ToLower(m.packs[packOrder[b]].DisplayName)
-		})
-	} else {
-		// Sort by status (default): complete first, then partial (desc %), then not installed, then name.
-		sort.SliceStable(packOrder, func(a, b int) bool {
-			ai, bi := packOrder[a], packOrder[b]
-			aTotal, bTotal := len(m.packs[ai].ToolNames), len(m.packs[bi].ToolNames)
-			aInst, bInst := packInstalled[ai], packInstalled[bi]
-			aComplete := aTotal > 0 && aInst == aTotal
-			bComplete := bTotal > 0 && bInst == bTotal
-			aPartial := aInst > 0 && !aComplete
-			bPartial := bInst > 0 && !bComplete
-
-			aRank := 2
-			if aComplete {
-				aRank = 0
-			} else if aPartial {
-				aRank = 1
-			}
-			bRank := 2
-			if bComplete {
-				bRank = 0
-			} else if bPartial {
-				bRank = 1
-			}
-			if aRank != bRank {
-				return aRank < bRank
-			}
-			if aPartial && bPartial && aTotal > 0 && bTotal > 0 {
-				aPct := aInst * 100 / aTotal
-				bPct := bInst * 100 / bTotal
-				if aPct != bPct {
-					return aPct > bPct
-				}
-			}
-			return strings.ToLower(m.packs[ai].DisplayName) < strings.ToLower(m.packs[bi].DisplayName)
-		})
 	}
 
 	// Header with sort indicator.
@@ -153,61 +176,13 @@ func (m Model) renderPacksList() string {
 }
 
 // packDisplayIndex returns the real pack index for the given display position,
-// accounting for the current sort mode.
-
+// using the same sort order that renderPacksList rendered.
 func (m Model) packDisplayIndex(displayIdx int) int {
-	if m.packSortMode == 1 || len(m.packs) == 0 {
-		return displayIdx // name sort = natural order (already alpha from scan)
+	order := m.packSortOrder()
+	if displayIdx < 0 || displayIdx >= len(order) {
+		return displayIdx
 	}
-	toolMap := registry.InstalledSet(m.tools)
-	packOrder := make([]int, len(m.packs))
-	for i := range packOrder {
-		packOrder[i] = i
-	}
-	packInstalled := make([]int, len(m.packs))
-	for i, pack := range m.packs {
-		for _, name := range pack.ToolNames {
-			if toolMap[name] {
-				packInstalled[i]++
-			}
-		}
-	}
-	sort.SliceStable(packOrder, func(a, b int) bool {
-		ai, bi := packOrder[a], packOrder[b]
-		aTotal, bTotal := len(m.packs[ai].ToolNames), len(m.packs[bi].ToolNames)
-		aInst, bInst := packInstalled[ai], packInstalled[bi]
-		aComplete := aTotal > 0 && aInst == aTotal
-		bComplete := bTotal > 0 && bInst == bTotal
-		aPartial := aInst > 0 && !aComplete
-		bPartial := bInst > 0 && !bComplete
-		aRank := 2
-		if aComplete {
-			aRank = 0
-		} else if aPartial {
-			aRank = 1
-		}
-		bRank := 2
-		if bComplete {
-			bRank = 0
-		} else if bPartial {
-			bRank = 1
-		}
-		if aRank != bRank {
-			return aRank < bRank
-		}
-		if aPartial && bPartial && aTotal > 0 && bTotal > 0 {
-			aPct := aInst * 100 / aTotal
-			bPct := bInst * 100 / bTotal
-			if aPct != bPct {
-				return aPct > bPct
-			}
-		}
-		return strings.ToLower(m.packs[ai].DisplayName) < strings.ToLower(m.packs[bi].DisplayName)
-	})
-	if displayIdx < len(packOrder) {
-		return packOrder[displayIdx]
-	}
-	return displayIdx
+	return order[displayIdx]
 }
 
 // renderPackDetailView renders the detail view for a selected pack.
