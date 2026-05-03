@@ -111,11 +111,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	toolMap := registry.ToolMap(tools)
 	t, ok := toolMap[toolName]
 	if !ok {
-		// Suggest the closest match if the user fat-fingered.
-		if suggestion := closestToolName(tools, toolName); suggestion != "" {
-			return fmt.Errorf("tool %q not found in catalog (did you mean %q?)", toolName, suggestion)
-		}
-		return fmt.Errorf("tool %q not found in catalog", toolName)
+		return notFoundError(toolName, closestToolName(tools, toolName))
 	}
 
 	report := buildInfoReport(cmd, t, tools)
@@ -224,8 +220,22 @@ func closestToolName(tools []registry.Tool, q string) string {
 	return bestName
 }
 
-// levenshtein computes the edit distance between a and b. Caps at len(b)+1
-// for early termination on very different strings.
+// notFoundError builds the error returned when `clim info <name>` is
+// given a tool name that isn't in the catalog. Wrapped in UsageError
+// so the CLI exits with code 2 (malformed user input) instead of 1
+// (runtime failure) — scripts can distinguish a typo from a genuine
+// failure. If suggestion is non-empty, it is appended as a "did you
+// mean" hint.
+func notFoundError(name, suggestion string) error {
+	if suggestion != "" {
+		return &UsageError{Err: fmt.Errorf("tool %q not found in catalog (did you mean %q?)", name, suggestion)}
+	}
+	return &UsageError{Err: fmt.Errorf("tool %q not found in catalog", name)}
+}
+
+// levenshtein computes the full edit distance between a and b using a
+// rolling two-row dynamic-programming table. It does no early-exit; the
+// inputs are tool names (≤32 chars in practice) so the cost is trivial.
 func levenshtein(a, b string) int {
 	la, lb := len(a), len(b)
 	if la == 0 {
@@ -260,9 +270,10 @@ func minInt(a, b int) int {
 	return b
 }
 
-// renderInfoText writes the human-readable view of report to stdout.
-// Warnings (if any) lead so the user can't miss them; the rest is
-// structured to match the TUI detail page.
+// renderInfoText writes the human-readable view of report to stderr.
+// Warnings are appended at the end of the output (after the structured
+// detail blocks) so they don't push the headline metadata off-screen
+// in a small terminal — the layout matches the TUI detail page.
 func renderInfoText(r infoReport, t *registry.Tool) {
 	// Per docs/cli-conventions.md, human-readable prose belongs on
 	// stderr so that stdout stays free for pipe-friendly machine output

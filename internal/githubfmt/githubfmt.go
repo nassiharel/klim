@@ -14,9 +14,10 @@ import (
 
 // FormatStars renders a star count compactly.
 //
-//	0–999             → "42"
-//	1000–9999         → "1.0k" / "9.9k"
-//	10_000–999_999    → "12k"  / "234k"
+//	0–999             → "42"      / "999"
+//	1000–9999         → "1.0k"    / "1.2k"  (rounded to one decimal,
+//	                                          so 9999 prints as "10.0k")
+//	10_000–999_999    → "12k"     / "234k"
 //	1_000_000+        → "1.5M"
 //
 // Decimal precision intentionally varies by magnitude to keep counts

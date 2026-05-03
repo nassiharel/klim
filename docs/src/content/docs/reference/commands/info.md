@@ -50,7 +50,7 @@ kubectl  (Containers)  ★ 3.3k
     Stats:     ★ 3.3k stars   ⑂ 997 forks
     License:   Apache-2.0
     Topics:    k8s-sig-cli, k8s-staging
-    Last push: 1 week(s) ago
+    Last push: 3 days ago
 
   Tags: kubernetes, cli
 

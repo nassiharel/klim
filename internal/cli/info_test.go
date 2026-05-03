@@ -1,9 +1,34 @@
 package cli
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+)
 
 // Star-count formatting tests live in internal/githubfmt; the CLI uses
 // that package directly so the contract is exercised there.
+
+func TestNotFoundError_IsUsageError(t *testing.T) {
+	// A typo on the tool name is malformed user input, so it must
+	// surface as a UsageError so Run() maps it to exit code 2.
+	// Otherwise scripts can't tell `clim info kubctl` (typo) apart
+	// from a genuine runtime failure (exit 1).
+	for _, suggestion := range []string{"", "kubectl"} {
+		err := notFoundError("kubctl", suggestion)
+		var ue *UsageError
+		if !errors.As(err, &ue) {
+			t.Errorf("suggestion=%q: expected *UsageError, got %T (%v)", suggestion, err, err)
+			continue
+		}
+		if !strings.Contains(err.Error(), "kubctl") {
+			t.Errorf("error should reference offending name; got %q", err.Error())
+		}
+		if suggestion != "" && !strings.Contains(err.Error(), suggestion) {
+			t.Errorf("error should include suggestion %q; got %q", suggestion, err.Error())
+		}
+	}
+}
 
 func TestFormatInfoRef_PreservesConstraint(t *testing.T) {
 	// Optional teamfile pin must show its version constraint.
