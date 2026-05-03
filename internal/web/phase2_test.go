@@ -227,6 +227,97 @@ func TestPageFavoritesToggle_RedirectsBack(t *testing.T) {
 	}
 }
 
+func TestCSRF_RejectsDNSRebindingHost(t *testing.T) {
+	// Regression for the PR #48 review: CSRF used to pass when the
+	// browser was tricked via DNS rebinding into addressing the
+	// request to attacker.com (resolved to 127.0.0.1) rather than a
+	// loopback hostname — both Origin and r.Host would say
+	// "attacker.com" and the same-origin check trivially passed.
+	// The fix enforces a loopback-hostname allowlist on the Host
+	// header when the server is bound to loopback.
+	ts, _ := startTestServer(t)
+	c := &http.Client{}
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/favorites/git/toggle", nil)
+	// Pretend the browser was tricked into addressing attacker.com.
+	// Origin matches the bogus host so step 2 of csrfProtect would
+	// pass; the Host allowlist is what saves us.
+	req.Host = "attacker.example"
+	req.Header.Set("Origin", "http://attacker.example")
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d (DNS rebinding scenario should be blocked)", resp.StatusCode)
+	}
+}
+
+func TestCSRF_AllowsLoopbackHostSpellings(t *testing.T) {
+	// 127.0.0.1, localhost, and ::1 must all be accepted as Host
+	// header values (after passing the same-origin check) when the
+	// server is bound to loopback.
+	ts, _ := startTestServer(t)
+	cases := []struct {
+		host   string
+		origin string
+	}{
+		{"127.0.0.1:7777", "http://127.0.0.1:7777"},
+		{"localhost:7777", "http://localhost:7777"},
+		{"[::1]:7777", "http://[::1]:7777"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.host, func(t *testing.T) {
+			c := &http.Client{}
+			req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/favorites/git/toggle", nil)
+			req.Host = tc.host
+			req.Header.Set("Origin", tc.origin)
+			resp, err := c.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			// We don't assert 200 — the toggle handler may not match
+			// these synthetic Host values for the same-origin check
+			// (httptest binds 127.0.0.1 so the Origin must match what
+			// the server actually saw). What matters is that the
+			// REJECTION is not from the Host allowlist (which would
+			// be 403 with body "host not allowed"). 200 / 403 cross-
+			// origin rejection / 404 are all fine; "host not allowed"
+			// is not.
+			if resp.StatusCode == http.StatusForbidden {
+				body := readAllString(t, resp)
+				if strings.Contains(body, "host not allowed") {
+					t.Errorf("loopback host %q rejected by allowlist", tc.host)
+				}
+			}
+		})
+	}
+}
+
+func TestIsLoopbackHostHeader(t *testing.T) {
+	cases := []struct {
+		host string
+		want bool
+	}{
+		{"127.0.0.1:7777", true},
+		{"localhost:7777", true},
+		{"[::1]:7777", true},
+		{"127.0.0.1", true},
+		{"localhost", true},
+		{"::1", true},
+		{"attacker.example:7777", false},
+		{"192.168.1.5:7777", false},
+		{"example.com", false},
+		{"", true}, // empty Host is unusual but not a rebinding signal
+	}
+	for _, tc := range cases {
+		if got := isLoopbackHostHeader(tc.host); got != tc.want {
+			t.Errorf("isLoopbackHostHeader(%q) = %v, want %v", tc.host, got, tc.want)
+		}
+	}
+}
+
 func TestSameOriginRequest_LoopbackEquivalence(t *testing.T) {
 	cases := []struct {
 		name string

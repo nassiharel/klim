@@ -1,32 +1,45 @@
 package web
 
 import (
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 )
 
-// csrfProtect rejects state-changing requests whose Origin or Referer
-// don't match the host the request actually arrived on (r.Host). This
-// blocks the two attacks the browser surface is exposed to even on
-// loopback:
+// csrfProtect rejects state-changing requests using two defenses:
 //
-//   - CSRF: a malicious page another browser tab loads making an
-//     authenticated cross-origin POST to clim's localhost server.
-//   - DNS rebinding: a malicious site rebinding its own DNS name to
-//     127.0.0.1 and then POSTing through the user's browser. Origin
-//     would be the attacker's domain, not r.Host.
+//  1. A Host header allowlist (only enforced when the server is
+//     bound to loopback). The browser must address the request to a
+//     loopback hostname (127.0.0.1 / localhost / ::1). This blocks
+//     DNS rebinding: a malicious page hosted on attacker.com that
+//     rebinds its DNS to 127.0.0.1 and then has the browser POST
+//     to attacker.com:<port> would arrive here with Host=attacker.com,
+//     which fails the allowlist. Without this check the rest of the
+//     CSRF logic would happily pass the request because Origin and
+//     Host both name attacker.com.
 //
-// Browsers always include at least one of Origin/Referer on POSTs from
-// page contexts; we accept either.
+//  2. A same-origin Origin/Referer check. Browsers always include
+//     at least one of these headers on POSTs from page contexts;
+//     comparing them to r.Host blocks classic CSRF (a malicious
+//     page on a *different* origin that POSTs to clim).
 //
-// We deliberately compare against r.Host rather than the server's
-// statically-known URL because the former reflects what the user is
-// actually browsing — which is what cross-origin attacks key off — and
-// stays correct under reverse proxies, alternative listeners, and the
-// httptest.NewServer wrapper used in our own tests.
+// Non-loopback binds (--insecure-bind) skip the Host allowlist
+// because the user is intentionally exposing the server to a LAN
+// hostname; the auto-generated bearer token is the real auth there.
+// The Origin/Referer check still applies on every bind type.
 func csrfProtect(s *Server, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.opts.Bind == "" || isLoopback(s.opts.Bind) {
+			if !isLoopbackHostHeader(r.Host) {
+				s.opts.Logger.Warn("web: rejected request with non-loopback Host header (possible DNS rebinding)",
+					"path", r.URL.Path,
+					"host", r.Host,
+				)
+				http.Error(w, "host not allowed", http.StatusForbidden)
+				return
+			}
+		}
 		if !sameOriginRequest(requestOrigin(r), r) {
 			s.opts.Logger.Warn("web: rejected cross-origin request",
 				"path", r.URL.Path,
@@ -39,6 +52,19 @@ func csrfProtect(s *Server, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isLoopbackHostHeader parses an HTTP Host header (which may include
+// a port and IPv6 brackets) and reports whether the hostname portion
+// is a loopback address. Used to gate the DNS-rebinding mitigation —
+// see csrfProtect.
+func isLoopbackHostHeader(hostHeader string) bool {
+	host, _, err := net.SplitHostPort(hostHeader)
+	if err != nil {
+		// No port: the whole string is the host.
+		host = hostHeader
+	}
+	return isLoopback(host)
 }
 
 // requestOrigin reconstructs the browser-facing origin from the
