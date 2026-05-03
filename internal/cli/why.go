@@ -3,16 +3,13 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/custompacks"
 	"github.com/nassiharel/clim/internal/progress"
 	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/teamfile"
 )
 
 var whyOutputFmt func() (OutputFormat, error)
@@ -35,20 +32,16 @@ func init() {
 	// Registered in root.go with command group.
 }
 
-// whyReference is a JSON-friendly description of a place a tool is mentioned.
-type whyReference struct {
-	Kind        string `json:"kind"` // teamfile | project | pack | custom_pack
-	Name        string `json:"name,omitempty"`
-	DisplayName string `json:"display_name,omitempty"`
-	Path        string `json:"path,omitempty"`
-	Required    bool   `json:"required,omitempty"`
-	Constraint  string `json:"version_constraint,omitempty"`
-}
+// whyReference is preserved as a backwards-compatible alias for the
+// shared cli.Reference type. The JSON shape is unchanged because the
+// field tags are identical.
+//
+//nolint:unused // kept for documentation
+type whyReference = Reference
 
-type whyPackageEntry struct {
-	Source string `json:"source"`
-	ID     string `json:"id"`
-}
+// whyPackageEntry is now an alias for the shared cli.PackageEntry so
+// `clim why` and `clim info` list the same package-manager sources.
+type whyPackageEntry = PackageEntry
 
 type whyReport struct {
 	Name         string            `json:"name"`
@@ -133,129 +126,22 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 		r.UpdateAvail = t.HasUpdate()
 	}
 
-	// 1. Check .clim.yaml in or above CWD.
-	cwd, _ := os.Getwd()
-	var seenTeamPath string
-	if cwd != "" {
-		path := teamfile.Find(cwd)
-		if path != "" {
-			seenTeamPath = path
-			tf, err := teamfile.Parse(path)
-			if err != nil {
-				r.Warnings = append(r.Warnings, fmt.Sprintf("could not parse %s: %v", path, err))
-			} else {
-				for _, req := range tf.Tools {
-					if req.Name == toolName {
-						r.References = append(r.References, whyReference{
-							Kind: "teamfile", Path: path,
-							Required: true, Constraint: req.Version,
-						})
-					}
-				}
-				for _, opt := range tf.Optional {
-					if opt.Name == toolName {
-						r.References = append(r.References, whyReference{
-							Kind: "teamfile", Path: path, Required: false,
-							Constraint: opt.Version,
-						})
-					}
-				}
-			}
-		}
+	// References + warnings: shared scanner so `clim why` and `clim info`
+	// cannot drift in their reference-discovery rules.
+	refs, warnings := CollectReferences(cmd, toolName)
+	if refs != nil {
+		r.References = refs
 	}
+	r.Warnings = append(r.Warnings, warnings...)
 
-	// 2. Check all registered projects.
-	projects, projErr := teamfile.LoadProjects()
-	if projErr != nil {
-		r.Warnings = append(r.Warnings, fmt.Sprintf("could not load project registry: %v", projErr))
-	}
-	for _, proj := range projects {
-		climPath := filepath.Join(proj.Path, ".clim.yaml")
-		if seenTeamPath != "" && filepath.Clean(climPath) == filepath.Clean(seenTeamPath) {
-			continue
-		}
-		tf, err := teamfile.Parse(climPath)
-		if err != nil {
-			// Surface parse failures rather than silently skipping —
-			// otherwise the report can claim "no references" when in fact
-			// a referenced .clim.yaml is malformed.
-			r.Warnings = append(r.Warnings, fmt.Sprintf("could not parse %s: %v", climPath, err))
-			continue
-		}
-		for _, req := range tf.Tools {
-			if req.Name == toolName {
-				r.References = append(r.References, whyReference{
-					Kind: "project", Name: proj.Name, Path: climPath,
-					Required: true, Constraint: req.Version,
-				})
-			}
-		}
-		for _, opt := range tf.Optional {
-			if opt.Name == toolName {
-				r.References = append(r.References, whyReference{
-					Kind: "project", Name: proj.Name, Path: climPath, Required: false,
-					Constraint: opt.Version,
-				})
-			}
-		}
-	}
-
-	// 3. Check packs.
-	packs, packErr := svcFrom(cmd).LoadPacks(cmd.Context())
-	if packErr != nil {
-		r.Warnings = append(r.Warnings, fmt.Sprintf("could not load packs: %v", packErr))
-	}
-	for _, pack := range packs {
-		for _, pToolName := range pack.ToolNames {
-			if pToolName == toolName {
-				r.References = append(r.References, whyReference{
-					Kind: "pack", Name: pack.Name, DisplayName: pack.DisplayName,
-				})
-			}
-		}
-	}
-
-	// 4. Check custom packs.
-	if cp, cpErr := custompacks.Load(); cpErr != nil {
-		r.Warnings = append(r.Warnings, fmt.Sprintf("could not load custom packs: %v", cpErr))
-	} else {
-		for _, pack := range cp {
-			for _, pToolName := range pack.ToolNames {
-				if pToolName == toolName {
-					r.References = append(r.References, whyReference{
-						Kind: "custom_pack", Name: pack.Name, DisplayName: pack.DisplayName,
-					})
-				}
-			}
-		}
-	}
-
-	// Available packages.
-	r.AvailableVia = append(r.AvailableVia, collectPackageEntriesForWhy(t.Packages)...)
+	// Available packages: shared helper so `clim why` and `clim info`
+	// can't drift on which package managers they enumerate.
+	r.AvailableVia = append(r.AvailableVia, CollectPackageEntries(t.Packages)...)
 
 	// Related installed tools (same category/tags).
 	r.RelatedTools = relatedInstalledTools(toolName, t, tools)
 
 	return r
-}
-
-func collectPackageEntriesForWhy(pkgs registry.PackageIDs) []whyPackageEntry {
-	all := []whyPackageEntry{
-		{Source: "winget", ID: pkgs.Winget},
-		{Source: "choco", ID: pkgs.Choco},
-		{Source: "scoop", ID: pkgs.Scoop},
-		{Source: "brew", ID: pkgs.Brew},
-		{Source: "apt", ID: pkgs.Apt},
-		{Source: "snap", ID: pkgs.Snap},
-		{Source: "npm", ID: pkgs.NPM},
-	}
-	out := make([]whyPackageEntry, 0, len(all))
-	for _, e := range all {
-		if e.ID != "" {
-			out = append(out, e)
-		}
-	}
-	return out
 }
 
 func relatedInstalledTools(toolName string, t *registry.Tool, tools []registry.Tool) []string {
@@ -311,7 +197,7 @@ func renderWhyText(r whyReport) {
 	if len(r.References) > 0 {
 		fmt.Fprintf(os.Stderr, "  Referenced by:\n")
 		for _, ref := range r.References {
-			fmt.Fprintf(os.Stderr, "    • %s\n", formatWhyRef(ref))
+			fmt.Fprintf(os.Stderr, "    • %s\n", FormatReference(ref))
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "  No project or pack references found.\n")
@@ -336,33 +222,5 @@ func renderWhyText(r whyReport) {
 	}
 }
 
-func formatWhyRef(ref whyReference) string {
-	switch ref.Kind {
-	case "teamfile":
-		if ref.Required {
-			constraint := ""
-			if ref.Constraint != "" {
-				constraint = " " + ref.Constraint
-			}
-			return fmt.Sprintf(".clim.yaml (required%s) — %s", constraint, ref.Path)
-		}
-		return ".clim.yaml (optional) — " + ref.Path
-	case "project":
-		role := "optional"
-		if ref.Required {
-			role = "required"
-		}
-		return fmt.Sprintf("Project %q (%s) — %s", ref.Name, role, ref.Path)
-	case "pack":
-		if ref.DisplayName != "" {
-			return fmt.Sprintf("Pack %q (%s)", ref.DisplayName, ref.Name)
-		}
-		return fmt.Sprintf("Pack %q", ref.Name)
-	case "custom_pack":
-		if ref.DisplayName != "" {
-			return fmt.Sprintf("Custom pack %q (%s)", ref.DisplayName, ref.Name)
-		}
-		return fmt.Sprintf("Custom pack %q", ref.Name)
-	}
-	return ref.Kind + " " + ref.Name
-}
+// formatWhyRef has been replaced by the shared cli.FormatReference
+// helper in refscan.go.

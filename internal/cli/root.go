@@ -100,6 +100,8 @@ func init() {
 	rootCmd.AddCommand(onboardCmd)
 	whyCmd.GroupID = "tools"
 	rootCmd.AddCommand(whyCmd)
+	infoCmd.GroupID = "tools"
+	rootCmd.AddCommand(infoCmd)
 	tryCmd.GroupID = "tools"
 	rootCmd.AddCommand(tryCmd)
 	watchCmd.GroupID = "tools"
