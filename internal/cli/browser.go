@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -16,6 +17,7 @@ var (
 	browserBind         string
 	browserNoOpen       bool
 	browserInsecureBind bool
+	browserKeepAlive    bool
 )
 
 var browserCmd = &cobra.Command{
@@ -42,6 +44,7 @@ func init() {
 	browserCmd.Flags().StringVar(&browserBind, "bind", "127.0.0.1", "bind address")
 	browserCmd.Flags().BoolVar(&browserNoOpen, "no-open", false, "do not open the browser automatically")
 	browserCmd.Flags().BoolVar(&browserInsecureBind, "insecure-bind", false, "allow non-loopback bind addresses (no auth — use with caution)")
+	browserCmd.Flags().BoolVar(&browserKeepAlive, "keep-alive", false, "keep the server running after the last browser tab closes (default: shut down)")
 }
 
 func runBrowser(cmd *cobra.Command, _ []string) error {
@@ -60,12 +63,14 @@ func runBrowser(cmd *cobra.Command, _ []string) error {
 	}
 
 	srv, err := web.New(web.Options{
-		Bind:         browserBind,
-		Port:         browserPort,
-		InsecureBind: browserInsecureBind,
-		AuthToken:    authToken,
-		Service:      svcFrom(cmd),
-		Config:       cfgFrom(cmd),
+		Bind:               browserBind,
+		Port:               browserPort,
+		InsecureBind:       browserInsecureBind,
+		AuthToken:          authToken,
+		Service:            svcFrom(cmd),
+		Config:             cfgFrom(cmd),
+		AutoShutdownOnIdle: !browserKeepAlive,
+		AutoShutdownGrace:  10 * time.Second,
 	})
 	if err != nil {
 		return err
@@ -84,12 +89,19 @@ func runBrowser(cmd *cobra.Command, _ []string) error {
 			fmt.Fprintf(os.Stderr, "  (could not auto-open browser: %v — visit %s manually)\n", err, authed)
 		}
 	}
-	fmt.Fprintln(os.Stderr, "  press Ctrl-C to stop")
+	if browserKeepAlive {
+		fmt.Fprintln(os.Stderr, "  press Ctrl-C to stop")
+	} else {
+		fmt.Fprintln(os.Stderr, "  press Ctrl-C to stop, or close the last browser tab")
+	}
 
 	// Bridge the OS signal channel into the cobra context so Serve's
-	// graceful shutdown trips on SIGINT/SIGTERM.
+	// graceful shutdown trips on SIGINT/SIGTERM. EnableAutoShutdown
+	// hooks the same stop func so closing the last tab runs the same
+	// shutdown path.
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	srv.EnableAutoShutdown(stop)
 	return srv.Serve(ctx)
 }
 

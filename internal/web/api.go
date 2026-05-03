@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/nassiharel/clim/internal/recommend"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/trail"
 )
@@ -58,12 +59,12 @@ func (s *Server) apiTool(w http.ResponseWriter, r *http.Request) {
 
 // apiDashboard returns aggregate stats.
 func (s *Server) apiDashboard(w http.ResponseWriter, r *http.Request) {
-	tools, _, err := s.loader.LoadInstalled(r.Context())
+	view, err := s.collectDashboard(r.Context())
 	if err != nil {
 		s.jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.writeJSON(w, http.StatusOK, buildDashboard(tools))
+	s.writeJSON(w, http.StatusOK, view)
 }
 
 // apiTrail returns trail entries.
@@ -236,16 +237,69 @@ func toAPIInstances(insts []registry.Instance) []apiInstance {
 	return out
 }
 
-// --- dashboard payload ---
-
+// dashboardView is the data the Dashboard page renders. It mirrors
+// the TUI's dashboard sections so users get the same overview either
+// way they look at it.
 type dashboardView struct {
-	TotalTools      int            `json:"total_tools"`
-	InstalledTools  int            `json:"installed_tools"`
-	UpdatesAvail    int            `json:"updates_available"`
-	BySource        map[string]int `json:"by_source"`
-	ByCategory      map[string]int `json:"by_category"`
-	TopCategories   []labelCount   `json:"top_categories"`
-	UpdatableSample []string       `json:"updatable_sample,omitempty"`
+	// Stat cards.
+	TotalTools     int `json:"total_tools"`
+	InstalledTools int `json:"installed_tools"`
+	UpdatesAvail   int `json:"updates_available"`
+	NotInstalled   int `json:"not_installed"`
+	FavoritesCount int `json:"favorites_count"`
+	UpToDate       int `json:"up_to_date"`
+
+	// Coverage percentages.
+	PctInstalled int `json:"pct_installed"`
+	PctUpToDate  int `json:"pct_up_to_date"`
+
+	// Attention alerts.
+	UpdatableSample []string `json:"updatable_sample,omitempty"`
+	FavoriteUpdates int      `json:"favorite_updates"`
+	NewMarketCount  int      `json:"new_marketplace_count"`
+
+	// Breakdowns.
+	BySource      []labelCount `json:"by_source"`
+	ByCategory    []labelCount `json:"by_category"`
+	TopCategories []labelCount `json:"top_categories"`
+	TopTags       []labelCount `json:"top_tags"`
+
+	// GitHub highlights — top starred installed tools.
+	StarredHighlights []starredHighlight `json:"starred_highlights"`
+
+	// Recommendation preview (top 3 from /foryou).
+	TopPicks      []dashboardPick `json:"top_picks"`
+	MoreRecsCount int             `json:"more_recs_count"`
+
+	// Pack completion.
+	PacksMarketplaceTotal   int `json:"packs_marketplace_total"`
+	PacksMarketplaceFull    int `json:"packs_marketplace_full"`
+	PacksMarketplacePartial int `json:"packs_marketplace_partial"`
+
+	// Backup count (best-effort; zero on read errors).
+	BackupCount int `json:"backup_count"`
+
+	// Convenience for the template — total raw rows (used when we
+	// build per-section "max" values for gauge widths).
+	MaxSource   int `json:"-"`
+	MaxCategory int `json:"-"`
+	MaxTag      int `json:"-"`
+}
+
+type starredHighlight struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Stars       int    `json:"stars"`
+	PushedAt    string `json:"pushed_at,omitempty"`
+}
+
+type dashboardPick struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Category    string `json:"category,omitempty"`
+	MatchPct    int    `json:"match_pct"`
+	Reason      string `json:"reason,omitempty"`
+	Stars       int    `json:"stars"`
 }
 
 type labelCount struct {
@@ -253,36 +307,124 @@ type labelCount struct {
 	Count int    `json:"count"`
 }
 
-func buildDashboard(tools []registry.Tool) dashboardView {
+func buildDashboard(tools []registry.Tool, favs map[string]bool, packs []registry.Pack, recs []recommend.Recommendation, backupCount int) dashboardView {
 	v := dashboardView{
-		TotalTools: len(tools),
-		BySource:   map[string]int{},
-		ByCategory: map[string]int{},
+		TotalTools:     len(tools),
+		FavoritesCount: len(favs),
+		BackupCount:    backupCount,
 	}
+	bySource := map[string]int{}
+	byCategory := map[string]int{}
+	tagCounts := map[string]int{}
+	starred := []starredHighlight{}
 	for _, t := range tools {
 		if !t.IsInstalled() {
+			v.NotInstalled++
 			continue
 		}
 		v.InstalledTools++
 		pi := t.PrimaryInstance()
 		if pi != nil {
-			v.BySource[string(pi.Source)]++
+			bySource[string(pi.Source)]++
 			if t.Latest != "" && registry.CompareVersions(pi.Version, t.Latest) < 0 {
 				v.UpdatesAvail++
 				if len(v.UpdatableSample) < 5 {
 					v.UpdatableSample = append(v.UpdatableSample, t.Name)
 				}
+				if favs[t.Name] {
+					v.FavoriteUpdates++
+				}
 			}
 		}
 		if t.Category != "" {
-			v.ByCategory[t.Category]++
+			byCategory[t.Category]++
+		}
+		for _, tag := range t.Tags {
+			if tag != "" {
+				tagCounts[tag]++
+			}
+		}
+		if t.MarketplaceStatus == registry.StatusNew {
+			v.NewMarketCount++
+		}
+		if t.GitHubInfo != nil && t.GitHubInfo.Stars > 0 {
+			starred = append(starred, starredHighlight{
+				Name:        t.Name,
+				DisplayName: t.DisplayName,
+				Stars:       t.GitHubInfo.Stars,
+				PushedAt:    t.GitHubInfo.PushedAt,
+			})
 		}
 	}
-	v.TopCategories = topN(v.ByCategory, 5)
+	v.UpToDate = v.InstalledTools - v.UpdatesAvail
+	if v.TotalTools > 0 {
+		v.PctInstalled = v.InstalledTools * 100 / v.TotalTools
+	}
+	if v.InstalledTools > 0 {
+		v.PctUpToDate = v.UpToDate * 100 / v.InstalledTools
+	}
+
+	v.BySource = sortedLabelCounts(bySource)
+	v.ByCategory = sortedLabelCounts(byCategory)
+	v.TopCategories = topNLabelCounts(byCategory, 5)
+	v.TopTags = topNLabelCounts(tagCounts, 12)
+	v.MaxSource = maxLabelCount(v.BySource)
+	v.MaxCategory = maxLabelCount(v.ByCategory)
+	v.MaxTag = maxLabelCount(v.TopTags)
+
+	// GitHub highlights — top 5 by stars.
+	sort.Slice(starred, func(i, j int) bool { return starred[i].Stars > starred[j].Stars })
+	if len(starred) > 5 {
+		starred = starred[:5]
+	}
+	v.StarredHighlights = starred
+
+	// Top picks for you (preview of /foryou).
+	if len(recs) > 0 {
+		shown := len(recs)
+		if shown > 3 {
+			shown = 3
+		}
+		for i := 0; i < shown; i++ {
+			r := recs[i]
+			if r.ToolIdx >= 0 && r.ToolIdx < len(tools) {
+				t := tools[r.ToolIdx]
+				v.TopPicks = append(v.TopPicks, dashboardPick{
+					Name:        t.Name,
+					DisplayName: t.DisplayName,
+					Category:    t.Category,
+					MatchPct:    r.MatchPct,
+					Reason:      r.Reason,
+					Stars:       r.Stars,
+				})
+			}
+		}
+		if len(recs) > 3 {
+			v.MoreRecsCount = len(recs) - 3
+		}
+	}
+
+	// Pack completion.
+	installed := registry.InstalledSet(tools)
+	v.PacksMarketplaceTotal = len(packs)
+	for _, p := range packs {
+		have := 0
+		for _, n := range p.ToolNames {
+			if installed[n] {
+				have++
+			}
+		}
+		switch {
+		case len(p.ToolNames) > 0 && have == len(p.ToolNames):
+			v.PacksMarketplaceFull++
+		case have > 0:
+			v.PacksMarketplacePartial++
+		}
+	}
 	return v
 }
 
-func topN(m map[string]int, n int) []labelCount {
+func sortedLabelCounts(m map[string]int) []labelCount {
 	out := make([]labelCount, 0, len(m))
 	for k, v := range m {
 		out = append(out, labelCount{Label: k, Count: v})
@@ -293,8 +435,23 @@ func topN(m map[string]int, n int) []labelCount {
 		}
 		return out[i].Label < out[j].Label
 	})
+	return out
+}
+
+func topNLabelCounts(m map[string]int, n int) []labelCount {
+	out := sortedLabelCounts(m)
 	if len(out) > n {
 		out = out[:n]
 	}
 	return out
+}
+
+func maxLabelCount(rows []labelCount) int {
+	m := 0
+	for _, r := range rows {
+		if r.Count > m {
+			m = r.Count
+		}
+	}
+	return m
 }

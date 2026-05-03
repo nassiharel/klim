@@ -2,50 +2,154 @@
 {{$d := .Data}}
 <section class="page-header">
   <h1>Dashboard</h1>
+  <p class="muted">Snapshot of your toolchain — same sections you'd see in the TUI.</p>
 </section>
 
 <div class="cards">
   <div class="card stat">
-    <div class="stat-label">Total catalog</div>
-    <div class="stat-value">{{$d.TotalTools}}</div>
-  </div>
-  <div class="card stat">
-    <div class="stat-label">Installed</div>
+    <div class="stat-label">● Installed</div>
     <div class="stat-value">{{$d.InstalledTools}}</div>
   </div>
   <div class="card stat">
-    <div class="stat-label">Updates available</div>
+    <div class="stat-label">▲ Updates</div>
     <div class="stat-value">{{$d.UpdatesAvail}}</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-label">○ Available</div>
+    <div class="stat-value">{{$d.NotInstalled}}</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-label">★ Favorites</div>
+    <div class="stat-value">{{$d.FavoritesCount}}</div>
   </div>
 </div>
 
 <section class="card">
-  <h2>By package source</h2>
+  <h2>Tool coverage</h2>
+  <div class="gauge-row">
+    <div class="gauge-label">{{$d.InstalledTools}} / {{$d.TotalTools}} installed</div>
+    <div class="gauge"><div class="gauge-fill" style="width: {{$d.PctInstalled}}%"></div></div>
+    <div class="gauge-pct">{{$d.PctInstalled}}%</div>
+  </div>
+  {{if $d.InstalledTools}}
+  <div class="gauge-row">
+    <div class="gauge-label">{{$d.UpToDate}} / {{$d.InstalledTools}} up to date</div>
+    <div class="gauge"><div class="gauge-fill {{if $d.UpdatesAvail}}warn{{end}}" style="width: {{$d.PctUpToDate}}%"></div></div>
+    <div class="gauge-pct">{{$d.PctUpToDate}}%</div>
+  </div>
+  {{end}}
+</section>
+
+<section class="card">
+  <h2>Attention</h2>
+  {{if and (eq $d.UpdatesAvail 0) (eq $d.FavoriteUpdates 0) (eq $d.NewMarketCount 0)}}
+    <p class="muted">✓ All good. Everything is up to date.</p>
+  {{else}}
+    <ul class="alerts">
+      {{if $d.UpdatesAvail}}<li>▲ {{$d.UpdatesAvail}} tools have updates available{{if $d.UpdatableSample}} ({{join $d.UpdatableSample ", "}}{{if gt $d.UpdatesAvail (len $d.UpdatableSample)}}, …{{end}}){{end}}</li>{{end}}
+      {{if $d.FavoriteUpdates}}<li>★ {{$d.FavoriteUpdates}} favorite tool(s) have updates</li>{{end}}
+      {{if $d.NewMarketCount}}<li>● {{$d.NewMarketCount}} new tools added to the marketplace</li>{{end}}
+    </ul>
+  {{end}}
+</section>
+
+{{if $d.StarredHighlights}}
+<section class="card">
+  <h2>GitHub highlights</h2>
   <table class="grid">
-    <thead><tr><th>Source</th><th>Tools</th></tr></thead>
+    <thead><tr><th>Stars</th><th>Tool</th><th>Last push</th></tr></thead>
     <tbody>
-      {{range $k, $v := $d.BySource}}
-        <tr><td>{{$k}}</td><td>{{$v}}</td></tr>
+      {{range $d.StarredHighlights}}
+        <tr>
+          <td>★ {{.Stars}}</td>
+          <td><a href="/tools/{{.Name}}" class="tool-link">{{if .DisplayName}}{{.DisplayName}}{{else}}{{.Name}}{{end}}</a></td>
+          <td class="muted small">{{if .PushedAt}}{{.PushedAt}}{{else}}—{{end}}</td>
+        </tr>
       {{end}}
     </tbody>
   </table>
 </section>
+{{end}}
 
+{{if $d.TopPicks}}
 <section class="card">
-  <h2>Top categories</h2>
-  <ol class="ranked">
-    {{range $d.TopCategories}}
-      <li><strong>{{.Label}}</strong> <span class="muted">{{.Count}}</span></li>
+  <h2>Top picks for you</h2>
+  <div class="cards">
+    {{range $d.TopPicks}}
+      <div class="card rec-card">
+        <div class="rec-header">
+          <a href="/tools/{{.Name}}" class="tool-link">{{.Name}}</a>
+          {{if .DisplayName}}<span class="muted">{{.DisplayName}}</span>{{end}}
+          <span class="match-pct">{{.MatchPct}}% match</span>
+        </div>
+        <p class="muted small">
+          {{if .Category}}{{.Category}} · {{end}}
+          {{if .Stars}}★ {{.Stars}} · {{end}}
+          {{if .Reason}}because of: {{.Reason}}{{end}}
+        </p>
+      </div>
     {{end}}
-  </ol>
+  </div>
+  {{if $d.MoreRecsCount}}<p class="muted small">… and {{$d.MoreRecsCount}} more in <a href="/foryou">For You</a>.</p>{{end}}
 </section>
+{{end}}
 
-{{if $d.UpdatableSample}}
+{{if $d.BySource}}
 <section class="card">
-  <h2>Pending updates (sample)</h2>
+  <h2>Package managers</h2>
+  <table class="bar-chart">
+    {{range $d.BySource}}
+      <tr>
+        <th>{{.Label}}</th>
+        <td><div class="bar"><div class="bar-fill" style="width: {{barPct .Count $d.MaxSource}}%"></div></div></td>
+        <td class="bar-count">{{.Count}}</td>
+      </tr>
+    {{end}}
+  </table>
+</section>
+{{end}}
+
+{{if $d.ByCategory}}
+<section class="card">
+  <h2>Categories</h2>
+  <table class="bar-chart">
+    {{range $d.ByCategory}}
+      <tr>
+        <th>{{.Label}}</th>
+        <td><div class="bar"><div class="bar-fill" style="width: {{barPct .Count $d.MaxCategory}}%"></div></div></td>
+        <td class="bar-count">{{.Count}}</td>
+      </tr>
+    {{end}}
+  </table>
+</section>
+{{end}}
+
+{{if $d.TopTags}}
+<section class="card">
+  <h2>Top tags</h2>
   <ul class="chips">
-    {{range $d.UpdatableSample}}<li><a href="/tools/{{.}}">{{.}}</a></li>{{end}}
+    {{range $d.TopTags}}<li><span class="chip">{{.Label}} <span class="chip-count">{{.Count}}</span></span></li>{{end}}
   </ul>
 </section>
 {{end}}
+
+{{if $d.PacksMarketplaceTotal}}
+<section class="card">
+  <h2>Packs</h2>
+  <p class="muted">
+    <strong>{{$d.PacksMarketplaceFull}}</strong> / {{$d.PacksMarketplaceTotal}} marketplace packs fully installed,
+    <strong>{{$d.PacksMarketplacePartial}}</strong> partial.
+    <a href="/packs">Browse packs →</a>
+  </p>
+</section>
+{{end}}
+
+<section class="card">
+  <h2>Backups</h2>
+  {{if $d.BackupCount}}
+    <p>{{$d.BackupCount}} backup file(s) saved. <a href="/backup">Manage in Backup →</a></p>
+  {{else}}
+    <p class="muted">No backups yet. <a href="/backup">Export from the Backup tab →</a></p>
+  {{end}}
+</section>
 {{end}}

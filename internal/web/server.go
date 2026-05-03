@@ -41,6 +41,16 @@ type Options struct {
 	// an explicit token. Loopback binds leave this empty by default
 	// because the threat model matches the TUI's.
 	AuthToken string
+	// AutoShutdownOnIdle enables shutting down when no browser tabs
+	// are connected to /api/lifecycle. Caller must also call
+	// EnableAutoShutdown(cancel) before Serve so we know how to
+	// cancel the parent context. Defaults off (Serve runs until
+	// Ctrl-C).
+	AutoShutdownOnIdle bool
+	// AutoShutdownGrace is the delay after the last tab disconnects
+	// before the server actually shuts down. Covers the brief gap
+	// during in-page navigation. Defaults to 10 seconds.
+	AutoShutdownGrace time.Duration
 	// Service is the resolved tool service this server reads from.
 	// Required.
 	Service *service.ToolService
@@ -53,13 +63,14 @@ type Options struct {
 
 // Server is a clim browser HTTP server.
 type Server struct {
-	opts     Options
-	mux      *http.ServeMux
-	tpls     map[string]*template.Template
-	loader   loader
-	jobs     *jobManager
-	httpsrv  *http.Server
-	listener net.Listener
+	opts      Options
+	mux       *http.ServeMux
+	tpls      map[string]*template.Template
+	loader    loader
+	jobs      *jobManager
+	lifecycle *lifecycle
+	httpsrv   *http.Server
+	listener  net.Listener
 }
 
 // New constructs a Server. The TCP listener is bound here so the caller
@@ -123,6 +134,22 @@ func (s *Server) URL() string {
 		host = "127.0.0.1"
 	}
 	return fmt.Sprintf("http://%s:%d", host, addr.Port)
+}
+
+// EnableAutoShutdown wires a cancel func into the lifecycle tracker
+// so the server stops itself when no browser tabs are connected for
+// AutoShutdownGrace. Must be called before Serve. Typically the
+// caller passes its signal.NotifyContext stop function so Ctrl-C and
+// "close last tab" both run the same shutdown path.
+func (s *Server) EnableAutoShutdown(cancel context.CancelFunc) {
+	if !s.opts.AutoShutdownOnIdle {
+		return
+	}
+	grace := s.opts.AutoShutdownGrace
+	if grace <= 0 {
+		grace = 10 * time.Second
+	}
+	s.lifecycle = newLifecycle(grace, cancel)
 }
 
 // Serve runs the HTTP server until ctx is cancelled. It performs a
@@ -194,6 +221,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/dashboard", s.apiDashboard)
 	s.mux.HandleFunc("GET /api/trail", s.apiTrail)
 	s.mux.HandleFunc("GET /api/trail/{ref...}", s.apiTrailShow)
+	s.mux.HandleFunc("GET /api/lifecycle", s.apiLifecycleStream)
 	s.mux.HandleFunc("GET /api/favorites", s.apiFavoritesList)
 	// Mutating endpoints. The form-submitting HTML page POSTs here and
 	// reloads; the JSON variant is also reachable for scripts.

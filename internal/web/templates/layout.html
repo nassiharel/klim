@@ -30,5 +30,22 @@
   <footer>
     <span>clim browser · localhost only</span>
   </footer>
+  <script>
+    // Keep an SSE connection open so the server knows this tab is
+    // alive. When the last tab closes, the server shuts itself down
+    // after a short grace period (see internal/web/lifecycle.go).
+    // The client doesn't need to do anything with the events — the
+    // connection itself is the heartbeat.
+    try {
+      var __climLifecycle = new EventSource('/api/lifecycle');
+      // Browsers close EventSource on page unload automatically; this
+      // explicit close on pagehide makes the unregister fire promptly
+      // even when the browser doesn't tear down the underlying TCP
+      // connection right away.
+      window.addEventListener('pagehide', function () {
+        try { __climLifecycle.close(); } catch (e) {}
+      });
+    } catch (e) { /* SSE unsupported — server stays up indefinitely. */ }
+  </script>
 </body>
 </html>{{end}}

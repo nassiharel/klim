@@ -11,6 +11,7 @@ import (
 
 	"github.com/nassiharel/clim/internal/favorites"
 	"github.com/nassiharel/clim/internal/githubfmt"
+	"github.com/nassiharel/clim/internal/recommend"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/trail"
@@ -97,21 +98,37 @@ func (s *Server) pageTool(w http.ResponseWriter, r *http.Request) {
 		s.serveError(w, r, err, status)
 		return
 	}
+
+	// Pull catalog + favorites once so the related-tools section and
+	// the favorite-button can render without re-fetching.
+	tools, _, _ := s.loader.LoadInstalled(r.Context())
+	favs, _ := s.loader.Favorites()
+	if favs == nil {
+		favs = map[string]bool{}
+	}
+
+	view := toolView{
+		Tool:        tool,
+		Installed:   tool.IsInstalled(),
+		Latest:      tool.Latest,
+		IsFavorite:  favs[tool.Name],
+		PMRows:      buildPMRows(tool),
+		Tags:        mergedTagsAndTopics(tool),
+		BinaryNames: tool.BinaryNames,
+		Related:     buildRelatedTools(tool, tools, favs),
+		GitHub:      formatGitHub(tool),
+	}
 	s.renderPage(w, r, "tool.html", pageData{
 		Title:     tool.Name,
 		ActiveTab: "installed",
-		Data: toolView{
-			Tool:      tool,
-			Installed: tool.IsInstalled(),
-			Latest:    tool.Latest,
-			GitHub:    formatGitHub(tool),
-		},
+		Data:      view,
 	})
 }
 
-// pageDashboard renders aggregate stats.
+// pageDashboard renders aggregate stats. Mirrors the TUI's dashboard
+// sections so users see the same overview either way.
 func (s *Server) pageDashboard(w http.ResponseWriter, r *http.Request) {
-	tools, _, err := s.loader.LoadInstalled(r.Context())
+	view, err := s.collectDashboard(r.Context())
 	if err != nil {
 		s.serveError(w, r, err, http.StatusInternalServerError)
 		return
@@ -119,8 +136,30 @@ func (s *Server) pageDashboard(w http.ResponseWriter, r *http.Request) {
 	s.renderPage(w, r, "dashboard.html", pageData{
 		Title:     "Dashboard",
 		ActiveTab: "dashboard",
-		Data:      buildDashboard(tools),
+		Data:      view,
 	})
+}
+
+// collectDashboard pulls together every input the dashboard renders:
+// the resolved tool list, favorites, marketplace packs, recommendations,
+// and the saved-backup count. Each piece is best-effort — a failure in
+// one (e.g. catalog packs not loaded yet) shouldn't blank the whole page.
+func (s *Server) collectDashboard(ctx context.Context) (dashboardView, error) {
+	tools, _, err := s.loader.LoadInstalled(ctx)
+	if err != nil {
+		return dashboardView{}, err
+	}
+	favs, _ := s.loader.Favorites()
+	if favs == nil {
+		favs = map[string]bool{}
+	}
+	packs, _ := s.loader.LoadPacks(ctx)
+	recs := recommend.Compute(tools)
+	backupCount := 0
+	if list, lerr := loadSavedBackups(); lerr == nil {
+		backupCount = len(list)
+	}
+	return buildDashboard(tools, favs, packs, recs, backupCount), nil
 }
 
 // pageUpdates renders the list of installed tools that have a newer
@@ -330,10 +369,40 @@ type favoritesView struct {
 }
 
 type toolView struct {
-	Tool      registry.Tool
-	Installed bool
-	Latest    string
-	GitHub    githubView
+	Tool        registry.Tool
+	Installed   bool
+	Latest      string
+	IsFavorite  bool
+	PMRows      []pmRow
+	Tags        []string // tags + GitHub topics, deduped
+	BinaryNames []string
+	Related     []relatedTool
+	GitHub      githubView
+}
+
+// pmRow is one row in the per-tool Package Managers table. We list
+// every source clim has a package id for, plus a flag for whether the
+// PM binary is on PATH so the user can tell which "Install" button
+// would actually work.
+type pmRow struct {
+	Source     string
+	PackageID  string
+	Available  bool
+	InstallCmd string
+}
+
+// relatedTool is one entry in the per-tool "You might also like"
+// list. We compute it from the global Recommend logic but limited to
+// the tools that share at least one tag/topic with this one.
+type relatedTool struct {
+	Name        string
+	DisplayName string
+	Category    string
+	Description string
+	Stars       int
+	MatchPct    int
+	Reason      string
+	IsFavorite  bool
 }
 
 type githubView struct {
@@ -642,5 +711,21 @@ func templateFuncs() template.FuncMap {
 			return s
 		},
 		"join": strings.Join,
+		// barPct turns a count + max into a percentage capped at 100.
+		// Used by /dashboard's bar-chart rows. Pure helper so it can
+		// live in the package without any HTML logic.
+		"barPct": func(count, max int) int {
+			if max <= 0 {
+				return 0
+			}
+			pct := count * 100 / max
+			if pct > 100 {
+				return 100
+			}
+			if count > 0 && pct == 0 {
+				return 1
+			}
+			return pct
+		},
 	}
 }
