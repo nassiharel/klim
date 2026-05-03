@@ -24,8 +24,10 @@ function loadYamlDir(dir) {
 // Falls back gracefully if unavailable (CI, fresh clone, etc.).
 function loadGitHubInfo() {
   const candidates = [
-    // Published marketplace.yaml in repo root (CI-assembled)
-    path.resolve(import.meta.dirname, '../../marketplace.yaml'),
+    // Published marketplace.yaml in repo root (CI-assembled).
+    // Use the already-derived __dirname (Node 18 doesn't have
+    // import.meta.dirname).
+    path.resolve(__dirname, '../../marketplace.yaml'),
   ];
 
   // Local clim cache (user's machine)

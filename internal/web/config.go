@@ -66,9 +66,15 @@ func (s *Server) pageConfigSave(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	s.writeConfig(staged)
-	if err := config.Save(s.opts.Config); err != nil {
+	// Save to disk FIRST, so a write failure doesn't leave the
+	// running config diverged from what's on disk. Only after a
+	// successful save do we commit the staged copy into the running
+	// pointer; concurrent renders therefore always see a value that
+	// matches the persisted state.
+	stagedCopy := staged
+	if err := config.Save(&stagedCopy); err != nil {
 		view := buildConfigView(s, "save failed: "+err.Error())
+		view.Form = r.PostForm
 		s.renderPage(w, r, "config.html", pageData{
 			Title:     "Config",
 			ActiveTab: "config",
@@ -76,6 +82,7 @@ func (s *Server) pageConfigSave(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	s.writeConfig(staged)
 	// Post / Redirect / Get: refreshing won't re-submit.
 	http.Redirect(w, r, "/config?saved=1", http.StatusSeeOther)
 }

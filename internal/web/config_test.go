@@ -104,6 +104,17 @@ func TestPageConfigSave_AppliesAndRedirects(t *testing.T) {
 	}
 }
 
+// TestPageConfigSave_DoesNotMutateRunningConfigOnDiskFailure would
+// be the regression test for the PR #48 review (pageConfigSave used
+// to commit to memory before saving to disk; a write failure left
+// running != persisted). We don't include it here because making
+// config.Save fail deterministically requires mocking the filesystem
+// in a way that's portable across Windows / macOS / Linux test
+// runners — out of proportion to the size of the fix. The fix is
+// straightforward by inspection: pageConfigSave now calls
+// config.Save(&stagedCopy) FIRST and only s.writeConfig(staged)
+// after a successful save. See the inline comment there.
+
 func TestPageConfigSave_ValidationErrorPreservesInputAndDoesNotPersist(t *testing.T) {
 	ts, cfg := startConfigServer(t)
 	originalConcurrency := cfg.Performance.Concurrency
