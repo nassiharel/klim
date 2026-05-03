@@ -1,0 +1,179 @@
+package trail
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// PruneOptions configures Prune behavior. Both filters apply (AND): an
+// entry is kept only if it satisfies both Keep and OlderThan.
+type PruneOptions struct {
+	// Keep is the maximum number of newest entries to retain. 0 disables.
+	Keep int
+
+	// OlderThan drops entries whose Time is strictly before now - OlderThan.
+	// Zero disables the time filter.
+	OlderThan time.Duration
+}
+
+// PruneResult summarises a Prune call.
+type PruneResult struct {
+	EntriesKept    int `yaml:"entries_kept"    json:"entries_kept"`
+	EntriesRemoved int `yaml:"entries_removed" json:"entries_removed"`
+	ObjectsKept    int `yaml:"objects_kept"    json:"objects_kept"`
+	ObjectsRemoved int `yaml:"objects_removed" json:"objects_removed"`
+}
+
+// Prune applies opts to the trail, removing log entries that fall outside
+// the retention window and garbage-collecting any objects that no entry
+// references afterwards.
+//
+// At least one of Keep / OlderThan must be set, otherwise Prune is a no-op.
+func Prune(opts PruneOptions) (PruneResult, error) {
+	var res PruneResult
+	if opts.Keep <= 0 && opts.OlderThan <= 0 {
+		return res, nil
+	}
+	r, err := resolveRoots()
+	if err != nil {
+		return res, err
+	}
+	release, err := acquireLock(r.lock)
+	if err != nil {
+		return res, err
+	}
+	defer release()
+
+	lf, err := loadLog(r)
+	if err != nil {
+		return res, err
+	}
+
+	cutoff := time.Time{}
+	if opts.OlderThan > 0 {
+		cutoff = time.Now().Add(-opts.OlderThan)
+	}
+
+	// Decide kept entries newest-first so --keep N is intuitive.
+	kept := make([]Entry, 0, len(lf.Entries))
+	for i := len(lf.Entries) - 1; i >= 0; i-- {
+		e := lf.Entries[i]
+		if !cutoff.IsZero() && e.Time.Before(cutoff) {
+			continue
+		}
+		if opts.Keep > 0 && len(kept) >= opts.Keep {
+			continue
+		}
+		kept = append(kept, e)
+	}
+	// Restore chronological order.
+	reverseEntries(kept)
+
+	res.EntriesKept = len(kept)
+	res.EntriesRemoved = len(lf.Entries) - len(kept)
+	if res.EntriesRemoved > 0 {
+		lf.Entries = kept
+		if err := saveLog(r, lf); err != nil {
+			return res, err
+		}
+	}
+
+	keptObjects, removedObjects, err := gcObjects(r, kept)
+	if err != nil {
+		return res, err
+	}
+	res.ObjectsKept = keptObjects
+	res.ObjectsRemoved = removedObjects
+	return res, nil
+}
+
+// gcObjects walks objects/ and removes any file whose hash isn't referenced
+// by an entry in keep.
+func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
+	wanted := make(map[ObjectID]struct{}, len(keep))
+	for _, e := range keep {
+		wanted[e.Object] = struct{}{}
+	}
+	keptCount := 0
+	removedCount := 0
+	if _, err := os.Stat(r.objects); os.IsNotExist(err) {
+		return 0, 0, nil
+	}
+	err := filepath.WalkDir(r.objects, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(path, ".yaml") {
+			return nil
+		}
+		// Reconstruct id from <objects>/<aa>/<rest>.yaml.
+		rel, err := filepath.Rel(r.objects, path)
+		if err != nil {
+			return err
+		}
+		id := pathToID(rel)
+		if !id.IsValid() {
+			return nil
+		}
+		if _, want := wanted[id]; want {
+			keptCount++
+			return nil
+		}
+		if err := os.Remove(path); err != nil { //nolint:gosec // G122: trail.objects is owned by clim, no symlinks expected
+			return fmt.Errorf("removing orphan object %s: %w", id.Short(), err)
+		}
+		removedCount++
+		return nil
+	})
+	if err != nil {
+		return keptCount, removedCount, err
+	}
+	// Best-effort: prune empty fanout dirs.
+	pruneEmptyFanout(r.objects)
+	return keptCount, removedCount, nil
+}
+
+func pathToID(rel string) ObjectID {
+	rel = strings.TrimSuffix(rel, ".yaml")
+	rel = filepath.ToSlash(rel)
+	parts := strings.Split(rel, "/")
+	var id string
+	switch len(parts) {
+	case 1:
+		id = parts[0]
+	case 2:
+		id = parts[0] + parts[1]
+	default:
+		return ""
+	}
+	return ObjectID(strings.ToLower(id))
+}
+
+func pruneEmptyFanout(root string) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		sub := filepath.Join(root, e.Name())
+		children, err := os.ReadDir(sub)
+		if err == nil && len(children) == 0 {
+			_ = os.Remove(sub)
+		}
+	}
+}
+
+func reverseEntries(s []Entry) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
