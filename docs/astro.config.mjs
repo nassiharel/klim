@@ -57,6 +57,7 @@ export default defineConfig({
               label: 'Core',
               items: [
                 { label: 'list', slug: 'reference/commands/list' },
+                { label: 'browser', slug: 'reference/commands/browser' },
                 { label: 'update', slug: 'reference/commands/update' },
                 { label: 'version', slug: 'reference/commands/version' },
               ],

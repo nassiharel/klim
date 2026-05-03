@@ -1,0 +1,31 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} — clim</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="brand">clim</a>
+    <nav>
+      <a href="/" class="{{if eq .ActiveTab "installed"}}active{{end}}">Installed</a>
+      <a href="/updates" class="{{if eq .ActiveTab "updates"}}active{{end}}">Updates</a>
+      <a href="/discover" class="{{if eq .ActiveTab "discover"}}active{{end}}">Discover</a>
+      <a href="/favorites" class="{{if eq .ActiveTab "favorites"}}active{{end}}">★ Favorites</a>
+      <a href="/backup" class="{{if eq .ActiveTab "backup"}}active{{end}}">Backup</a>
+      <a href="/dashboard" class="{{if eq .ActiveTab "dashboard"}}active{{end}}">Dashboard</a>
+      <a href="/trail" class="{{if eq .ActiveTab "trail"}}active{{end}}">Trail</a>
+      <a href="/config" class="{{if eq .ActiveTab "config"}}active{{end}}">Config</a>
+    </nav>
+  </header>
+  <main>
+    {{template "content" .}}
+  </main>
+  <footer>
+    <span>clim browser · localhost only</span>
+  </footer>
+</body>
+</html>{{end}}

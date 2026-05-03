@@ -1,0 +1,51 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>Dashboard</h1>
+</section>
+
+<div class="cards">
+  <div class="card stat">
+    <div class="stat-label">Total catalog</div>
+    <div class="stat-value">{{$d.TotalTools}}</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-label">Installed</div>
+    <div class="stat-value">{{$d.InstalledTools}}</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-label">Updates available</div>
+    <div class="stat-value">{{$d.UpdatesAvail}}</div>
+  </div>
+</div>
+
+<section class="card">
+  <h2>By package source</h2>
+  <table class="grid">
+    <thead><tr><th>Source</th><th>Tools</th></tr></thead>
+    <tbody>
+      {{range $k, $v := $d.BySource}}
+        <tr><td>{{$k}}</td><td>{{$v}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Top categories</h2>
+  <ol class="ranked">
+    {{range $d.TopCategories}}
+      <li><strong>{{.Label}}</strong> <span class="muted">{{.Count}}</span></li>
+    {{end}}
+  </ol>
+</section>
+
+{{if $d.UpdatableSample}}
+<section class="card">
+  <h2>Pending updates (sample)</h2>
+  <ul class="chips">
+    {{range $d.UpdatableSample}}<li><a href="/tools/{{.}}">{{.}}</a></li>{{end}}
+  </ul>
+</section>
+{{end}}
+{{end}}

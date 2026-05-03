@@ -1,0 +1,44 @@
+{{define "content"}}
+{{$d := .Data}}
+{{$t := $d.Tool}}
+<section class="page-header">
+  <a href="/" class="back">← Installed</a>
+  <h1>{{$t.Name}} {{if $t.DisplayName}}<span class="muted">/ {{$t.DisplayName}}</span>{{end}}</h1>
+  <p class="muted">{{dash $t.Category}}{{if $t.Tags}} · {{join $t.Tags ", "}}{{end}}</p>
+</section>
+
+<section class="card">
+  <h2>Status</h2>
+  <table class="kv">
+    <tr><th>Installed</th><td>{{if $d.Installed}}<span class="badge ok">yes</span>{{else}}<span class="badge muted">no</span>{{end}}</td></tr>
+    <tr><th>Latest</th><td><code>{{dash $d.Latest}}</code>{{if $t.LatestFrom}} <span class="muted">(via {{$t.LatestFrom}})</span>{{end}}</td></tr>
+  </table>
+</section>
+
+{{if $t.Instances}}
+<section class="card">
+  <h2>Detected installations</h2>
+  <table class="grid">
+    <thead><tr><th>Source</th><th>Version</th><th>Path</th></tr></thead>
+    <tbody>
+      {{range $t.Instances}}
+        <tr><td>{{.Source}}</td><td><code>{{dash .Version}}</code></td><td><code>{{.Path}}</code></td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+
+{{if $d.GitHub.Slug}}
+<section class="card">
+  <h2>GitHub</h2>
+  <table class="kv">
+    <tr><th>Repo</th><td><a href="{{$d.GitHub.URL}}" target="_blank" rel="noopener">{{$d.GitHub.Slug}}</a></td></tr>
+    {{if $d.GitHub.Stars}}<tr><th>Stars</th><td>★ {{$d.GitHub.Stars}}</td></tr>{{end}}
+    {{if $d.GitHub.License}}<tr><th>License</th><td>{{$d.GitHub.License}}</td></tr>{{end}}
+    {{if $d.GitHub.Topics}}<tr><th>Topics</th><td>{{join $d.GitHub.Topics ", "}}</td></tr>{{end}}
+    {{if $d.GitHub.Push}}<tr><th>Last push</th><td>{{$d.GitHub.Push}}</td></tr>{{end}}
+  </table>
+</section>
+{{end}}
+{{end}}

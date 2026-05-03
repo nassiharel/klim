@@ -1,0 +1,36 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>Trail</h1>
+  <p class="muted">Git-style history for your toolchain. Run <code>clim trail capture</code> to record a new entry.</p>
+</section>
+
+{{if eq (len $d.Entries) 0}}
+  <p class="empty">No trail entries yet. <code>clim trail capture --label initial</code> creates the first one.</p>
+{{else}}
+<table class="grid">
+  <thead>
+    <tr>
+      <th>Index</th>
+      <th>Object</th>
+      <th>When</th>
+      <th>Op</th>
+      <th>Label</th>
+      <th>Summary</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range $d.Entries}}
+      <tr>
+        <td>@{{.Index}}</td>
+        <td><a href="/trail/{{.Object.Short}}"><code>{{.Object.Short}}</code></a></td>
+        <td>{{.Time.Local.Format "2006-01-02 15:04"}}</td>
+        <td>{{.Operation}}</td>
+        <td>{{dash .Label}}</td>
+        <td>{{dash .Summary}}</td>
+      </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}
