@@ -37,13 +37,15 @@ func FormatStars(n int) string {
 }
 
 // FormatDate converts a GitHub ISO-8601 timestamp into a human-friendly
-// "N days ago" / "N months ago" / "on YYYY-MM-DD" string.
+// "N days ago" / "N months ago" / bare "YYYY-MM-DD" string.
 //
 // Returns the raw input if it cannot be parsed. Future timestamps fall
-// back to the calendar date — never "today" or other "ago" phrasing —
-// because a future push usually means the input was generated on a
-// machine with skewed clock or ahead time zone, and pretending it's
-// recent would mislead the user.
+// back to the calendar date (no "ago" phrasing) — a future push usually
+// means the input was generated on a machine with a skewed clock, and
+// pretending it's recent would mislead the user. Singular buckets
+// ("1 hour ago", "1 day ago", …) use the singular noun explicitly so
+// the output reads naturally in both `clim info` and the TUI detail
+// page that share this helper.
 func FormatDate(ts string) string {
 	if ts == "" {
 		return ""
@@ -61,19 +63,37 @@ func FormatDate(ts string) string {
 	switch {
 	case delta < 0:
 		return t.Format("2006-01-02")
+	case delta < time.Hour:
+		// Anything under an hour is "just now" — the user doesn't care
+		// whether it was 5 or 55 minutes ago for a push timestamp.
+		return "just now"
 	case delta < 48*time.Hour:
-		h := int(delta.Hours())
-		if h <= 1 {
-			return "just now"
-		}
-		return fmt.Sprintf("%d hours ago", h)
-	case delta < 60*24*time.Hour:
-		return fmt.Sprintf("%d days ago", int(delta.Hours()/24))
+		return pluralAgo(int(delta.Hours()), "hour")
+	case delta < 30*24*time.Hour:
+		// 2–29 days. The month bucket below would otherwise never be
+		// able to emit "1 month ago" because at 30 days int(d/30)==1
+		// can be reached.
+		return pluralAgo(int(delta.Hours()/24), "day")
 	case delta < 365*24*time.Hour:
-		return fmt.Sprintf("%d months ago", int(delta.Hours()/(24*30)))
+		return pluralAgo(int(delta.Hours()/(24*30)), "month")
 	default:
-		return fmt.Sprintf("%.1f years ago", delta.Hours()/(24*365))
+		// Years use one decimal so 1.0/1.5/2.0 read naturally; we
+		// special-case exact 1.0 to "1 year ago" for grammar.
+		years := delta.Hours() / (24 * 365)
+		if years < 1.05 {
+			return "1 year ago"
+		}
+		return fmt.Sprintf("%.1f years ago", years)
 	}
+}
+
+// pluralAgo formats counts with the right singular/plural noun so we
+// never emit "1 hours ago" / "1 days ago".
+func pluralAgo(n int, unit string) string {
+	if n == 1 {
+		return "1 " + unit + " ago"
+	}
+	return fmt.Sprintf("%d %ss ago", n, unit)
 }
 
 // RepoURL returns the canonical https URL for a "owner/repo" slug, or
