@@ -4,9 +4,8 @@ import (
 	"runtime"
 	"strings"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/textwrap"
 )
 
 // combineTagsAndTopics merges catalog tags and GitHub topics, de-duplicating
@@ -107,27 +106,9 @@ func derivePlatforms(pkgs registry.PackageIDs) []string {
 	return platforms
 }
 
-// wordWrap breaks text into lines that fit within maxWidth display columns.
-// Uses lipgloss.Width for correct handling of multi-byte UTF-8 and wide characters.
+// wordWrap delegates to textwrap.Wrap so the CLI and TUI share one
+// display-width-aware implementation. Local stub kept for backwards
+// compatibility with existing call sites.
 func wordWrap(text string, maxWidth int) []string {
-	if maxWidth <= 0 {
-		return []string{text}
-	}
-	words := strings.Fields(text)
-	if len(words) == 0 {
-		return nil
-	}
-
-	var lines []string
-	current := words[0]
-	for _, word := range words[1:] {
-		if lipgloss.Width(current)+1+lipgloss.Width(word) > maxWidth {
-			lines = append(lines, current)
-			current = word
-		} else {
-			current += " " + word
-		}
-	}
-	lines = append(lines, current)
-	return lines
+	return textwrap.Wrap(text, maxWidth)
 }
