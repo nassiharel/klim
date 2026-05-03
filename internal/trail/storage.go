@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -164,6 +165,14 @@ func loadLog(r fsRoots) (*logFile, error) {
 	if err := dec.Decode(&lf); err != nil {
 		return nil, fmt.Errorf("parsing trail log: %w", err)
 	}
+	// Strict: log.yaml must contain exactly one YAML document. A
+	// hand-edited file with a trailing `---` separator and additional
+	// content would otherwise be silently accepted, breaking the
+	// "strict decoding" guarantee this feature advertises.
+	var trailing logFile
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("trail log has trailing YAML content (corrupted or hand-edited?) — delete %s to start over", r.log)
+	}
 	// Strict: a non-empty log MUST carry an explicit schema_version.
 	// We never wrote a versionless log (saveLog always sets it), so any
 	// log we're reading without one was hand-edited or corrupted.
@@ -174,7 +183,36 @@ func loadLog(r fsRoots) (*logFile, error) {
 		return nil, fmt.Errorf("trail log has unsupported schema version %d (this clim supports %d) — upgrade clim",
 			lf.SchemaVersion, SchemaVersion)
 	}
+	// Validate every Object reference. Entry.Object is later passed to
+	// objectPath which uses it as a filesystem path fragment, so a
+	// hand-edited log could otherwise read arbitrary paths outside
+	// objects/ before the hash mismatch is noticed.
+	for i := range lf.Entries {
+		if !isValidObjectID(lf.Entries[i].Object) {
+			return nil, fmt.Errorf("trail log entry @%d has invalid object id %q (corrupted or hand-edited?)",
+				lf.Entries[i].Index, lf.Entries[i].Object)
+		}
+	}
 	return &lf, nil
+}
+
+// isValidObjectID reports whether id has exactly the canonical shape
+// produced by hashSnapshot: 64 lowercase hex characters. Anything else
+// is rejected at log-load time so it can't be passed to objectPath as
+// a path fragment.
+func isValidObjectID(id ObjectID) bool {
+	if len(id) != 64 {
+		return false
+	}
+	for _, c := range id {
+		switch {
+		case c >= '0' && c <= '9':
+		case c >= 'a' && c <= 'f':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // saveLog writes log.yaml + HEAD atomically. Caller must hold the trail lock.
@@ -195,6 +233,42 @@ func saveLog(r fsRoots, lf *logFile) error {
 	}
 	if err := fileutil.AtomicWrite(r.head, []byte(fmt.Sprintf("%d\n", head)), 0o644); err != nil {
 		return fmt.Errorf("writing trail HEAD: %w", err)
+	}
+	return nil
+}
+
+// ValidateLabel performs the structural label checks Capture would
+// otherwise apply only after loading the trail. Exposed so CLI runners
+// can fail fast on bad labels (control characters, reserved ref syntax)
+// before running a slow PATH scan and surface the failure as a usage
+// error instead of a post-scan runtime error.
+//
+// Duplicate-label collisions are NOT checked here because they require
+// reading log.yaml under the trail lock; that check stays in Capture.
+func ValidateLabel(label string) error {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return nil
+	}
+	if reason := invalidLabelReason(label); reason != "" {
+		return fmt.Errorf("trail: invalid label %q: %s", label, reason)
+	}
+	if reason := reservedLabelReason(label); reason != "" {
+		return fmt.Errorf("trail: label %q conflicts with reserved ref syntax (%s); pick a different name", label, reason)
+	}
+	return nil
+}
+
+// ValidateOp returns an error if op is not one of the recognised Op*
+// constants. Empty op is treated as OpCapture (the default), so no
+// error.
+func ValidateOp(op string) error {
+	if op == "" {
+		return nil
+	}
+	if _, ok := validOps[op]; !ok {
+		known := []string{OpCapture, OpImport, OpInstall, OpUpgrade, OpRemove}
+		return fmt.Errorf("trail: invalid op %q (valid: %s)", op, strings.Join(known, ", "))
 	}
 	return nil
 }
@@ -337,8 +411,12 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 		Time:      time.Now().UTC(),
 		Operation: op,
 		Label:     label,
-		Summary:   summarize(r, lf, &snap),
 	}
+	summary, err := summarize(r, lf, &snap)
+	if err != nil {
+		return nil, fmt.Errorf("trail: previous entry's snapshot is unreadable, cannot extend trail: %w (resolve the corruption or run `clim trail prune` to recover)", err)
+	}
+	entry.Summary = summary
 	lf.Entries = append(lf.Entries, entry)
 	if err := saveLog(r, lf); err != nil {
 		return nil, err
@@ -349,16 +427,17 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 // summarize builds a one-line description of how this entry differs from
 // the previous one. For the first entry (no predecessor) it returns
 // "<n> tool(s)" so users can tell the trail head from a glance instead
-// of seeing an empty Summary column. Uses pre-computed roots so tests'
-// overrideRoot is honored.
-func summarize(r fsRoots, lf *logFile, current *Snapshot) string {
+// of seeing an empty Summary column. Returns an error if the previous
+// snapshot can't be read — silently emitting an empty summary would
+// paper over corruption and let users keep extending broken history.
+func summarize(r fsRoots, lf *logFile, current *Snapshot) (string, error) {
 	if len(lf.Entries) == 0 {
-		return fmt.Sprintf("%d tool(s)", len(current.Tools))
+		return fmt.Sprintf("%d tool(s)", len(current.Tools)), nil
 	}
 	prevID := lf.Entries[len(lf.Entries)-1].Object
 	prev, err := readObject(r, prevID)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	d := diffSnapshots(prev, current)
 	parts := make([]string, 0, 4)
@@ -375,9 +454,9 @@ func summarize(r fsRoots, lf *logFile, current *Snapshot) string {
 		parts = append(parts, fmt.Sprintf("⇄%d", len(d.SourceChanged)))
 	}
 	if len(parts) == 0 {
-		return "no changes"
+		return "no changes", nil
 	}
-	return strings.Join(parts, " ")
+	return strings.Join(parts, " "), nil
 }
 
 // LogOptions filters Log results.

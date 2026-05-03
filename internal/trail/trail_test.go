@@ -629,23 +629,23 @@ func TestDiff_SourceAndVersionChange(t *testing.T) {
 // `clim trail log` tabwriter output (tabs split columns, newlines inject
 // extra rows) or break terminal rendering of `clim trail show`.
 func TestCapture_RejectsControlCharLabels(t *testing.T) {
-useTempDir(t)
-cases := []string{
-"with\ttab",
-"with\nnewline",
-"with\rcarriage",
-"bell\x07char",
-}
-for _, label := range cases {
-_, err := Capture(OpCapture, label, orderedTools())
-if err == nil {
-t.Errorf("Capture(%q) accepted control-character label", label)
-continue
-}
-if !strings.Contains(err.Error(), "invalid label") {
-t.Errorf("Capture(%q): expected 'invalid label' in error, got: %v", label, err)
-}
-}
+	useTempDir(t)
+	cases := []string{
+		"with\ttab",
+		"with\nnewline",
+		"with\rcarriage",
+		"bell\x07char",
+	}
+	for _, label := range cases {
+		_, err := Capture(OpCapture, label, orderedTools())
+		if err == nil {
+			t.Errorf("Capture(%q) accepted control-character label", label)
+			continue
+		}
+		if !strings.Contains(err.Error(), "invalid label") {
+			t.Errorf("Capture(%q): expected 'invalid label' in error, got: %v", label, err)
+		}
+	}
 }
 
 // TestDecodeSnapshot_VersionlessIsCorruption ensures a snapshot file
@@ -653,29 +653,102 @@ t.Errorf("Capture(%q): expected 'invalid label' in error, got: %v", label, err)
 // rather than the generic "upgrade clim" message — we have never
 // written versionless snapshots, so the latter would mislead users.
 func TestDecodeSnapshot_VersionlessIsCorruption(t *testing.T) {
-body := []byte("tools: []\nos: linux\narch: amd64\n")
-_, err := decodeSnapshot(body, ObjectID(strings.Repeat("0", 64)))
-if err == nil {
-t.Fatal("expected error decoding versionless snapshot")
-}
-if !strings.Contains(err.Error(), "missing schema_version") {
-t.Errorf("expected 'missing schema_version' message, got: %v", err)
-}
-if strings.Contains(err.Error(), "upgrade clim") {
-t.Errorf("error should not say 'upgrade clim'; got: %v", err)
-}
+	body := []byte("tools: []\nos: linux\narch: amd64\n")
+	_, err := decodeSnapshot(body, ObjectID(strings.Repeat("0", 64)))
+	if err == nil {
+		t.Fatal("expected error decoding versionless snapshot")
+	}
+	if !strings.Contains(err.Error(), "missing schema_version") {
+		t.Errorf("expected 'missing schema_version' message, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "upgrade clim") {
+		t.Errorf("error should not say 'upgrade clim'; got: %v", err)
+	}
 }
 
 // TestDecodeSnapshot_FutureVersionStillSaysUpgrade verifies the genuine
 // forward-compat path is preserved: schema_version > current means a
 // newer clim wrote this file.
 func TestDecodeSnapshot_FutureVersionStillSaysUpgrade(t *testing.T) {
-body := []byte("schema_version: 9999\ntools: []\nos: linux\narch: amd64\n")
-_, err := decodeSnapshot(body, ObjectID(strings.Repeat("0", 64)))
-if err == nil {
-t.Fatal("expected error")
+	body := []byte("schema_version: 9999\ntools: []\nos: linux\narch: amd64\n")
+	_, err := decodeSnapshot(body, ObjectID(strings.Repeat("0", 64)))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "upgrade clim") {
+		t.Errorf("expected 'upgrade clim' for future version, got: %v", err)
+	}
 }
-if !strings.Contains(err.Error(), "upgrade clim") {
-t.Errorf("expected 'upgrade clim' for future version, got: %v", err)
+
+// TestLoadLog_RejectsInvalidObjectID guards against a hand-edited
+// log.yaml whose entries point at an arbitrary path fragment.
+// Entry.Object is later passed to objectPath, so accepting non-hex
+// values would let a corrupted log read files outside objects/.
+func TestLoadLog_RejectsInvalidObjectID(t *testing.T) {
+dir := useTempDir(t)
+if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
+t.Fatal(err)
+}
+logPath := filepath.Join(dir, "log.yaml")
+body, err := os.ReadFile(logPath)
+if err != nil {
+t.Fatal(err)
+}
+// Replace the object id with a path-traversal-looking string.
+tampered := strings.Replace(string(body), "object: ", "object: ../etc/passwd #", 1)
+if err := os.WriteFile(logPath, []byte(tampered), 0o644); err != nil { //nolint:gosec
+t.Fatal(err)
+}
+if _, err := Log(LogOptions{}); err == nil {
+t.Fatal("expected error loading log with invalid object id")
+} else if !strings.Contains(err.Error(), "invalid object id") {
+t.Fatalf("got: %v", err)
+}
+}
+
+// TestLoadLog_RejectsTrailingYAMLDocs ensures the strict-decoding
+// guarantee covers extra YAML documents glued onto log.yaml.
+func TestLoadLog_RejectsTrailingYAMLDocs(t *testing.T) {
+dir := useTempDir(t)
+if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
+t.Fatal(err)
+}
+logPath := filepath.Join(dir, "log.yaml")
+body, err := os.ReadFile(logPath)
+if err != nil {
+t.Fatal(err)
+}
+tampered := append(body, []byte("---\nschema_version: 1\nentries: []\n")...)
+if err := os.WriteFile(logPath, tampered, 0o644); err != nil { //nolint:gosec
+t.Fatal(err)
+}
+if _, err := Log(LogOptions{}); err == nil {
+t.Fatal("expected error loading log with trailing YAML doc")
+} else if !strings.Contains(err.Error(), "trailing YAML content") {
+t.Fatalf("got: %v", err)
+}
+}
+
+// TestCapture_FailsClosedOnCorruptPredecessor ensures that a corrupted
+// previous snapshot blocks new captures rather than silently appending
+// an entry with an empty Summary. Otherwise users could keep extending
+// broken history indefinitely.
+func TestCapture_FailsClosedOnCorruptPredecessor(t *testing.T) {
+dir := useTempDir(t)
+first, err := Capture(OpCapture, "", orderedTools())
+if err != nil {
+t.Fatal(err)
+}
+objPath := filepath.Join(dir, "objects", string(first.Object[:2]), string(first.Object[2:])+".yaml")
+if err := os.WriteFile(objPath, []byte("garbage\n"), 0o644); err != nil { //nolint:gosec
+t.Fatal(err)
+}
+tools := append(orderedTools(), fakeTool("new", "1.0", registry.SourceBrew, "/n"))
+_, err = Capture(OpCapture, "", tools)
+if err == nil {
+t.Fatal("expected capture to fail on corrupt predecessor, got nil")
+}
+if !strings.Contains(err.Error(), "previous entry") {
+t.Fatalf("expected 'previous entry' in error, got: %v", err)
 }
 }

@@ -177,11 +177,15 @@ func init() {
 func runTrailCapture(cmd *cobra.Command, _ []string) error {
 	// Validate flags up-front so bad input exits with the documented
 	// usage code (2) rather than getting wrapped into a runtime error
-	// after a possibly-slow PATH scan.
-	if trailCaptureOp != "" {
-		if !isValidTrailOp(trailCaptureOp) {
-			return &UsageError{Err: fmt.Errorf("--op must be one of capture, import, install, upgrade, remove (got %q)", trailCaptureOp)}
-		}
+	// after a possibly-slow PATH scan. Op + label structure are
+	// checked here; duplicate-label collisions still happen inside
+	// trail.Capture under the trail lock (we'd otherwise have to
+	// double-acquire the lock just for early validation).
+	if err := trail.ValidateOp(trailCaptureOp); err != nil {
+		return &UsageError{Err: err}
+	}
+	if err := trail.ValidateLabel(trailCaptureLabel); err != nil {
+		return &UsageError{Err: err}
 	}
 
 	// Word the spinner so it matches what actually happens. With
@@ -238,17 +242,6 @@ func humanizeAge(t time.Time) string {
 	default:
 		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
-}
-
-// isValidTrailOp mirrors internal/trail.validOps for early CLI-side
-// validation. The trail package re-checks this so library-only callers
-// can't slip in an arbitrary value either.
-func isValidTrailOp(op string) bool {
-	switch op {
-	case trail.OpCapture, trail.OpImport, trail.OpInstall, trail.OpUpgrade, trail.OpRemove:
-		return true
-	}
-	return false
 }
 
 func runTrailLog(cmd *cobra.Command, _ []string) error {
