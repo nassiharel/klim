@@ -280,3 +280,27 @@ func TestCollectReferences_GetwdErrorBecomesWarning(t *testing.T) {
 	// Platform may not produce the error — that's fine.
 	t.Skipf("os.Getwd did not fail on this platform; warnings=%v", warnings)
 }
+
+// TestSamePath_WindowsCaseInsensitive guards against the
+// duplicate-suppression regression where a registered project's
+// `.clim.yaml` and the locally-discovered one differed only by case
+// on Windows and ended up reported twice. Other platforms keep
+// byte-wise comparison.
+func TestSamePath_WindowsCaseInsensitive(t *testing.T) {
+	a := filepath.Join("C:", "Users", "me", ".clim.yaml")
+	b := filepath.Join("c:", "users", "me", ".clim.yaml")
+	got := samePath(a, b)
+	want := runtime.GOOS == "windows"
+	if got != want {
+		t.Errorf("samePath(%q, %q) = %v, want %v on %s", a, b, got, want, runtime.GOOS)
+	}
+	// Identical paths always match.
+	if !samePath(a, a) {
+		t.Errorf("samePath should match identical paths")
+	}
+	// Genuinely-different paths never match.
+	c := filepath.Join("C:", "Users", "other", ".clim.yaml")
+	if samePath(a, c) {
+		t.Errorf("samePath(%q, %q) should be false", a, c)
+	}
+}

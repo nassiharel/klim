@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -11,6 +13,20 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/teamfile"
 )
+
+// samePath reports whether a and b refer to the same filesystem path.
+// On Windows the comparison is case-insensitive (the OS treats
+// `C:\Users\me` and `c:\users\me` as identical). Other platforms keep
+// the standard byte-wise comparison since macOS/Linux file systems
+// are routinely case-sensitive even when the kernel is not.
+func samePath(a, b string) bool {
+	a = filepath.Clean(a)
+	b = filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
 
 // Reference describes a place where a tool is mentioned: the local
 // .clim.yaml, a registered project's .clim.yaml, a marketplace pack, or
@@ -166,7 +182,7 @@ func CollectReferences(cmd *cobra.Command, toolName string) ([]Reference, []stri
 	}
 	for _, proj := range projects {
 		climPath := filepath.Join(proj.Path, ".clim.yaml")
-		if seenTeamPath != "" && filepath.Clean(climPath) == filepath.Clean(seenTeamPath) {
+		if seenTeamPath != "" && samePath(climPath, seenTeamPath) {
 			continue
 		}
 		tf, err := teamfile.Parse(climPath)
