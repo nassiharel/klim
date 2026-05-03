@@ -8,6 +8,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/clim/internal/progress"
@@ -212,6 +213,14 @@ func runTrailCapture(cmd *cobra.Command, _ []string) error {
 
 	entry, err := trail.Capture(trailCaptureOp, trailCaptureLabel, tools)
 	if err != nil {
+		// Duplicate-label collisions are user-input errors that can
+		// only be detected under the trail lock (post-scan), so they
+		// surface here. Map them to UsageError so the exit code is 2
+		// (malformed input) per docs/cli-conventions.md, not 1.
+		var dup *trail.LabelInUseError
+		if errors.As(err, &dup) {
+			return &UsageError{Err: err}
+		}
 		return fmt.Errorf("capturing trail entry: %w", err)
 	}
 
@@ -461,18 +470,35 @@ func humanAgo(t time.Time) string {
 	}
 }
 
-// truncate shortens s to fit in n display columns, replacing the dropped
-// suffix with "…". Operates on runes (not bytes), so non-ASCII labels and
-// summaries can never be cut mid-codepoint and emit malformed UTF-8.
+// truncate shortens s to fit in n display columns (terminal cells),
+// replacing the dropped suffix with "…". Uses go-runewidth so wide
+// characters (CJK, emoji, etc.) count as 2 columns and combining marks
+// as 0 — that's the only definition of "fits in N columns" that keeps
+// `clim trail log`'s tabwriter columns aligned for non-ASCII labels.
+//
+// Always emits valid UTF-8: drops whole runes, never bytes.
 func truncate(s string, n int) string {
 	if n <= 1 {
 		return s
 	}
-	runes := []rune(s)
-	if len(runes) <= n {
+	if runewidth.StringWidth(s) <= n {
 		return s
 	}
-	return string(runes[:n-1]) + "…"
+	// Reserve one cell for the ellipsis. Walk runes accumulating widths
+	// until the next rune would exceed (n - 1).
+	budget := n - 1
+	var b strings.Builder
+	used := 0
+	for _, r := range s {
+		w := runewidth.RuneWidth(r)
+		if used+w > budget {
+			break
+		}
+		b.WriteRune(r)
+		used += w
+	}
+	b.WriteRune('…')
+	return b.String()
 }
 
 func dashIfEmpty(s string) string {

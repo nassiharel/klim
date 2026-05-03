@@ -71,6 +71,19 @@ func (r fsRoots) objectPath(id ObjectID) string {
 }
 
 // writeObject writes the snapshot body content-addressed by id, idempotently.
+// See writeObjectReportingCreated; this preserves the original signature
+// for callers that don't need the boolean.
+func writeObject(r fsRoots, id ObjectID, body []byte) error {
+	_, err := writeObjectReportingCreated(r, id, body)
+	return err
+}
+
+// writeObjectReportingCreated is writeObject's full-information variant:
+// it returns true only when this call wrote a fresh file (vs. observed
+// an existing one with matching hash). Capture uses the boolean to
+// decide whether a saveLog rollback should also delete the object —
+// touching an idempotent reuse would clobber state another in-flight
+// capture might depend on.
 //
 // If the object already exists on disk, we re-hash the stored bytes and
 // compare against id. A mismatch means a previous capture wrote a good
@@ -79,23 +92,26 @@ func (r fsRoots) objectPath(id ObjectID) string {
 // silently point at the corrupted data, breaking `show <ref>` after a
 // successful `capture`. Failing here is the safe choice — the user can
 // delete the offending file and recapture.
-func writeObject(r fsRoots, id ObjectID, body []byte) error {
+func writeObjectReportingCreated(r fsRoots, id ObjectID, body []byte) (bool, error) {
 	path := r.objectPath(id)
 	if existing, err := os.ReadFile(path); err == nil {
 		sum := sha256.Sum256(existing)
 		got := ObjectID(hex.EncodeToString(sum[:]))
 		if got == id {
-			return nil
+			return false, nil
 		}
-		return fmt.Errorf("trail object %s on disk has been corrupted: stored bytes hash to %s (delete %s and recapture)",
+		return false, fmt.Errorf("trail object %s on disk has been corrupted: stored bytes hash to %s (delete %s and recapture)",
 			id.Short(), got.Short(), path)
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("inspecting trail object %s: %w", id.Short(), err)
+		return false, fmt.Errorf("inspecting trail object %s: %w", id.Short(), err)
 	}
 	if err := fileutil.EnsureDir(path); err != nil {
-		return fmt.Errorf("creating object dir: %w", err)
+		return false, fmt.Errorf("creating object dir: %w", err)
 	}
-	return fileutil.AtomicWrite(path, body, 0o644)
+	if err := fileutil.AtomicWrite(path, body, 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // readObject loads the snapshot at id from disk and verifies its integrity.
@@ -119,13 +135,22 @@ func readObject(r fsRoots, id ObjectID) (*Snapshot, error) {
 }
 
 // decodeSnapshot strictly decodes the YAML bytes into a Snapshot.
-// Unknown fields and unknown schema versions are rejected.
+// Unknown fields, unknown schema versions, and trailing YAML documents
+// are rejected — clim writes exactly one document per object file, so
+// any extra content was added by a hand-edit or corruption.
 func decodeSnapshot(data []byte, id ObjectID) (*Snapshot, error) {
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
 	var s Snapshot
 	if err := dec.Decode(&s); err != nil {
 		return nil, fmt.Errorf("parsing trail object %s: %w", id.Short(), err)
+	}
+	// Same trailing-content guard as loadLog: a snapshot file with
+	// extra YAML documents is rejected so the strict-decoding contract
+	// holds for object files as well as the log.
+	var trailing Snapshot
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("trail object %s has trailing YAML content (corrupted or hand-edited?)", id.Short())
 	}
 	// SchemaVersion == 0 means the field was missing; we have never
 	// written versionless objects, so this is corruption / hand-edit
@@ -148,12 +173,18 @@ type logFile struct {
 }
 
 // loadLog reads log.yaml strictly. A missing file returns an empty log
-// (treated as "fresh trail, no history yet"). A partially-corrupt or
-// version-mismatched file fails closed — clim owns this format and we
-// would rather refuse to run than silently mis-interpret history.
+// only when the rest of the trail is also empty — if HEAD or any
+// objects/ entries already exist, a missing log indicates partial
+// corruption (lost rename, manual deletion) and we fail closed rather
+// than silently start a fresh history at @0 that hides the prior
+// snapshots. A partially-corrupt or version-mismatched file always
+// fails closed.
 func loadLog(r fsRoots) (*logFile, error) {
 	data, err := os.ReadFile(r.log)
 	if errors.Is(err, os.ErrNotExist) {
+		if hasTrailRemnants(r) {
+			return nil, fmt.Errorf("trail log is missing but other trail state still exists (HEAD or objects/) — refusing to silently start over; delete %s to recover from a known-empty state", r.dir)
+		}
 		return &logFile{SchemaVersion: SchemaVersion}, nil
 	}
 	if err != nil {
@@ -183,36 +214,48 @@ func loadLog(r fsRoots) (*logFile, error) {
 		return nil, fmt.Errorf("trail log has unsupported schema version %d (this clim supports %d) — upgrade clim",
 			lf.SchemaVersion, SchemaVersion)
 	}
-	// Validate every Object reference. Entry.Object is later passed to
-	// objectPath which uses it as a filesystem path fragment, so a
-	// hand-edited log could otherwise read arbitrary paths outside
-	// objects/ before the hash mismatch is noticed.
+	// Validate every entry's Object id and Index field. Entry.Object
+	// is later passed to objectPath which uses it as a filesystem path
+	// fragment; entry indices form the @<index> ref form, which is
+	// documented as unique. A hand-edited log with duplicates or
+	// non-monotonic indices would let Resolve("@N") silently return
+	// the first match instead of failing closed.
+	seen := make(map[int]struct{}, len(lf.Entries))
+	prevIdx := -1
 	for i := range lf.Entries {
-		if !isValidObjectID(lf.Entries[i].Object) {
+		e := &lf.Entries[i]
+		if !e.Object.IsValid() {
 			return nil, fmt.Errorf("trail log entry @%d has invalid object id %q (corrupted or hand-edited?)",
-				lf.Entries[i].Index, lf.Entries[i].Object)
+				e.Index, e.Object)
 		}
+		if e.Index < 0 {
+			return nil, fmt.Errorf("trail log entry has negative index %d (corrupted or hand-edited?)", e.Index)
+		}
+		if _, dup := seen[e.Index]; dup {
+			return nil, fmt.Errorf("trail log has duplicate entry index @%d (corrupted or hand-edited?)", e.Index)
+		}
+		if e.Index <= prevIdx {
+			return nil, fmt.Errorf("trail log entries are not strictly increasing (got @%d after @%d, corrupted or hand-edited?)", e.Index, prevIdx)
+		}
+		seen[e.Index] = struct{}{}
+		prevIdx = e.Index
 	}
 	return &lf, nil
 }
 
-// isValidObjectID reports whether id has exactly the canonical shape
-// produced by hashSnapshot: 64 lowercase hex characters. Anything else
-// is rejected at log-load time so it can't be passed to objectPath as
-// a path fragment.
-func isValidObjectID(id ObjectID) bool {
-	if len(id) != 64 {
+// hasTrailRemnants reports whether the trail dir contains state other
+// than log.yaml. Used to distinguish "fresh install" from "log got
+// lost". HEAD or any non-empty objects/ subtree counts as evidence the
+// store was once populated.
+func hasTrailRemnants(r fsRoots) bool {
+	if _, err := os.Stat(r.head); err == nil {
+		return true
+	}
+	entries, err := os.ReadDir(r.objects)
+	if err != nil {
 		return false
 	}
-	for _, c := range id {
-		switch {
-		case c >= '0' && c <= '9':
-		case c >= 'a' && c <= 'f':
-		default:
-			return false
-		}
-	}
-	return true
+	return len(entries) > 0
 }
 
 // saveLog writes log.yaml + HEAD atomically. Caller must hold the trail lock.
@@ -257,6 +300,18 @@ func ValidateLabel(label string) error {
 		return fmt.Errorf("trail: label %q conflicts with reserved ref syntax (%s); pick a different name", label, reason)
 	}
 	return nil
+}
+
+// validOps is the closed set of operation kinds permitted in Entry.op.
+// ValidateOp consults this so a typo or arbitrary string can't become
+// permanent history data — the on-disk format keeps a small,
+// well-defined operation vocabulary.
+var validOps = map[string]struct{}{
+	OpCapture: {},
+	OpImport:  {},
+	OpInstall: {},
+	OpUpgrade: {},
+	OpRemove:  {},
 }
 
 // ValidateOp returns an error if op is not one of the recognised Op*
@@ -318,16 +373,18 @@ func reservedLabelReason(label string) string {
 	return ""
 }
 
-// validOps is the closed set of operation kinds permitted in Entry.op.
-// Capture rejects anything else so a typo or arbitrary string can't
-// become permanent history data — the on-disk format keeps a small,
-// well-defined operation vocabulary.
-var validOps = map[string]struct{}{
-	OpCapture: {},
-	OpImport:  {},
-	OpInstall: {},
-	OpUpgrade: {},
-	OpRemove:  {},
+// LabelInUseError is returned by Capture when the requested label is
+// already taken by another entry. CLI runners detect this with
+// errors.As and surface it as a UsageError so the exit code matches
+// docs/cli-conventions.md (malformed user input ⇒ exit 2).
+type LabelInUseError struct {
+	Label string
+	Index int
+}
+
+func (e *LabelInUseError) Error() string {
+	return fmt.Sprintf("trail: label %q is already used by entry @%d (use `clim trail capture` without --label, or pick a different name)",
+		e.Label, e.Index)
 }
 
 // Capture writes a new Entry pointing at the canonical Snapshot of tools.
@@ -338,25 +395,24 @@ var validOps = map[string]struct{}{
 // arbitrary strings are rejected as a UsageError-equivalent.
 //
 // label is an optional user-provided tag — capture fails if the label
-// is already used by another entry, so labels stay unique and
-// `Resolve(<label>)` always points at one entry.
+// is already used by another entry (see LabelInUseError), so labels
+// stay unique and `Resolve(<label>)` always points at one entry.
 func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
+	// Op + label structural validation: shared with the CLI's pre-scan
+	// validation so a non-CLI caller can't slip a bad value through
+	// either. Reusing ValidateOp/ValidateLabel keeps a single source of
+	// truth for the closed sets — the previous duplicate inline checks
+	// here drifted from CLI-side wording the moment one was edited.
+	if err := ValidateOp(op); err != nil {
+		return nil, err
+	}
 	if op == "" {
 		op = OpCapture
 	}
-	if _, ok := validOps[op]; !ok {
-		known := []string{OpCapture, OpImport, OpInstall, OpUpgrade, OpRemove}
-		return nil, fmt.Errorf("trail: invalid op %q (valid: %s)", op, strings.Join(known, ", "))
+	if err := ValidateLabel(label); err != nil {
+		return nil, err
 	}
 	label = strings.TrimSpace(label)
-	if label != "" {
-		if reason := invalidLabelReason(label); reason != "" {
-			return nil, fmt.Errorf("trail: invalid label %q: %s", label, reason)
-		}
-		if reason := reservedLabelReason(label); reason != "" {
-			return nil, fmt.Errorf("trail: label %q conflicts with reserved ref syntax (%s); pick a different name", label, reason)
-		}
-	}
 	r, err := resolveRoots()
 	if err != nil {
 		return nil, err
@@ -374,8 +430,9 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 	// Acquire the lock BEFORE any disk mutation, so a concurrent prune
 	// can't observe a freshly-written object as orphaned and GC it
 	// before this entry is appended. Also lets us validate the label
-	// against existing entries before writing the object — otherwise
-	// a duplicate-label rejection would leave an orphan object on disk.
+	// and predecessor against existing entries before writing the
+	// object — otherwise a rejected capture would leave an orphan
+	// object on disk.
 	release, err := acquireLock(r.lock)
 	if err != nil {
 		return nil, err
@@ -389,16 +446,19 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 	if label != "" {
 		for i := range lf.Entries {
 			if lf.Entries[i].Label == label {
-				return nil, fmt.Errorf("trail: label %q is already used by entry @%d (use `clim trail capture` without --label, or pick a different name)",
-					label, lf.Entries[i].Index)
+				return nil, &LabelInUseError{Label: label, Index: lf.Entries[i].Index}
 			}
 		}
 	}
 
-	// Write the object only after every pre-condition has been validated,
-	// so we never leave an orphan if the entry append is rejected.
-	if err := writeObject(r, id, body); err != nil {
-		return nil, fmt.Errorf("writing trail object: %w", err)
+	// Compute the summary BEFORE writing the object: summarize reads
+	// the previous snapshot, and a corrupted predecessor must abort
+	// without leaving the new object orphaned on disk. Same reasoning
+	// for any later failure — we'll only writeObject after we know
+	// the entry will actually be appended.
+	summary, err := summarize(r, lf, &snap)
+	if err != nil {
+		return nil, fmt.Errorf("trail: previous entry's snapshot is unreadable, cannot extend trail: %w (resolve the corruption or run `clim trail prune` to recover)", err)
 	}
 
 	nextIdx := 0
@@ -411,14 +471,25 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 		Time:      time.Now().UTC(),
 		Operation: op,
 		Label:     label,
+		Summary:   summary,
 	}
-	summary, err := summarize(r, lf, &snap)
-	if err != nil {
-		return nil, fmt.Errorf("trail: previous entry's snapshot is unreadable, cannot extend trail: %w (resolve the corruption or run `clim trail prune` to recover)", err)
-	}
-	entry.Summary = summary
 	lf.Entries = append(lf.Entries, entry)
+
+	// Write the object, then commit the log. If saveLog fails after a
+	// fresh object was written, roll back: delete the new file so we
+	// don't leak an orphan that prune would later GC anyway. We do
+	// NOT roll back if writeObject reused an existing matching object
+	// (idempotent path) — distinguishing those without an extra stat
+	// would be racy, so writeObject returns whether it created a new
+	// file.
+	createdObject, err := writeObjectReportingCreated(r, id, body)
+	if err != nil {
+		return nil, fmt.Errorf("writing trail object: %w", err)
+	}
 	if err := saveLog(r, lf); err != nil {
+		if createdObject {
+			_ = os.Remove(r.objectPath(id))
+		}
 		return nil, err
 	}
 	return &entry, nil

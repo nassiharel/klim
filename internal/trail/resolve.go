@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -127,6 +128,11 @@ func resolveSpec(lf *logFile, refSpec string) (*Entry, error) {
 			for id := range seenObject {
 				short = append(short, id.Short())
 			}
+			// Sort so the ambiguous-ref message is stable across
+			// runs — Go's map iteration order is randomized, and
+			// without sorting users would see a different ordering
+			// each time they retried the same broken ref.
+			sort.Strings(short)
 			return nil, fmt.Errorf("trail: ref %q is ambiguous (matches %d distinct objects: %s)",
 				refSpec, len(seenObject), strings.Join(short, ", "))
 		}

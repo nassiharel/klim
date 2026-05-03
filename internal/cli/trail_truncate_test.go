@@ -2,26 +2,38 @@ package cli
 
 import "testing"
 
-// TestTruncate_PreservesUTF8 guards against splitting multi-byte runes
-// mid-codepoint when shortening labels/summaries for the trail-log
-// table. A byte-wise truncation would emit broken UTF-8 for valid
-// non-ASCII input ("中" is 3 bytes; cutting at byte index 2 produces
-// invalid output).
-func TestTruncate_PreservesUTF8(t *testing.T) {
+// TestTruncate_PreservesUTF8AndDisplayWidth guards against two
+// distinct bugs:
+//   - splitting multi-byte runes mid-codepoint (would emit invalid UTF-8)
+//   - counting runes instead of display columns (would misalign the
+//     tabwriter table for CJK/emoji where one rune occupies two cells)
+//
+// All expected widths use go-runewidth's accounting: ASCII = 1 col,
+// CJK = 2 cols.
+func TestTruncate_PreservesUTF8AndDisplayWidth(t *testing.T) {
 	cases := []struct {
 		in   string
 		n    int
 		want string
 	}{
-		{"hello", 10, "hello"},          // shorter than limit, returned as-is
-		{"hello", 5, "hello"},           // exactly at limit
-		{"hello world", 5, "hell…"},     // ASCII truncation
-		{"中文label", 4, "中文l…"},          // mixed, rune-counted
-		{"中文中文中文", 3, "中文…"},            // pure CJK
-		{"中文", 2, "中文"},                 // exactly at limit, returned as-is
-		{"中文", 5, "中文"},                 // CJK fits
-		{"é", 1, "é"},                   // n=1 returns input untouched
-		{"naïve renaming", 6, "naïve…"}, // accented char preserved
+		// ASCII fits.
+		{"hello", 10, "hello"},
+		// ASCII exactly at limit.
+		{"hello", 5, "hello"},
+		// ASCII truncation: keep budget-1 cells, then ellipsis.
+		{"hello world", 5, "hell…"},
+		// CJK fits exactly: "中文" is 4 columns, n=4 ⇒ no truncation.
+		{"中文", 4, "中文"},
+		// CJK shorter limit: budget=3 ⇒ "中" (2 cols) + "…" (1 col) = 3.
+		{"中文中文", 3, "中…"},
+		// Mixed: "中a" is 3 cols, n=3 ⇒ no truncation.
+		{"中a", 3, "中a"},
+		// Mixed truncation: "中文label" is 9 cols; n=4 ⇒ "中" (2) + "…" (1).
+		{"中文label", 4, "中…"},
+		// Accented char (1 col) preserved.
+		{"naïve renaming", 6, "naïve…"},
+		// n=1 returns input untouched (no room for ellipsis).
+		{"é", 1, "é"},
 	}
 	for _, c := range cases {
 		got := truncate(c.in, c.n)

@@ -685,48 +685,48 @@ func TestDecodeSnapshot_FutureVersionStillSaysUpgrade(t *testing.T) {
 // Entry.Object is later passed to objectPath, so accepting non-hex
 // values would let a corrupted log read files outside objects/.
 func TestLoadLog_RejectsInvalidObjectID(t *testing.T) {
-dir := useTempDir(t)
-if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
-t.Fatal(err)
-}
-logPath := filepath.Join(dir, "log.yaml")
-body, err := os.ReadFile(logPath)
-if err != nil {
-t.Fatal(err)
-}
-// Replace the object id with a path-traversal-looking string.
-tampered := strings.Replace(string(body), "object: ", "object: ../etc/passwd #", 1)
-if err := os.WriteFile(logPath, []byte(tampered), 0o644); err != nil { //nolint:gosec
-t.Fatal(err)
-}
-if _, err := Log(LogOptions{}); err == nil {
-t.Fatal("expected error loading log with invalid object id")
-} else if !strings.Contains(err.Error(), "invalid object id") {
-t.Fatalf("got: %v", err)
-}
+	dir := useTempDir(t)
+	if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "log.yaml")
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Replace the object id with a path-traversal-looking string.
+	tampered := strings.Replace(string(body), "object: ", "object: ../etc/passwd #", 1)
+	if err := os.WriteFile(logPath, []byte(tampered), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	if _, err := Log(LogOptions{}); err == nil {
+		t.Fatal("expected error loading log with invalid object id")
+	} else if !strings.Contains(err.Error(), "invalid object id") {
+		t.Fatalf("got: %v", err)
+	}
 }
 
 // TestLoadLog_RejectsTrailingYAMLDocs ensures the strict-decoding
 // guarantee covers extra YAML documents glued onto log.yaml.
 func TestLoadLog_RejectsTrailingYAMLDocs(t *testing.T) {
-dir := useTempDir(t)
-if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
-t.Fatal(err)
-}
-logPath := filepath.Join(dir, "log.yaml")
-body, err := os.ReadFile(logPath)
-if err != nil {
-t.Fatal(err)
-}
-tampered := append(body, []byte("---\nschema_version: 1\nentries: []\n")...)
-if err := os.WriteFile(logPath, tampered, 0o644); err != nil { //nolint:gosec
-t.Fatal(err)
-}
-if _, err := Log(LogOptions{}); err == nil {
-t.Fatal("expected error loading log with trailing YAML doc")
-} else if !strings.Contains(err.Error(), "trailing YAML content") {
-t.Fatalf("got: %v", err)
-}
+	dir := useTempDir(t)
+	if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "log.yaml")
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := append(body, []byte("---\nschema_version: 1\nentries: []\n")...)
+	if err := os.WriteFile(logPath, tampered, 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	if _, err := Log(LogOptions{}); err == nil {
+		t.Fatal("expected error loading log with trailing YAML doc")
+	} else if !strings.Contains(err.Error(), "trailing YAML content") {
+		t.Fatalf("got: %v", err)
+	}
 }
 
 // TestCapture_FailsClosedOnCorruptPredecessor ensures that a corrupted
@@ -734,21 +734,123 @@ t.Fatalf("got: %v", err)
 // an entry with an empty Summary. Otherwise users could keep extending
 // broken history indefinitely.
 func TestCapture_FailsClosedOnCorruptPredecessor(t *testing.T) {
-dir := useTempDir(t)
-first, err := Capture(OpCapture, "", orderedTools())
-if err != nil {
-t.Fatal(err)
+	dir := useTempDir(t)
+	first, err := Capture(OpCapture, "", orderedTools())
+	if err != nil {
+		t.Fatal(err)
+	}
+	objPath := filepath.Join(dir, "objects", string(first.Object[:2]), string(first.Object[2:])+".yaml")
+	if err := os.WriteFile(objPath, []byte("garbage\n"), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	tools := append(orderedTools(), fakeTool("new", "1.0", registry.SourceBrew, "/n"))
+	_, err = Capture(OpCapture, "", tools)
+	if err == nil {
+		t.Fatal("expected capture to fail on corrupt predecessor, got nil")
+	}
+	if !strings.Contains(err.Error(), "previous entry") {
+		t.Fatalf("expected 'previous entry' in error, got: %v", err)
+	}
 }
-objPath := filepath.Join(dir, "objects", string(first.Object[:2]), string(first.Object[2:])+".yaml")
-if err := os.WriteFile(objPath, []byte("garbage\n"), 0o644); err != nil { //nolint:gosec
-t.Fatal(err)
+
+// TestDecodeSnapshot_RejectsTrailingDocs ensures the strict-decoding
+// guarantee covers object files too: a hand-edited file with a
+// trailing YAML document is rejected rather than silently accepted.
+func TestDecodeSnapshot_RejectsTrailingDocs(t *testing.T) {
+	body := []byte("schema_version: 1\ntools: []\nos: linux\narch: amd64\n---\nschema_version: 1\ntools: []\nos: linux\narch: amd64\n")
+	_, err := decodeSnapshot(body, ObjectID(strings.Repeat("0", 64)))
+	if err == nil {
+		t.Fatal("expected error decoding trailing-doc snapshot")
+	}
+	if !strings.Contains(err.Error(), "trailing YAML content") {
+		t.Errorf("expected 'trailing YAML content' in error, got: %v", err)
+	}
 }
-tools := append(orderedTools(), fakeTool("new", "1.0", registry.SourceBrew, "/n"))
-_, err = Capture(OpCapture, "", tools)
-if err == nil {
-t.Fatal("expected capture to fail on corrupt predecessor, got nil")
+
+// TestLoadLog_MissingButRemnantsExist guards against silently
+// re-initializing an empty trail when log.yaml has been lost while
+// other state (HEAD or objects/) is still on disk. That would hide
+// the prior history behind a fresh @0 entry instead of surfacing the
+// corruption.
+func TestLoadLog_MissingButRemnantsExist(t *testing.T) {
+	dir := useTempDir(t)
+	if _, err := Capture(OpCapture, "", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(dir, "log.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	// HEAD + objects/ still exist; loading must fail closed.
+	if _, err := Log(LogOptions{}); err == nil {
+		t.Fatal("expected error when log.yaml is missing but remnants remain")
+	} else if !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("got: %v", err)
+	}
 }
-if !strings.Contains(err.Error(), "previous entry") {
-t.Fatalf("expected 'previous entry' in error, got: %v", err)
+
+// TestLoadLog_RejectsDuplicateIndex verifies that hand-edited logs
+// with non-unique entry indices fail closed — otherwise Resolve("@N")
+// would silently return the first match instead of erroring out.
+func TestLoadLog_RejectsDuplicateIndex(t *testing.T) {
+	dir := useTempDir(t)
+	if _, err := Capture(OpCapture, "first", orderedTools()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Capture(OpCapture, "second", append(orderedTools(), fakeTool("x", "1.0", registry.SourceBrew, "/x"))); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(dir, "log.yaml")
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Replace the index of the second entry with the first one's index.
+	tampered := strings.Replace(string(body), "index: 1", "index: 0", 1)
+	if err := os.WriteFile(logPath, []byte(tampered), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	if _, err := Log(LogOptions{}); err == nil {
+		t.Fatal("expected error on duplicate index")
+	} else if !strings.Contains(err.Error(), "duplicate") && !strings.Contains(err.Error(), "increasing") {
+		t.Fatalf("got: %v", err)
+	}
 }
+
+// TestCapture_OrphanCleanupOnSaveFailure exercises the rollback path
+// when saveLog fails after writeObject succeeded. We can't easily
+// induce a real saveLog failure under the temp dir, so this test
+// asserts the surface contract by checking that a corrupted
+// predecessor (which causes summarize to error BEFORE writeObject
+// runs in the new ordering) leaves no orphaned object on disk.
+func TestCapture_NoOrphanWhenSummarizeFails(t *testing.T) {
+	dir := useTempDir(t)
+	first, err := Capture(OpCapture, "", orderedTools())
+	if err != nil {
+		t.Fatal(err)
+	}
+	objPath := filepath.Join(dir, "objects", string(first.Object[:2]), string(first.Object[2:])+".yaml")
+	if err := os.WriteFile(objPath, []byte("garbage\n"), 0o644); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+	// Try to capture a *different* environment so a brand-new object
+	// would have been written under the old ordering; under the new
+	// ordering, summarize fails first and nothing is written.
+	tools := append(orderedTools(), fakeTool("brand-new", "9.9", registry.SourceBrew, "/n"))
+	_, err = Capture(OpCapture, "", tools)
+	if err == nil {
+		t.Fatal("expected capture failure on corrupt predecessor")
+	}
+	// Walk objects/ and confirm no second object was written. The
+	// only file present should be the corrupted one we put there.
+	objsDir := filepath.Join(dir, "objects")
+	count := 0
+	_ = filepath.Walk(objsDir, func(path string, info os.FileInfo, werr error) error {
+		if werr == nil && !info.IsDir() {
+			count++
+		}
+		return nil
+	})
+	if count != 1 {
+		t.Errorf("expected 1 object on disk (the corrupted predecessor), found %d", count)
+	}
 }
