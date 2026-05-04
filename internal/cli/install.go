@@ -20,9 +20,10 @@ clim picks the package manager for each tool using this precedence:
   2. defaults.preferred_source in config.yaml (global default)
   3. OS-priority fallback (e.g. brew on macOS, winget on Windows)
 
-Tools that are already installed are skipped silently. Tools missing
-from the catalog or without a package on the current OS are reported
-but do not stop the run.
+Tools that are already installed are skipped (listed under "Already
+installed" in the plan summary). Tools missing from the catalog or
+without a package on the current OS are reported but do not stop the
+run.
 
 Examples:
   clim install jq fzf

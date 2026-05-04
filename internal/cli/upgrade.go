@@ -16,7 +16,7 @@ var upgradeCmd = &cobra.Command{
 
 For each target:
   · installed with an update available → upgrade
-  · installed and already at the latest → skipped silently
+  · installed and already at the latest → skipped (listed under "Up to date")
   · not installed                       → skipped (use 'clim install' for those)
 
 Source precedence is the same as 'clim install':

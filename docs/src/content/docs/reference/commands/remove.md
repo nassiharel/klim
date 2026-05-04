@@ -22,7 +22,7 @@ At least one positional tool name **or** `--pack` is required.
 | State | Outcome |
 |-------|---------|
 | Installed | remove |
-| Not installed | skipped silently (`not_installed`) |
+| Not installed | skipped (`not_installed`) |
 | `clim` itself | refused — use the OS uninstaller for clim |
 | Not in catalog | reported, skipped |
 

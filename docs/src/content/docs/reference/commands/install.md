@@ -63,8 +63,8 @@ clim install jq --output json
 
 For each target:
 
-- **Already installed** → skipped (silent in text mode, listed under
-  `skipped: already_installed` in JSON).
+- **Already installed** → skipped (listed under "Already installed" in
+  the plan summary, and as `skipped: already_installed` in JSON).
 - **Not in catalog** → reported as a warning, skipped.
 - **No package on this OS** → reported, skipped.
 - **No package manager available** → reported, skipped.

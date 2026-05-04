@@ -16,7 +16,7 @@ var removeCmd = &cobra.Command{
 
 For each target:
   · installed   → remove
-  · not installed → skipped silently
+  · not installed → skipped (listed under "Not installed")
   · "clim" itself → refused (use the OS uninstaller for clim)
 
 Source precedence is the same as 'clim install'.
