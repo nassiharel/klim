@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/nassiharel/clim/internal/teamfile"
@@ -43,7 +44,7 @@ func (s *Server) pageProjects(w http.ResponseWriter, r *http.Request) {
 	rows := make([]projectRow, 0, len(projects))
 	for _, p := range projects {
 		row := projectRow{Entry: p, PathURL: url.PathEscape(p.Path)}
-		filePath := p.Path + string(os.PathSeparator) + teamfile.FileName
+		filePath := filepath.Join(p.Path, teamfile.FileName)
 		if _, err := os.Stat(filePath); err == nil {
 			row.HasFile = true
 			tf, perr := teamfile.Parse(filePath)
@@ -97,7 +98,7 @@ func (s *Server) pageProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	view := projectDetailView{Entry: entry}
-	filePath := entry.Path + string(os.PathSeparator) + teamfile.FileName
+	filePath := filepath.Join(entry.Path, teamfile.FileName)
 	if _, statErr := os.Stat(filePath); statErr != nil {
 		if errors.Is(statErr, os.ErrNotExist) {
 			view.HasFile = false

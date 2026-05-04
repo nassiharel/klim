@@ -2,8 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -120,11 +122,18 @@ func runBrowser(cmd *cobra.Command, _ []string) error {
 }
 
 // isLoopbackAddr is the CLI-side mirror of internal/web.isLoopback,
-// used only to decide whether to generate an auth token.
+// used only to decide whether to generate an auth token. We reuse
+// net.ParseIP(...).IsLoopback() so all of 127.0.0.0/8 (e.g.
+// 127.0.1.1 on Debian) plus ::1 round-trip identically — keeping
+// the CLI's auth-token decision in lockstep with the server's
+// non-loopback bind refusal.
 func isLoopbackAddr(host string) bool {
-	switch host {
-	case "", "127.0.0.1", "localhost", "::1":
+	host = strings.TrimSpace(host)
+	if host == "" || host == "localhost" {
 		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
 	}
 	return false
 }
