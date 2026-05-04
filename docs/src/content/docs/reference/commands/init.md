@@ -13,11 +13,12 @@ clim init [flags]
 
 ## Flags
 
-| Flag | Description |
-|------|-------------|
-| `--all` | Include all installed tools (skip project detection) |
-| `--min-version` | Include minimum version constraints (>=X.Y) |
-| `--name` | Project name for the manifest |
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--all` | | Include all installed tools (skip project detection) |
+| `--min-version` | | Include minimum version constraints (`>=X.Y`) |
+| `--name` | | Project name for the manifest |
+| `--force` | `-f` | Overwrite an existing `.clim.yaml` (clim refuses by default to protect a team-shared file) |
 
 ## Detection
 
@@ -51,6 +52,9 @@ clim init --min-version
 
 # Set project name
 clim init --name my-project
+
+# Overwrite an existing .clim.yaml
+clim init --force
 ```
 
 ## Output

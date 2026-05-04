@@ -17,6 +17,7 @@ import (
 var initMinVersionFlag bool
 var initNameFlag string
 var initAllFlag bool
+var initForceFlag bool
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -28,11 +29,15 @@ package.json, go.mod, CI workflows, Helm charts, Terraform files, and more.
 Only tools that are both detected AND installed are included (so versions
 can be pinned). Tools detected but not installed are listed as suggestions.
 
+When .clim.yaml already exists clim refuses to clobber it; pass --force
+(or -f) to overwrite.
+
 Usage:
   clim init                        # auto-detect from project files
   clim init --all                  # include ALL installed tools (no detection)
   clim init --min-version          # include >=X.Y version constraints
-  clim init --name my-project      # set project name`,
+  clim init --name my-project      # set project name
+  clim init --force                # overwrite an existing .clim.yaml`,
 	RunE: runInit,
 }
 
@@ -40,15 +45,18 @@ func init() {
 	initCmd.Flags().BoolVar(&initMinVersionFlag, "min-version", false, "Include minimum version constraints (>=X.Y)")
 	initCmd.Flags().StringVar(&initNameFlag, "name", "", "Project name for the manifest")
 	initCmd.Flags().BoolVar(&initAllFlag, "all", false, "Include all installed tools (skip project detection)")
+	initCmd.Flags().BoolVarP(&initForceFlag, "force", "f", false, "Overwrite an existing .clim.yaml")
 	// Registered in root.go with command group.
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
 	outPath := filepath.Join(".", teamfile.FileName)
 
-	// Check if file already exists.
-	if _, err := os.Stat(outPath); err == nil {
-		return fmt.Errorf("%s already exists (delete it first or edit manually)", outPath)
+	// Refuse to clobber an existing manifest unless --force is set.
+	// The error nudges the user toward the explicit opt-in instead of
+	// silently overwriting team-shared config.
+	if _, err := os.Stat(outPath); err == nil && !initForceFlag {
+		return fmt.Errorf("%s already exists — pass --force (-f) to overwrite, or edit it manually", outPath)
 	}
 
 	// Scan installed tools. Use full resolution when --min-version needs versions.
