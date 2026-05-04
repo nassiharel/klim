@@ -255,6 +255,7 @@ type Model struct {
 	auditFindings    []audit.Finding    // security audit findings
 	auditLicenses    map[string]int     // license counts
 	complianceResult *compliance.Result // compliance check result (nil = no policy)
+	complianceIndex  *compliance.Index  // fast per-tool compliance lookup
 	complianceError  string             // non-empty when policy failed to load
 	cachedScore      score.Result       // computed once in runDoctor
 	doctorScroll     int                // scroll offset for doctor tab
@@ -425,6 +426,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.auditFindings = nil
 	m.auditLicenses = nil
 	m.complianceResult = nil
+	m.complianceIndex = nil
 	m.complianceError = ""
 	m.doctorChecked = false
 	m.doctorScroll = 0
@@ -1164,6 +1166,12 @@ func RunWithConfig(cfg *config.Config, warnings []string) error {
 func (m *Model) nextPackItem() tea.Cmd {
 	for i := range m.packItems {
 		if m.packItems[i].status == packItemPending {
+			// Block install of non-compliant tools.
+			if blocked, reason := m.complianceBlocksInstall(m.packItems[i].name); blocked {
+				m.packItems[i].status = packItemSkipped
+				m.packItems[i].errMsg = reason
+				continue
+			}
 			m.packItems[i].status = packItemRunning
 			return execPackItemCmd(i, m.packItems[i].cmdArgs)
 		}
@@ -1949,7 +1957,7 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 	if m.cfg != nil {
 		policyPath = m.cfg.Compliance.Policy
 	}
-	m.complianceResult, m.complianceError = runComplianceForTUI(m.tools, policyPath)
+	m.complianceResult, m.complianceIndex, m.complianceError = runComplianceForTUI(m.tools, policyPath)
 
 	// Compute environment health score using precomputed data.
 	auditW, auditI := audit.CountBySeverity(m.auditFindings)
@@ -2243,6 +2251,12 @@ func (m Model) rowCount() int {
 func (m *Model) nextBackupInstall() tea.Cmd {
 	for i := range m.backupItems {
 		if m.backupItems[i].status == backupPending {
+			// Block install of non-compliant tools.
+			if blocked, reason := m.complianceBlocksInstall(m.backupItems[i].name); blocked {
+				m.backupItems[i].status = backupSkipped
+				m.backupItems[i].errMsg = reason
+				continue
+			}
 			m.backupItems[i].status = backupRunning
 			m.cursor = i // auto-scroll to installing item
 			m.statusMsg = fmt.Sprintf("Installing %s...", itemLabel(m.backupItems[i].name, m.backupItems[i].display))

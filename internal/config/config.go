@@ -60,7 +60,11 @@ type UIConfig struct {
 
 // ComplianceConfig controls compliance policy checking.
 type ComplianceConfig struct {
-	Policy string `yaml:"policy,omitempty"` // path to .clim-policy.yaml
+	Policy          string   `yaml:"policy,omitempty"`           // local path to policy file
+	URL             string   `yaml:"url,omitempty"`              // remote URL to fetch policy from
+	AutoRefresh     bool     `yaml:"auto_refresh,omitempty"`     // auto-refresh from URL when stale
+	RefreshInterval Duration `yaml:"refresh_interval,omitempty"` // refresh interval (default 24h)
+	BlockInstalls   bool     `yaml:"block_installs,omitempty"`   // hard-block non-compliant installs
 }
 
 // Duration wraps time.Duration for YAML marshaling as a human-readable string
@@ -108,6 +112,11 @@ func Default() *Config {
 		UI: UIConfig{
 			DefaultTab: "installed",
 			ShowPath:   true,
+		},
+		Compliance: ComplianceConfig{
+			AutoRefresh:     true,
+			RefreshInterval: Duration{24 * time.Hour},
+			BlockInstalls:   true,
 		},
 	}
 }

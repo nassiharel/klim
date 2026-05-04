@@ -57,6 +57,13 @@ func (m Model) handleKeyConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "y", "Y":
 		action := *m.pendingAction
 		m.pendingAction = nil
+		// Block install of non-compliant tools.
+		if action.action == "install" && action.toolIdx >= 0 && action.toolIdx < len(m.tools) {
+			if blocked, reason := m.complianceBlocksInstall(m.tools[action.toolIdx].Name); blocked {
+				m.statusMsg = fmt.Sprintf("✗ %s", reason)
+				return m, nil
+			}
+		}
 		slog.Info("executing tool action", "action", action.action, "cmd", strings.Join(action.cmdArgs, " "))
 		m.statusMsg = fmt.Sprintf("Running %s...", action.action)
 		return m, execToolActionCmd(action)

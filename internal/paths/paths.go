@@ -73,6 +73,11 @@ func CompliancePolicy() (string, error) {
 	return Join("compliance", "policy.yaml")
 }
 
+// ComplianceCachePath returns the path to the cached remote policy.
+func ComplianceCachePath() (string, error) {
+	return Join("compliance", "policy-cache.yaml")
+}
+
 // TrailDir returns the path to the trail (env-history) directory.
 func TrailDir() (string, error) {
 	return Join("trail")

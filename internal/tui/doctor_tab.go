@@ -315,8 +315,8 @@ func (m Model) renderComplianceView() string {
 }
 
 // runComplianceForTUI loads the compliance policy and checks tools against it.
-// Returns (result, error string). Error is non-empty when policy exists but can't be loaded.
-func runComplianceForTUI(tools []registry.Tool, policyPath string) (*compliance.Result, string) {
+// Returns (result, index, error string). Error is non-empty when policy exists but can't be loaded.
+func runComplianceForTUI(tools []registry.Tool, policyPath string) (*compliance.Result, *compliance.Index, string) {
 	if policyPath == "" {
 		// Check default global location.
 		if p, err := paths.CompliancePolicy(); err == nil {
@@ -326,12 +326,13 @@ func runComplianceForTUI(tools []registry.Tool, policyPath string) (*compliance.
 		}
 	}
 	if policyPath == "" {
-		return nil, ""
+		return nil, nil, ""
 	}
 	policy, err := compliance.LoadPolicy(policyPath)
 	if err != nil {
-		return nil, fmt.Sprintf("Failed to load policy %s: %v", policyPath, err)
+		return nil, nil, fmt.Sprintf("Failed to load policy %s: %v", policyPath, err)
 	}
 	result := compliance.Check(policy, tools)
-	return &result, ""
+	idx := compliance.BuildIndex(policy, tools)
+	return &result, idx, ""
 }
