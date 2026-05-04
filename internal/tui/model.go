@@ -677,11 +677,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.statusMsg = fmt.Sprintf("✓ %s refreshed", msg.tool.DisplayName)
 		m.applyFilter()
-		// Rebuild the compliance index from the cached policy so badges
-		// and BlockInstalls reflect the post-action state — without
-		// this the index goes stale until the next full doctor run.
+		// Recompute compliance result/index AND dashboard score from
+		// the cached policy so badges, doctor verdict, and the score
+		// gauge all reflect the post-action state — without this the
+		// doctor tab and dashboard kept showing pre-action numbers
+		// until the next full scan.
 		if m.complianceIndex != nil && m.complianceIndex.HasPolicy() {
-			m.complianceIndex = compliance.BuildIndex(m.complianceIndex.Policy(), m.tools)
+			m.recomputeComplianceDerivedState()
 		}
 		// Persist the updated state so future runs see the refreshed tool
 		// — but only when the original scan produced a complete tools list.
@@ -695,12 +697,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case complianceLoadedMsg:
-		// Async fetch of compliance.url completed. Rebuild the index
-		// against the CURRENT m.tools — a snapshot from command-
+		// Async fetch of compliance.url completed. Rebuild Result +
+		// Index against the CURRENT m.tools — a snapshot from command-
 		// dispatch time would lose any install/upgrade/remove that
-		// happened while the fetch was in flight.
+		// happened while the fetch was in flight. Dashboard score is
+		// recomputed too so the gauge reflects the new policy.
 		if msg.errorMsg != "" {
 			m.complianceError = msg.errorMsg
+			m.recomputeComplianceDerivedState()
 			return m, nil
 		}
 		if msg.policy != nil {
@@ -708,6 +712,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.complianceResult = &result
 			m.complianceIndex = compliance.BuildIndex(msg.policy, m.tools)
 			m.complianceError = ""
+			m.recomputeComplianceDerivedState()
 			// Rebuild the menu so blocked actions get the new badge.
 			if m.showDetail {
 				m.buildToolMenu()
@@ -2014,6 +2019,33 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) tea.Cmd {
 	m.doctorScroll = 0
 
 	return loadComplianceURLCmd(m.cfg)
+}
+
+// recomputeComplianceDerivedState rebuilds m.complianceResult,
+// m.complianceIndex (via the existing policy in the index) and the
+// dashboard score against m.tools. Used after a single-tool refresh
+// or async policy load so the doctor view + dashboard don't show
+// stale verdicts until the next full scan. Safe to call when no
+// policy is loaded — it bails out and leaves derived state alone.
+func (m *Model) recomputeComplianceDerivedState() {
+	policy := m.complianceIndex.Policy()
+	if policy != nil {
+		result := compliance.Check(policy, m.tools)
+		m.complianceResult = &result
+		m.complianceIndex = compliance.BuildIndex(policy, m.tools)
+	}
+	// Dashboard score reads complianceResult + auditFindings; recompute
+	// it against the latest data even when there's no policy so a
+	// missing-tool-now-installed flips the score.
+	auditW, auditI := audit.CountBySeverity(m.auditFindings)
+	m.cachedScore = score.Compute(score.Input{
+		Tools:         m.tools,
+		DoctorIssues:  m.doctorIssues,
+		AuditWarnings: auditW,
+		AuditInfos:    auditI,
+		CompResult:    m.complianceResult,
+		ComplianceErr: m.complianceError,
+	})
 }
 
 // --- Actions ---
