@@ -15,17 +15,21 @@ import (
 // Atomicity. Since Go 1.5, os.Rename uses MoveFileExW(MOVEFILE_REPLACE_EXISTING)
 // on Windows, so a single rename replaces an existing target without the
 // previous remove-and-retry dance. POSIX rename(2) is always atomic for
-// overwrite. Either the old contents or the new contents are visible at
-// path at every point — there is no window where path doesn't exist.
+// overwrite. **For an overwrite, either the old contents or the new
+// contents are visible at the resolved target at every point — there
+// is no window where the target is missing.** First-time writes are
+// not "atomic" in this sense (the target obviously starts absent and
+// becomes present at rename time); the guarantee applies only when
+// path was already populated.
 //
 // Symlink preservation. When path is a symlink (including a *dangling*
 // symlink whose target doesn't exist yet), the temp file is created
-// next to the resolved target and the rename targets that path. The
-// symlink itself is left intact — repos that keep `.clim.yaml` as a
-// link to a shared template don't lose that setup on overwrite.
-// Symlink chains are followed up to a sane depth so a multi-hop link
-// still resolves correctly; cycles are detected and surface as a
-// rename failure rather than a silent write to the wrong place.
+// next to the resolved target and the rename writes to that target.
+// The symlink itself is left intact — repos that keep `.clim.yaml` as
+// a link to a shared template don't lose that setup on overwrite.
+// Symlink chains are followed up to maxSymlinkDepth hops; if a cycle
+// is detected, resolveLinkTarget returns an error *before* any temp
+// file is created and AtomicWrite never attempts the rename.
 func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 	target, err := resolveLinkTarget(path)
 	if err != nil {

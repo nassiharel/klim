@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -222,14 +224,16 @@ func TestInit_ForceProjectDetectedButNoneInstalled(t *testing.T) {
 // `clim init` refuses to clobber it the same way it would refuse
 // for a regular existing file.
 func TestInit_DanglingSymlinkRequiresForce(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation not reliable on Windows CI")
-	}
 	resetInitFlags(t)
 	dir := chdirTemp(t)
 	redirectConfig(t)
 	// Dangling symlink: .clim.yaml → /nonexistent/template.yaml.
-	if err := os.Symlink("/nonexistent/template.yaml", filepath.Join(dir, teamfile.FileName)); err != nil {
+	// Skip-on-permission-error so this exercises Windows CI when
+	// developer mode is enabled and skips when it isn't.
+	if err := tryCreateSymlink("/nonexistent/template.yaml", filepath.Join(dir, teamfile.FileName)); err != nil {
+		if isSymlinkPermissionError(err) {
+			t.Skipf("symlink creation requires elevated privileges: %v", err)
+		}
 		t.Fatal(err)
 	}
 	cmd := withInitCtx(t)
@@ -249,6 +253,32 @@ func TestInit_DanglingSymlinkRequiresForce(t *testing.T) {
 	if info.Mode()&os.ModeSymlink == 0 {
 		t.Error("dangling symlink was replaced despite the --force refusal")
 	}
+}
+
+// tryCreateSymlink wraps os.Symlink for tests; on Windows CI without
+// developer mode it returns ERROR_PRIVILEGE_NOT_HELD which the caller
+// translates into t.Skip.
+func tryCreateSymlink(oldname, newname string) error {
+	return os.Symlink(oldname, newname)
+}
+
+// isSymlinkPermissionError reports whether err is the
+// "privilege not held" error emitted by Windows when the user lacks
+// the SeCreateSymbolicLinkPrivilege (i.e. not admin and developer mode
+// is off). Matches both the wrapped fs.ErrPermission case and the
+// raw "privilege not held" string.
+func isSymlinkPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, fs.ErrPermission) {
+		return true
+	}
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "privilege") || strings.Contains(msg, "not held")
 }
 
 // Compile-time assertion that registry.Tool type is still importable.

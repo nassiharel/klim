@@ -18,7 +18,7 @@ clim init [flags]
 | `--all` | Include all installed tools (skip project detection) |
 | `--min-version` | Include minimum version constraints (`>=X.Y`) |
 | `--name` | Project name for the manifest |
-| `--force` | Overwrite an existing `.clim.yaml` (clim refuses by default to protect a team-shared file). When `--force` is overwriting an existing manifest, clim refuses to write an empty result — either when `--all` is used and no tools are installed at all, or when project detection found tools but none of them are installed yet. The existing manifest is preserved untouched in both cases. Dangling `.clim.yaml` symlinks are also recognised as "existing", so `--force` is required to replace them. |
+| `--force` | Overwrite an existing `.clim.yaml` (clim refuses by default to protect a team-shared file). When `--force` is overwriting an existing manifest, clim refuses to write an empty result — either when `--all` is used and no tools are installed at all, or when project detection found tools but none of them are installed yet. The existing manifest is preserved untouched in both cases. A dangling `.clim.yaml` symlink also counts as "existing" for the safety check; `--force` is required to write through it (the symlink itself is preserved — see *Symlinks* below). |
 
 ## Detection
 
@@ -72,7 +72,9 @@ optional:
   - name: k9s
 ```
 
-If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` updates the link's target rather than replacing the symlink with a regular file. This works even when the link is dangling — the target file is created on first write and the link is left intact. Symlink chains are followed up to 32 levels; cycles are reported as errors.
+## Symlinks
+
+If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` writes through the link to the target file rather than replacing the link with a regular file. This works even when the link is dangling — the target file is created on first write and the link is left intact. Symlink chains are followed up to 32 levels; cycles are reported as errors.
 
 ## See Also
 

@@ -1,12 +1,42 @@
 package fileutil
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+// mustSymlink creates a symlink, skipping the test if the platform
+// refuses (typically Windows without admin or developer-mode). On any
+// other failure it fails the test. By trying first instead of
+// blanket-skipping on Windows, CI runners that *do* have developer
+// mode enabled (the GitHub Actions windows-latest image since 2023
+// when running as a regular user with developer mode) actually
+// exercise the symlink test path.
+func mustSymlink(t *testing.T, oldname, newname string) {
+	t.Helper()
+	err := os.Symlink(oldname, newname)
+	if err == nil {
+		return
+	}
+	if errors.Is(err, fs.ErrPermission) {
+		t.Skipf("symlink creation requires elevated privileges on this platform: %v", err)
+	}
+	// Windows-specific message when developer mode isn't enabled and
+	// the user isn't admin: ERROR_PRIVILEGE_NOT_HELD ("A required
+	// privilege is not held by the client.").
+	if runtime.GOOS == "windows" {
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "privilege") || strings.Contains(msg, "not held") {
+			t.Skipf("Windows symlink creation requires admin or developer-mode: %v", err)
+		}
+	}
+	t.Fatalf("os.Symlink(%q, %q): %v", oldname, newname, err)
+}
 
 func TestAtomicWrite(t *testing.T) {
 	dir := t.TempDir()
@@ -44,20 +74,13 @@ func TestAtomicWriteOverwrite(t *testing.T) {
 // shared template would otherwise lose their setup on the first
 // `clim init --force`.
 func TestAtomicWritePreservesSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		// Symlink creation on Windows requires admin or developer-mode
-		// privileges; skip rather than gate the rest of CI on that.
-		t.Skip("symlink creation not reliable on Windows CI")
-	}
 	dir := t.TempDir()
 	target := filepath.Join(dir, "real.txt")
 	if err := os.WriteFile(target, []byte("v1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(dir, "link.txt")
-	if err := os.Symlink(target, link); err != nil {
-		t.Fatal(err)
-	}
+	mustSymlink(t, target, link)
 
 	if err := AtomicWrite(link, []byte("v2"), 0o644); err != nil {
 		t.Fatalf("AtomicWrite via symlink: %v", err)
@@ -85,15 +108,10 @@ func TestAtomicWritePreservesSymlink(t *testing.T) {
 // file and leave the link intact, not replace the link with a regular
 // file.
 func TestAtomicWritePreservesDanglingSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation not reliable on Windows CI")
-	}
 	dir := t.TempDir()
 	target := filepath.Join(dir, "real.txt") // intentionally does NOT exist
 	link := filepath.Join(dir, "link.txt")
-	if err := os.Symlink(target, link); err != nil {
-		t.Fatal(err)
-	}
+	mustSymlink(t, target, link)
 
 	if err := AtomicWrite(link, []byte("first"), 0o644); err != nil {
 		t.Fatalf("AtomicWrite via dangling symlink: %v", err)
@@ -121,22 +139,15 @@ func TestAtomicWritePreservesDanglingSymlink(t *testing.T) {
 // symlink to a symlink to a regular file. The write must end up at
 // the final regular file, with both intermediate links intact.
 func TestAtomicWriteFollowsSymlinkChain(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation not reliable on Windows CI")
-	}
 	dir := t.TempDir()
 	real := filepath.Join(dir, "real.txt")
 	if err := os.WriteFile(real, []byte("v1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	mid := filepath.Join(dir, "mid.txt")
-	if err := os.Symlink(real, mid); err != nil {
-		t.Fatal(err)
-	}
+	mustSymlink(t, real, mid)
 	top := filepath.Join(dir, "top.txt")
-	if err := os.Symlink(mid, top); err != nil {
-		t.Fatal(err)
-	}
+	mustSymlink(t, mid, top)
 
 	if err := AtomicWrite(top, []byte("v2"), 0o644); err != nil {
 		t.Fatalf("AtomicWrite via symlink chain: %v", err)
@@ -162,9 +173,6 @@ func TestAtomicWriteFollowsSymlinkChain(t *testing.T) {
 // raw relative target; we must resolve it against the symlink's
 // parent dir rather than the process cwd.
 func TestAtomicWriteRelativeSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation not reliable on Windows CI")
-	}
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "sub")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
@@ -176,9 +184,7 @@ func TestAtomicWriteRelativeSymlink(t *testing.T) {
 	}
 	link := filepath.Join(sub, "link.txt")
 	// Relative link from sub/link.txt → ../real.txt
-	if err := os.Symlink("../real.txt", link); err != nil {
-		t.Fatal(err)
-	}
+	mustSymlink(t, "../real.txt", link)
 
 	if err := AtomicWrite(link, []byte("v2"), 0o644); err != nil {
 		t.Fatalf("AtomicWrite via relative symlink: %v", err)
@@ -198,20 +204,13 @@ func TestAtomicWriteRelativeSymlink(t *testing.T) {
 // → link B → link A) is reported as an error rather than spinning
 // forever or silently writing somewhere unexpected.
 func TestAtomicWriteSymlinkCycleDetected(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation not reliable on Windows CI")
-	}
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a")
 	b := filepath.Join(dir, "b")
 	// a → b, b → a — both dangling at creation time, but we still
 	// detect the cycle when resolveLinkTarget walks the chain.
-	if err := os.Symlink(b, a); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(a, b); err != nil {
-		t.Fatal(err)
-	}
+	mustSymlink(t, b, a)
+	mustSymlink(t, a, b)
 
 	err := AtomicWrite(a, []byte("doomed"), 0o644)
 	if err == nil {
