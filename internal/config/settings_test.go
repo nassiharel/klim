@@ -118,6 +118,7 @@ func TestSetting_DisplayReplacesEmptyAndZero(t *testing.T) {
 	cfg := Default()
 	cfg.Marketplace.URL = ""
 	cfg.Performance.Concurrency = 0
+	cfg.Defaults.PreferredSource = ""
 	urlSetting, _ := SettingByKey("marketplace_url")
 	if got := urlSetting.Display(cfg); got != "(default)" {
 		t.Errorf("empty string display = %q, want (default)", got)
@@ -125,5 +126,16 @@ func TestSetting_DisplayReplacesEmptyAndZero(t *testing.T) {
 	concSetting, _ := SettingByKey("performance_concurrency")
 	if got := concSetting.Display(cfg); got != "auto" {
 		t.Errorf("zero int display = %q, want auto", got)
+	}
+	// Empty-choice settings should render as "(default)" too — otherwise
+	// the TUI / web editor shows a blank cell that's indistinguishable
+	// from a missing value.
+	srcSetting, _ := SettingByKey("defaults_preferred_source")
+	if got := srcSetting.Display(cfg); got != "(default)" {
+		t.Errorf("empty choice display = %q, want (default)", got)
+	}
+	cfg.Defaults.PreferredSource = "brew"
+	if got := srcSetting.Display(cfg); got != "brew" {
+		t.Errorf("non-empty choice display = %q, want brew", got)
 	}
 }

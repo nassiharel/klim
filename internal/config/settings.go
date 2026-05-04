@@ -76,7 +76,15 @@ func (s Setting) Display(cfg *Config) string {
 	case SettingDuration:
 		return s.GetDuration(cfg).String()
 	case SettingChoice:
-		return s.GetString(cfg)
+		v := s.GetString(cfg)
+		if v == "" {
+			// Empty is sometimes a meaningful choice ("use the
+			// default"), so render it the same way SettingString
+			// does — keeps blank values from looking ambiguous in
+			// the TUI / web config editor.
+			return "(default)"
+		}
+		return v
 	}
 	return ""
 }
