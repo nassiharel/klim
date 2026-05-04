@@ -264,6 +264,37 @@ func AllSettings() []Setting {
 			GetString: func(c *Config) string { return c.Defaults.PreferredSource },
 			SetString: func(c *Config, v string) { c.Defaults.PreferredSource = v },
 		},
+		// --- Compliance ---
+		{
+			Section: "Compliance", Label: "Policy Path", Key: "compliance_policy", Type: SettingString,
+			Help:      "Local path to .clim-policy.yaml. Empty = auto-discover or use compliance.url.",
+			GetString: func(c *Config) string { return c.Compliance.Policy },
+			SetString: func(c *Config, v string) { c.Compliance.Policy = v },
+		},
+		{
+			Label: "Policy URL", Key: "compliance_url", Type: SettingString,
+			Help:      "Remote URL (http/https) to fetch the compliance policy from.",
+			GetString: func(c *Config) string { return c.Compliance.URL },
+			SetString: func(c *Config, v string) { c.Compliance.URL = v },
+		},
+		{
+			Label: "Auto Refresh", Key: "compliance_auto_refresh", Type: SettingBool,
+			Help:    "Re-fetch the policy from compliance.url when the cache is older than refresh_interval.",
+			GetBool: func(c *Config) bool { return c.Compliance.AutoRefresh },
+			SetBool: func(c *Config, v bool) { c.Compliance.AutoRefresh = v },
+		},
+		{
+			Label: "Refresh Interval", Key: "compliance_refresh_interval", Type: SettingDuration,
+			Help:        "Used when Auto Refresh is on. Examples: 1h, 24h.",
+			GetDuration: func(c *Config) time.Duration { return c.Compliance.RefreshInterval.Duration },
+			SetDuration: func(c *Config, v time.Duration) { c.Compliance.RefreshInterval = Duration{Duration: v} },
+		},
+		{
+			Label: "Block Installs", Key: "compliance_block_installs", Type: SettingBool,
+			Help:    "Hard-block install/upgrade actions for non-compliant tools (warn-only when off).",
+			GetBool: func(c *Config) bool { return c.Compliance.BlockInstalls },
+			SetBool: func(c *Config, v bool) { c.Compliance.BlockInstalls = v },
+		},
 	}
 }
 

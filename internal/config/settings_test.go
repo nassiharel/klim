@@ -13,6 +13,8 @@ func TestAllSettings_CoversAllConfigFields(t *testing.T) {
 		"performance_concurrency", "performance_command_timeout",
 		"ui_default_tab", "ui_show_path", "ui_sidebar_right",
 		"defaults_preferred_source",
+		"compliance_policy", "compliance_url", "compliance_auto_refresh",
+		"compliance_refresh_interval", "compliance_block_installs",
 	}
 	got := map[string]bool{}
 	for _, s := range settings {

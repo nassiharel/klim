@@ -24,16 +24,26 @@ var complianceCmd = &cobra.Command{
 The policy defines which tools are allowed, blocked, required, and which
 install sources and licenses are permitted.
 
-Policy resolution order:
-  1. --policy flag
-  2. compliance.policy in config.yaml
-  3. Default location in the clim config directory
+Policy resolution order (highest to lowest):
+  1. --policy flag           (local file, per-invocation)
+  2. --url flag              (remote URL, per-invocation; check & refresh)
+  3. compliance.url          (remote URL in config.yaml, with cache + auto-refresh)
+  4. compliance.policy       (local file in config.yaml)
+  5. default global location (~/.config/clim/compliance/policy.yaml)
+
+Subcommands:
+  check    Validate installed tools against the policy.
+  show     Show the resolved policy.
+  init     Generate a sample .clim-policy.yaml.
+  refresh  Force-refetch the policy from compliance.url (or --url) and update the cache.
 
 Generate a default policy with: clim compliance init`,
 }
 
 var compliancePolicyFlag string
+var complianceURLFlag string
 var complianceRefreshFlag bool
+var complianceForceRefreshFlag bool
 var complianceOutput func() (OutputFormat, error)
 
 var complianceCheckCmd = &cobra.Command{
@@ -54,28 +64,92 @@ var complianceInitCmd = &cobra.Command{
 	RunE:  runComplianceInit,
 }
 
+var complianceRefreshCmd = &cobra.Command{
+	Use:   "refresh",
+	Short: "Force-refresh the compliance policy from its remote URL",
+	Long: `Fetch the latest policy from the URL configured in compliance.url
+and update the local cache. Fails if no URL is configured.`,
+	RunE: runComplianceRefresh,
+}
+
 func init() {
 	complianceCheckCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Path to policy file (overrides config)")
+	complianceCheckCmd.Flags().StringVar(&complianceURLFlag, "url", "", "Remote policy URL (overrides config)")
 	complianceOutput = addOutputFlag(complianceCheckCmd, OutputText, OutputJSON)
-	complianceCheckCmd.Flags().BoolVar(&complianceRefreshFlag, "refresh", false, "Force fresh scan")
+	complianceCheckCmd.Flags().BoolVar(&complianceRefreshFlag, "refresh", false, "Force fresh tool scan")
+	complianceCheckCmd.Flags().BoolVar(&complianceForceRefreshFlag, "force-refresh-policy", false, "Force re-fetch policy from URL")
 	complianceShowCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Path to policy file (overrides config)")
 	complianceInitCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Output path (default: clim config directory)")
+	// `refresh` reads complianceURLFlag too — register --url here so a
+	// user can pass an ad-hoc remote without editing config.yaml first.
+	complianceRefreshCmd.Flags().StringVar(&complianceURLFlag, "url", "", "Remote policy URL (overrides config)")
 
 	complianceCmd.AddCommand(complianceCheckCmd)
 	complianceCmd.AddCommand(complianceShowCmd)
 	complianceCmd.AddCommand(complianceInitCmd)
+	complianceCmd.AddCommand(complianceRefreshCmd)
 	// Registered in root.go with command group.
 }
 
-func resolvePolicyPath(cmd *cobra.Command) (string, error) {
+// loadPolicyForCmd resolves and loads the policy. It uses the fetcher when a URL
+// is configured, otherwise falls back to a local file. Returns (policy, source, err).
+func loadPolicyForCmd(cmd *cobra.Command, forceRefresh bool) (*compliance.Policy, string, error) {
+	cfg := cfgFrom(cmd)
+	url := complianceURLFlag
+	if url == "" {
+		url = cfg.Compliance.URL
+	}
+
+	// Explicit --policy flag always wins (local file).
 	if compliancePolicyFlag != "" {
-		return compliancePolicyFlag, nil
+		p, err := compliance.LoadPolicy(compliancePolicyFlag)
+		return p, compliancePolicyFlag, err
 	}
-	path := findPolicyPath(cfgFrom(cmd))
-	if path != "" {
-		return path, nil
+
+	// URL configured — fetch + cache.
+	if url != "" {
+		fetcher := &compliance.HTTPFetcher{URL: url}
+		if forceRefresh {
+			p, path, err := compliance.Refresh(cmd.Context(), fetcher)
+			return p, path, err
+		}
+		opts := compliance.LoadOptions{}
+		if cfg.Compliance.AutoRefresh && cfg.Compliance.RefreshInterval.Duration > 0 {
+			opts.MaxAge = cfg.Compliance.RefreshInterval.Duration
+		}
+		p, path, err := compliance.LoadOrFetch(cmd.Context(), fetcher, opts)
+		return p, path, err
 	}
-	return "", errors.New("no policy file found\n\nGenerate one:\n  clim compliance init\n\nOr configure a custom path in config.yaml:\n  compliance:\n    policy: /path/to/policy.yaml\n\nOr pass directly:\n  clim compliance check --policy /path/to/policy.yaml")
+
+	// Fall back to local file.
+	path := findPolicyPath(cfg)
+	if path == "" {
+		return nil, "", errors.New("no policy file or URL configured\n\nGenerate one:\n  clim compliance init\n\nOr configure a URL in config.yaml:\n  compliance:\n    url: https://example.com/policy.yaml")
+	}
+	p, err := compliance.LoadPolicy(path)
+	return p, path, err
+}
+
+func runComplianceRefresh(cmd *cobra.Command, args []string) error {
+	cfg := cfgFrom(cmd)
+	url := complianceURLFlag
+	if url == "" {
+		url = cfg.Compliance.URL
+	}
+	if url == "" {
+		return errors.New("compliance.url not configured (set in config.yaml or pass --url)")
+	}
+
+	sp := progress.New("Fetching policy...")
+	fetcher := &compliance.HTTPFetcher{URL: url}
+	policy, path, err := compliance.Refresh(cmd.Context(), fetcher)
+	if err != nil {
+		sp.Fail(err.Error())
+		return err
+	}
+	sp.Done(fmt.Sprintf("Policy refreshed (%s)", policy.Name))
+	fmt.Fprintf(os.Stderr, "  Cache: %s\n", path)
+	return nil
 }
 
 // findPolicyPath returns the policy file path from config or default
@@ -99,12 +173,7 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	policyPath, err := resolvePolicyPath(cmd)
-	if err != nil {
-		return err
-	}
-
-	policy, err := compliance.LoadPolicy(policyPath)
+	policy, policyPath, err := loadPolicyForCmd(cmd, complianceForceRefreshFlag)
 	if err != nil {
 		return err
 	}
@@ -173,12 +242,7 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 }
 
 func runComplianceShow(cmd *cobra.Command, args []string) error {
-	policyPath, err := resolvePolicyPath(cmd)
-	if err != nil {
-		return err
-	}
-
-	policy, err := compliance.LoadPolicy(policyPath)
+	policy, policyPath, err := loadPolicyForCmd(cmd, false)
 	if err != nil {
 		return err
 	}

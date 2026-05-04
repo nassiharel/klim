@@ -10,6 +10,7 @@ import (
 
 	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/compliance"
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
@@ -275,6 +276,14 @@ func (m Model) renderComplianceView() string {
 		return b.String()
 	}
 
+	// Refresh failed but a previous cache is loaded — warn so the user
+	// knows the doctor verdict is from the stale cache, not a fresh
+	// fetch. Without this banner the tab silently shows the old policy.
+	if m.complianceError != "" {
+		b.WriteString("  " + doctorError.Render("⚠ Policy refresh failed: "+m.complianceError) + "\n")
+		b.WriteString("  " + dashDim.Render("Showing previously cached policy below.") + "\n\n")
+	}
+
 	result := m.complianceResult
 	b.WriteString("  " + doctorSection.Render("Policy: "+result.PolicyName) + "\n\n")
 
@@ -314,24 +323,85 @@ func (m Model) renderComplianceView() string {
 	return b.String()
 }
 
-// runComplianceForTUI loads the compliance policy and checks tools against it.
-// Returns (result, error string). Error is non-empty when policy exists but can't be loaded.
-func runComplianceForTUI(tools []registry.Tool, policyPath string) (*compliance.Result, string) {
-	if policyPath == "" {
-		// Check default global location.
-		if p, err := paths.CompliancePolicy(); err == nil {
-			if _, statErr := os.Stat(p); statErr == nil {
-				policyPath = p
-			}
-		}
-	}
-	if policyPath == "" {
-		return nil, ""
-	}
-	policy, err := compliance.LoadPolicy(policyPath)
-	if err != nil {
-		return nil, fmt.Sprintf("Failed to load policy %s: %v", policyPath, err)
+// runComplianceForTUI loads the compliance policy from local sources
+// only (synchronous, no network) and builds an evaluation result + per-
+// tool index. Used inside the Bubble Tea Update loop where blocking on
+// HTTP would freeze the UI for up to the fetch timeout. For remote
+// policies, callers also dispatch loadComplianceURLCmd which posts
+// complianceLoadedMsg when the fetch completes.
+//
+// Resolution (local-only):
+//   - Explicit policyPath argument → load it.
+//   - Cached remote policy at paths.ComplianceCachePath() → load.
+//   - cfg.Compliance.Policy → load.
+//   - paths.CompliancePolicy() default global file → load.
+//
+// Returns (result, index, errMsg). errMsg is non-empty only when a
+// configured source failed to load; missing optional sources are not
+// errors. policy may be nil with empty errMsg when nothing is configured.
+func runComplianceForTUI(tools []registry.Tool, cfg *config.Config, policyPath string) (*compliance.Result, *compliance.Index, string) {
+	policy, errMsg := loadPolicyForTUISync(cfg, policyPath)
+	if policy == nil {
+		return nil, nil, errMsg
 	}
 	result := compliance.Check(policy, tools)
-	return &result, ""
+	idx := compliance.BuildIndex(policy, tools)
+	return &result, idx, ""
+}
+
+// loadPolicyForTUISync is the non-blocking half of policy loading:
+// disk reads only, never an HTTP fetch. Mirrors the CLI's resolution
+// order with one twist — when compliance.url is set we serve the
+// previously cached payload (if any) so the user gets immediate
+// feedback while the async fetcher refreshes it.
+func loadPolicyForTUISync(cfg *config.Config, policyPath string) (*compliance.Policy, string) {
+	// 1. Explicit policy path always wins.
+	if policyPath != "" {
+		p, err := compliance.LoadPolicy(policyPath)
+		if err != nil {
+			return nil, fmt.Sprintf("Failed to load policy %s: %v", policyPath, err)
+		}
+		return p, ""
+	}
+
+	// 2. compliance.url — serve the cached copy synchronously; the
+	//    async fetcher will refresh it shortly. A malformed cache is
+	//    surfaced as an error rather than silently treated as "no
+	//    policy" — otherwise startup with a broken cache would let
+	//    blocked actions through until the async fetch completed.
+	if cfg != nil && cfg.Compliance.URL != "" {
+		if cachePath, err := paths.ComplianceCachePath(); err == nil {
+			if info, statErr := os.Stat(cachePath); statErr == nil && info.Size() > 0 {
+				p, perr := compliance.LoadPolicy(cachePath)
+				if perr != nil {
+					return nil, fmt.Sprintf("Cached policy %s is malformed: %v", cachePath, perr)
+				}
+				return p, ""
+			}
+		}
+		// No cache yet — UI will show "no policy" until the async
+		// load completes; that's acceptable for the first launch.
+		return nil, ""
+	}
+
+	// 3. cfg.Compliance.Policy — explicit local file.
+	if cfg != nil && cfg.Compliance.Policy != "" {
+		p, err := compliance.LoadPolicy(cfg.Compliance.Policy)
+		if err != nil {
+			return nil, fmt.Sprintf("Failed to load policy %s: %v", cfg.Compliance.Policy, err)
+		}
+		return p, ""
+	}
+
+	// 4. Default global location.
+	if p, err := paths.CompliancePolicy(); err == nil {
+		if _, statErr := os.Stat(p); statErr == nil {
+			policy, err := compliance.LoadPolicy(p)
+			if err != nil {
+				return nil, fmt.Sprintf("Failed to load policy %s: %v", p, err)
+			}
+			return policy, ""
+		}
+	}
+	return nil, ""
 }

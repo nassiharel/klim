@@ -96,6 +96,15 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					action:  action.picker.action,
 					cmdArgs: action.picker.choices[0].cmdArgs,
 				}
+				// Honour compliance.block_installs here too — without
+				// this the detail view's PM-row Enter bypasses the
+				// confirmation-based gate that handleKeys enforces.
+				if pa.toolIdx >= 0 && pa.toolIdx < len(m.tools) {
+					if blocked, reason := m.complianceBlocksInstall(m.tools[pa.toolIdx].Name); blocked {
+						m.statusMsg = reason
+						return m, nil
+					}
+				}
 				slog.Info("executing tool action", "action", pa.action, "cmd", strings.Join(pa.cmdArgs, " "))
 				m.statusMsg = fmt.Sprintf("Running %s...", pa.action)
 				return m, execToolActionCmd(pa)

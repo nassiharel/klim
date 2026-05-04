@@ -5,6 +5,8 @@
 package paths
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 )
@@ -71,6 +73,25 @@ func ShimsDir() (string, error) {
 // CompliancePolicy returns the path to the compliance policy file.
 func CompliancePolicy() (string, error) {
 	return Join("compliance", "policy.yaml")
+}
+
+// ComplianceCachePath returns the path to the cached remote policy
+// (unkeyed default — used as a fallback when no source key is given).
+func ComplianceCachePath() (string, error) {
+	return Join("compliance", "policy-cache.yaml")
+}
+
+// ComplianceCachePathFor returns a per-source cache path. Keying the
+// cache by source URL hash keeps different policy hosts from clobbering
+// each other's cached payloads — switching compliance.url to a
+// different endpoint no longer silently reuses the old URL's policy.
+func ComplianceCachePathFor(key string) (string, error) {
+	if key == "" {
+		return ComplianceCachePath()
+	}
+	sum := sha256.Sum256([]byte(key))
+	short := hex.EncodeToString(sum[:6]) // 12 hex chars — enough to avoid collisions
+	return Join("compliance", "policy-cache-"+short+".yaml")
 }
 
 // TrailDir returns the path to the trail (env-history) directory.

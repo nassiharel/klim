@@ -60,9 +60,18 @@ func LoadPolicy(path string) (*Policy, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading policy %s: %w", path, err)
 	}
+	p, err := parsePolicy(data)
+	if err != nil {
+		return nil, fmt.Errorf("policy %s: %w", path, err)
+	}
+	return p, nil
+}
+
+// parsePolicy parses YAML bytes into a Policy.
+func parsePolicy(data []byte) (*Policy, error) {
 	var p Policy
 	if err := yaml.Unmarshal(data, &p); err != nil {
-		return nil, fmt.Errorf("parsing policy %s: %w", path, err)
+		return nil, fmt.Errorf("parsing policy: %w", err)
 	}
 	if p.Name == "" {
 		p.Name = "Unnamed Policy"

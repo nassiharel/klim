@@ -61,7 +61,11 @@ type UIConfig struct {
 
 // ComplianceConfig controls compliance policy checking.
 type ComplianceConfig struct {
-	Policy string `yaml:"policy,omitempty"` // path to .clim-policy.yaml
+	Policy          string   `yaml:"policy,omitempty"`           // local path to policy file
+	URL             string   `yaml:"url,omitempty"`              // remote URL to fetch policy from
+	AutoRefresh     bool     `yaml:"auto_refresh,omitempty"`     // auto-refresh from URL when stale
+	RefreshInterval Duration `yaml:"refresh_interval,omitempty"` // refresh interval (default 24h)
+	BlockInstalls   bool     `yaml:"block_installs,omitempty"`   // hard-block non-compliant installs
 }
 
 // DefaultsConfig holds user-preferred defaults consumed by action commands
@@ -120,6 +124,11 @@ func Default() *Config {
 		UI: UIConfig{
 			DefaultTab: "installed",
 			ShowPath:   true,
+		},
+		Compliance: ComplianceConfig{
+			AutoRefresh:     true,
+			RefreshInterval: Duration{24 * time.Hour},
+			BlockInstalls:   true,
 		},
 	}
 }
@@ -225,6 +234,25 @@ func (c *Config) Validate() []string {
 	// Marketplace URL.
 	if c.Marketplace.URL != "" && !strings.HasPrefix(c.Marketplace.URL, "http") {
 		w = append(w, fmt.Sprintf("marketplace.url: %q doesn't look like a URL", c.Marketplace.URL))
+	}
+
+	// Compliance URL — must be http/https with a host so the fetcher
+	// can resolve it. Mirrors the marketplace.extra_urls validation.
+	// Surrounding whitespace is rejected because the stored YAML value
+	// is what gets passed verbatim to the fetcher; trimming here would
+	// pass validation while later HTTP calls still see the whitespace.
+	if c.Compliance.URL != "" {
+		raw := c.Compliance.URL
+		if strings.TrimSpace(raw) != raw {
+			w = append(w, fmt.Sprintf("compliance.url: %q has surrounding whitespace; trim it", raw))
+		}
+		parsed, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			w = append(w, fmt.Sprintf("compliance.url: %q is not a valid http/https URL", raw))
+		}
+	}
+	if c.Compliance.RefreshInterval.Duration < 0 {
+		w = append(w, "compliance.refresh_interval: negative duration")
 	}
 
 	// Defaults.PreferredSource — validate against known package managers.

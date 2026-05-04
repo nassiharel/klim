@@ -188,6 +188,39 @@ func TestValidate_PreferredSource(t *testing.T) {
 	}
 }
 
+func TestValidate_ComplianceURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantLen int
+	}{
+		{"empty", "", 0},
+		{"valid https", "https://example.com/policy.yaml", 0},
+		{"valid http", "http://localhost:8080/p.yaml", 0},
+		{"file scheme rejected", "file:///etc/passwd", 1},
+		{"ftp rejected", "ftp://example.com/p.yaml", 1},
+		{"missing host", "https://", 1},
+		{"plain text", "just-a-string", 1},
+		{"surrounding whitespace warned", " https://example.com/p.yaml ", 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Compliance.URL = tt.url
+			warnings := cfg.Validate()
+			count := 0
+			for _, w := range warnings {
+				if strings.Contains(w, "compliance.url") {
+					count++
+				}
+			}
+			if count != tt.wantLen {
+				t.Errorf("got %d compliance.url warnings, want %d: %v", count, tt.wantLen, warnings)
+			}
+		})
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && strings.Contains(s, sub)
 }

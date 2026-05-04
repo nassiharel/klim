@@ -556,6 +556,10 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 
 	line := cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 
+	if badge := m.complianceBadge(tool.Name); badge != "" {
+		line += "  " + badge
+	}
+
 	if badge := githubStarsBadge(tool); badge != "" {
 		line += "  " + fixedWidthANSI(dimVersion.Render(badge), colStars)
 	}

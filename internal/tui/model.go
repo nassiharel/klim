@@ -255,8 +255,10 @@ type Model struct {
 	auditFindings    []audit.Finding    // security audit findings
 	auditLicenses    map[string]int     // license counts
 	complianceResult *compliance.Result // compliance check result (nil = no policy)
+	complianceIndex  *compliance.Index  // fast per-tool compliance lookup
 	complianceError  string             // non-empty when policy failed to load
 	cachedScore      score.Result       // computed once in runDoctor
+	lastScanMeta     doctor.ScanMeta    // remembered so post-action recompute keeps FromCache provenance
 	doctorScroll     int                // scroll offset for doctor tab
 	doctorChecked    bool               // true after first doctor check completed
 	doctorSubTab     int                // 0=doctor, 1=audit, 2=compliance
@@ -425,6 +427,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.auditFindings = nil
 	m.auditLicenses = nil
 	m.complianceResult = nil
+	m.complianceIndex = nil
 	m.complianceError = ""
 	m.doctorChecked = false
 	m.doctorScroll = 0
@@ -585,8 +588,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			m.loading = false
 			m.detectTeamFile()
-			m.runDoctor(doctor.ScanMeta{FromCache: true})
-			return m, nil
+			cmplCmd := m.runDoctor(doctor.ScanMeta{FromCache: true})
+			return m, cmplCmd
 		}
 
 		// Fire per-tool version resolution commands.
@@ -610,7 +613,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.svc.SaveScanCache(m.tools)
 			}
 			m.detectTeamFile()
-			m.runDoctor()
+			if cmplCmd := m.runDoctor(); cmplCmd != nil {
+				return m, cmplCmd
+			}
 		}
 		return m, tea.Batch(cmds...)
 
@@ -643,7 +648,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Check .clim.yaml now that versions are resolved.
 			m.detectTeamFile()
-			m.runDoctor()
+			cmplCmd := m.runDoctor()
+			return m, cmplCmd
 		}
 		return m, nil
 
@@ -672,6 +678,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.statusMsg = fmt.Sprintf("✓ %s refreshed", msg.tool.DisplayName)
 		m.applyFilter()
+		// Recompute compliance result/index AND dashboard score from
+		// the latest tool state. We always recompute (no policy-loaded
+		// guard) because doctorIssues / auditFindings inputs have
+		// changed too — without this the dashboard score gauge stays
+		// pre-action even when no compliance policy is configured.
+		// recomputeComplianceDerivedState handles the no-policy case
+		// internally.
+		m.recomputeComplianceDerivedState()
 		// Persist the updated state so future runs see the refreshed tool
 		// — but only when the original scan produced a complete tools list.
 		if m.scanOK {
@@ -680,6 +694,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Rebuild the tool menu if the detail view is still showing.
 		if m.showDetail {
 			m.buildToolMenu()
+		}
+		return m, nil
+
+	case complianceLoadedMsg:
+		// Async fetch of compliance.url completed. Rebuild Result +
+		// Index against the CURRENT m.tools — a snapshot from command-
+		// dispatch time would lose any install/upgrade/remove that
+		// happened while the fetch was in flight. Dashboard score is
+		// recomputed too so the gauge reflects the new policy.
+		if msg.errorMsg != "" {
+			m.complianceError = msg.errorMsg
+			m.recomputeComplianceDerivedState()
+			return m, nil
+		}
+		if msg.policy != nil {
+			result := compliance.Check(msg.policy, m.tools)
+			m.complianceResult = &result
+			m.complianceIndex = compliance.BuildIndex(msg.policy, m.tools)
+			m.complianceError = ""
+			m.recomputeComplianceDerivedState()
+			// Rebuild the menu so blocked actions get the new badge.
+			if m.showDetail {
+				m.buildToolMenu()
+			}
 		}
 		return m, nil
 
@@ -1164,6 +1202,12 @@ func RunWithConfig(cfg *config.Config, warnings []string) error {
 func (m *Model) nextPackItem() tea.Cmd {
 	for i := range m.packItems {
 		if m.packItems[i].status == packItemPending {
+			// Block install of non-compliant tools.
+			if blocked, reason := m.complianceBlocksInstall(m.packItems[i].name); blocked {
+				m.packItems[i].status = packItemSkipped
+				m.packItems[i].errMsg = reason
+				continue
+			}
 			m.packItems[i].status = packItemRunning
 			return execPackItemCmd(i, m.packItems[i].cmdArgs)
 		}
@@ -1936,20 +1980,37 @@ func (m *Model) detectTeamFile() {
 
 // runDoctor computes environment diagnostics and stores results.
 // Callers may optionally provide scan metadata (e.g. cache/fresh state).
-func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
+//
+// When compliance.url is configured this returns a tea.Cmd that
+// asynchronously fetches the remote policy and posts a
+// complianceLoadedMsg; callers should chain it via tea.Batch alongside
+// any other commands they're returning. nil is returned when no async
+// load is needed (no URL configured).
+func (m *Model) runDoctor(meta ...doctor.ScanMeta) tea.Cmd {
 	scanMeta := doctor.ScanMeta{}
 	if len(meta) > 0 {
 		scanMeta = meta[0]
 	}
+	// Remember the scan provenance so recomputeComplianceDerivedState
+	// can re-run doctor.Diagnose later without losing FromCache —
+	// otherwise the "based on cached data" note disappears after the
+	// first single-tool refresh.
+	m.lastScanMeta = scanMeta
 	m.doctorIssues = doctor.Diagnose(m.tools, scanMeta)
 	m.auditFindings, m.auditLicenses = audit.Analyze(m.tools)
 
-	// Run compliance check if a policy is configured.
-	policyPath := ""
-	if m.cfg != nil {
-		policyPath = m.cfg.Compliance.Policy
-	}
-	m.complianceResult, m.complianceError = runComplianceForTUI(m.tools, policyPath)
+	// Run compliance check if a policy is configured. We only consult
+	// LOCAL sources here (file or cached remote) — never block the
+	// Bubble Tea Update loop on an HTTP fetch. The runtime kicks off
+	// loadComplianceURLCmd separately when compliance.url is set; that
+	// command posts complianceLoadedMsg with the freshly fetched index.
+	//
+	// We pass policyPath="" so loadPolicyForTUISync follows the
+	// documented precedence — URL (cache) > Policy (file) > default
+	// global file. The TUI has no per-invocation override flag; the
+	// "explicit policyPath" slot in loadPolicyForTUISync is reserved
+	// for callers that supply one (e.g. tests).
+	m.complianceResult, m.complianceIndex, m.complianceError = runComplianceForTUI(m.tools, m.cfg, "")
 
 	// Compute environment health score using precomputed data.
 	auditW, auditI := audit.CountBySeverity(m.auditFindings)
@@ -1964,6 +2025,42 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 
 	m.doctorChecked = true
 	m.doctorScroll = 0
+
+	return loadComplianceURLCmd(m.cfg)
+}
+
+// recomputeComplianceDerivedState rebuilds compliance + audit + doctor
+// + dashboard-score state against m.tools. Called after a single-tool
+// refresh or async policy load so every derived view stays in sync
+// with the latest tool state — not just compliance badges. Safe to
+// call when no policy is loaded; the score still reflects updated
+// doctor/audit findings.
+func (m *Model) recomputeComplianceDerivedState() {
+	// Re-run audit + doctor against the latest tools so every input
+	// to score.Compute is fresh. Reuse the original ScanMeta from the
+	// last runDoctor so the doctor view's "based on cached data" note
+	// survives a single-tool refresh.
+	m.auditFindings, m.auditLicenses = audit.Analyze(m.tools)
+	m.doctorIssues = doctor.Diagnose(m.tools, m.lastScanMeta)
+
+	// Rebuild compliance Result/Index from the cached Policy when one
+	// is loaded; otherwise leave both nil so the score reflects
+	// "no policy".
+	if policy := m.complianceIndex.Policy(); policy != nil {
+		result := compliance.Check(policy, m.tools)
+		m.complianceResult = &result
+		m.complianceIndex = compliance.BuildIndex(policy, m.tools)
+	}
+
+	auditW, auditI := audit.CountBySeverity(m.auditFindings)
+	m.cachedScore = score.Compute(score.Input{
+		Tools:         m.tools,
+		DoctorIssues:  m.doctorIssues,
+		AuditWarnings: auditW,
+		AuditInfos:    auditI,
+		CompResult:    m.complianceResult,
+		ComplianceErr: m.complianceError,
+	})
 }
 
 // --- Actions ---
@@ -2243,6 +2340,12 @@ func (m Model) rowCount() int {
 func (m *Model) nextBackupInstall() tea.Cmd {
 	for i := range m.backupItems {
 		if m.backupItems[i].status == backupPending {
+			// Block install of non-compliant tools.
+			if blocked, reason := m.complianceBlocksInstall(m.backupItems[i].name); blocked {
+				m.backupItems[i].status = backupSkipped
+				m.backupItems[i].errMsg = reason
+				continue
+			}
 			m.backupItems[i].status = backupRunning
 			m.cursor = i // auto-scroll to installing item
 			m.statusMsg = fmt.Sprintf("Installing %s...", itemLabel(m.backupItems[i].name, m.backupItems[i].display))
@@ -2318,6 +2421,20 @@ func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
 		}
 		tool := &m.tools[idx]
 		if !tool.HasUpdate() {
+			continue
+		}
+		// Compliance gate: BlockInstalls applies to upgrades too. We
+		// pre-skip non-compliant tools here (rather than failing
+		// mid-batch) so the batch summary reports the reason and the
+		// rest of the batch still runs.
+		if blocked, reason := m.complianceBlocksInstall(tool.Name); blocked {
+			items = append(items, batchItem{
+				name:    tool.Name,
+				display: tool.DisplayName,
+				source:  "",
+				status:  batchSkipped,
+				errMsg:  reason,
+			})
 			continue
 		}
 		// Find upgrade args (best available source).
