@@ -70,10 +70,60 @@ func TestPagePack_DetailShowsToolStatusAndInstallButton(t *testing.T) {
 	}
 }
 
-// TestPagePack_DistinguishesMissingFromUnknown is the regression test
-// for PR #48 review: pack detail used to count "not in catalog" rows
-// as missing, conflating user-installable gaps with broken pack
-// entries. The fixed handler tracks them separately.
+func TestPagePacks_LandingDistinguishesUnknownFromMissing(t *testing.T) {
+	// Regression for the PR #48 review: buildPackRows used to count
+	// every not-installed name (including catalog-unknowns) as
+	// missing, which contradicted the per-pack detail page where
+	// missing and unknown are tracked separately. The landing now
+	// matches: kubectl is installed, terraform is missing-but-known,
+	// ghost-tool is unknown.
+	ts := startServerWithFixtures(t, []registry.Pack{
+		{Name: "mixed", ToolNames: []string{"kubectl", "terraform", "ghost-tool"}},
+	})
+	resp, body := get(t, ts.URL+"/packs")
+	if resp.StatusCode != 200 {
+		t.Fatalf("status: %d", resp.StatusCode)
+	}
+	// Header should now include both columns.
+	for _, want := range []string{">Missing<", ">Unknown<"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("packs landing missing column header %q", want)
+		}
+	}
+	// Find the mixed pack's row and confirm the badge values: 1 installed,
+	// 1 missing, 1 unknown.
+	if !strings.Contains(body, `class="badge update">1<`) {
+		t.Errorf("expected '1' in update badge (missing) for mixed pack; body:\n%s", body[:min(2000, len(body))])
+	}
+	if !strings.Contains(body, `class="badge muted">1<`) {
+		t.Errorf("expected '1' in muted badge (unknown) for mixed pack")
+	}
+}
+
+func TestBuildPackRows_UnknownTracking(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "kubectl", Instances: []registry.Instance{{Path: "/k"}}},
+		{Name: "terraform"}, // catalog-known but not installed
+	}
+	installed := registry.InstalledSet(tools)
+	known := knownToolSet(tools)
+	rows := buildPackRows([]registry.Pack{
+		{Name: "p", ToolNames: []string{"kubectl", "terraform", "ghost"}},
+	}, installed, known, false)
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows", len(rows))
+	}
+	r := rows[0]
+	if r.Installed != 1 {
+		t.Errorf("Installed=%d, want 1", r.Installed)
+	}
+	if r.Missing != 1 {
+		t.Errorf("Missing=%d, want 1", r.Missing)
+	}
+	if r.Unknown != 1 {
+		t.Errorf("Unknown=%d, want 1", r.Unknown)
+	}
+}
 func TestPagePack_DistinguishesMissingFromUnknown(t *testing.T) {
 	// kubectl is installed (fixtureToolWithPackages), terraform is in
 	// the catalog but not installed, "ghost-tool" isn't in the

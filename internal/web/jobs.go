@@ -13,6 +13,39 @@ import (
 	"time"
 )
 
+// scanMaxLineBytes caps the length of a single logical "line"
+// captured from a job's stdout/stderr. A runaway upstream that emits
+// no newline before this many bytes has its output truncated; the
+// reader keeps draining the pipe so the subprocess never blocks.
+const scanMaxLineBytes = 1 << 20 // 1 MiB
+
+// appendCapped grows buf with chunk's bytes up to max total bytes.
+// Anything past max is dropped (we still drain the pipe so the
+// subprocess can't block on a full buffer; truncation is preferable
+// to a hung install).
+func appendCapped(buf []byte, chunk []byte, max int) []byte {
+	if max <= 0 || len(buf) >= max {
+		return buf
+	}
+	room := max - len(buf)
+	if len(chunk) > room {
+		chunk = chunk[:room]
+	}
+	return append(buf, chunk...)
+}
+
+// trimEOL strips a trailing \n and a preceding \r if present, so
+// callers receiving "Done.\r\n" see "Done." with no trailing whitespace.
+func trimEOL(line []byte) []byte {
+	if n := len(line); n > 0 && line[n-1] == '\n' {
+		line = line[:n-1]
+	}
+	if n := len(line); n > 0 && line[n-1] == '\r' {
+		line = line[:n-1]
+	}
+	return line
+}
+
 // JobStatus is a job's lifecycle state.
 type JobStatus string
 
@@ -108,13 +141,44 @@ func (execExecutor) Run(ctx context.Context, args []string) (<-chan string, <-ch
 		close(done)
 		return out, done
 	}
+	// scan reads r line-by-line into the out channel. We use a
+	// bufio.Reader rather than bufio.Scanner so a single output line
+	// longer than the buffer doesn't silently stop the reader and
+	// leave the subprocess blocked on a full pipe (Scanner returns
+	// ErrTooLong and stops; if we never drained the rest of the
+	// pipe the package manager could hang waiting for its writes
+	// to complete).
+	//
+	// We split on '\n' and treat anything between newlines as a
+	// single "line", regardless of length, with a defensive cap so
+	// a runaway upstream line doesn't blow our memory. Past the cap
+	// we yield what we have so far and resume reading — the package
+	// manager keeps making progress and the UI keeps streaming.
 	var wg sync.WaitGroup
 	scan := func(r io.Reader) {
 		defer wg.Done()
-		s := bufio.NewScanner(r)
-		s.Buffer(make([]byte, 64*1024), 1024*1024)
-		for s.Scan() {
-			out <- s.Text()
+		br := bufio.NewReaderSize(r, 64*1024)
+		var buf []byte
+		for {
+			chunk, err := br.ReadSlice('\n')
+			// ReadSlice returns ErrBufferFull when the next \n is
+			// past the reader's internal buffer; accumulate and
+			// keep reading.
+			if errors.Is(err, bufio.ErrBufferFull) {
+				buf = appendCapped(buf, chunk, scanMaxLineBytes)
+				continue
+			}
+			if len(chunk) > 0 {
+				line := appendCapped(buf, chunk, scanMaxLineBytes)
+				out <- string(trimEOL(line))
+				buf = nil
+			}
+			if err != nil {
+				if !errors.Is(err, io.EOF) {
+					out <- fmt.Sprintf("[read: %v]", err)
+				}
+				return
+			}
 		}
 	}
 	wg.Add(2)

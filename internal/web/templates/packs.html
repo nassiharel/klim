@@ -17,6 +17,7 @@
         <th>Tools</th>
         <th>Installed</th>
         <th>Missing</th>
+        <th>Unknown</th>
       </tr>
     </thead>
     <tbody>
@@ -29,6 +30,7 @@
           <td>{{.ToolCount}}</td>
           <td>{{if .Installed}}<span class="badge ok">{{.Installed}}</span>{{else}}<span class="muted">0</span>{{end}}</td>
           <td>{{if .Missing}}<span class="badge update">{{.Missing}}</span>{{else}}<span class="badge ok">0</span>{{end}}</td>
+          <td>{{if .Unknown}}<span class="badge muted">{{.Unknown}}</span>{{else}}—{{end}}</td>
         </tr>
       {{end}}
     </tbody>
@@ -48,6 +50,7 @@
         <th>Tools</th>
         <th>Installed</th>
         <th>Missing</th>
+        <th>Unknown</th>
       </tr>
     </thead>
     <tbody>
@@ -60,6 +63,7 @@
           <td>{{.ToolCount}}</td>
           <td>{{if .Installed}}<span class="badge ok">{{.Installed}}</span>{{else}}<span class="muted">0</span>{{end}}</td>
           <td>{{if .Missing}}<span class="badge update">{{.Missing}}</span>{{else}}<span class="badge ok">0</span>{{end}}</td>
+          <td>{{if .Unknown}}<span class="badge muted">{{.Unknown}}</span>{{else}}—{{end}}</td>
         </tr>
       {{end}}
     </tbody>

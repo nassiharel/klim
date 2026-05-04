@@ -23,8 +23,15 @@ type packRow struct {
 	Pack      registry.Pack
 	ToolCount int
 	Installed int
-	Missing   int
-	IsCustom  bool
+	// Missing counts pack entries that ARE in the catalog but not
+	// installed locally. Unknown counts entries the catalog has no
+	// record of (typo / removed since the pack was authored). We
+	// surface them separately so /packs and /packs/{name} stay
+	// consistent — the per-pack detail page already distinguishes
+	// these two and we don't want the landing page to contradict it.
+	Missing  int
+	Unknown  int
+	IsCustom bool
 }
 
 // packDetailView is the per-pack page. We resolve every tool name in
@@ -64,9 +71,10 @@ func (s *Server) pagePacks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	installed := registry.InstalledSet(tools)
+	known := knownToolSet(tools)
 	view := packsView{
-		Marketplace: buildPackRows(mp, installed, false),
-		Custom:      buildPackRows(custom, installed, true),
+		Marketplace: buildPackRows(mp, installed, known, false),
+		Custom:      buildPackRows(custom, installed, known, true),
 	}
 	s.renderPage(w, r, "packs.html", pageData{
 		Title:     "Packs",
@@ -146,18 +154,34 @@ func (s *Server) loadAllPacks(ctx context.Context) (marketplace, custom []regist
 	return mp, customAll, nil
 }
 
-func buildPackRows(packs []registry.Pack, installed map[string]bool, isCustom bool) []packRow {
+func buildPackRows(packs []registry.Pack, installed, known map[string]bool, isCustom bool) []packRow {
 	out := make([]packRow, 0, len(packs))
 	for _, p := range packs {
 		row := packRow{Pack: p, ToolCount: len(p.ToolNames), IsCustom: isCustom}
 		for _, n := range p.ToolNames {
-			if installed[n] {
+			switch {
+			case installed[n]:
 				row.Installed++
-			} else {
+			case known[n]:
 				row.Missing++
+			default:
+				// Catalog doesn't know this name — track separately
+				// so users see the same numbers on the detail page.
+				row.Unknown++
 			}
 		}
 		out = append(out, row)
+	}
+	return out
+}
+
+// knownToolSet returns the set of catalog tool names (installed or
+// not). Used by buildPackRows to distinguish "missing but
+// installable" from "unknown / typo" pack entries.
+func knownToolSet(tools []registry.Tool) map[string]bool {
+	out := make(map[string]bool, len(tools))
+	for _, t := range tools {
+		out[t.Name] = true
 	}
 	return out
 }

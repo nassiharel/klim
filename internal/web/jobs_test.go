@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -258,6 +259,117 @@ func TestJobs_FormSubmitRedirectsToJobPage(t *testing.T) {
 	loc := resp.Header.Get("Location")
 	if !strings.HasPrefix(loc, "/jobs/") {
 		t.Fatalf("expected redirect to /jobs/<id>, got %q", loc)
+	}
+}
+
+// TestExecExecutor_LongLineDoesNotHang is the regression for the
+// PR #48 review: bufio.Scanner used to silently stop on lines longer
+// than its 1 MiB token cap, leaving the subprocess pipe undrained
+// and risking a hang. The fix uses a bufio.Reader-based loop so
+// arbitrarily long lines drain through (truncated to scanMaxLineBytes
+// for memory safety, but the pipe is never blocked).
+//
+// We can't easily run a real subprocess that emits a > 1 MiB line in
+// a unit test, so instead we test the scan loop logic by feeding a
+// long line through a pipe directly. The test asserts the reader
+// returns at least one chunk for the long line and finishes without
+// blocking.
+func TestExecExecutor_LongLineDoesNotHang(t *testing.T) {
+	// Build a fake reader: 2 MiB of 'a' followed by a newline, then
+	// "after\n". The total exceeds scanMaxLineBytes (1 MiB), which
+	// would have hit Scanner's ErrTooLong with the old code. Verify
+	// the reader processes both lines and returns.
+	long := strings.Repeat("a", 2*scanMaxLineBytes) + "\n"
+	full := long + "after\n"
+	r := strings.NewReader(full)
+
+	// Replicate the scan logic the production code uses, since we
+	// can't easily get at execExecutor's internal scan func.
+	out := make(chan string, 4)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		br := bufio.NewReaderSize(r, 64*1024)
+		var buf []byte
+		for {
+			chunk, err := br.ReadSlice('\n')
+			if errors.Is(err, bufio.ErrBufferFull) {
+				buf = appendCapped(buf, chunk, scanMaxLineBytes)
+				continue
+			}
+			if len(chunk) > 0 {
+				line := appendCapped(buf, chunk, scanMaxLineBytes)
+				out <- string(trimEOL(line))
+				buf = nil
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	// Wait for the scanner to finish; if it deadlocks, the test
+	// times out via the testing framework. Drain output meanwhile.
+	var lines []string
+	timeout := time.After(5 * time.Second)
+loop:
+	for {
+		select {
+		case <-done:
+			break loop
+		case <-timeout:
+			t.Fatal("scanner deadlocked on long line")
+		case line, ok := <-out:
+			if !ok {
+				break loop
+			}
+			lines = append(lines, line)
+		}
+	}
+	// Drain any trailing buffered lines.
+	close(out)
+	for line := range out {
+		lines = append(lines, line)
+	}
+	if len(lines) < 2 {
+		t.Fatalf("expected at least 2 lines (long + 'after'), got %d", len(lines))
+	}
+	if lines[len(lines)-1] != "after" {
+		t.Errorf("last line should be 'after', got %q", lines[len(lines)-1])
+	}
+	// The long line must be truncated to scanMaxLineBytes — not 0
+	// (which would mean we silently dropped it like Scanner did).
+	if got := len(lines[0]); got != scanMaxLineBytes {
+		t.Errorf("long line len=%d, want %d (capped)", got, scanMaxLineBytes)
+	}
+}
+
+func TestTrimEOL(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"hello\n", "hello"},
+		{"hello\r\n", "hello"},
+		{"hello", "hello"},
+		{"\n", ""},
+		{"", ""},
+		{"hello\r", "hello"}, // bare \r at end stripped too
+	}
+	for _, c := range cases {
+		if got := string(trimEOL([]byte(c.in))); got != c.want {
+			t.Errorf("trimEOL(%q)=%q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestAppendCapped(t *testing.T) {
+	if got := appendCapped(nil, []byte("hello"), 100); string(got) != "hello" {
+		t.Errorf("under cap: got %q", got)
+	}
+	if got := appendCapped([]byte("ab"), []byte("cdefg"), 5); string(got) != "abcde" {
+		t.Errorf("at cap: got %q", got)
+	}
+	if got := appendCapped([]byte("12345"), []byte("xyz"), 5); string(got) != "12345" {
+		t.Errorf("already at cap: got %q (should drop chunk)", got)
 	}
 }
 
