@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/compliance"
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
@@ -316,23 +318,58 @@ func (m Model) renderComplianceView() string {
 
 // runComplianceForTUI loads the compliance policy and checks tools against it.
 // Returns (result, index, error string). Error is non-empty when policy exists but can't be loaded.
-func runComplianceForTUI(tools []registry.Tool, policyPath string) (*compliance.Result, *compliance.Index, string) {
-	if policyPath == "" {
-		// Check default global location.
-		if p, err := paths.CompliancePolicy(); err == nil {
-			if _, statErr := os.Stat(p); statErr == nil {
-				policyPath = p
-			}
-		}
-	}
-	if policyPath == "" {
-		return nil, nil, ""
-	}
-	policy, err := compliance.LoadPolicy(policyPath)
-	if err != nil {
-		return nil, nil, fmt.Sprintf("Failed to load policy %s: %v", policyPath, err)
+// runComplianceForTUI loads the compliance policy from the configured
+// source and builds an evaluation result + per-tool index. Resolution
+// order matches the CLI: explicit policyPath → compliance.url (with
+// auto-refresh + cache) → default global file. policy may be nil with
+// an empty error string when no policy is configured at all.
+func runComplianceForTUI(ctx context.Context, tools []registry.Tool, cfg *config.Config, policyPath string) (*compliance.Result, *compliance.Index, string) {
+	policy, errMsg := loadPolicyForTUI(ctx, cfg, policyPath)
+	if policy == nil {
+		return nil, nil, errMsg
 	}
 	result := compliance.Check(policy, tools)
 	idx := compliance.BuildIndex(policy, tools)
 	return &result, idx, ""
+}
+
+// loadPolicyForTUI mirrors internal/cli.loadPolicyForCmd but skips
+// flag overrides — the TUI has no per-command flags. Returns the
+// policy plus a stderr-style message when loading failed.
+func loadPolicyForTUI(ctx context.Context, cfg *config.Config, policyPath string) (*compliance.Policy, string) {
+	// 1. Explicit policy path always wins.
+	if policyPath != "" {
+		p, err := compliance.LoadPolicy(policyPath)
+		if err != nil {
+			return nil, fmt.Sprintf("Failed to load policy %s: %v", policyPath, err)
+		}
+		return p, ""
+	}
+
+	// 2. compliance.url — fetch + cache.
+	if cfg != nil && cfg.Compliance.URL != "" {
+		fetcher := &compliance.HTTPFetcher{URL: cfg.Compliance.URL}
+		opts := compliance.LoadOptions{}
+		if cfg.Compliance.AutoRefresh && cfg.Compliance.RefreshInterval.Duration > 0 {
+			opts.MaxAge = cfg.Compliance.RefreshInterval.Duration
+		}
+		p, path, err := compliance.LoadOrFetch(ctx, fetcher, opts)
+		if err != nil {
+			return nil, fmt.Sprintf("Failed to load policy from %s: %v", cfg.Compliance.URL, err)
+		}
+		_ = path
+		return p, ""
+	}
+
+	// 3. Default global location.
+	if p, err := paths.CompliancePolicy(); err == nil {
+		if _, statErr := os.Stat(p); statErr == nil {
+			policy, err := compliance.LoadPolicy(p)
+			if err != nil {
+				return nil, fmt.Sprintf("Failed to load policy %s: %v", p, err)
+			}
+			return policy, ""
+		}
+	}
+	return nil, ""
 }

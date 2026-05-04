@@ -61,9 +61,13 @@ func BuildIndex(policy *Policy, tools []registry.Tool) *Index {
 	allowedSourceSet := toSet(policy.AllowedSources)
 	allowedLicenseSet := toSet(policy.AllowedLicenses)
 	blockedLicenseSet := toSet(policy.BlockedLicenses)
-	requiredSet := make(map[string]bool, len(policy.RequiredTools))
+
+	// Map of required tool name → required version constraint (may be
+	// empty). Used both for the "is this tool required?" check and for
+	// the per-tool version-satisfaction check below.
+	requiredVersions := make(map[string]string, len(policy.RequiredTools))
 	for _, r := range policy.RequiredTools {
-		requiredSet[strings.ToLower(r.Name)] = true
+		requiredVersions[strings.ToLower(r.Name)] = r.Version
 	}
 
 	// Per-tool evaluation.
@@ -105,6 +109,18 @@ func BuildIndex(policy *Policy, tools []registry.Tool) *Index {
 					entry.Status = StatusWarning
 				}
 				entry.Reasons = append(entry.Reasons, "license "+license+" not in allowed list")
+			}
+		}
+
+		// Version constraint check for required tools — keep the index
+		// in lock-step with compliance.Check so the TUI badges and
+		// install-blocking match the doctor view's verdict.
+		if constraint, isRequired := requiredVersions[key]; isRequired && constraint != "" && t.IsInstalled() {
+			primary := t.PrimaryInstance()
+			if primary != nil && primary.Version != "" && !versionSatisfies(primary.Version, constraint) {
+				entry.Status = StatusViolation
+				entry.Reasons = append(entry.Reasons,
+					"version "+primary.Version+" does not satisfy "+constraint)
 			}
 		}
 

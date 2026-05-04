@@ -1952,12 +1952,14 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 	m.doctorIssues = doctor.Diagnose(m.tools, scanMeta)
 	m.auditFindings, m.auditLicenses = audit.Analyze(m.tools)
 
-	// Run compliance check if a policy is configured.
+	// Run compliance check if a policy is configured. Resolution
+	// (explicit path → URL+cache → default file) is shared with the
+	// CLI via runComplianceForTUI / loadPolicyForTUI.
 	policyPath := ""
 	if m.cfg != nil {
 		policyPath = m.cfg.Compliance.Policy
 	}
-	m.complianceResult, m.complianceIndex, m.complianceError = runComplianceForTUI(m.tools, policyPath)
+	m.complianceResult, m.complianceIndex, m.complianceError = runComplianceForTUI(context.Background(), m.tools, m.cfg, policyPath)
 
 	// Compute environment health score using precomputed data.
 	auditW, auditI := audit.CountBySeverity(m.auditFindings)
