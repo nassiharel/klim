@@ -36,6 +36,14 @@ type actionPlan struct {
 	source  string
 }
 
+// bucketEntry pairs a stable tool name with its user-facing display
+// label. Buckets that surface both in JSON (machine-readable, by name)
+// and stderr text (human-readable, by display) need both.
+type bucketEntry struct {
+	Name    string
+	Display string
+}
+
 // actionSummary classifies the requested targets into outcome buckets.
 // Each bucket maps to a different stderr / JSON section so the caller can
 // render and execute them independently.
@@ -43,14 +51,16 @@ type actionSummary struct {
 	toExec []actionPlan
 
 	// Targets that didn't make it into toExec, grouped by reason.
-	alreadyInstalled []string // install only
-	notInstalled     []string // upgrade / remove only
-	upToDate         []string // upgrade only
-	selfProtected    []string // remove only — refused for safety
-	unknown          []string // name not in registry
-	noPackage        []string // no package ID for the current OS
-	noPkgMgr         []string // package ID exists but its PM isn't on PATH
-	unknownPacks     []string // --pack <name> not found in catalog
+	// bucketEntry slices keep stable Name (used as JSON skipped[].name)
+	// separate from Display (used in stderr text).
+	alreadyInstalled []bucketEntry // install only
+	notInstalled     []bucketEntry // upgrade / remove only
+	upToDate         []bucketEntry // upgrade only
+	selfProtected    []string      // remove only — refused for safety; name only
+	unknown          []string      // name not in registry — no display known
+	noPackage        []string      // no package ID for the current OS
+	noPkgMgr         []string      // package ID exists but its PM isn't on PATH
+	unknownPacks     []string      // --pack <name> not found in catalog
 
 	// Action records the verb used to build this summary so render code
 	// doesn't need it threaded separately.
@@ -201,7 +211,7 @@ func buildActionPlan(action Action, targets []string, regMap map[string]*registr
 		switch action {
 		case ActionInstall:
 			if rt.IsInstalled() {
-				ps.alreadyInstalled = append(ps.alreadyInstalled, display)
+				ps.alreadyInstalled = append(ps.alreadyInstalled, bucketEntry{Name: rt.Name, Display: display})
 				continue
 			}
 			plan, hasAny := resolveInstallPlanFor(rt, sourceHint)
@@ -213,11 +223,11 @@ func buildActionPlan(action Action, targets []string, regMap map[string]*registr
 
 		case ActionUpgrade:
 			if !rt.IsInstalled() {
-				ps.notInstalled = append(ps.notInstalled, display)
+				ps.notInstalled = append(ps.notInstalled, bucketEntry{Name: rt.Name, Display: display})
 				continue
 			}
 			if !rt.HasUpdate() {
-				ps.upToDate = append(ps.upToDate, display)
+				ps.upToDate = append(ps.upToDate, bucketEntry{Name: rt.Name, Display: display})
 				continue
 			}
 			plan, hasAny := resolveUpgradePlan(name, display, rt.Packages, sourceHint)
@@ -229,7 +239,7 @@ func buildActionPlan(action Action, targets []string, regMap map[string]*registr
 
 		case ActionRemove:
 			if !rt.IsInstalled() {
-				ps.notInstalled = append(ps.notInstalled, display)
+				ps.notInstalled = append(ps.notInstalled, bucketEntry{Name: rt.Name, Display: display})
 				continue
 			}
 			plan, hasAny := resolveRemovePlan(name, display, rt.Packages, sourceHint)
@@ -270,31 +280,45 @@ func (ps *actionSummary) appendNoPM(name string, hasAny bool) {
 func printActionSummary(ps actionSummary) {
 	fmt.Fprintf(os.Stderr, "\n──── %s Plan ────\n\n", titleCase(string(ps.Action)))
 
-	emit := func(label string, items []string) {
+	emitStrings := func(label string, items []string) {
 		if len(items) == 0 {
 			return
 		}
-		sortStringsCopy(items)
-		fmt.Fprintf(os.Stderr, "  %s (%d):\n", label, len(items))
-		for _, s := range items {
+		sorted := append([]string(nil), items...)
+		sort.Strings(sorted)
+		fmt.Fprintf(os.Stderr, "  %s (%d):\n", label, len(sorted))
+		for _, s := range sorted {
 			fmt.Fprintf(os.Stderr, "    · %s\n", s)
 		}
 		fmt.Fprintln(os.Stderr)
 	}
+	emitEntries := func(label string, items []bucketEntry) {
+		if len(items) == 0 {
+			return
+		}
+		// Render via Display (human-readable) so titles like "Visual
+		// Studio Code" stay readable; Name (canonical) is emitted only
+		// in the JSON output path.
+		labels := make([]string, len(items))
+		for i, e := range items {
+			labels[i] = e.Display
+		}
+		emitStrings(label, labels)
+	}
 
 	switch ps.Action {
 	case ActionInstall:
-		emit("✓ Already installed", ps.alreadyInstalled)
+		emitEntries("✓ Already installed", ps.alreadyInstalled)
 	case ActionUpgrade:
-		emit("✓ Up to date", ps.upToDate)
-		emit("· Not installed (skipped)", ps.notInstalled)
+		emitEntries("✓ Up to date", ps.upToDate)
+		emitEntries("· Not installed (skipped)", ps.notInstalled)
 	case ActionRemove:
-		emit("· Not installed (skipped)", ps.notInstalled)
-		emit("⚠ Refused (clim self-removal blocked)", ps.selfProtected)
+		emitEntries("· Not installed (skipped)", ps.notInstalled)
+		emitStrings("⚠ Refused (clim self-removal blocked)", ps.selfProtected)
 	}
-	emit("⚠ Not in catalog", ps.unknown)
-	emit(fmt.Sprintf("⚠ No package for %s", runtime.GOOS), ps.noPackage)
-	emit("⚠ No supported package manager", ps.noPkgMgr)
+	emitStrings("⚠ Not in catalog", ps.unknown)
+	emitStrings(fmt.Sprintf("⚠ No package for %s", runtime.GOOS), ps.noPackage)
+	emitStrings("⚠ No supported package manager", ps.noPkgMgr)
 
 	if len(ps.toExec) > 0 {
 		fmt.Fprintf(os.Stderr, "  To %s (%d):\n", ps.Action, len(ps.toExec))
@@ -305,20 +329,30 @@ func printActionSummary(ps actionSummary) {
 	}
 }
 
-func sortStringsCopy(s []string) { sort.Strings(s) }
-
-// executeActionPlans runs each plan sequentially with live terminal
-// output. Returns per-tool results so callers can build structured
-// output (JSON) and counts.
-func executeActionPlans(ctx context.Context, ps actionSummary) []actionExecResult {
-	verb := titleCase(string(ps.Action) + "ing")
+// executeActionPlans runs each plan sequentially. Returns per-tool
+// results so callers can build structured output (JSON) and counts.
+//
+// streamStdout controls whether the subprocess's stdout is forwarded to
+// our stdout. In text mode this is `true` so the user sees package-
+// manager progress live; in JSON mode it MUST be `false` so the final
+// JSON object on stdout stays parseable — instead the subprocess
+// stdout is merged into stderr alongside its stderr.
+func executeActionPlans(ctx context.Context, ps actionSummary, streamStdout bool) []actionExecResult {
+	verb := presentParticiple(ps.Action)
 	results := make([]actionExecResult, 0, len(ps.toExec))
 	for _, p := range ps.toExec {
 		fmt.Fprintf(os.Stderr, "\n──── %s %s via %s ────\n", verb, p.display, p.source)
 
 		c := exec.CommandContext(ctx, p.cmdArgs[0], p.cmdArgs[1:]...) //nolint:gosec // G204: PM binary + package id, no user shell
 		c.Stdin = os.Stdin
-		c.Stdout = os.Stdout
+		if streamStdout {
+			c.Stdout = os.Stdout
+		} else {
+			// JSON mode: keep our stdout reserved for the final JSON
+			// payload. Forward the subprocess's stdout to our stderr
+			// so the user still sees PM progress.
+			c.Stdout = os.Stderr
+		}
 		c.Stderr = os.Stderr
 
 		runErr := c.Run()
@@ -332,6 +366,23 @@ func executeActionPlans(ctx context.Context, ps actionSummary) []actionExecResul
 		results = append(results, res)
 	}
 	return results
+}
+
+// presentParticiple returns the "-ing" form of an action verb. Hand-
+// rolled because naive concatenation produces "installing" but also
+// "upgradeing" / "removeing".
+func presentParticiple(a Action) string {
+	switch a {
+	case ActionInstall:
+		return "Installing"
+	case ActionUpgrade:
+		return "Upgrading"
+	case ActionRemove:
+		return "Removing"
+	}
+	// Fallback: best-effort title-cased verb without the trailing -e.
+	v := strings.TrimSuffix(string(a), "e")
+	return titleCase(v + "ing")
 }
 
 // actionExecResult captures the outcome of a single plan execution.

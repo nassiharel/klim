@@ -29,7 +29,7 @@ Examples:
   clim upgrade --pack go-dev
   clim upgrade jq fzf --source brew --yes
   clim upgrade --pack rust-dev --dry-run`,
-	GroupID: "data",
+	GroupID: "tools",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAction(cmd, args, ActionUpgrade, upgradeFlags, upgradeOutputFmt)
 	},

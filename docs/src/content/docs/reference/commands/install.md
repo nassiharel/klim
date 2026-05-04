@@ -85,8 +85,12 @@ After execution clim invalidates its scan cache so subsequent commands
 
 ## JSON output
 
-`--output json` writes a single object to stdout (text summary still
-goes to stderr until execution starts). Schema:
+`--output json` writes a single object to stdout. Human-readable
+progress (the plan summary, package-manager output, success/failure
+markers) goes to stderr — stdout is reserved for the final JSON
+payload so it remains parseable for scripts and CI.
+
+Schema:
 
 ```json
 {

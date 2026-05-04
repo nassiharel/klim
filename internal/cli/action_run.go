@@ -131,7 +131,7 @@ func runActionText(cmd *cobra.Command, action Action, plan actionSummary, flags 
 		return nil
 	}
 
-	results := executeActionPlans(cmd.Context(), plan)
+	results := executeActionPlans(cmd.Context(), plan, true)
 	succeeded, failed := countResults(results)
 
 	svc := svcFrom(cmd)
@@ -149,8 +149,14 @@ func runActionText(cmd *cobra.Command, action Action, plan actionSummary, flags 
 }
 
 // runActionJSON emits a structured result on stdout and (unless dry-run)
-// executes plans without an interactive prompt.
+// executes plans without an interactive prompt. A human-readable plan
+// summary is also written to stderr so the user can see what is about
+// to happen even when stdout is piped to a file or jq.
 func runActionJSON(cmd *cobra.Command, action Action, plan actionSummary, flags *actionFlags) error {
+	// Plan summary on stderr — keeps stdout pristine for the final
+	// JSON object that scripts will parse.
+	printActionSummary(plan)
+
 	res := actionResult{
 		Action:    string(action),
 		DryRun:    flags.dryRun,
@@ -165,24 +171,31 @@ func runActionJSON(cmd *cobra.Command, action Action, plan actionSummary, flags 
 			Cmd:     append([]string(nil), p.cmdArgs...),
 		})
 	}
-	addSkip := func(reason string, names []string) {
+	addSkipNames := func(reason string, names []string) {
 		for _, n := range names {
 			res.Skipped = append(res.Skipped, actionSkippedEntry{Name: n, Reason: reason})
 		}
 	}
-	addSkip("already_installed", plan.alreadyInstalled)
-	addSkip("not_installed", plan.notInstalled)
-	addSkip("up_to_date", plan.upToDate)
-	addSkip("self_protected", plan.selfProtected)
-	addSkip("unknown_tool", plan.unknown)
-	addSkip("no_package_for_os", plan.noPackage)
-	addSkip("no_package_manager", plan.noPkgMgr)
+	addSkipEntries := func(reason string, items []bucketEntry) {
+		for _, e := range items {
+			res.Skipped = append(res.Skipped, actionSkippedEntry{Name: e.Name, Reason: reason})
+		}
+	}
+	addSkipEntries("already_installed", plan.alreadyInstalled)
+	addSkipEntries("not_installed", plan.notInstalled)
+	addSkipEntries("up_to_date", plan.upToDate)
+	addSkipNames("self_protected", plan.selfProtected)
+	addSkipNames("unknown_tool", plan.unknown)
+	addSkipNames("no_package_for_os", plan.noPackage)
+	addSkipNames("no_package_manager", plan.noPkgMgr)
 
 	if flags.dryRun || len(plan.toExec) == 0 {
 		return printJSON(res)
 	}
 
-	results := executeActionPlans(cmd.Context(), plan)
+	// JSON mode: subprocess stdout MUST NOT touch our stdout — the
+	// final printJSON is the sole stdout writer for scripts.
+	results := executeActionPlans(cmd.Context(), plan, false)
 	for _, r := range results {
 		if r.Err == nil {
 			res.Succeeded = append(res.Succeeded, r.Plan.name)

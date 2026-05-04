@@ -284,6 +284,42 @@ func TestPastTense(t *testing.T) {
 	}
 }
 
+func TestPresentParticiple(t *testing.T) {
+	cases := map[Action]string{
+		ActionInstall: "Installing",
+		ActionUpgrade: "Upgrading",
+		ActionRemove:  "Removing",
+	}
+	for a, want := range cases {
+		if got := presentParticiple(a); got != want {
+			t.Errorf("presentParticiple(%v)=%q, want %q", a, got, want)
+		}
+	}
+}
+
+func TestBuildActionPlan_BucketsCarryStableNameAndDisplay(t *testing.T) {
+	// DisplayName intentionally differs from Name so the JSON name and
+	// stderr label use the right field.
+	t1 := registry.Tool{
+		Name:        "vscode",
+		DisplayName: "Visual Studio Code",
+		Latest:      "1.0",
+		Packages:    registry.PackageIDs{Brew: "vscode", Winget: "Microsoft.VisualStudioCode", Apt: "code", Scoop: "vscode"},
+		Instances:   []registry.Instance{{Path: "/usr/bin/code", Version: "1.0", Source: registry.SourceBrew}},
+	}
+	plan := buildActionPlan(ActionInstall, []string{"vscode"}, toolMap(t1), "")
+	if len(plan.alreadyInstalled) != 1 {
+		t.Fatalf("expected 1 alreadyInstalled, got %+v", plan.alreadyInstalled)
+	}
+	got := plan.alreadyInstalled[0]
+	if got.Name != "vscode" {
+		t.Errorf("expected canonical Name=vscode, got %q", got.Name)
+	}
+	if got.Display != "Visual Studio Code" {
+		t.Errorf("expected DisplayName retained, got %q", got.Display)
+	}
+}
+
 func TestTitleCase(t *testing.T) {
 	if got := titleCase("install"); got != "Install" {
 		t.Errorf("titleCase(install)=%q", got)

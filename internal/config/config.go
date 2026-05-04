@@ -229,7 +229,9 @@ func (c *Config) Validate() []string {
 
 	// Defaults.PreferredSource — validate against known package managers.
 	// Empty value means "use OS-priority fallback" and is allowed.
-	if src := c.Defaults.PreferredSource; src != "" && !knownSources[src] {
+	// Trim whitespace first so behavior matches resolveSource (which
+	// also trims) — otherwise " brew " warns even though it works.
+	if src := strings.TrimSpace(c.Defaults.PreferredSource); src != "" && !knownSources[src] {
 		w = append(w, fmt.Sprintf("defaults.preferred_source: unknown value %q (expected one of: winget/choco/scoop/brew/apt/snap/npm)", src))
 	}
 
