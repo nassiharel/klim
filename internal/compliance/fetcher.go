@@ -217,7 +217,14 @@ func tryRefresh(ctx context.Context, fetcher Fetcher, cachePath string) ([]byte,
 		return nil, false
 	}
 	if err := writeCacheFile(cachePath, data); err != nil {
-		slog.Warn("writing policy cache", "path", cachePath, "error", err)
+		// Don't bump mtime on write failure — otherwise the next
+		// LoadOrFetch would consider the (still stale) on-disk cache
+		// "fresh" and skip retrying for a full refresh interval.
+		// Returning ok=false makes LoadOrFetch keep serving the
+		// previous bytes it already has and try again next time.
+		slog.Warn("auto-refresh: cache write failed, will retry next interval",
+			"path", cachePath, "error", err)
+		return nil, false
 	}
 	// Refresh mtime even if contents unchanged.
 	now := time.Now()

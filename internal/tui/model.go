@@ -678,13 +678,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = fmt.Sprintf("✓ %s refreshed", msg.tool.DisplayName)
 		m.applyFilter()
 		// Recompute compliance result/index AND dashboard score from
-		// the cached policy so badges, doctor verdict, and the score
-		// gauge all reflect the post-action state — without this the
-		// doctor tab and dashboard kept showing pre-action numbers
-		// until the next full scan.
-		if m.complianceIndex != nil && m.complianceIndex.HasPolicy() {
-			m.recomputeComplianceDerivedState()
-		}
+		// the latest tool state. We always recompute (no policy-loaded
+		// guard) because doctorIssues / auditFindings inputs have
+		// changed too — without this the dashboard score gauge stays
+		// pre-action even when no compliance policy is configured.
+		// recomputeComplianceDerivedState handles the no-policy case
+		// internally.
+		m.recomputeComplianceDerivedState()
 		// Persist the updated state so future runs see the refreshed tool
 		// — but only when the original scan produced a complete tools list.
 		if m.scanOK {
@@ -1998,11 +1998,13 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) tea.Cmd {
 	// Bubble Tea Update loop on an HTTP fetch. The runtime kicks off
 	// loadComplianceURLCmd separately when compliance.url is set; that
 	// command posts complianceLoadedMsg with the freshly fetched index.
-	policyPath := ""
-	if m.cfg != nil {
-		policyPath = m.cfg.Compliance.Policy
-	}
-	m.complianceResult, m.complianceIndex, m.complianceError = runComplianceForTUI(m.tools, m.cfg, policyPath)
+	//
+	// We pass policyPath="" so loadPolicyForTUISync follows the
+	// documented precedence — URL (cache) > Policy (file) > default
+	// global file. The TUI has no per-invocation override flag; the
+	// "explicit policyPath" slot in loadPolicyForTUISync is reserved
+	// for callers that supply one (e.g. tests).
+	m.complianceResult, m.complianceIndex, m.complianceError = runComplianceForTUI(m.tools, m.cfg, "")
 
 	// Compute environment health score using precomputed data.
 	auditW, auditI := audit.CountBySeverity(m.auditFindings)
@@ -2021,22 +2023,27 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) tea.Cmd {
 	return loadComplianceURLCmd(m.cfg)
 }
 
-// recomputeComplianceDerivedState rebuilds m.complianceResult,
-// m.complianceIndex (via the existing policy in the index) and the
-// dashboard score against m.tools. Used after a single-tool refresh
-// or async policy load so the doctor view + dashboard don't show
-// stale verdicts until the next full scan. Safe to call when no
-// policy is loaded — it bails out and leaves derived state alone.
+// recomputeComplianceDerivedState rebuilds compliance + audit + doctor
+// + dashboard-score state against m.tools. Called after a single-tool
+// refresh or async policy load so every derived view stays in sync
+// with the latest tool state — not just compliance badges. Safe to
+// call when no policy is loaded; the score still reflects updated
+// doctor/audit findings.
 func (m *Model) recomputeComplianceDerivedState() {
-	policy := m.complianceIndex.Policy()
-	if policy != nil {
+	// Re-run audit + doctor against the latest tools so every input
+	// to score.Compute is fresh.
+	m.auditFindings, m.auditLicenses = audit.Analyze(m.tools)
+	m.doctorIssues = doctor.Diagnose(m.tools, doctor.ScanMeta{})
+
+	// Rebuild compliance Result/Index from the cached Policy when one
+	// is loaded; otherwise leave both nil so the score reflects
+	// "no policy".
+	if policy := m.complianceIndex.Policy(); policy != nil {
 		result := compliance.Check(policy, m.tools)
 		m.complianceResult = &result
 		m.complianceIndex = compliance.BuildIndex(policy, m.tools)
 	}
-	// Dashboard score reads complianceResult + auditFindings; recompute
-	// it against the latest data even when there's no policy so a
-	// missing-tool-now-installed flips the score.
+
 	auditW, auditI := audit.CountBySeverity(m.auditFindings)
 	m.cachedScore = score.Compute(score.Input{
 		Tools:         m.tools,
