@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -18,6 +19,11 @@ import (
 // maxRemotePolicySize caps remote downloads to prevent abuse.
 const maxRemotePolicySize = 1 << 20 // 1 MB
 
+// maxRedirects bounds the redirect chain so a slow/looping server can't
+// burn the whole 30s timeout. http.Client's default is 10, which is more
+// than a legitimate policy-host setup ever needs.
+const maxRedirects = 3
+
 // Fetcher abstracts policy retrieval from a remote source.
 type Fetcher interface {
 	Fetch(ctx context.Context) ([]byte, error)
@@ -26,13 +32,33 @@ type Fetcher interface {
 // HTTPFetcher fetches a policy from an HTTP/HTTPS URL.
 type HTTPFetcher struct {
 	URL        string
-	HTTPClient *http.Client // nil = default with 30s timeout
+	HTTPClient *http.Client // nil = default with 30s timeout and a 3-redirect cap
+}
+
+// validateHTTPURL ensures u is a usable http/https URL. We reject other
+// schemes (notably file://) up-front: net/http will happily follow them
+// and would let an attacker-controlled compliance.url read local files.
+func validateHTTPURL(u string) error {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("policy URL scheme must be http or https (got %q)", parsed.Scheme)
+	}
+	if parsed.Host == "" {
+		return errors.New("policy URL missing host")
+	}
+	return nil
 }
 
 // Fetch downloads policy YAML from the configured URL.
 func (f *HTTPFetcher) Fetch(ctx context.Context) ([]byte, error) {
 	if f.URL == "" {
 		return nil, errors.New("policy URL not configured")
+	}
+	if err := validateHTTPURL(f.URL); err != nil {
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.URL, nil)
 	if err != nil {
@@ -42,7 +68,17 @@ func (f *HTTPFetcher) Fetch(ctx context.Context) ([]byte, error) {
 
 	client := f.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
+		client = &http.Client{
+			Timeout: 30 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= maxRedirects {
+					return fmt.Errorf("stopped after %d redirects", maxRedirects)
+				}
+				// Re-validate the redirect target — defends against
+				// http→file:// or other scheme-downgrade tricks.
+				return validateHTTPURL(req.URL.String())
+			},
+		}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -104,10 +140,8 @@ func LoadOrFetch(ctx context.Context, fetcher Fetcher, opts LoadOptions) (*Polic
 		return nil, "", fmt.Errorf("fetching policy (no local cache): %w", err)
 	}
 
-	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr == nil {
-		if writeErr := os.WriteFile(cachePath, data, 0o644); writeErr != nil {
-			slog.Warn("writing policy cache", "path", cachePath, "error", writeErr)
-		}
+	if err := writeCacheFile(cachePath, data); err != nil {
+		slog.Warn("writing policy cache", "path", cachePath, "error", err)
 	}
 	return parsePolicyBytes(data, cachePath)
 }
@@ -122,12 +156,24 @@ func Refresh(ctx context.Context, fetcher Fetcher) (*Policy, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr == nil {
-		if writeErr := os.WriteFile(cachePath, data, 0o644); writeErr != nil {
-			slog.Warn("writing policy cache", "path", cachePath, "error", writeErr)
-		}
+	if err := writeCacheFile(cachePath, data); err != nil {
+		slog.Warn("writing policy cache", "path", cachePath, "error", err)
 	}
 	return parsePolicyBytes(data, cachePath)
+}
+
+// writeCacheFile creates the cache directory if needed and atomically
+// writes data to the cache path. Both MkdirAll and WriteFile failures
+// surface as a single returned error so callers can log them — the
+// previous nested `if mkErr == nil` quietly swallowed MkdirAll errors.
+func writeCacheFile(cachePath string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		return fmt.Errorf("creating cache directory: %w", err)
+	}
+	if err := os.WriteFile(cachePath, data, 0o644); err != nil {
+		return fmt.Errorf("writing cache file: %w", err)
+	}
+	return nil
 }
 
 func cacheIsStale(path string, maxAge time.Duration) bool {
@@ -146,10 +192,8 @@ func tryRefresh(ctx context.Context, fetcher Fetcher, cachePath string, prev []b
 	if len(data) == 0 {
 		return nil, false
 	}
-	if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o755); mkErr == nil {
-		if writeErr := os.WriteFile(cachePath, data, 0o644); writeErr != nil {
-			slog.Warn("writing policy cache", "path", cachePath, "error", writeErr)
-		}
+	if err := writeCacheFile(cachePath, data); err != nil {
+		slog.Warn("writing policy cache", "path", cachePath, "error", err)
 	}
 	// Refresh mtime even if contents unchanged.
 	now := time.Now()

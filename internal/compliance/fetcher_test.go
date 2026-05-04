@@ -2,6 +2,7 @@ package compliance
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -54,6 +55,59 @@ func TestHTTPFetcherServerError(t *testing.T) {
 	_, err := f.Fetch(context.Background())
 	if err == nil {
 		t.Error("expected error for 500")
+	}
+}
+
+func TestHTTPFetcher_RejectsNonHTTPScheme(t *testing.T) {
+	cases := []string{
+		"file:///etc/passwd",
+		"ftp://example.com/policy.yaml",
+		"javascript:alert(1)",
+		"://no-scheme",
+		"http://",
+	}
+	for _, u := range cases {
+		t.Run(u, func(t *testing.T) {
+			f := &HTTPFetcher{URL: u}
+			_, err := f.Fetch(context.Background())
+			if err == nil {
+				t.Errorf("expected error for %q", u)
+			}
+		})
+	}
+}
+
+func TestHTTPFetcher_RejectsRedirectChain(t *testing.T) {
+	// Build a chain longer than maxRedirects. Each handler 302's to
+	// the next; the last would serve the policy if reached. With a
+	// CheckRedirect cap we expect Fetch to fail before reaching it.
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	for i := 0; i < maxRedirects+2; i++ {
+		i := i
+		mux.HandleFunc(fmt.Sprintf("/r%d", i), func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, fmt.Sprintf("/r%d", i+1), http.StatusFound)
+		})
+	}
+	mux.HandleFunc(fmt.Sprintf("/r%d", maxRedirects+2), func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("name: too-late\n"))
+	})
+	f := &HTTPFetcher{URL: srv.URL + "/r0"}
+	if _, err := f.Fetch(context.Background()); err == nil {
+		t.Errorf("expected redirect-chain rejection")
+	}
+}
+
+func TestHTTPFetcher_RedirectToFileSchemeRejected(t *testing.T) {
+	// Server tries to bounce us to file:// — CheckRedirect must refuse.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "file:///etc/passwd", http.StatusFound)
+	}))
+	defer srv.Close()
+	f := &HTTPFetcher{URL: srv.URL}
+	if _, err := f.Fetch(context.Background()); err == nil {
+		t.Error("expected scheme-downgrade redirect to be rejected")
 	}
 }
 

@@ -236,6 +236,18 @@ func (c *Config) Validate() []string {
 		w = append(w, fmt.Sprintf("marketplace.url: %q doesn't look like a URL", c.Marketplace.URL))
 	}
 
+	// Compliance URL — must be http/https with a host so the fetcher
+	// can resolve it. Mirrors the marketplace.extra_urls validation.
+	if raw := strings.TrimSpace(c.Compliance.URL); raw != "" {
+		parsed, err := url.Parse(raw)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			w = append(w, fmt.Sprintf("compliance.url: %q is not a valid http/https URL", c.Compliance.URL))
+		}
+	}
+	if c.Compliance.RefreshInterval.Duration < 0 {
+		w = append(w, "compliance.refresh_interval: negative duration")
+	}
+
 	// Defaults.PreferredSource — validate against known package managers.
 	// Empty value means "use OS-priority fallback" and is allowed.
 	// Trim whitespace first so behavior matches resolveSource (which
