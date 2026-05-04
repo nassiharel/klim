@@ -90,7 +90,7 @@ progress (the plan summary, package-manager output, success/failure
 markers) goes to stderr — stdout is reserved for the final JSON
 payload so it remains parseable for scripts and CI.
 
-Schema:
+Schema (every field always present — empty arrays / `false` instead of missing keys for scripts and CI):
 
 ```json
 {
@@ -108,7 +108,8 @@ Schema:
   "failed": [],
   "skipped": [
     { "name": "fzf", "reason": "already_installed" }
-  ]
+  ],
+  "errors": []
 }
 ```
 

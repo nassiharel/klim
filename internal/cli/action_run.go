@@ -19,15 +19,17 @@ type actionFlags struct {
 	refresh bool
 }
 
-// actionResult is the JSON-output shape for action commands.
+// actionResult is the JSON-output shape for action commands. All
+// fields are always emitted (no `omitempty`) so the schema is stable
+// for scripts and CI — empty array/false instead of missing keys.
 type actionResult struct {
 	Action    string               `json:"action"`
-	DryRun    bool                 `json:"dry_run,omitempty"`
+	DryRun    bool                 `json:"dry_run"`
 	Planned   []actionPlannedEntry `json:"planned"`
 	Succeeded []string             `json:"succeeded"`
-	Failed    []actionFailedEntry  `json:"failed,omitempty"`
-	Skipped   []actionSkippedEntry `json:"skipped,omitempty"`
-	Errors    []string             `json:"errors,omitempty"`
+	Failed    []actionFailedEntry  `json:"failed"`
+	Skipped   []actionSkippedEntry `json:"skipped"`
+	Errors    []string             `json:"errors"`
 }
 
 type actionPlannedEntry struct {
@@ -162,6 +164,9 @@ func runActionJSON(cmd *cobra.Command, action Action, plan actionSummary, flags 
 		DryRun:    flags.dryRun,
 		Planned:   make([]actionPlannedEntry, 0, len(plan.toExec)),
 		Succeeded: []string{},
+		Failed:    []actionFailedEntry{},
+		Skipped:   []actionSkippedEntry{},
+		Errors:    []string{},
 	}
 	for _, p := range plan.toExec {
 		res.Planned = append(res.Planned, actionPlannedEntry{
