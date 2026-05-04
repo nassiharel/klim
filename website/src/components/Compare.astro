@@ -5,6 +5,7 @@ const rows = [
     pkgMgr: 'Only their own',
     verMgr: 'Only managed tools',
     scripts: 'Fragile',
+    agent: 'Slow + costs tokens',
     clim: 'All detected tools',
   },
   {
@@ -12,6 +13,7 @@ const rows = [
     pkgMgr: 'Per-manager',
     verMgr: 'Per-manager',
     scripts: 'Partial',
+    agent: 'Re-runs every time',
     clim: 'Unified view',
   },
   {
@@ -19,6 +21,7 @@ const rows = [
     pkgMgr: '✗',
     verMgr: '✗',
     scripts: 'Manual',
+    agent: 'Re-discovers each call',
     clim: 'Automatic',
   },
   {
@@ -26,6 +29,7 @@ const rows = [
     pkgMgr: '✗',
     verMgr: 'Limited',
     scripts: '✗',
+    agent: 'Hand-rolled per call',
     clim: '7 managers',
   },
   {
@@ -33,6 +37,7 @@ const rows = [
     pkgMgr: 'Per-manager',
     verMgr: 'Per-manager',
     scripts: '✗',
+    agent: 'Knowledge-cutoff stale',
     clim: 'Single view',
   },
   {
@@ -40,6 +45,7 @@ const rows = [
     pkgMgr: '✗',
     verMgr: 'Partial',
     scripts: '✗',
+    agent: 'No portable artifact',
     clim: 'YAML manifest',
   },
   {
@@ -47,6 +53,7 @@ const rows = [
     pkgMgr: '✗',
     verMgr: '✗',
     scripts: '✗',
+    agent: 'Chat only',
     clim: 'Full TUI',
   },
   {
@@ -54,6 +61,7 @@ const rows = [
     pkgMgr: '✗',
     verMgr: 'Partial',
     scripts: '✗',
+    agent: 'Prompt drift',
     clim: '.clim.yaml',
   },
   {
@@ -61,6 +69,7 @@ const rows = [
     pkgMgr: 'Per-manager only',
     verMgr: '✗',
     scripts: '✗',
+    agent: 'Plausible, not reliable',
     clim: 'clim info',
   },
   {
@@ -68,6 +77,7 @@ const rows = [
     pkgMgr: '✗',
     verMgr: '✗',
     scripts: 'Manual',
+    agent: 'Forgets across sessions',
     clim: 'clim trail',
   },
   {
@@ -75,7 +85,40 @@ const rows = [
     pkgMgr: 'Per-manager',
     verMgr: 'Per-manager',
     scripts: 'Manual',
+    agent: 'Non-deterministic',
     clim: 'clim install / upgrade / remove',
+  },
+  {
+    capability: 'CI / Dockerfile usage',
+    pkgMgr: '✓',
+    verMgr: 'Limited',
+    scripts: 'Manual',
+    agent: 'Tokens per build, flaky',
+    clim: '--output json, exit codes',
+  },
+  {
+    capability: 'Compliance policy enforcement',
+    pkgMgr: '✗',
+    verMgr: '✗',
+    scripts: 'Manual',
+    agent: 'Best-effort',
+    clim: 'Hard refusal',
+  },
+  {
+    capability: 'Offline / air-gapped',
+    pkgMgr: '✓',
+    verMgr: '✓',
+    scripts: '✓',
+    agent: '✗',
+    clim: '✓',
+  },
+  {
+    capability: 'Reproducible across machines',
+    pkgMgr: 'Per-manager',
+    verMgr: 'Per-manager',
+    scripts: 'Manual',
+    agent: 'Coin flip',
+    clim: 'Identical every run',
   },
 ];
 ---
@@ -99,6 +142,7 @@ const rows = [
             <th class="px-4 py-3 font-medium text-gray-400">Package Managers</th>
             <th class="px-4 py-3 font-medium text-gray-400">Version Managers</th>
             <th class="px-4 py-3 font-medium text-gray-400">Ad-hoc Scripts</th>
+            <th class="px-4 py-3 font-medium text-gray-400">AI Agent + Shell</th>
             <th class="px-4 py-3 font-medium text-green-400">clim</th>
           </tr>
         </thead>
@@ -109,6 +153,7 @@ const rows = [
               <td class="px-4 py-3 text-gray-500">{row.pkgMgr}</td>
               <td class="px-4 py-3 text-gray-500">{row.verMgr}</td>
               <td class="px-4 py-3 text-gray-500">{row.scripts}</td>
+              <td class="px-4 py-3 text-gray-500">{row.agent}</td>
               <td class="px-4 py-3 font-medium text-green-400">{row.clim}</td>
             </tr>
           ))}

@@ -104,6 +104,89 @@ Add extra marketplace URLs to extend the tool catalog with your own or community
 ---
 
 
+## Why not just use an agent with skills?
+
+> *"Cool — but I have an AI agent. It can run shell commands. Can't it do all of this?"*
+
+It can, for one-off tasks. But "agent + shell access" and clim solve different problems, and at any non-trivial scale the differences compound. Honest case for both:
+
+### Where an agent does fine
+- One-shot exploratory installs on your laptop (*"set me up for this React project"*).
+- Translating fuzzy intent into commands (*"I need something to query JSON"* → `jq`).
+- Composing multi-step plans across unfamiliar tools.
+
+### Where you want clim
+
+#### Determinism
+- Reproducible across machines, days, models. `clim install --pack go-dev --output json` exits 3 the same way every time. *"Hey agent, set up the pack"* is a coin flip on prompt, model, and weather.
+- A regression test can pin clim's output. It cannot pin an LLM's output.
+
+#### Speed and cost
+- `clim list` is **sub-second**, free, offline. The agent equivalent is 5–30 seconds, costs tokens, and dies on a plane / VPN-only / air-gapped corp net.
+- Multiply by 10 000 engineers running it daily — that's ~$millions/yr in tokens for an answer a single binary stat already had.
+- Battery, data, and laptop fan all thank you.
+
+#### Trust boundary
+- clim runs a **curated, public catalog** (110+ vetted entries) through **native package managers**. Every install is `winget install Stedolan.jq` — auditable, signed by the OS package manager.
+- A shell-enabled agent will happily `curl … | bash` whatever a Stack Overflow answer / README / GitHub Issue suggests. That is a SOC2 audit-finding waiting to happen.
+- **Prompt injection**: a malicious tool's README on GitHub can convince an agent to install something else / exfiltrate secrets / `rm -rf`. clim's catalog is git-versioned source code; READMEs aren't executable.
+
+#### Compliance as code, not as vibes
+- `.clim-policy.yaml` defines blocked tools, allowed licenses, allowed install sources, required versions. `compliance.block_installs: true` makes them **hard refusals**, not "the agent will probably honor it."
+- Policy is fetched from a versioned URL with caching, signed cache validation, and an audit trail.
+- Try writing *"never install GPL-licensed CLIs"* as a system prompt and proving to an auditor that it always holds. You can't.
+
+#### Privacy
+- Your installed-tools list, your project's `.clim.yaml`, your company's compliance policy never leave the machine.
+- "Ask the agent what's in `~/bin`" sends that information to a third-party model provider every time.
+- Air-gapped / regulated environments simply cannot run agent-only workflows.
+
+#### Stateful, portable artifacts
+- **`.clim.yaml`** in a repo: a versioned, lintable contract every developer + CI follows.
+- **Manifest exports** & **share tokens**: paste `clim:abc123…` in Slack — recipient runs one command and gets the same toolchain. No backend, no auth, no model.
+- **`clim trail`**: git-style content-addressable history of your dev environment, diffable across machines and across time. Hashes survive process restarts; agent memory does not.
+- These all outlive the chat session.
+
+#### Scriptability and CI
+- Agents in CI = non-determinism + token spend per build + flaky tests. Most teams ban them from the critical path.
+- `RUN clim import team.yaml --yes` works in 100 000 container builds with zero model calls.
+- `--output json` has a **stable, versioned schema**. LLM JSON output drifts the moment the model updates.
+
+#### Offline / cold-start
+- Fresh box, no API key, no network: `clim list` still works. Cached catalog + native PM queries are enough.
+- Onboarding day-one engineers who don't yet have agent access is a real UX.
+
+#### Explainability
+- `clim why jq` answers *"why is this on my machine?"* in milliseconds, citing the team manifest, pack, or project that requires it. An agent has to *guess* (and won't remember last week).
+- `clim diff <other-machine-token>` shows **exactly** which tool versions differ between two environments. Agent diffs are prose.
+
+#### Discoverability for humans
+- A user who doesn't know `kubectx`, `direnv`, or `gh` exists can't ask the agent for them by name.
+- The TUI / `clim browser` marketplace surfaces the **long tail of tools you didn't know you needed** — categories, tags, "for you" recommendations based on what's already on your box.
+
+#### Catalog freshness
+- LLM training cutoffs lag months/years. clim's catalog updates **daily** via the `marketplace` branch and ships new tool entries via PRs anyone can audit.
+- A new tool released yesterday is in the catalog today. The agent will tell you about it next year.
+
+#### Bounded resource use
+- `clim` cannot, under any circumstance, spend $10 000 on tokens overnight in a runaway loop.
+- It cannot leak its system prompt or its catalog because it has neither.
+
+#### Agents *should call clim*
+The honest framing: **clim is a primitive an agent should be using, not competing with.**
+> *"Hey agent, my dev box should have the go-dev pack."*
+> Agent: `clim install --pack go-dev --output json` → parses the JSON.
+
+The agent supplies intent translation. clim supplies the deterministic, auditable, cached primitive. Without something like clim, every agent has to re-implement PATH scanning, source detection, version comparison, and per-OS package-manager dispatch in throwaway shell heredocs — badly, every time.
+
+### One-line summary
+> **Agents handle the long tail of judgment calls. clim handles the short head of operations you want to be the same every time.**
+
+You don't replace `apt`, `winget`, or `npm` with an agent — you let agents call them. clim is the missing piece between *agent* and *apt* / *brew* / *winget*: the contract layer that makes the answer the same every time, on every machine, in every CI pipeline, for every user, today and a year from now.
+
+---
+
+
 ## Usage
 
 ### Interactive TUI
