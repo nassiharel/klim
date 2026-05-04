@@ -258,6 +258,7 @@ type Model struct {
 	complianceIndex  *compliance.Index  // fast per-tool compliance lookup
 	complianceError  string             // non-empty when policy failed to load
 	cachedScore      score.Result       // computed once in runDoctor
+	lastScanMeta     doctor.ScanMeta    // remembered so post-action recompute keeps FromCache provenance
 	doctorScroll     int                // scroll offset for doctor tab
 	doctorChecked    bool               // true after first doctor check completed
 	doctorSubTab     int                // 0=doctor, 1=audit, 2=compliance
@@ -1990,6 +1991,11 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) tea.Cmd {
 	if len(meta) > 0 {
 		scanMeta = meta[0]
 	}
+	// Remember the scan provenance so recomputeComplianceDerivedState
+	// can re-run doctor.Diagnose later without losing FromCache —
+	// otherwise the "based on cached data" note disappears after the
+	// first single-tool refresh.
+	m.lastScanMeta = scanMeta
 	m.doctorIssues = doctor.Diagnose(m.tools, scanMeta)
 	m.auditFindings, m.auditLicenses = audit.Analyze(m.tools)
 
@@ -2031,9 +2037,11 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) tea.Cmd {
 // doctor/audit findings.
 func (m *Model) recomputeComplianceDerivedState() {
 	// Re-run audit + doctor against the latest tools so every input
-	// to score.Compute is fresh.
+	// to score.Compute is fresh. Reuse the original ScanMeta from the
+	// last runDoctor so the doctor view's "based on cached data" note
+	// survives a single-tool refresh.
 	m.auditFindings, m.auditLicenses = audit.Analyze(m.tools)
-	m.doctorIssues = doctor.Diagnose(m.tools, doctor.ScanMeta{})
+	m.doctorIssues = doctor.Diagnose(m.tools, m.lastScanMeta)
 
 	// Rebuild compliance Result/Index from the cached Policy when one
 	// is loaded; otherwise leave both nil so the score reflects

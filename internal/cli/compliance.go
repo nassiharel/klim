@@ -24,10 +24,18 @@ var complianceCmd = &cobra.Command{
 The policy defines which tools are allowed, blocked, required, and which
 install sources and licenses are permitted.
 
-Policy resolution order:
-  1. --policy flag
-  2. compliance.policy in config.yaml
-  3. Default location in the clim config directory
+Policy resolution order (highest to lowest):
+  1. --policy flag           (local file, per-invocation)
+  2. --url flag              (remote URL, per-invocation; check & refresh)
+  3. compliance.url          (remote URL in config.yaml, with cache + auto-refresh)
+  4. compliance.policy       (local file in config.yaml)
+  5. default global location (~/.config/clim/compliance/policy.yaml)
+
+Subcommands:
+  check    Validate installed tools against the policy.
+  show     Show the resolved policy.
+  init     Generate a sample .clim-policy.yaml.
+  refresh  Force-refetch the policy from compliance.url (or --url) and update the cache.
 
 Generate a default policy with: clim compliance init`,
 }
