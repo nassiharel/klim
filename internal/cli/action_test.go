@@ -9,6 +9,16 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
+// stubAllPMsAvailable forces every package-manager probe to succeed
+// for the duration of the test, so plan-building doesn't depend on
+// which binaries happen to be on PATH in the local dev / CI image.
+// Reverted automatically via t.Cleanup.
+func stubAllPMsAvailable(t *testing.T) {
+	t.Helper()
+	registry.SetPMAvailableFunc(func(registry.InstallSource) bool { return true })
+	t.Cleanup(func() { registry.SetPMAvailableFunc(nil) })
+}
+
 func TestValidateSource(t *testing.T) {
 	cases := []struct {
 		in      string
@@ -133,6 +143,7 @@ func toolMap(tools ...registry.Tool) map[string]*registry.Tool {
 }
 
 func TestBuildActionPlan_Install(t *testing.T) {
+	stubAllPMsAvailable(t)
 	tools := []registry.Tool{
 		makeTool("jq", false, "", "1.7"),
 		makeTool("fzf", true, "0.42", "0.42"),
@@ -151,6 +162,7 @@ func TestBuildActionPlan_Install(t *testing.T) {
 }
 
 func TestBuildActionPlan_Upgrade(t *testing.T) {
+	stubAllPMsAvailable(t)
 	tools := []registry.Tool{
 		makeTool("jq", true, "1.6", "1.7"),    // upgradable
 		makeTool("fzf", true, "0.42", "0.42"), // up to date
@@ -170,6 +182,7 @@ func TestBuildActionPlan_Upgrade(t *testing.T) {
 }
 
 func TestBuildActionPlan_Remove_SelfProtected(t *testing.T) {
+	stubAllPMsAvailable(t)
 	tools := []registry.Tool{
 		makeTool("clim", true, "1.0", "1.0"),
 		makeTool("jq", true, "1.7", "1.7"),
@@ -185,6 +198,7 @@ func TestBuildActionPlan_Remove_SelfProtected(t *testing.T) {
 }
 
 func TestBuildActionPlan_Remove_NotInstalled(t *testing.T) {
+	stubAllPMsAvailable(t)
 	tools := []registry.Tool{makeTool("jq", false, "", "1.7")}
 	plan := buildActionPlan(ActionRemove, []string{"jq"}, toolMap(tools...), "")
 	if len(plan.toExec) != 0 {
@@ -196,6 +210,7 @@ func TestBuildActionPlan_Remove_NotInstalled(t *testing.T) {
 }
 
 func TestBuildActionPlan_SourceHintHonored(t *testing.T) {
+	stubAllPMsAvailable(t)
 	// On linux brew is the second-priority source; on macOS it's first.
 	// Either way --source=brew should resolve to brew when we have a brew id.
 	tools := []registry.Tool{makeTool("jq", false, "", "1.7")}
@@ -212,6 +227,7 @@ func TestBuildActionPlan_SourceHintHonored(t *testing.T) {
 }
 
 func TestBuildActionPlan_FallbackWhenSourceUnavailable(t *testing.T) {
+	stubAllPMsAvailable(t)
 	// --source hint that does not match any package id should fall back
 	// to PackageIDs.BestInstallSource. We populate every per-OS
 	// candidate so the test is portable across linux/macOS/windows.
@@ -248,7 +264,7 @@ func TestBuildActionPlan_FallbackWhenSourceUnavailable(t *testing.T) {
 
 func TestResolveUpgradePlan_NoPackageForOS(t *testing.T) {
 	// PackageIDs with no field set → nothing to do.
-	plan, hasAny := resolveUpgradePlan("ghost", "Ghost", registry.PackageIDs{}, "")
+	plan, hasAny := resolveUpgradePlan("ghost", "Ghost", registry.PackageIDs{}, "", "")
 	if plan != nil {
 		t.Errorf("expected nil plan, got %+v", plan)
 	}
@@ -258,8 +274,9 @@ func TestResolveUpgradePlan_NoPackageForOS(t *testing.T) {
 }
 
 func TestResolveRemovePlan_BasicShape(t *testing.T) {
+	stubAllPMsAvailable(t)
 	pkgs := registry.PackageIDs{Brew: "jq", Apt: "jq", Winget: "Stedolan.jq", Scoop: "jq"}
-	plan, hasAny := resolveRemovePlan("jq", "jq", pkgs, "brew")
+	plan, hasAny := resolveRemovePlan("jq", "jq", pkgs, "brew", "")
 	if !hasAny || plan == nil {
 		t.Fatalf("expected a plan: hasAny=%v plan=%v", hasAny, plan)
 	}
@@ -268,6 +285,39 @@ func TestResolveRemovePlan_BasicShape(t *testing.T) {
 	}
 	if len(plan.cmdArgs) < 2 || plan.cmdArgs[0] != "brew" {
 		t.Errorf("unexpected cmd args: %v", plan.cmdArgs)
+	}
+}
+
+func TestResolveUpgradePlan_PrefersInstalledSource(t *testing.T) {
+	// Tool is available via brew, winget, scoop. Installed source =
+	// scoop. With no flag/config hint, upgrade should target scoop —
+	// not BestInstallSource (which on Windows is winget).
+	stubAllPMsAvailable(t)
+	pkgs := registry.PackageIDs{Brew: "jq", Winget: "Stedolan.jq", Scoop: "jq"}
+	plan, hasAny := resolveUpgradePlan("jq", "jq", pkgs, "", registry.SourceScoop)
+	if !hasAny || plan == nil {
+		t.Fatalf("expected a plan: hasAny=%v plan=%v", hasAny, plan)
+	}
+	if plan.source != "scoop" {
+		t.Errorf("expected installed source (scoop) to win, got %q", plan.source)
+	}
+}
+
+func TestResolveUpgradePlan_FlagBeatsInstalledSource(t *testing.T) {
+	stubAllPMsAvailable(t)
+	pkgs := registry.PackageIDs{Brew: "jq", Winget: "Stedolan.jq", Scoop: "jq"}
+	plan, _ := resolveUpgradePlan("jq", "jq", pkgs, "brew", registry.SourceScoop)
+	if plan.source != "brew" {
+		t.Errorf("expected --source flag (brew) to override installed (scoop), got %q", plan.source)
+	}
+}
+
+func TestResolveRemovePlan_PrefersInstalledSource(t *testing.T) {
+	stubAllPMsAvailable(t)
+	pkgs := registry.PackageIDs{Brew: "jq", Winget: "Stedolan.jq", Scoop: "jq"}
+	plan, _ := resolveRemovePlan("jq", "jq", pkgs, "", registry.SourceWinget)
+	if plan.source != "winget" {
+		t.Errorf("expected installed (winget), got %q", plan.source)
 	}
 }
 
@@ -298,6 +348,7 @@ func TestPresentParticiple(t *testing.T) {
 }
 
 func TestBuildActionPlan_BucketsCarryStableNameAndDisplay(t *testing.T) {
+	stubAllPMsAvailable(t)
 	// DisplayName intentionally differs from Name so the JSON name and
 	// stderr label use the right field.
 	t1 := registry.Tool{

@@ -4,8 +4,24 @@ description: Upgrade installed tools to the latest available version
 ---
 
 `clim upgrade` brings installed tools to the latest version reported by
-their package manager. Source precedence and flag set match
-[`clim install`](./install).
+their package manager. Flag set matches [`clim install`](./install);
+source precedence differs slightly so the upgrade runs through the
+package manager the tool was actually installed from (see below).
+
+## Source precedence
+
+For an installed tool, clim picks the package manager in this order:
+
+1. `--source <pm>` flag (per invocation), if it maps to a package id
+   for this tool
+2. `defaults.preferred_source` in `config.yaml`, if it maps to a
+   package id
+3. The tool's installed package manager (detected during the PATH scan)
+4. `BestInstallSource()` — last-ditch OS-priority fallback
+
+That ordering avoids the surprise of running `winget upgrade jq` on a
+jq that was installed via scoop. The same precedence applies to
+[`clim remove`](./remove).
 
 ## Usage
 

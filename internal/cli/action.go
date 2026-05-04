@@ -60,7 +60,6 @@ type actionSummary struct {
 	unknown          []string      // name not in registry — no display known
 	noPackage        []string      // no package ID for the current OS
 	noPkgMgr         []string      // package ID exists but its PM isn't on PATH
-	unknownPacks     []string      // --pack <name> not found in catalog
 
 	// Action records the verb used to build this summary so render code
 	// doesn't need it threaded separately.
@@ -100,17 +99,22 @@ func validateSource(flagValue string) error {
 	return usageErrorf("unknown --source %q (expected one of: winget/choco/scoop/brew/apt/snap/npm)", v)
 }
 
-// resolveUpgradePlan mirrors resolveInstallPlan for the upgrade verb.
+// resolveUpgradePlan picks the upgrade command for an installed tool.
+//
+// Source precedence:
+//  1. sourceHint (--source flag or config default), if it maps to a
+//     package id.
+//  2. installedSource — the package manager the tool was actually
+//     installed from (rt.PrimaryInstance().Source). This matches what
+//     the TUI / web UI do and avoids running 'winget upgrade jq' on a
+//     jq that was installed via scoop.
+//  3. PackageIDs.BestInstallSource() — last-ditch OS-priority fallback
+//     for the rare case where the installed source can't be detected.
+//
 // A nil plan with hasAny=true means "package id exists but no PM
 // available"; with hasAny=false means "no package id for this OS".
-func resolveUpgradePlan(name, display string, pkgs registry.PackageIDs, sourceHint string) (*actionPlan, bool) {
-	src := pkgs.BestInstallSource()
-	if sourceHint != "" {
-		preferred := registry.InstallSource(sourceHint)
-		if args := pkgs.UpgradeArgs(preferred); args != nil {
-			src = preferred
-		}
-	}
+func resolveUpgradePlan(name, display string, pkgs registry.PackageIDs, sourceHint string, installedSource registry.InstallSource) (*actionPlan, bool) {
+	src := chooseActionSource(pkgs, sourceHint, installedSource, pkgs.UpgradeArgs)
 	args := pkgs.UpgradeArgs(src)
 	if args == nil {
 		return nil, pkgs.HasAnyPackageForOS()
@@ -123,15 +127,13 @@ func resolveUpgradePlan(name, display string, pkgs registry.PackageIDs, sourceHi
 	}, true
 }
 
-// resolveRemovePlan mirrors resolveInstallPlan for the remove verb.
-func resolveRemovePlan(name, display string, pkgs registry.PackageIDs, sourceHint string) (*actionPlan, bool) {
-	src := pkgs.BestInstallSource()
-	if sourceHint != "" {
-		preferred := registry.InstallSource(sourceHint)
-		if args := pkgs.RemoveArgs(preferred); args != nil {
-			src = preferred
-		}
-	}
+// resolveRemovePlan picks the remove command for an installed tool.
+// Source precedence is the same as resolveUpgradePlan — using the
+// installed source by default avoids the worst case where a different
+// package manager owns the same name and we'd uninstall the wrong
+// thing.
+func resolveRemovePlan(name, display string, pkgs registry.PackageIDs, sourceHint string, installedSource registry.InstallSource) (*actionPlan, bool) {
+	src := chooseActionSource(pkgs, sourceHint, installedSource, pkgs.RemoveArgs)
 	args := pkgs.RemoveArgs(src)
 	if args == nil {
 		return nil, pkgs.HasAnyPackageForOS()
@@ -142,6 +144,26 @@ func resolveRemovePlan(name, display string, pkgs registry.PackageIDs, sourceHin
 		cmdArgs: args,
 		source:  string(src),
 	}, true
+}
+
+// chooseActionSource implements the upgrade/remove source precedence:
+// flag/config hint first, then the installed source, then the
+// OS-priority best source. argsFor is the verb-specific args function
+// (UpgradeArgs / RemoveArgs) used to confirm a candidate source maps
+// to a real command for this tool.
+func chooseActionSource(pkgs registry.PackageIDs, sourceHint string, installedSource registry.InstallSource, argsFor func(registry.InstallSource) []string) registry.InstallSource {
+	if sourceHint != "" {
+		preferred := registry.InstallSource(sourceHint)
+		if argsFor(preferred) != nil {
+			return preferred
+		}
+	}
+	if installedSource != "" {
+		if argsFor(installedSource) != nil {
+			return installedSource
+		}
+	}
+	return pkgs.BestInstallSource()
 }
 
 // expandTargets merges positional tool names with --pack expansions and
@@ -230,7 +252,7 @@ func buildActionPlan(action Action, targets []string, regMap map[string]*registr
 				ps.upToDate = append(ps.upToDate, bucketEntry{Name: rt.Name, Display: display})
 				continue
 			}
-			plan, hasAny := resolveUpgradePlan(name, display, rt.Packages, sourceHint)
+			plan, hasAny := resolveUpgradePlan(name, display, rt.Packages, sourceHint, installedSourceOf(rt))
 			if plan == nil {
 				ps.appendNoPM(name, hasAny)
 				continue
@@ -242,7 +264,7 @@ func buildActionPlan(action Action, targets []string, regMap map[string]*registr
 				ps.notInstalled = append(ps.notInstalled, bucketEntry{Name: rt.Name, Display: display})
 				continue
 			}
-			plan, hasAny := resolveRemovePlan(name, display, rt.Packages, sourceHint)
+			plan, hasAny := resolveRemovePlan(name, display, rt.Packages, sourceHint, installedSourceOf(rt))
 			if plan == nil {
 				ps.appendNoPM(name, hasAny)
 				continue
@@ -251,6 +273,16 @@ func buildActionPlan(action Action, targets []string, regMap map[string]*registr
 		}
 	}
 	return ps
+}
+
+// installedSourceOf returns the package manager the tool was actually
+// installed from, or "" if no instance is recorded. Used as the
+// default upgrade/remove source.
+func installedSourceOf(rt *registry.Tool) registry.InstallSource {
+	if inst := rt.PrimaryInstance(); inst != nil {
+		return inst.Source
+	}
+	return ""
 }
 
 // resolveInstallPlanFor wraps resolveInstallPlan for registry tools so

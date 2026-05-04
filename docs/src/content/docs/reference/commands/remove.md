@@ -3,8 +3,10 @@ title: "clim remove"
 description: Remove installed tools via the system package manager
 ---
 
-`clim remove` uninstalls tools using their original package manager
-(or the `--source` you specify). Source precedence and flag set match
+`clim remove` uninstalls tools using the package manager they were
+originally installed from (detected via the `clim list` scan), or the
+`--source` you specify. Falls back to OS-priority when the installed
+source isn't recorded. Source precedence overall matches
 [`clim install`](./install).
 
 ## Usage
