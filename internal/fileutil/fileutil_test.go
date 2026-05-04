@@ -3,6 +3,7 @@ package fileutil
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -33,6 +34,46 @@ func TestAtomicWriteOverwrite(t *testing.T) {
 	data, _ := os.ReadFile(path)
 	if string(data) != "second" {
 		t.Fatalf("got %q, want %q", data, "second")
+	}
+}
+
+// TestAtomicWritePreservesSymlink asserts that writing through a
+// symlink updates the target file rather than replacing the symlink
+// with a regular file. Repos that keep .clim.yaml as a symlink to a
+// shared template would otherwise lose their setup on the first
+// `clim init --force`.
+func TestAtomicWritePreservesSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Symlink creation on Windows requires admin or developer-mode
+		// privileges; skip rather than gate the rest of CI on that.
+		t.Skip("symlink creation not reliable on Windows CI")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "real.txt")
+	if err := os.WriteFile(target, []byte("v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := AtomicWrite(link, []byte("v2"), 0o644); err != nil {
+		t.Fatalf("AtomicWrite via symlink: %v", err)
+	}
+
+	// The symlink must still be a symlink (Lstat doesn't follow it).
+	info, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("AtomicWrite replaced the symlink with a regular file (mode=%v)", info.Mode())
+	}
+	// And the target must hold the new bytes.
+	got, _ := os.ReadFile(target)
+	if string(got) != "v2" {
+		t.Errorf("target not updated through symlink: got %q, want %q", got, "v2")
 	}
 }
 

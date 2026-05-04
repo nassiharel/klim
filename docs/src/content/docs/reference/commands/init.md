@@ -13,12 +13,12 @@ clim init [flags]
 
 ## Flags
 
-| Flag | Short | Description |
-|------|-------|-------------|
-| `--all` | | Include all installed tools (skip project detection) |
-| `--min-version` | | Include minimum version constraints (`>=X.Y`) |
-| `--name` | | Project name for the manifest |
-| `--force` | `-f` | Overwrite an existing `.clim.yaml` (clim refuses by default to protect a team-shared file) |
+| Flag | Description |
+|------|-------------|
+| `--all` | Include all installed tools (skip project detection) |
+| `--min-version` | Include minimum version constraints (`>=X.Y`) |
+| `--name` | Project name for the manifest |
+| `--force` | Overwrite an existing `.clim.yaml` (clim refuses by default to protect a team-shared file). When `--force` is given but no tools are detected, clim refuses rather than silently writing an empty manifest. |
 
 ## Detection
 
@@ -71,6 +71,8 @@ tools:
 optional:
   - name: k9s
 ```
+
+If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` updates the link's target rather than replacing the symlink with a regular file.
 
 ## See Also
 

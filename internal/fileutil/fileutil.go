@@ -11,11 +11,36 @@ import (
 )
 
 // AtomicWrite writes data to path atomically via a temp file + rename.
-// On Windows, os.Rename fails if the destination exists, so we remove
-// the destination and retry once.
+//
+// Two robustness behaviours layered on top of the basic temp+rename:
+//
+//   - **Symlink preservation**: when path is a symlink, the temp file
+//     is created next to the symlink's target and the rename targets
+//     the resolved path. This keeps the symlink intact (matches what
+//     os.WriteFile already does on POSIX). Without this, every
+//     overwrite would silently replace the symlink with a regular
+//     file.
+//
+//   - **Crash-safe overwrite on Windows**: os.Rename in Go 1.5+ uses
+//     MoveFileExW(..., MOVEFILE_REPLACE_EXISTING) and is atomic on
+//     NTFS in the common case. On filesystems / scenarios where it
+//     fails (e.g. cross-volume, locked files), we fall back to a
+//     rename-rename-remove sequence: rename existing dest →
+//     dest.bak-XXX, rename tmp → dest, remove the backup. At every
+//     point in that sequence either dest or dest.bak-XXX has the
+//     correct contents — the previous "remove and retry" path could
+//     leave the dest gone entirely if the second rename failed.
 func AtomicWrite(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+	// Resolve symlinks so we write to the target file, not to the
+	// link itself. EvalSymlinks fails when path doesn't exist (the
+	// common first-write case) — fall back to the original path.
+	target := path
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		target = resolved
+	}
+
+	dir := filepath.Dir(target)
+	tmp, err := os.CreateTemp(dir, filepath.Base(target)+".tmp-*")
 	if err != nil {
 		return err
 	}
@@ -36,18 +61,34 @@ func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 		return err
 	}
 
-	if err := os.Rename(tmpPath, path); err != nil {
-		// Windows: Rename fails if destination exists. Remove and retry.
-		removeErr := os.Remove(path)
-		if removeErr != nil {
+	// Happy path: most filesystems do an atomic replace here.
+	if err := os.Rename(tmpPath, target); err == nil {
+		return nil
+	}
+
+	// Fallback: backup-rename-cleanup so we never have a window where
+	// `target` is missing entirely.
+	backup := target + ".clim-bak"
+	// Best-effort: clear any leftover backup from a previous crash.
+	_ = os.Remove(backup)
+
+	if _, statErr := os.Stat(target); statErr == nil {
+		if err := os.Rename(target, backup); err != nil {
 			_ = os.Remove(tmpPath)
-			return fmt.Errorf("rename %s → %s failed, remove dest also failed: %w", tmpPath, path, removeErr)
-		}
-		if retryErr := os.Rename(tmpPath, path); retryErr != nil {
-			_ = os.Remove(tmpPath)
-			return fmt.Errorf("rename retry %s → %s: %w", tmpPath, path, retryErr)
+			return fmt.Errorf("backing up %s before atomic write: %w", target, err)
 		}
 	}
+	if err := os.Rename(tmpPath, target); err != nil {
+		// Roll back: restore the backup if we created one.
+		if _, backupErr := os.Stat(backup); backupErr == nil {
+			_ = os.Rename(backup, target)
+		}
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("rename %s → %s: %w", tmpPath, target, err)
+	}
+	// Tmp is now in place; remove the backup. A failure here is
+	// non-fatal — the new file is already at target.
+	_ = os.Remove(backup)
 	return nil
 }
 

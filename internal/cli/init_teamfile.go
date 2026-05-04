@@ -30,7 +30,8 @@ Only tools that are both detected AND installed are included (so versions
 can be pinned). Tools detected but not installed are listed as suggestions.
 
 When .clim.yaml already exists clim refuses to clobber it; pass --force
-(or -f) to overwrite.
+to overwrite. (No -f shorthand: docs/cli-conventions.md reserves -f for
+--file paths.)
 
 Usage:
   clim init                        # auto-detect from project files
@@ -45,7 +46,8 @@ func init() {
 	initCmd.Flags().BoolVar(&initMinVersionFlag, "min-version", false, "Include minimum version constraints (>=X.Y)")
 	initCmd.Flags().StringVar(&initNameFlag, "name", "", "Project name for the manifest")
 	initCmd.Flags().BoolVar(&initAllFlag, "all", false, "Include all installed tools (skip project detection)")
-	initCmd.Flags().BoolVarP(&initForceFlag, "force", "f", false, "Overwrite an existing .clim.yaml")
+	// No -f shorthand: docs/cli-conventions.md reserves -f for --file.
+	initCmd.Flags().BoolVar(&initForceFlag, "force", false, "Overwrite an existing .clim.yaml")
 	// Registered in root.go with command group.
 }
 
@@ -55,8 +57,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Refuse to clobber an existing manifest unless --force is set.
 	// The error nudges the user toward the explicit opt-in instead of
 	// silently overwriting team-shared config.
-	if _, err := os.Stat(outPath); err == nil && !initForceFlag {
-		return fmt.Errorf("%s already exists — pass --force (-f) to overwrite, or edit it manually", outPath)
+	manifestExists := false
+	if _, err := os.Stat(outPath); err == nil {
+		manifestExists = true
+		if !initForceFlag {
+			return fmt.Errorf("%s already exists — pass --force to overwrite, or edit it manually", outPath)
+		}
 	}
 
 	// Scan installed tools. Use full resolution when --min-version needs versions.
@@ -97,6 +103,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "  Scanned %d files in %d directories\n", result.FilesScanned, result.DirsScanned)
 
 		if len(detected) == 0 {
+			if initForceFlag && manifestExists {
+				return fmt.Errorf("--force given but no project files detected — refusing to overwrite %s (try --all to include every installed tool)", outPath)
+			}
 			fmt.Fprintln(os.Stderr, "No project files detected. Use --all to include all installed tools.")
 			return nil
 		}
@@ -165,6 +174,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(tf.Tools) == 0 {
+		// With --force on an existing file the user expects a
+		// replacement. Emitting "No tools to include" + exit 0 would
+		// silently leave the previous manifest in place — a script
+		// running `clim init --force` would believe the regenerate
+		// succeeded. Surface this as an error instead.
+		if initForceFlag && manifestExists {
+			return fmt.Errorf("--force given but no tools detected — refusing to overwrite %s with an empty manifest (use --all to include every installed tool)", outPath)
+		}
 		fmt.Fprintln(os.Stderr, "No tools to include in manifest.")
 		return nil
 	}
