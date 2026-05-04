@@ -156,8 +156,13 @@ func BuildIndex(policy *Policy, tools []registry.Tool) *Index {
 	return idx
 }
 
-// Status returns the compliance status for a tool. Returns StatusUnknown
-// when the policy is nil or the tool isn't tracked.
+// Status returns the compliance status for a tool.
+//
+//   - StatusUnknown when the index is nil or no policy is configured.
+//   - The tracked status (Compliant / Warning / Violation) when the
+//     tool was evaluated against the policy.
+//   - StatusCompliant for tools the policy doesn't reference (no rules
+//     apply, so they pass by default).
 func (idx *Index) Status(toolName string) ToolStatus {
 	if idx == nil || !idx.policyOK {
 		return StatusUnknown
@@ -210,6 +215,16 @@ func (idx *Index) PolicyName() string {
 		return ""
 	}
 	return idx.policy.Name
+}
+
+// Policy returns the policy this index was built from, or nil. Used by
+// callers (e.g. the TUI) that want to rebuild the index after a tool
+// state change without re-loading the policy from disk/network.
+func (idx *Index) Policy() *Policy {
+	if idx == nil {
+		return nil
+	}
+	return idx.policy
 }
 
 // MissingRequired returns required tool names that aren't installed.

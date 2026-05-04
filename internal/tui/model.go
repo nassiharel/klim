@@ -587,8 +587,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			m.loading = false
 			m.detectTeamFile()
-			m.runDoctor(doctor.ScanMeta{FromCache: true})
-			return m, nil
+			cmplCmd := m.runDoctor(doctor.ScanMeta{FromCache: true})
+			return m, cmplCmd
 		}
 
 		// Fire per-tool version resolution commands.
@@ -612,7 +612,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.svc.SaveScanCache(m.tools)
 			}
 			m.detectTeamFile()
-			m.runDoctor()
+			if cmplCmd := m.runDoctor(); cmplCmd != nil {
+				return m, cmplCmd
+			}
 		}
 		return m, tea.Batch(cmds...)
 
@@ -645,7 +647,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Check .clim.yaml now that versions are resolved.
 			m.detectTeamFile()
-			m.runDoctor()
+			cmplCmd := m.runDoctor()
+			return m, cmplCmd
 		}
 		return m, nil
 
@@ -674,6 +677,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.statusMsg = fmt.Sprintf("✓ %s refreshed", msg.tool.DisplayName)
 		m.applyFilter()
+		// Rebuild the compliance index from the cached policy so badges
+		// and BlockInstalls reflect the post-action state — without
+		// this the index goes stale until the next full doctor run.
+		if m.complianceIndex != nil && m.complianceIndex.HasPolicy() {
+			m.complianceIndex = compliance.BuildIndex(m.complianceIndex.Policy(), m.tools)
+		}
 		// Persist the updated state so future runs see the refreshed tool
 		// — but only when the original scan produced a complete tools list.
 		if m.scanOK {
@@ -682,6 +691,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Rebuild the tool menu if the detail view is still showing.
 		if m.showDetail {
 			m.buildToolMenu()
+		}
+		return m, nil
+
+	case complianceLoadedMsg:
+		// Async fetch of compliance.url completed. Swap in the new
+		// index/result; on error keep whatever the sync local-load gave
+		// us and surface the error in the doctor view.
+		if msg.errorMsg != "" {
+			m.complianceError = msg.errorMsg
+			return m, nil
+		}
+		if msg.index != nil {
+			m.complianceIndex = msg.index
+			m.complianceResult = msg.result
+			m.complianceError = ""
+			// Rebuild the menu so blocked actions get the new badge.
+			if m.showDetail {
+				m.buildToolMenu()
+			}
 		}
 		return m, nil
 
@@ -1944,7 +1972,13 @@ func (m *Model) detectTeamFile() {
 
 // runDoctor computes environment diagnostics and stores results.
 // Callers may optionally provide scan metadata (e.g. cache/fresh state).
-func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
+//
+// When compliance.url is configured this returns a tea.Cmd that
+// asynchronously fetches the remote policy and posts a
+// complianceLoadedMsg; callers should chain it via tea.Batch alongside
+// any other commands they're returning. nil is returned when no async
+// load is needed (no URL configured).
+func (m *Model) runDoctor(meta ...doctor.ScanMeta) tea.Cmd {
 	scanMeta := doctor.ScanMeta{}
 	if len(meta) > 0 {
 		scanMeta = meta[0]
@@ -1952,14 +1986,16 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 	m.doctorIssues = doctor.Diagnose(m.tools, scanMeta)
 	m.auditFindings, m.auditLicenses = audit.Analyze(m.tools)
 
-	// Run compliance check if a policy is configured. Resolution
-	// (explicit path → URL+cache → default file) is shared with the
-	// CLI via runComplianceForTUI / loadPolicyForTUI.
+	// Run compliance check if a policy is configured. We only consult
+	// LOCAL sources here (file or cached remote) — never block the
+	// Bubble Tea Update loop on an HTTP fetch. The runtime kicks off
+	// loadComplianceURLCmd separately when compliance.url is set; that
+	// command posts complianceLoadedMsg with the freshly fetched index.
 	policyPath := ""
 	if m.cfg != nil {
 		policyPath = m.cfg.Compliance.Policy
 	}
-	m.complianceResult, m.complianceIndex, m.complianceError = runComplianceForTUI(context.Background(), m.tools, m.cfg, policyPath)
+	m.complianceResult, m.complianceIndex, m.complianceError = runComplianceForTUI(m.tools, m.cfg, policyPath)
 
 	// Compute environment health score using precomputed data.
 	auditW, auditI := audit.CountBySeverity(m.auditFindings)
@@ -1974,6 +2010,8 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) {
 
 	m.doctorChecked = true
 	m.doctorScroll = 0
+
+	return loadComplianceURLCmd(m.cfg, m.tools)
 }
 
 // --- Actions ---

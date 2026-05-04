@@ -111,6 +111,81 @@ func TestHTTPFetcher_RedirectToFileSchemeRejected(t *testing.T) {
 	}
 }
 
+func TestLoadOrFetch_RejectsBadFreshFetchAndPreservesCache(t *testing.T) {
+	dir := t.TempDir()
+	setEnvDir(t, dir)
+
+	// Seed a known-good cached policy.
+	cachePath, err := CachePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	good := []byte("name: good-policy\n")
+	if err := os.WriteFile(cachePath, good, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Make the cache stale so LoadOrFetch will try to refresh.
+	old := time.Now().Add(-25 * time.Hour)
+	if err := os.Chtimes(cachePath, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stub fetcher returns an unparseable HTML/login-page response.
+	bad := []byte("<html><body>Please sign in</body></html>")
+	fetcher := &stubFetcher{data: bad}
+
+	// Auto-refresh active. Under the old behaviour this would write
+	// `bad` over `good`. Under the fixed behaviour, the cache is left
+	// alone and the user keeps getting the previous policy.
+	_, _, err = LoadOrFetch(context.Background(), fetcher, LoadOptions{MaxAge: 24 * time.Hour})
+	if err != nil {
+		t.Fatalf("expected fallback to stale cache, got error: %v", err)
+	}
+
+	stillThere, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(stillThere) != string(good) {
+		t.Errorf("cache was poisoned. got %q, want %q", stillThere, good)
+	}
+}
+
+func TestRefresh_RejectsBadFreshFetchAndPreservesCache(t *testing.T) {
+	dir := t.TempDir()
+	setEnvDir(t, dir)
+	cachePath, err := CachePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	good := []byte("name: good-policy\n")
+	if err := os.WriteFile(cachePath, good, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	bad := []byte("<<< not yaml >>>")
+	fetcher := &stubFetcher{data: bad}
+
+	_, _, err = Refresh(context.Background(), fetcher)
+	if err == nil {
+		t.Fatal("expected parse error for bad payload")
+	}
+
+	stillThere, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(stillThere) != string(good) {
+		t.Errorf("cache was poisoned. got %q, want %q", stillThere, good)
+	}
+}
+
 type stubFetcher struct {
 	data []byte
 	err  error

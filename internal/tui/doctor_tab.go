@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -316,15 +315,24 @@ func (m Model) renderComplianceView() string {
 	return b.String()
 }
 
-// runComplianceForTUI loads the compliance policy and checks tools against it.
-// Returns (result, index, error string). Error is non-empty when policy exists but can't be loaded.
-// runComplianceForTUI loads the compliance policy from the configured
-// source and builds an evaluation result + per-tool index. Resolution
-// order matches the CLI: explicit policyPath → compliance.url (with
-// auto-refresh + cache) → default global file. policy may be nil with
-// an empty error string when no policy is configured at all.
-func runComplianceForTUI(ctx context.Context, tools []registry.Tool, cfg *config.Config, policyPath string) (*compliance.Result, *compliance.Index, string) {
-	policy, errMsg := loadPolicyForTUI(ctx, cfg, policyPath)
+// runComplianceForTUI loads the compliance policy from local sources
+// only (synchronous, no network) and builds an evaluation result + per-
+// tool index. Used inside the Bubble Tea Update loop where blocking on
+// HTTP would freeze the UI for up to the fetch timeout. For remote
+// policies, callers also dispatch loadComplianceURLCmd which posts
+// complianceLoadedMsg when the fetch completes.
+//
+// Resolution (local-only):
+//   - Explicit policyPath argument → load it.
+//   - Cached remote policy at paths.ComplianceCachePath() → load.
+//   - cfg.Compliance.Policy → load.
+//   - paths.CompliancePolicy() default global file → load.
+//
+// Returns (result, index, errMsg). errMsg is non-empty only when a
+// configured source failed to load; missing optional sources are not
+// errors. policy may be nil with empty errMsg when nothing is configured.
+func runComplianceForTUI(tools []registry.Tool, cfg *config.Config, policyPath string) (*compliance.Result, *compliance.Index, string) {
+	policy, errMsg := loadPolicyForTUISync(cfg, policyPath)
 	if policy == nil {
 		return nil, nil, errMsg
 	}
@@ -333,10 +341,12 @@ func runComplianceForTUI(ctx context.Context, tools []registry.Tool, cfg *config
 	return &result, idx, ""
 }
 
-// loadPolicyForTUI mirrors internal/cli.loadPolicyForCmd but skips
-// flag overrides — the TUI has no per-command flags. Returns the
-// policy plus a stderr-style message when loading failed.
-func loadPolicyForTUI(ctx context.Context, cfg *config.Config, policyPath string) (*compliance.Policy, string) {
+// loadPolicyForTUISync is the non-blocking half of policy loading:
+// disk reads only, never an HTTP fetch. Mirrors the CLI's resolution
+// order with one twist — when compliance.url is set we serve the
+// previously cached payload (if any) so the user gets immediate
+// feedback while the async fetcher refreshes it.
+func loadPolicyForTUISync(cfg *config.Config, policyPath string) (*compliance.Policy, string) {
 	// 1. Explicit policy path always wins.
 	if policyPath != "" {
 		p, err := compliance.LoadPolicy(policyPath)
@@ -346,22 +356,32 @@ func loadPolicyForTUI(ctx context.Context, cfg *config.Config, policyPath string
 		return p, ""
 	}
 
-	// 2. compliance.url — fetch + cache.
+	// 2. compliance.url — serve the cached copy synchronously; the
+	//    async fetcher will refresh it shortly.
 	if cfg != nil && cfg.Compliance.URL != "" {
-		fetcher := &compliance.HTTPFetcher{URL: cfg.Compliance.URL}
-		opts := compliance.LoadOptions{}
-		if cfg.Compliance.AutoRefresh && cfg.Compliance.RefreshInterval.Duration > 0 {
-			opts.MaxAge = cfg.Compliance.RefreshInterval.Duration
+		if cachePath, err := paths.ComplianceCachePath(); err == nil {
+			if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
+				if p, perr := compliance.LoadPolicy(cachePath); perr == nil {
+					_ = data
+					return p, ""
+				}
+			}
 		}
-		p, path, err := compliance.LoadOrFetch(ctx, fetcher, opts)
+		// No cache yet — UI will show "no policy" until the async
+		// load completes; that's acceptable for the first launch.
+		return nil, ""
+	}
+
+	// 3. cfg.Compliance.Policy — explicit local file.
+	if cfg != nil && cfg.Compliance.Policy != "" {
+		p, err := compliance.LoadPolicy(cfg.Compliance.Policy)
 		if err != nil {
-			return nil, fmt.Sprintf("Failed to load policy from %s: %v", cfg.Compliance.URL, err)
+			return nil, fmt.Sprintf("Failed to load policy %s: %v", cfg.Compliance.Policy, err)
 		}
-		_ = path
 		return p, ""
 	}
 
-	// 3. Default global location.
+	// 4. Default global location.
 	if p, err := paths.CompliancePolicy(); err == nil {
 		if _, statErr := os.Stat(p); statErr == nil {
 			policy, err := compliance.LoadPolicy(p)

@@ -60,7 +60,11 @@ func LoadPolicy(path string) (*Policy, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading policy %s: %w", path, err)
 	}
-	return parsePolicy(data)
+	p, err := parsePolicy(data)
+	if err != nil {
+		return nil, fmt.Errorf("policy %s: %w", path, err)
+	}
+	return p, nil
 }
 
 // parsePolicy parses YAML bytes into a Policy.

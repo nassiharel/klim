@@ -72,6 +72,9 @@ func init() {
 	complianceCheckCmd.Flags().BoolVar(&complianceForceRefreshFlag, "force-refresh-policy", false, "Force re-fetch policy from URL")
 	complianceShowCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Path to policy file (overrides config)")
 	complianceInitCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Output path (default: clim config directory)")
+	// `refresh` reads complianceURLFlag too — register --url here so a
+	// user can pass an ad-hoc remote without editing config.yaml first.
+	complianceRefreshCmd.Flags().StringVar(&complianceURLFlag, "url", "", "Remote policy URL (overrides config)")
 
 	complianceCmd.AddCommand(complianceCheckCmd)
 	complianceCmd.AddCommand(complianceShowCmd)

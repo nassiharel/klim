@@ -12,14 +12,18 @@ Check installed tools against a compliance policy file that defines allowed sour
 | `clim compliance check` | Validate tools against the policy |
 | `clim compliance show` | Show the current policy details |
 | `clim compliance init` | Generate a sample `.clim-policy.yaml` |
+| `clim compliance refresh` | Force-refetch the policy from `compliance.url` and update the local cache |
 
 ## Flags
 
 | Flag | Commands | Description |
 |------|----------|-------------|
-| `--policy` | check, show, init | Path to policy file (overrides config) |
-| `--json` | check | Machine-readable JSON output |
-| `--refresh` | check | Force fresh scan |
+| `--policy` | check, show, init | Path to a local policy file (overrides config) |
+| `--url` | check, refresh | Remote policy URL (overrides `compliance.url`) |
+| `--output {text,json}` | check | Output format (canonical) |
+| `--json` | check | Machine-readable JSON output (deprecated alias for `--output=json`) |
+| `--refresh` | check | Force fresh tool scan (PATH rescan) |
+| `--force-refresh-policy` | check | Force re-fetch policy from the URL even if the cache is still fresh |
 
 ## Policy File Format
 
@@ -48,10 +52,29 @@ required_tools:
 
 ## Policy Resolution
 
-The policy file is resolved in this order:
-1. `--policy` flag
-2. `compliance.policy` in config.yaml
-3. `~/.config/clim/compliance/policy.yaml` (default global location)
+The policy is resolved in this order:
+1. `--policy` flag (always a local file)
+2. `--url` flag (remote, with caching)
+3. `compliance.url` in `config.yaml` (remote, with caching)
+4. `compliance.policy` in `config.yaml` (local file)
+5. `~/.config/clim/compliance/policy.yaml` (default global location)
+
+When a remote URL is used, clim caches the fetched policy at
+`~/.config/clim/compliance/policy-cache.yaml`. The cache is kept fresh
+according to `compliance.auto_refresh` and `compliance.refresh_interval`
+in `config.yaml`. Failed fetches always fall back to the previous
+cache rather than poison it — see *Cache safety* below.
+
+## Cache safety
+
+- The HTTP fetcher rejects non-`http`/`https` URLs (incl. `file://`)
+  to keep an attacker-controlled `compliance.url` from reading local
+  files; redirects are similarly re-validated and capped at 3.
+- A freshly fetched payload is parsed as YAML *before* it replaces the
+  cache, so a transient login page / proxy error / malformed response
+  cannot break later compliance checks.
+- The cache is written via temp file + rename so other clim processes
+  cannot observe a half-written or empty file.
 
 ## Examples
 
@@ -65,8 +88,17 @@ clim compliance check
 # Check with explicit policy file
 clim compliance check --policy /path/to/policy.yaml
 
+# Use a remote policy URL ad-hoc (no config edit required)
+clim compliance check --url https://policies.example.com/clim.yaml
+
 # JSON output for CI
-clim compliance check --json
+clim compliance check --output json
+
+# Force re-fetch the policy from the configured URL
+clim compliance refresh
+
+# Or re-fetch from an ad-hoc URL
+clim compliance refresh --url https://policies.example.com/clim.yaml
 
 # View current policy
 clim compliance show

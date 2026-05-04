@@ -19,6 +19,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/catalog"
+	"github.com/nassiharel/clim/internal/compliance"
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/fileutil"
 	"github.com/nassiharel/clim/internal/manifest"
 	"github.com/nassiharel/clim/internal/paths"
@@ -76,6 +78,15 @@ type execFinishedMsg struct {
 type refreshToolMsg struct {
 	toolIdx int
 	tool    registry.Tool
+}
+
+// complianceLoadedMsg arrives when the async URL fetch initiated by
+// loadComplianceURLCmd completes. It carries the freshly built index +
+// result so model.Update can swap them in without blocking on I/O.
+type complianceLoadedMsg struct {
+	result   *compliance.Result
+	index    *compliance.Index
+	errorMsg string
 }
 
 // --- Action types ---
@@ -322,6 +333,39 @@ func refreshSingleToolCmd(svc *service.ToolService, idx int, tool registry.Tool)
 		ctx := context.Background()
 		refreshed := svc.RefreshTool(ctx, tool)
 		return refreshToolMsg{toolIdx: idx, tool: refreshed}
+	}
+}
+
+// loadComplianceURLCmd asynchronously fetches the compliance policy
+// from cfg.Compliance.URL (with cache + auto-refresh) and returns a
+// complianceLoadedMsg. Returns nil when there's nothing to fetch (no
+// URL configured) so callers can unconditionally tea.Batch it.
+func loadComplianceURLCmd(cfg *config.Config, tools []registry.Tool) tea.Cmd {
+	if cfg == nil || cfg.Compliance.URL == "" {
+		return nil
+	}
+	// Snapshot the slice header — registry.Tool values are large, but
+	// the underlying tool data is immutable for the duration of this
+	// fetch and the caller will run BuildIndex on whichever copy is
+	// current when the message is processed.
+	snapshot := append([]registry.Tool(nil), tools...)
+	url := cfg.Compliance.URL
+	autoRefresh := cfg.Compliance.AutoRefresh
+	maxAge := cfg.Compliance.RefreshInterval.Duration
+	return func() tea.Msg {
+		ctx := context.Background()
+		fetcher := &compliance.HTTPFetcher{URL: url}
+		opts := compliance.LoadOptions{}
+		if autoRefresh && maxAge > 0 {
+			opts.MaxAge = maxAge
+		}
+		policy, _, err := compliance.LoadOrFetch(ctx, fetcher, opts)
+		if err != nil {
+			return complianceLoadedMsg{errorMsg: fmt.Sprintf("Failed to load policy from %s: %v", url, err)}
+		}
+		result := compliance.Check(policy, snapshot)
+		idx := compliance.BuildIndex(policy, snapshot)
+		return complianceLoadedMsg{result: &result, index: idx}
 	}
 }
 

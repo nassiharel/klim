@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/nassiharel/clim/internal/fileutil"
 	"github.com/nassiharel/clim/internal/paths"
 )
 
@@ -113,8 +114,9 @@ type LoadOptions struct {
 }
 
 // LoadOrFetch loads a cached policy. If the cache is missing/stale, fetches
-// from the remote and updates the cache. On fetch failure, the stale cache
-// (if any) is returned.
+// from the remote and updates the cache. On fetch failure or a malformed
+// fresh response, the stale cache (if any) is returned and preserved —
+// we never overwrite a known-good cache with an unparseable payload.
 func LoadOrFetch(ctx context.Context, fetcher Fetcher, opts LoadOptions) (*Policy, string, error) {
 	cachePath, err := CachePath()
 	if err != nil {
@@ -124,7 +126,7 @@ func LoadOrFetch(ctx context.Context, fetcher Fetcher, opts LoadOptions) (*Polic
 	// Try existing cache.
 	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
 		if opts.MaxAge > 0 && cacheIsStale(cachePath, opts.MaxAge) {
-			if refreshed, ok := tryRefresh(ctx, fetcher, cachePath, data); ok {
+			if refreshed, ok := tryRefresh(ctx, fetcher, cachePath); ok {
 				slog.Info("compliance policy auto-refreshed", "path", cachePath, "bytes", len(refreshed))
 				return parsePolicyBytes(refreshed, cachePath)
 			}
@@ -133,20 +135,29 @@ func LoadOrFetch(ctx context.Context, fetcher Fetcher, opts LoadOptions) (*Polic
 		return parsePolicyBytes(data, cachePath)
 	}
 
-	// No cache — fetch.
+	// No cache — fetch and validate before writing.
 	slog.Info("fetching compliance policy from remote")
 	data, err := fetcher.Fetch(ctx)
 	if err != nil {
 		return nil, "", fmt.Errorf("fetching policy (no local cache): %w", err)
 	}
+	policy, err := parsePolicy(data)
+	if err != nil {
+		// Don't poison the cache with HTML / login pages / malformed YAML.
+		return nil, cachePath, fmt.Errorf("parsing fetched policy: %w", err)
+	}
 
 	if err := writeCacheFile(cachePath, data); err != nil {
 		slog.Warn("writing policy cache", "path", cachePath, "error", err)
 	}
-	return parsePolicyBytes(data, cachePath)
+	return policy, cachePath, nil
 }
 
 // Refresh forces a fetch and updates the cache. Returns the new policy.
+// If the freshly fetched bytes don't parse as a Policy, the previous
+// cache is preserved untouched and the parse error is returned —
+// matches LoadOrFetch's "never poison the cache" semantics so a flaky
+// proxy / login page can't silently break later runs.
 func Refresh(ctx context.Context, fetcher Fetcher) (*Policy, string, error) {
 	cachePath, err := CachePath()
 	if err != nil {
@@ -156,21 +167,25 @@ func Refresh(ctx context.Context, fetcher Fetcher) (*Policy, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+	policy, err := parsePolicy(data)
+	if err != nil {
+		return nil, cachePath, fmt.Errorf("parsing fetched policy: %w", err)
+	}
 	if err := writeCacheFile(cachePath, data); err != nil {
 		slog.Warn("writing policy cache", "path", cachePath, "error", err)
 	}
-	return parsePolicyBytes(data, cachePath)
+	return policy, cachePath, nil
 }
 
-// writeCacheFile creates the cache directory if needed and atomically
-// writes data to the cache path. Both MkdirAll and WriteFile failures
-// surface as a single returned error so callers can log them — the
-// previous nested `if mkErr == nil` quietly swallowed MkdirAll errors.
+// writeCacheFile creates the cache directory if needed and writes data
+// to cachePath atomically (temp file + rename), so other processes
+// cannot observe a half-written or empty cache. Both MkdirAll and
+// AtomicWrite failures surface so callers can log them.
 func writeCacheFile(cachePath string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
 		return fmt.Errorf("creating cache directory: %w", err)
 	}
-	if err := os.WriteFile(cachePath, data, 0o644); err != nil {
+	if err := fileutil.AtomicWrite(cachePath, data, 0o644); err != nil {
 		return fmt.Errorf("writing cache file: %w", err)
 	}
 	return nil
@@ -184,12 +199,21 @@ func cacheIsStale(path string, maxAge time.Duration) bool {
 	return time.Since(info.ModTime()) > maxAge
 }
 
-func tryRefresh(ctx context.Context, fetcher Fetcher, cachePath string, prev []byte) ([]byte, bool) {
+// tryRefresh fetches a fresh policy and writes it to the cache only if
+// it parses successfully. Returns the bytes (and ok=true) on success;
+// on fetch error or parse failure it returns ok=false so the caller
+// can keep serving the previous cache.
+func tryRefresh(ctx context.Context, fetcher Fetcher, cachePath string) ([]byte, bool) {
 	data, err := fetcher.Fetch(ctx)
 	if err != nil {
 		return nil, false
 	}
 	if len(data) == 0 {
+		return nil, false
+	}
+	if _, err := parsePolicy(data); err != nil {
+		slog.Warn("auto-refresh: fetched policy did not parse, keeping previous cache",
+			"path", cachePath, "error", err)
 		return nil, false
 	}
 	if err := writeCacheFile(cachePath, data); err != nil {
@@ -198,7 +222,6 @@ func tryRefresh(ctx context.Context, fetcher Fetcher, cachePath string, prev []b
 	// Refresh mtime even if contents unchanged.
 	now := time.Now()
 	_ = os.Chtimes(cachePath, now, now)
-	_ = prev // keep var for future diff support
 	return data, true
 }
 
