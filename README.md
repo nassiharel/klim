@@ -35,6 +35,9 @@
 ### 🔍 Discover & Install Tools
 Browse 110+ curated developer tools from one place. Filter by category, tag, or platform. Install anything with one keypress — clim picks the right package manager for your OS.
 
+### 🛠️ Scriptable Install / Upgrade / Remove
+`clim install jq fzf`, `clim upgrade --pack go-dev`, `clim remove jq` — install/upgrade/remove tools and packs from the command line, with `--source` to pin a package manager, `--pack` for bundles, `--dry-run` to preview, and `--output json` for CI.
+
 ### 📦 Packs — Curated Tool Bundles
 Install entire toolchains in one shot. Cloud Essentials, K8s Starter, Python Developer — pick a pack and go. See which packs you've already completed with visual progress gauges.
 

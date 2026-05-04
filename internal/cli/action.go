@@ -1,0 +1,379 @@
+package cli
+
+import (
+	"cmp"
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
+	"sort"
+	"strings"
+
+	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/clim/internal/registry"
+)
+
+// Action discriminates the three sibling action commands.
+type Action string
+
+// Action values match the subcommand verb so they can be used directly in
+// log lines and JSON output.
+const (
+	ActionInstall Action = "install"
+	ActionUpgrade Action = "upgrade"
+	ActionRemove  Action = "remove"
+)
+
+// String returns the verb for human-readable headers.
+func (a Action) String() string { return string(a) }
+
+// actionPlan holds a single tool-level action with its resolved command.
+type actionPlan struct {
+	name    string
+	display string
+	cmdArgs []string
+	source  string
+}
+
+// actionSummary classifies the requested targets into outcome buckets.
+// Each bucket maps to a different stderr / JSON section so the caller can
+// render and execute them independently.
+type actionSummary struct {
+	toExec []actionPlan
+
+	// Targets that didn't make it into toExec, grouped by reason.
+	alreadyInstalled []string // install only
+	notInstalled     []string // upgrade / remove only
+	upToDate         []string // upgrade only
+	selfProtected    []string // remove only — refused for safety
+	unknown          []string // name not in registry
+	noPackage        []string // no package ID for the current OS
+	noPkgMgr         []string // package ID exists but its PM isn't on PATH
+	unknownPacks     []string // --pack <name> not found in catalog
+
+	// Action records the verb used to build this summary so render code
+	// doesn't need it threaded separately.
+	Action Action
+}
+
+// resolveSource picks the source hint for an action invocation.
+//
+// Precedence (highest to lowest):
+//  1. --source <pm> flag (per invocation)
+//  2. cfg.Defaults.PreferredSource (global config)
+//  3. "" — let resolveInstallPlan / resolveUpgradePlan / resolveRemovePlan
+//     fall back to PackageIDs.BestInstallSource.
+func resolveSource(flagHint string, cfg *config.Config) string {
+	if v := strings.TrimSpace(flagHint); v != "" {
+		return v
+	}
+	if cfg != nil {
+		return strings.TrimSpace(cfg.Defaults.PreferredSource)
+	}
+	return ""
+}
+
+// validateSource ensures a non-empty --source value is one of the known
+// package managers. Empty is always accepted (means "use precedence").
+func validateSource(flagValue string) error {
+	v := strings.TrimSpace(flagValue)
+	if v == "" {
+		return nil
+	}
+	switch registry.InstallSource(v) {
+	case registry.SourceWinget, registry.SourceChoco, registry.SourceScoop,
+		registry.SourceBrew, registry.SourceApt, registry.SourceSnap,
+		registry.SourceNPM:
+		return nil
+	}
+	return usageErrorf("unknown --source %q (expected one of: winget/choco/scoop/brew/apt/snap/npm)", v)
+}
+
+// resolveUpgradePlan mirrors resolveInstallPlan for the upgrade verb.
+// A nil plan with hasAny=true means "package id exists but no PM
+// available"; with hasAny=false means "no package id for this OS".
+func resolveUpgradePlan(name, display string, pkgs registry.PackageIDs, sourceHint string) (*actionPlan, bool) {
+	src := pkgs.BestInstallSource()
+	if sourceHint != "" {
+		preferred := registry.InstallSource(sourceHint)
+		if args := pkgs.UpgradeArgs(preferred); args != nil {
+			src = preferred
+		}
+	}
+	args := pkgs.UpgradeArgs(src)
+	if args == nil {
+		return nil, pkgs.HasAnyPackageForOS()
+	}
+	return &actionPlan{
+		name:    name,
+		display: cmp.Or(display, name),
+		cmdArgs: args,
+		source:  string(src),
+	}, true
+}
+
+// resolveRemovePlan mirrors resolveInstallPlan for the remove verb.
+func resolveRemovePlan(name, display string, pkgs registry.PackageIDs, sourceHint string) (*actionPlan, bool) {
+	src := pkgs.BestInstallSource()
+	if sourceHint != "" {
+		preferred := registry.InstallSource(sourceHint)
+		if args := pkgs.RemoveArgs(preferred); args != nil {
+			src = preferred
+		}
+	}
+	args := pkgs.RemoveArgs(src)
+	if args == nil {
+		return nil, pkgs.HasAnyPackageForOS()
+	}
+	return &actionPlan{
+		name:    name,
+		display: cmp.Or(display, name),
+		cmdArgs: args,
+		source:  string(src),
+	}, true
+}
+
+// expandTargets merges positional tool names with --pack expansions and
+// deduplicates by name. Unknown pack names are returned in the second
+// slice so the caller can report and exit with a usage error.
+func expandTargets(toolNames []string, packNames []string, packs []registry.Pack) (targets []string, unknownPacks []string) {
+	seen := make(map[string]bool, len(toolNames))
+	addName := func(n string) {
+		n = strings.TrimSpace(n)
+		if n == "" || seen[n] {
+			return
+		}
+		seen[n] = true
+		targets = append(targets, n)
+	}
+	for _, n := range toolNames {
+		addName(n)
+	}
+
+	if len(packNames) > 0 {
+		packMap := make(map[string]*registry.Pack, len(packs))
+		for i := range packs {
+			packMap[packs[i].Name] = &packs[i]
+		}
+		for _, pn := range packNames {
+			pn = strings.TrimSpace(pn)
+			if pn == "" {
+				continue
+			}
+			pk, ok := packMap[pn]
+			if !ok {
+				unknownPacks = append(unknownPacks, pn)
+				continue
+			}
+			for _, tn := range pk.ToolNames {
+				addName(tn)
+			}
+		}
+	}
+	return targets, unknownPacks
+}
+
+// buildActionPlan classifies each target according to the action's
+// semantics and produces an actionSummary ready for confirmation /
+// execution. regMap is the catalog-resolved map of registry tools (with
+// installed instances populated where applicable).
+func buildActionPlan(action Action, targets []string, regMap map[string]*registry.Tool, sourceHint string) actionSummary {
+	ps := actionSummary{Action: action}
+
+	for _, name := range targets {
+		// Self-protection (Remove only): refuse to uninstall clim
+		// itself before the catalog lookup. Triggers regardless of
+		// whether clim is in the marketplace, so the guard remains in
+		// place if the catalog gains a clim entry later.
+		if action == ActionRemove && name == "clim" {
+			ps.selfProtected = append(ps.selfProtected, name)
+			continue
+		}
+
+		rt, exists := regMap[name]
+		if !exists {
+			ps.unknown = append(ps.unknown, name)
+			continue
+		}
+		display := cmp.Or(rt.DisplayName, rt.Name)
+
+		switch action {
+		case ActionInstall:
+			if rt.IsInstalled() {
+				ps.alreadyInstalled = append(ps.alreadyInstalled, display)
+				continue
+			}
+			plan, hasAny := resolveInstallPlanFor(rt, sourceHint)
+			if plan == nil {
+				ps.appendNoPM(name, hasAny)
+				continue
+			}
+			ps.toExec = append(ps.toExec, *plan)
+
+		case ActionUpgrade:
+			if !rt.IsInstalled() {
+				ps.notInstalled = append(ps.notInstalled, display)
+				continue
+			}
+			if !rt.HasUpdate() {
+				ps.upToDate = append(ps.upToDate, display)
+				continue
+			}
+			plan, hasAny := resolveUpgradePlan(name, display, rt.Packages, sourceHint)
+			if plan == nil {
+				ps.appendNoPM(name, hasAny)
+				continue
+			}
+			ps.toExec = append(ps.toExec, *plan)
+
+		case ActionRemove:
+			if !rt.IsInstalled() {
+				ps.notInstalled = append(ps.notInstalled, display)
+				continue
+			}
+			plan, hasAny := resolveRemovePlan(name, display, rt.Packages, sourceHint)
+			if plan == nil {
+				ps.appendNoPM(name, hasAny)
+				continue
+			}
+			ps.toExec = append(ps.toExec, *plan)
+		}
+	}
+	return ps
+}
+
+// resolveInstallPlanFor wraps resolveInstallPlan for registry tools so
+// the install/upgrade/remove paths can share one shape.
+func resolveInstallPlanFor(rt *registry.Tool, sourceHint string) (*actionPlan, bool) {
+	plan, hasAny := resolveInstallPlan(rt.Name, rt.DisplayName, rt.Packages, sourceHint)
+	if plan == nil {
+		return nil, hasAny
+	}
+	return &actionPlan{
+		name:    plan.name,
+		display: plan.display,
+		cmdArgs: plan.cmdArgs,
+		source:  plan.source,
+	}, true
+}
+
+func (ps *actionSummary) appendNoPM(name string, hasAny bool) {
+	if hasAny {
+		ps.noPkgMgr = append(ps.noPkgMgr, name)
+	} else {
+		ps.noPackage = append(ps.noPackage, name)
+	}
+}
+
+// printActionSummary writes a human-readable summary to stderr.
+func printActionSummary(ps actionSummary) {
+	fmt.Fprintf(os.Stderr, "\n──── %s Plan ────\n\n", titleCase(string(ps.Action)))
+
+	emit := func(label string, items []string) {
+		if len(items) == 0 {
+			return
+		}
+		sortStringsCopy(items)
+		fmt.Fprintf(os.Stderr, "  %s (%d):\n", label, len(items))
+		for _, s := range items {
+			fmt.Fprintf(os.Stderr, "    · %s\n", s)
+		}
+		fmt.Fprintln(os.Stderr)
+	}
+
+	switch ps.Action {
+	case ActionInstall:
+		emit("✓ Already installed", ps.alreadyInstalled)
+	case ActionUpgrade:
+		emit("✓ Up to date", ps.upToDate)
+		emit("· Not installed (skipped)", ps.notInstalled)
+	case ActionRemove:
+		emit("· Not installed (skipped)", ps.notInstalled)
+		emit("⚠ Refused (clim self-removal blocked)", ps.selfProtected)
+	}
+	emit("⚠ Not in catalog", ps.unknown)
+	emit(fmt.Sprintf("⚠ No package for %s", runtime.GOOS), ps.noPackage)
+	emit("⚠ No supported package manager", ps.noPkgMgr)
+
+	if len(ps.toExec) > 0 {
+		fmt.Fprintf(os.Stderr, "  To %s (%d):\n", ps.Action, len(ps.toExec))
+		for _, p := range ps.toExec {
+			fmt.Fprintf(os.Stderr, "    · %-20s  via %s\n", p.display, p.source)
+		}
+		fmt.Fprintln(os.Stderr)
+	}
+}
+
+func sortStringsCopy(s []string) { sort.Strings(s) }
+
+// executeActionPlans runs each plan sequentially with live terminal
+// output. Returns per-tool results so callers can build structured
+// output (JSON) and counts.
+func executeActionPlans(ctx context.Context, ps actionSummary) []actionExecResult {
+	verb := titleCase(string(ps.Action) + "ing")
+	results := make([]actionExecResult, 0, len(ps.toExec))
+	for _, p := range ps.toExec {
+		fmt.Fprintf(os.Stderr, "\n──── %s %s via %s ────\n", verb, p.display, p.source)
+
+		c := exec.CommandContext(ctx, p.cmdArgs[0], p.cmdArgs[1:]...) //nolint:gosec // G204: PM binary + package id, no user shell
+		c.Stdin = os.Stdin
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+
+		runErr := c.Run()
+		res := actionExecResult{Plan: p}
+		if runErr != nil {
+			fmt.Fprintf(os.Stderr, "  ✗ %s failed: %s\n", p.display, runErr)
+			res.Err = runErr
+		} else {
+			fmt.Fprintf(os.Stderr, "  ✓ %s %s\n", p.display, pastTense(ps.Action))
+		}
+		results = append(results, res)
+	}
+	return results
+}
+
+// actionExecResult captures the outcome of a single plan execution.
+type actionExecResult struct {
+	Plan actionPlan
+	Err  error // nil on success
+}
+
+// countResults splits per-tool results into success/failure counts.
+func countResults(rs []actionExecResult) (succeeded, failed int) {
+	for _, r := range rs {
+		if r.Err == nil {
+			succeeded++
+		} else {
+			failed++
+		}
+	}
+	return
+}
+
+func pastTense(a Action) string {
+	switch a {
+	case ActionInstall:
+		return "installed"
+	case ActionUpgrade:
+		return "upgraded"
+	case ActionRemove:
+		return "removed"
+	}
+	return string(a) + "d"
+}
+
+// titleCase upper-cases the first ASCII letter of s. Sufficient for our
+// fixed verb set ("install", "upgrade", "remove", "installing", etc.) —
+// avoids strings.Title (deprecated) and the cases.Title import.
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	b := []byte(s)
+	if b[0] >= 'a' && b[0] <= 'z' {
+		b[0] -= 'a' - 'A'
+	}
+	return string(b)
+}

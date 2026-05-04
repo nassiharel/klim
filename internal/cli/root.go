@@ -102,6 +102,12 @@ func init() {
 	rootCmd.AddCommand(whyCmd)
 	infoCmd.GroupID = "tools"
 	rootCmd.AddCommand(infoCmd)
+	installCmd.GroupID = "tools"
+	rootCmd.AddCommand(installCmd)
+	upgradeCmd.GroupID = "tools"
+	rootCmd.AddCommand(upgradeCmd)
+	removeCmd.GroupID = "tools"
+	rootCmd.AddCommand(removeCmd)
 	tryCmd.GroupID = "tools"
 	rootCmd.AddCommand(tryCmd)
 	watchCmd.GroupID = "tools"

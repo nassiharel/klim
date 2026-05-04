@@ -12,6 +12,7 @@ func TestAllSettings_CoversAllConfigFields(t *testing.T) {
 		"marketplace_url", "marketplace_auto_refresh", "marketplace_refresh_interval",
 		"performance_concurrency", "performance_command_timeout",
 		"ui_default_tab", "ui_show_path", "ui_sidebar_right",
+		"defaults_preferred_source",
 	}
 	got := map[string]bool{}
 	for _, s := range settings {

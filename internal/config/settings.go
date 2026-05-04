@@ -248,6 +248,14 @@ func AllSettings() []Setting {
 			GetBool: func(c *Config) bool { return c.UI.SidebarRight },
 			SetBool: func(c *Config, v bool) { c.UI.SidebarRight = v },
 		},
+		// --- Defaults (consumed by clim install / upgrade / remove) ---
+		{
+			Section: "Defaults", Label: "Preferred Source", Key: "defaults_preferred_source", Type: SettingChoice,
+			Help:      "Package manager clim install/upgrade/remove prefer when available. Empty = OS-priority fallback.",
+			Choices:   []string{"", "winget", "choco", "scoop", "brew", "apt", "snap", "npm"},
+			GetString: func(c *Config) string { return c.Defaults.PreferredSource },
+			SetString: func(c *Config, v string) { c.Defaults.PreferredSource = v },
+		},
 	}
 }
 

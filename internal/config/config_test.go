@@ -153,6 +153,41 @@ func TestValidate_ExtraURLs(t *testing.T) {
 	}
 }
 
+func TestValidate_PreferredSource(t *testing.T) {
+	tests := []struct {
+		name      string
+		source    string
+		wantWarns int
+	}{
+		{"empty (default)", "", 0},
+		{"valid brew", "brew", 0},
+		{"valid winget", "winget", 0},
+		{"valid scoop", "scoop", 0},
+		{"valid choco", "choco", 0},
+		{"valid apt", "apt", 0},
+		{"valid snap", "snap", 0},
+		{"valid npm", "npm", 0},
+		{"unknown source", "foobar", 1},
+		{"unknown go", "go", 1}, // not yet a real install source
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Defaults.PreferredSource = tt.source
+			warnings := cfg.Validate()
+			count := 0
+			for _, w := range warnings {
+				if strings.Contains(w, "defaults.preferred_source") {
+					count++
+				}
+			}
+			if count != tt.wantWarns {
+				t.Errorf("got %d preferred_source warnings, want %d: %v", count, tt.wantWarns, warnings)
+			}
+		})
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && strings.Contains(s, sub)
 }
