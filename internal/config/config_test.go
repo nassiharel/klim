@@ -201,6 +201,7 @@ func TestValidate_ComplianceURL(t *testing.T) {
 		{"ftp rejected", "ftp://example.com/p.yaml", 1},
 		{"missing host", "https://", 1},
 		{"plain text", "just-a-string", 1},
+		{"surrounding whitespace warned", " https://example.com/p.yaml ", 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

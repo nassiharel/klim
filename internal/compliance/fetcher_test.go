@@ -1,6 +1,7 @@
 package compliance
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -96,6 +97,21 @@ func TestHTTPFetcher_RejectsRedirectChain(t *testing.T) {
 	f := &HTTPFetcher{URL: srv.URL + "/r0"}
 	if _, err := f.Fetch(context.Background()); err == nil {
 		t.Errorf("expected redirect-chain rejection")
+	}
+}
+
+func TestHTTPFetcher_TrimsURLWhitespace(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("name: trimmed\n"))
+	}))
+	defer srv.Close()
+	f := &HTTPFetcher{URL: "  " + srv.URL + "  "}
+	data, err := f.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("expected trim to succeed, got %v", err)
+	}
+	if !bytes.Contains(data, []byte("trimmed")) {
+		t.Errorf("unexpected payload: %s", data)
 	}
 }
 

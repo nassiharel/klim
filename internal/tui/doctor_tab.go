@@ -357,14 +357,18 @@ func loadPolicyForTUISync(cfg *config.Config, policyPath string) (*compliance.Po
 	}
 
 	// 2. compliance.url — serve the cached copy synchronously; the
-	//    async fetcher will refresh it shortly.
+	//    async fetcher will refresh it shortly. A malformed cache is
+	//    surfaced as an error rather than silently treated as "no
+	//    policy" — otherwise startup with a broken cache would let
+	//    blocked actions through until the async fetch completed.
 	if cfg != nil && cfg.Compliance.URL != "" {
 		if cachePath, err := paths.ComplianceCachePath(); err == nil {
-			if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
-				if p, perr := compliance.LoadPolicy(cachePath); perr == nil {
-					_ = data
-					return p, ""
+			if info, statErr := os.Stat(cachePath); statErr == nil && info.Size() > 0 {
+				p, perr := compliance.LoadPolicy(cachePath)
+				if perr != nil {
+					return nil, fmt.Sprintf("Cached policy %s is malformed: %v", cachePath, perr)
 				}
+				return p, ""
 			}
 		}
 		// No cache yet — UI will show "no policy" until the async

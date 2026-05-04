@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/nassiharel/clim/internal/fileutil"
@@ -53,15 +54,19 @@ func validateHTTPURL(u string) error {
 	return nil
 }
 
-// Fetch downloads policy YAML from the configured URL.
+// Fetch downloads policy YAML from the configured URL. Surrounding
+// whitespace on f.URL is tolerated — config.Validate also flags it as
+// a warning, but trimming here keeps a config-edit slip from breaking
+// the runtime fetch.
 func (f *HTTPFetcher) Fetch(ctx context.Context) ([]byte, error) {
-	if f.URL == "" {
+	rawURL := strings.TrimSpace(f.URL)
+	if rawURL == "" {
 		return nil, errors.New("policy URL not configured")
 	}
-	if err := validateHTTPURL(f.URL); err != nil {
+	if err := validateHTTPURL(rawURL); err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.URL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}

@@ -238,10 +238,17 @@ func (c *Config) Validate() []string {
 
 	// Compliance URL — must be http/https with a host so the fetcher
 	// can resolve it. Mirrors the marketplace.extra_urls validation.
-	if raw := strings.TrimSpace(c.Compliance.URL); raw != "" {
-		parsed, err := url.Parse(raw)
+	// Surrounding whitespace is rejected because the stored YAML value
+	// is what gets passed verbatim to the fetcher; trimming here would
+	// pass validation while later HTTP calls still see the whitespace.
+	if c.Compliance.URL != "" {
+		raw := c.Compliance.URL
+		if strings.TrimSpace(raw) != raw {
+			w = append(w, fmt.Sprintf("compliance.url: %q has surrounding whitespace; trim it", raw))
+		}
+		parsed, err := url.Parse(strings.TrimSpace(raw))
 		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-			w = append(w, fmt.Sprintf("compliance.url: %q is not a valid http/https URL", c.Compliance.URL))
+			w = append(w, fmt.Sprintf("compliance.url: %q is not a valid http/https URL", raw))
 		}
 	}
 	if c.Compliance.RefreshInterval.Duration < 0 {
