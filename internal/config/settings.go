@@ -76,7 +76,15 @@ func (s Setting) Display(cfg *Config) string {
 	case SettingDuration:
 		return s.GetDuration(cfg).String()
 	case SettingChoice:
-		return s.GetString(cfg)
+		v := s.GetString(cfg)
+		if v == "" {
+			// Empty is sometimes a meaningful choice ("use the
+			// default"), so render it the same way SettingString
+			// does — keeps blank values from looking ambiguous in
+			// the TUI / web config editor.
+			return "(default)"
+		}
+		return v
 	}
 	return ""
 }
@@ -247,6 +255,14 @@ func AllSettings() []Setting {
 			Help:    "Render the filter sidebar on the right (default: left).",
 			GetBool: func(c *Config) bool { return c.UI.SidebarRight },
 			SetBool: func(c *Config, v bool) { c.UI.SidebarRight = v },
+		},
+		// --- Defaults (consumed by clim install / upgrade / remove) ---
+		{
+			Section: "Defaults", Label: "Preferred Source", Key: "defaults_preferred_source", Type: SettingChoice,
+			Help:      "Package manager that clim install / upgrade / remove prefers when available. Empty = OS-priority fallback.",
+			Choices:   []string{"", "winget", "choco", "scoop", "brew", "apt", "snap", "npm"},
+			GetString: func(c *Config) string { return c.Defaults.PreferredSource },
+			SetString: func(c *Config, v string) { c.Defaults.PreferredSource = v },
 		},
 	}
 }

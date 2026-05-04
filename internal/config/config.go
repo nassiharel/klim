@@ -27,6 +27,7 @@ type Config struct {
 	Marketplace MarketplaceConfig `yaml:"marketplace"`
 	Performance PerformanceConfig `yaml:"performance"`
 	UI          UIConfig          `yaml:"ui"`
+	Defaults    DefaultsConfig    `yaml:"defaults,omitempty"`
 	Compliance  ComplianceConfig  `yaml:"compliance,omitempty"`
 }
 
@@ -65,6 +66,17 @@ type ComplianceConfig struct {
 	AutoRefresh     bool     `yaml:"auto_refresh,omitempty"`     // auto-refresh from URL when stale
 	RefreshInterval Duration `yaml:"refresh_interval,omitempty"` // refresh interval (default 24h)
 	BlockInstalls   bool     `yaml:"block_installs,omitempty"`   // hard-block non-compliant installs
+}
+
+// DefaultsConfig holds user-preferred defaults consumed by action commands
+// (clim install / upgrade / remove). The values here are overridden by the
+// per-invocation `--source` flag.
+type DefaultsConfig struct {
+	// PreferredSource is the package manager clim should prefer when a tool
+	// is available from multiple sources on the current OS. Empty string
+	// means "use the OS-priority fallback" (registry.BestInstallSource).
+	// Examples: "brew", "winget", "scoop", "apt", "snap", "npm".
+	PreferredSource string `yaml:"preferred_source,omitempty"`
 }
 
 // Duration wraps time.Duration for YAML marshaling as a human-readable string
@@ -224,6 +236,14 @@ func (c *Config) Validate() []string {
 		w = append(w, fmt.Sprintf("marketplace.url: %q doesn't look like a URL", c.Marketplace.URL))
 	}
 
+	// Defaults.PreferredSource — validate against known package managers.
+	// Empty value means "use OS-priority fallback" and is allowed.
+	// Trim whitespace first so behavior matches resolveSource (which
+	// also trims) — otherwise " brew " warns even though it works.
+	if src := strings.TrimSpace(c.Defaults.PreferredSource); src != "" && !knownSources[src] {
+		w = append(w, fmt.Sprintf("defaults.preferred_source: unknown value %q (expected one of: winget/choco/scoop/brew/apt/snap/npm)", src))
+	}
+
 	// Extra marketplace URLs.
 	for i, raw := range c.Marketplace.ExtraURLs {
 		raw = strings.TrimSpace(raw)
@@ -240,6 +260,15 @@ func (c *Config) Validate() []string {
 }
 
 const configHeader = "# clim — Configuration\n# All values are optional. Defaults are shown below.\n# Restart clim after editing for changes to take effect.\n\n"
+
+// knownSources lists the package-manager source names accepted by
+// Defaults.PreferredSource. Mirrors registry.SourceXxx constants;
+// duplicated here to avoid a new internal/config → internal/registry
+// dependency.
+var knownSources = map[string]bool{
+	"winget": true, "choco": true, "scoop": true,
+	"brew": true, "apt": true, "snap": true, "npm": true,
+}
 
 // Save writes the config to config.yaml atomically.
 func Save(cfg *Config) error {

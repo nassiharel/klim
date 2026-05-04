@@ -32,7 +32,12 @@ internal/
                  errors.go       UsageError, PartialFailureError, exit codes
                  help.go         Colorized help template for the root command
                  output.go       Canonical --output {text,json,yaml} flag helpers
-                 installplan.go  Install-plan resolution + execution (shared by import / open)
+                 installplan.go  Install-plan resolution (legacy, used by import / open)
+                 action.go       Action enum + buildActionPlan + plan resolution shared by install/upgrade/remove
+                 action_run.go   Shared runAction body (text + JSON output paths) for install/upgrade/remove
+                 install.go      `clim install [tool...] [--pack ...]`
+                 upgrade.go      `clim upgrade [tool...] [--pack ...]`
+                 remove.go       `clim remove  [tool...] [--pack ...]` with clim self-protection
   config/      config.yaml: logging, marketplace URL, performance, UI prefs
   custompacks/ User-created pack definitions → ~/.config/clim/marketplace/custom-packs.yaml
   detector/    Fallback version detection (Go buildinfo, Windows PE resources)
