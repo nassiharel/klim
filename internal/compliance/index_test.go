@@ -113,3 +113,55 @@ func TestIndex_Counts(t *testing.T) {
 		t.Errorf("counts = %d/%d/%d, want 1/1/1", c, w, v)
 	}
 }
+
+// TestIndex_RequiredMissing_StillInstallable guards against a regression
+// where required-but-not-installed tools were marked StatusViolation +
+// CanInstall=false, which made it impossible to install the very tools
+// the policy was demanding the user install.
+func TestIndex_RequiredMissing_StillInstallable(t *testing.T) {
+	policy := &Policy{
+		Name: "requires-git",
+		RequiredTools: []RequiredTool{
+			{Name: "git"},
+		},
+	}
+	// git is in the catalog but not installed.
+	tools := []registry.Tool{
+		{Name: "git"},
+	}
+	idx := BuildIndex(policy, tools)
+
+	// Status surfaces the violation so the doctor view / badge stays honest…
+	if got := idx.Status("git"); got != StatusViolation {
+		t.Errorf("Status(git) = %v, want StatusViolation (so doctor surfaces it)", got)
+	}
+	// …but CanInstall must permit the install — installing IS the fix.
+	ok, reason := idx.CanInstall("git")
+	if !ok {
+		t.Errorf("CanInstall(git) = false (%q); should be true so the user can install the required tool", reason)
+	}
+}
+
+// TestIndex_BlockedToolVsRequiredMissing verifies the two violation
+// kinds behave differently w.r.t. CanInstall.
+func TestIndex_BlockedToolVsRequiredMissing(t *testing.T) {
+	policy := &Policy{
+		Name:         "mixed",
+		BlockedTools: []string{"banned"},
+		RequiredTools: []RequiredTool{
+			{Name: "needed"},
+		},
+	}
+	tools := []registry.Tool{
+		{Name: "banned"},
+		{Name: "needed"},
+	}
+	idx := BuildIndex(policy, tools)
+
+	if ok, _ := idx.CanInstall("banned"); ok {
+		t.Error("blocked tool must remain CanInstall=false")
+	}
+	if ok, _ := idx.CanInstall("needed"); !ok {
+		t.Error("required-missing tool must be CanInstall=true so the user can install it")
+	}
+}

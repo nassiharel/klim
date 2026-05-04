@@ -32,8 +32,9 @@ func (s ToolStatus) String() string {
 
 // toolEntry holds the per-tool compliance state.
 type toolEntry struct {
-	Status  ToolStatus
-	Reasons []string
+	Status        ToolStatus
+	Reasons       []string
+	BlocksInstall bool // true when installing/upgrading this tool would itself violate policy
 }
 
 // Index provides fast O(1) compliance lookup per tool.
@@ -76,9 +77,10 @@ func BuildIndex(policy *Policy, tools []registry.Tool) *Index {
 		key := strings.ToLower(t.Name)
 		entry := toolEntry{Status: StatusCompliant}
 
-		// Blocked tool — hard violation.
+		// Blocked tool — hard violation, and blocks install.
 		if blockedToolSet[key] {
 			entry.Status = StatusViolation
+			entry.BlocksInstall = true
 			entry.Reasons = append(entry.Reasons, "blocked by policy")
 		}
 
@@ -88,6 +90,7 @@ func BuildIndex(policy *Policy, tools []registry.Tool) *Index {
 				src := strings.ToLower(string(primary.Source))
 				if len(allowedSourceSet) > 0 && !allowedSourceSet[src] {
 					entry.Status = StatusViolation
+					entry.BlocksInstall = true
 					entry.Reasons = append(entry.Reasons,
 						"installed via "+string(primary.Source)+" — only "+strings.Join(policy.AllowedSources, ", ")+" allowed")
 				}
@@ -103,6 +106,7 @@ func BuildIndex(policy *Policy, tools []registry.Tool) *Index {
 			lkey := strings.ToLower(license)
 			if blockedLicenseSet[lkey] {
 				entry.Status = StatusViolation
+				entry.BlocksInstall = true
 				entry.Reasons = append(entry.Reasons, "license "+license+" is blocked")
 			} else if len(allowedLicenseSet) > 0 && !allowedLicenseSet[lkey] {
 				if entry.Status != StatusViolation {
@@ -119,6 +123,9 @@ func BuildIndex(policy *Policy, tools []registry.Tool) *Index {
 			primary := t.PrimaryInstance()
 			if primary != nil && primary.Version != "" && !versionSatisfies(primary.Version, constraint) {
 				entry.Status = StatusViolation
+				// Version mismatch on an installed tool: upgrade IS the
+				// remediation, so we don't block install/upgrade — only
+				// the doctor view + badge surface the constraint.
 				entry.Reasons = append(entry.Reasons,
 					"version "+primary.Version+" does not satisfy "+constraint)
 			}
@@ -149,6 +156,9 @@ func BuildIndex(policy *Policy, tools []registry.Tool) *Index {
 			if entry.Status == StatusCompliant {
 				entry.Status = StatusViolation
 			}
+			// IMPORTANT: do NOT set BlocksInstall here — installing
+			// the tool is the *remediation* for this violation, not
+			// a new violation. CanInstall must permit it.
 			idx.entries[key] = entry
 		}
 	}
@@ -184,15 +194,21 @@ func (idx *Index) Reasons(toolName string) []string {
 	return nil
 }
 
-// CanInstall reports whether installing a tool is permitted under the policy.
-// Returns (true, "") when allowed. Returns (false, reason) when blocked.
-// Always returns true if the index is nil or has no policy.
+// CanInstall reports whether installing or upgrading a tool is
+// permitted under the policy. Returns (true, "") when allowed,
+// (false, reason) when blocked. Always returns true if the index is
+// nil or has no policy.
+//
+// "Required-but-not-installed" violations do NOT block installs —
+// installing the tool is the remediation, not a new violation. Only
+// per-tool legitimacy violations (blocked tool, disallowed source,
+// blocked license) flip BlocksInstall and refuse the action.
 func (idx *Index) CanInstall(toolName string) (bool, string) {
 	if idx == nil || !idx.policyOK {
 		return true, ""
 	}
 	if entry, ok := idx.entries[strings.ToLower(toolName)]; ok {
-		if entry.Status == StatusViolation {
+		if entry.BlocksInstall {
 			reason := "policy violation"
 			if len(entry.Reasons) > 0 {
 				reason = strings.Join(entry.Reasons, "; ")

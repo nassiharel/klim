@@ -695,16 +695,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case complianceLoadedMsg:
-		// Async fetch of compliance.url completed. Swap in the new
-		// index/result; on error keep whatever the sync local-load gave
-		// us and surface the error in the doctor view.
+		// Async fetch of compliance.url completed. Rebuild the index
+		// against the CURRENT m.tools — a snapshot from command-
+		// dispatch time would lose any install/upgrade/remove that
+		// happened while the fetch was in flight.
 		if msg.errorMsg != "" {
 			m.complianceError = msg.errorMsg
 			return m, nil
 		}
-		if msg.index != nil {
-			m.complianceIndex = msg.index
-			m.complianceResult = msg.result
+		if msg.policy != nil {
+			result := compliance.Check(msg.policy, m.tools)
+			m.complianceResult = &result
+			m.complianceIndex = compliance.BuildIndex(msg.policy, m.tools)
 			m.complianceError = ""
 			// Rebuild the menu so blocked actions get the new badge.
 			if m.showDetail {
@@ -2011,7 +2013,7 @@ func (m *Model) runDoctor(meta ...doctor.ScanMeta) tea.Cmd {
 	m.doctorChecked = true
 	m.doctorScroll = 0
 
-	return loadComplianceURLCmd(m.cfg, m.tools)
+	return loadComplianceURLCmd(m.cfg)
 }
 
 // --- Actions ---
@@ -2372,6 +2374,20 @@ func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
 		}
 		tool := &m.tools[idx]
 		if !tool.HasUpdate() {
+			continue
+		}
+		// Compliance gate: BlockInstalls applies to upgrades too. We
+		// pre-skip non-compliant tools here (rather than failing
+		// mid-batch) so the batch summary reports the reason and the
+		// rest of the batch still runs.
+		if blocked, reason := m.complianceBlocksInstall(tool.Name); blocked {
+			items = append(items, batchItem{
+				name:    tool.Name,
+				display: tool.DisplayName,
+				source:  "",
+				status:  batchSkipped,
+				errMsg:  reason,
+			})
 			continue
 		}
 		// Find upgrade args (best available source).

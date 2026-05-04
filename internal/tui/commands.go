@@ -81,11 +81,13 @@ type refreshToolMsg struct {
 }
 
 // complianceLoadedMsg arrives when the async URL fetch initiated by
-// loadComplianceURLCmd completes. It carries the freshly built index +
-// result so model.Update can swap them in without blocking on I/O.
+// loadComplianceURLCmd completes. It carries the freshly fetched
+// policy; the receiver must rebuild the index against its CURRENT
+// tools slice — using a snapshot taken at command-dispatch time
+// would regress to pre-action state if the user installed/upgraded/
+// removed a tool while the fetch was in flight.
 type complianceLoadedMsg struct {
-	result   *compliance.Result
-	index    *compliance.Index
+	policy   *compliance.Policy
 	errorMsg string
 }
 
@@ -338,17 +340,16 @@ func refreshSingleToolCmd(svc *service.ToolService, idx int, tool registry.Tool)
 
 // loadComplianceURLCmd asynchronously fetches the compliance policy
 // from cfg.Compliance.URL (with cache + auto-refresh) and returns a
-// complianceLoadedMsg. Returns nil when there's nothing to fetch (no
-// URL configured) so callers can unconditionally tea.Batch it.
-func loadComplianceURLCmd(cfg *config.Config, tools []registry.Tool) tea.Cmd {
+// complianceLoadedMsg carrying just the parsed Policy. The Index is
+// deliberately NOT pre-built here — the receiver builds it against
+// its current tools slice so a tool change in flight isn't lost.
+//
+// Returns nil when there's nothing to fetch (no URL configured) so
+// callers can unconditionally tea.Batch it.
+func loadComplianceURLCmd(cfg *config.Config) tea.Cmd {
 	if cfg == nil || cfg.Compliance.URL == "" {
 		return nil
 	}
-	// Snapshot the slice header — registry.Tool values are large, but
-	// the underlying tool data is immutable for the duration of this
-	// fetch and the caller will run BuildIndex on whichever copy is
-	// current when the message is processed.
-	snapshot := append([]registry.Tool(nil), tools...)
 	url := cfg.Compliance.URL
 	autoRefresh := cfg.Compliance.AutoRefresh
 	maxAge := cfg.Compliance.RefreshInterval.Duration
@@ -363,9 +364,7 @@ func loadComplianceURLCmd(cfg *config.Config, tools []registry.Tool) tea.Cmd {
 		if err != nil {
 			return complianceLoadedMsg{errorMsg: fmt.Sprintf("Failed to load policy from %s: %v", url, err)}
 		}
-		result := compliance.Check(policy, snapshot)
-		idx := compliance.BuildIndex(policy, snapshot)
-		return complianceLoadedMsg{result: &result, index: idx}
+		return complianceLoadedMsg{policy: policy}
 	}
 }
 
