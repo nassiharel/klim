@@ -18,7 +18,7 @@ clim init [flags]
 | `--all` | Include all installed tools (skip project detection) |
 | `--min-version` | Include minimum version constraints (`>=X.Y`) |
 | `--name` | Project name for the manifest |
-| `--force` | Overwrite an existing `.clim.yaml` (clim refuses by default to protect a team-shared file). When `--force` is given but no tools are detected, clim refuses rather than silently writing an empty manifest. |
+| `--force` | Overwrite an existing `.clim.yaml` (clim refuses by default to protect a team-shared file). When `--force` is passed but no tools are detected (and an existing manifest is present), clim refuses rather than silently writing an empty manifest or leaving a stale manifest in place. |
 
 ## Detection
 
