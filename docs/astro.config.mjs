@@ -68,6 +68,9 @@ export default defineConfig({
               items: [
                 { label: 'info', slug: 'reference/commands/info' },
                 { label: 'search', slug: 'reference/commands/search' },
+                { label: 'install', slug: 'reference/commands/install' },
+                { label: 'upgrade', slug: 'reference/commands/upgrade' },
+                { label: 'remove', slug: 'reference/commands/remove' },
                 { label: 'diff', slug: 'reference/commands/diff' },
                 { label: 'onboard', slug: 'reference/commands/onboard' },
                 { label: 'try', slug: 'reference/commands/try' },

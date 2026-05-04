@@ -93,7 +93,9 @@ func init() {
 	generateCmd.GroupID = "project"
 	rootCmd.AddCommand(generateCmd)
 
-	// Tool discovery & management.
+	// Tool discovery & management. install/upgrade/remove already set
+	// their own GroupID in the command definition — no override here,
+	// to keep one source of truth per command.
 	searchCmd.GroupID = "tools"
 	rootCmd.AddCommand(searchCmd)
 	onboardCmd.GroupID = "tools"
@@ -102,6 +104,9 @@ func init() {
 	rootCmd.AddCommand(whyCmd)
 	infoCmd.GroupID = "tools"
 	rootCmd.AddCommand(infoCmd)
+	rootCmd.AddCommand(installCmd)
+	rootCmd.AddCommand(upgradeCmd)
+	rootCmd.AddCommand(removeCmd)
 	tryCmd.GroupID = "tools"
 	rootCmd.AddCommand(tryCmd)
 	watchCmd.GroupID = "tools"
