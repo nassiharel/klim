@@ -27,8 +27,16 @@ const maxRemotePolicySize = 1 << 20 // 1 MB
 const maxRedirects = 3
 
 // Fetcher abstracts policy retrieval from a remote source.
+//
+// CacheKey returns a stable identifier for the source (typically the
+// URL) so the on-disk cache can be keyed per-source. When two
+// configurations point at different URLs they get different cache
+// files — switching `compliance.url` no longer accidentally serves
+// the previous URL's policy. Returning an empty string falls back to
+// the default unkeyed path (used by tests + the cli).
 type Fetcher interface {
 	Fetch(ctx context.Context) ([]byte, error)
+	CacheKey() string
 }
 
 // HTTPFetcher fetches a policy from an HTTP/HTTPS URL.
@@ -106,9 +114,26 @@ func (f *HTTPFetcher) Fetch(ctx context.Context) ([]byte, error) {
 	return data, nil
 }
 
-// CachePath returns the path to the remote-policy cache file.
+// CacheKey returns the configured URL — used to derive a per-URL
+// cache file so different policy hosts don't share a single cache.
+func (f *HTTPFetcher) CacheKey() string {
+	return strings.TrimSpace(f.URL)
+}
+
+// CachePath returns the path to the remote-policy cache file for the
+// default (unkeyed) location. Per-URL caching uses cachePathFor below.
 func CachePath() (string, error) {
 	return paths.ComplianceCachePath()
+}
+
+// cachePathFor returns the cache file path for a specific source key
+// (typically the URL). When key is empty falls back to CachePath() for
+// backwards compatibility.
+func cachePathFor(key string) (string, error) {
+	if strings.TrimSpace(key) == "" {
+		return CachePath()
+	}
+	return paths.ComplianceCachePathFor(key)
 }
 
 // LoadOptions controls LoadOrFetch behavior.
@@ -123,7 +148,7 @@ type LoadOptions struct {
 // fresh response, the stale cache (if any) is returned and preserved —
 // we never overwrite a known-good cache with an unparseable payload.
 func LoadOrFetch(ctx context.Context, fetcher Fetcher, opts LoadOptions) (*Policy, string, error) {
-	cachePath, err := CachePath()
+	cachePath, err := cachePathFor(fetcher.CacheKey())
 	if err != nil {
 		return nil, "", fmt.Errorf("resolving cache path: %w", err)
 	}
@@ -164,7 +189,7 @@ func LoadOrFetch(ctx context.Context, fetcher Fetcher, opts LoadOptions) (*Polic
 // matches LoadOrFetch's "never poison the cache" semantics so a flaky
 // proxy / login page can't silently break later runs.
 func Refresh(ctx context.Context, fetcher Fetcher) (*Policy, string, error) {
-	cachePath, err := CachePath()
+	cachePath, err := cachePathFor(fetcher.CacheKey())
 	if err != nil {
 		return nil, "", err
 	}

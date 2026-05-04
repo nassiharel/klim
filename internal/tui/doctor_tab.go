@@ -276,6 +276,14 @@ func (m Model) renderComplianceView() string {
 		return b.String()
 	}
 
+	// Refresh failed but a previous cache is loaded — warn so the user
+	// knows the doctor verdict is from the stale cache, not a fresh
+	// fetch. Without this banner the tab silently shows the old policy.
+	if m.complianceError != "" {
+		b.WriteString("  " + doctorError.Render("⚠ Policy refresh failed: "+m.complianceError) + "\n")
+		b.WriteString("  " + dashDim.Render("Showing previously cached policy below.") + "\n\n")
+	}
+
 	result := m.complianceResult
 	b.WriteString("  " + doctorSection.Render("Policy: "+result.PolicyName) + "\n\n")
 

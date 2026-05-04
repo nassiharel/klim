@@ -202,9 +202,45 @@ func TestRefresh_RejectsBadFreshFetchAndPreservesCache(t *testing.T) {
 	}
 }
 
+func TestLoadOrFetch_PerURLCache(t *testing.T) {
+	dir := t.TempDir()
+	setEnvDir(t, dir)
+
+	// Two fetchers with different keys (simulating different URLs)
+	// must NOT share a cache file. Otherwise a config switch from
+	// URL-A to URL-B silently reuses A's cached policy.
+	a := &stubFetcher{key: "https://a.example.com/policy.yaml", data: []byte("name: from-a\n")}
+	b := &stubFetcher{key: "https://b.example.com/policy.yaml", data: []byte("name: from-b\n")}
+
+	// Populate A's cache via fetch.
+	pa, _, err := LoadOrFetch(context.Background(), a, LoadOptions{})
+	if err != nil || pa.Name != "from-a" {
+		t.Fatalf("a load: %v / %+v", err, pa)
+	}
+	// Now switch to B with no fetch yet — would hit A's cache if shared.
+	pb, _, err := LoadOrFetch(context.Background(), b, LoadOptions{})
+	if err != nil || pb.Name != "from-b" {
+		t.Fatalf("b should fetch its own policy, not reuse A: err=%v p=%+v", err, pb)
+	}
+
+	// Verify cache paths actually differ on disk.
+	pathA, _ := cachePathFor(a.CacheKey())
+	pathB, _ := cachePathFor(b.CacheKey())
+	if pathA == pathB {
+		t.Errorf("expected distinct cache paths, both = %s", pathA)
+	}
+	if _, err := os.Stat(pathA); err != nil {
+		t.Errorf("A cache file missing at %s: %v", pathA, err)
+	}
+	if _, err := os.Stat(pathB); err != nil {
+		t.Errorf("B cache file missing at %s: %v", pathB, err)
+	}
+}
+
 type stubFetcher struct {
 	data []byte
 	err  error
+	key  string // optional cache key; "" → unkeyed default
 }
 
 func (s *stubFetcher) Fetch(ctx context.Context) ([]byte, error) {
@@ -213,6 +249,8 @@ func (s *stubFetcher) Fetch(ctx context.Context) ([]byte, error) {
 	}
 	return s.data, nil
 }
+
+func (s *stubFetcher) CacheKey() string { return s.key }
 
 func TestLoadOrFetch_NoCacheFetches(t *testing.T) {
 	tmp := t.TempDir()
