@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -138,8 +139,8 @@ func TestInit_ForceWithoutToolsRefusesToBlankExistingFile(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when --force given but no tools to write")
 	}
-	if !strings.Contains(err.Error(), "--force") || !strings.Contains(err.Error(), "no tools") {
-		t.Errorf("error should mention --force AND no tools, got: %v", err)
+	if !strings.Contains(err.Error(), "--force") || !strings.Contains(err.Error(), "no installed tools") {
+		t.Errorf("error should mention --force AND no installed tools, got: %v", err)
 	}
 	// Existing file must be intact — never silently truncated.
 	got, _ := os.ReadFile(filepath.Join(dir, teamfile.FileName))
@@ -176,6 +177,77 @@ func TestInit_ForceFlag_NoShortHand(t *testing.T) {
 	}
 	if got := initCmd.Flag("force").Shorthand; got != "" {
 		t.Errorf("--force should not have a shorthand (-f is reserved for --file), got %q", got)
+	}
+}
+
+// TestInit_ForceProjectDetectedButNoneInstalled covers the empty-tools
+// path on the project-detection branch when --all is NOT set. The
+// reviewer flagged that the previous error message ("no tools
+// detected") was inaccurate — detection found things, they just
+// weren't installed. The new message must reflect that.
+func TestInit_ForceProjectDetectedButNoneInstalled(t *testing.T) {
+	resetInitFlags(t)
+	dir := chdirTemp(t)
+	redirectConfig(t)
+	// Existing manifest so manifestExists is true.
+	if err := os.WriteFile(filepath.Join(dir, teamfile.FileName), []byte("tools:\n  - name: existing\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Project file so detection succeeds.
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module demo\n\ngo 1.22\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Empty installed set (catalog has 0 tools) — detection produces
+	// matches, none of them are in the installed map.
+	cmd := withInitCtx(t)
+	initForceFlag = true
+
+	err := runInit(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when --force given but no detected tools are installed")
+	}
+	if !strings.Contains(err.Error(), "not installed") {
+		t.Errorf("error should explain that detected tools aren't installed, got: %v", err)
+	}
+	// Existing file untouched.
+	got, _ := os.ReadFile(filepath.Join(dir, teamfile.FileName))
+	if !strings.Contains(string(got), "existing") {
+		t.Errorf("existing manifest should be preserved, got: %s", got)
+	}
+}
+
+// TestInit_DanglingSymlinkRequiresForce verifies that a dangling
+// .clim.yaml symlink is recognised as "exists" by Lstat, so plain
+// `clim init` refuses to clobber it the same way it would refuse
+// for a regular existing file.
+func TestInit_DanglingSymlinkRequiresForce(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation not reliable on Windows CI")
+	}
+	resetInitFlags(t)
+	dir := chdirTemp(t)
+	redirectConfig(t)
+	// Dangling symlink: .clim.yaml → /nonexistent/template.yaml.
+	if err := os.Symlink("/nonexistent/template.yaml", filepath.Join(dir, teamfile.FileName)); err != nil {
+		t.Fatal(err)
+	}
+	cmd := withInitCtx(t)
+
+	err := runInit(cmd, nil)
+	if err == nil {
+		t.Fatal("expected error when dangling .clim.yaml symlink exists and --force is not set")
+	}
+	if !strings.Contains(err.Error(), "--force") {
+		t.Errorf("error should mention --force, got: %v", err)
+	}
+	// Symlink itself must still be in place.
+	info, err := os.Lstat(filepath.Join(dir, teamfile.FileName))
+	if err != nil {
+		t.Fatalf("symlink missing after init: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Error("dangling symlink was replaced despite the --force refusal")
 	}
 }
 

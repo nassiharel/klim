@@ -12,24 +12,24 @@ import (
 
 // AtomicWrite writes data to path atomically via a temp file + rename.
 //
-// Since Go 1.5, os.Rename uses MoveFileExW(MOVEFILE_REPLACE_EXISTING)
-// on Windows, so a single rename replaces an existing target without
-// the previous remove-and-retry dance. Either the old contents or the
-// new contents are visible at every point — there is no window where
-// path doesn't exist.
+// Atomicity. Since Go 1.5, os.Rename uses MoveFileExW(MOVEFILE_REPLACE_EXISTING)
+// on Windows, so a single rename replaces an existing target without the
+// previous remove-and-retry dance. POSIX rename(2) is always atomic for
+// overwrite. Either the old contents or the new contents are visible at
+// path at every point — there is no window where path doesn't exist.
 //
-// **Symlink preservation**: when path is a symlink, the temp file is
-// created next to the symlink's target and the rename targets the
-// resolved path. This keeps the symlink intact (matches what
-// os.WriteFile already does on POSIX). Without this, every overwrite
-// would silently replace the symlink with a regular file.
+// Symlink preservation. When path is a symlink (including a *dangling*
+// symlink whose target doesn't exist yet), the temp file is created
+// next to the resolved target and the rename targets that path. The
+// symlink itself is left intact — repos that keep `.clim.yaml` as a
+// link to a shared template don't lose that setup on overwrite.
+// Symlink chains are followed up to a sane depth so a multi-hop link
+// still resolves correctly; cycles are detected and surface as a
+// rename failure rather than a silent write to the wrong place.
 func AtomicWrite(path string, data []byte, perm os.FileMode) error {
-	// Resolve symlinks so we write to the target file, not to the
-	// link itself. EvalSymlinks fails when path doesn't exist (the
-	// common first-write case) — fall back to the original path.
-	target := path
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		target = resolved
+	target, err := resolveLinkTarget(path)
+	if err != nil {
+		return err
 	}
 
 	dir := filepath.Dir(target)
@@ -59,6 +59,45 @@ func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("atomic rename %s → %s: %w", tmpPath, target, err)
 	}
 	return nil
+}
+
+// maxSymlinkDepth caps the number of links resolveLinkTarget will
+// follow before giving up. POSIX SYMLOOP_MAX is typically 8, Linux
+// follows up to 40; we sit comfortably between.
+const maxSymlinkDepth = 32
+
+// resolveLinkTarget walks symbolic links starting at path and returns
+// the final non-symlink target — even when the target doesn't exist
+// (dangling link). Used by AtomicWrite so writing through a symlink
+// updates the eventual target file rather than replacing the link.
+//
+// Returns path itself when path is not a symlink (or doesn't exist).
+// Errors only on excessive link depth; missing intermediate targets
+// are treated as the final destination.
+func resolveLinkTarget(path string) (string, error) {
+	current := path
+	for i := 0; i < maxSymlinkDepth; i++ {
+		info, err := os.Lstat(current)
+		if err != nil {
+			// Link target doesn't exist (the dangling case) or path
+			// itself is a fresh write — current is the final target.
+			return current, nil
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			// Real file or directory — done walking.
+			return current, nil
+		}
+		next, err := os.Readlink(current)
+		if err != nil {
+			return "", fmt.Errorf("reading symlink %s: %w", current, err)
+		}
+		// Relative targets resolve against the symlink's parent dir.
+		if !filepath.IsAbs(next) {
+			next = filepath.Join(filepath.Dir(current), next)
+		}
+		current = next
+	}
+	return "", fmt.Errorf("symlink depth exceeded at %s (>%d levels — possible cycle)", path, maxSymlinkDepth)
 }
 
 // EnsureDir creates all parent directories for path if they don't exist.

@@ -55,10 +55,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	outPath := filepath.Join(".", teamfile.FileName)
 
 	// Refuse to clobber an existing manifest unless --force is set.
-	// The error nudges the user toward the explicit opt-in instead of
-	// silently overwriting team-shared config.
+	// We use Lstat so a *dangling* .clim.yaml symlink still trips the
+	// safety check — Stat would follow the link, see ENOENT, and
+	// happily let `clim init` (no --force) replace the symlink.
 	manifestExists := false
-	if _, err := os.Stat(outPath); err == nil {
+	if _, err := os.Lstat(outPath); err == nil {
 		manifestExists = true
 		if !initForceFlag {
 			return fmt.Errorf("%s already exists — pass --force to overwrite, or edit it manually", outPath)
@@ -178,9 +179,20 @@ func runInit(cmd *cobra.Command, args []string) error {
 		// replacement. Emitting "No tools to include" + exit 0 would
 		// silently leave the previous manifest in place — a script
 		// running `clim init --force` would believe the regenerate
-		// succeeded. Surface this as an error instead.
+		// succeeded. Surface this as an error instead, with a hint
+		// tailored to the mode that produced the empty result.
 		if initForceFlag && manifestExists {
-			return fmt.Errorf("--force given but no tools detected — refusing to overwrite %s with an empty manifest (use --all to include every installed tool)", outPath)
+			var detail string
+			if initAllFlag {
+				detail = "no installed tools on this system to include — install something first or remove --force"
+			} else {
+				// We only reach this branch when project detection
+				// matched at least one tool (the empty-detection case
+				// returned earlier) but none of those tools are
+				// installed yet.
+				detail = "all detected tools are not installed yet — install them first, or use --all to include every installed tool regardless of detection"
+			}
+			return fmt.Errorf("--force given but %s — refusing to overwrite %s with an empty manifest", detail, outPath)
 		}
 		fmt.Fprintln(os.Stderr, "No tools to include in manifest.")
 		return nil

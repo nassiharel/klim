@@ -18,7 +18,7 @@ clim init [flags]
 | `--all` | Include all installed tools (skip project detection) |
 | `--min-version` | Include minimum version constraints (`>=X.Y`) |
 | `--name` | Project name for the manifest |
-| `--force` | Overwrite an existing `.clim.yaml` (clim refuses by default to protect a team-shared file). When `--force` is passed but no tools are detected (and an existing manifest is present), clim refuses rather than silently writing an empty manifest or leaving a stale manifest in place. |
+| `--force` | Overwrite an existing `.clim.yaml` (clim refuses by default to protect a team-shared file). When `--force` is overwriting an existing manifest, clim refuses to write an empty result — either when `--all` is used and no tools are installed at all, or when project detection found tools but none of them are installed yet. The existing manifest is preserved untouched in both cases. Dangling `.clim.yaml` symlinks are also recognised as "existing", so `--force` is required to replace them. |
 
 ## Detection
 
@@ -72,7 +72,7 @@ optional:
   - name: k9s
 ```
 
-If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` updates the link's target rather than replacing the symlink with a regular file.
+If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` updates the link's target rather than replacing the symlink with a regular file. This works even when the link is dangling — the target file is created on first write and the link is left intact. Symlink chains are followed up to 32 levels; cycles are reported as errors.
 
 ## See Also
 
