@@ -1,0 +1,62 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>Installed tools</h1>
+  <p class="muted">
+    Showing {{$d.Filtered}} of {{$d.Total}} known tools · Catalog: {{$d.Catalog.Count}} tools · Scan source: {{$d.Catalog.Source}}
+  </p>
+</section>
+
+<form method="GET" action="/" class="filters">
+  <input type="search" name="q" placeholder="search name or display name" value="{{$d.Query}}" autocomplete="off">
+  <select name="category">
+    <option value="">All categories</option>
+    {{range $d.Categories}}
+      <option value="{{.}}" {{if eq . $d.Category}}selected{{end}}>{{.}}</option>
+    {{end}}
+  </select>
+  <select name="source">
+    <option value="">All sources</option>
+    {{range $d.Sources}}
+      <option value="{{.}}" {{if eq . $d.Source}}selected{{end}}>{{.}}</option>
+    {{end}}
+  </select>
+  <button type="submit">Apply</button>
+  <a href="/" class="btn-link">Reset</a>
+</form>
+
+{{if eq (len $d.Tools) 0}}
+  <p class="empty">No installed tools matched. Run <code>clim list --refresh</code> in your terminal to rebuild the scan cache.</p>
+{{else}}
+<table class="grid">
+  <thead>
+    <tr>
+      <th>Tool</th>
+      <th>Version</th>
+      <th>Latest</th>
+      <th>Source</th>
+      <th>Category</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range $d.Tools}}
+      <tr>
+        <td><a href="/tools/{{.Name}}" class="tool-link">{{.Name}}</a>{{if .DisplayName}} <span class="muted">{{.DisplayName}}</span>{{end}}</td>
+        <td><code>{{primaryVersion .}}</code></td>
+        <td><code>{{dash .Latest}}</code></td>
+        <td>{{primarySource .}}</td>
+        <td>{{dash .Category}}</td>
+        <td>
+          {{if updateAvailable .}}
+            <span class="badge update">⬆ update</span>
+          {{else}}
+            <span class="badge ok">✓ up to date</span>
+          {{end}}
+        </td>
+      </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}

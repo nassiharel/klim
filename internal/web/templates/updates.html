@@ -1,0 +1,42 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>Updates available</h1>
+  <p class="muted">{{$d.Total}} installed tool{{if ne $d.Total 1}}s have{{else}} has{{end}} a newer version.</p>
+</section>
+
+{{if eq $d.Total 0}}
+  <p class="empty">Everything is up to date. ✓</p>
+{{else}}
+<table class="grid">
+  <thead>
+    <tr>
+      <th></th>
+      <th>Tool</th>
+      <th>Current</th>
+      <th>Latest</th>
+      <th>Source</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range $d.Rows}}
+      <tr>
+        <td>
+          <form method="POST" action="/favorites/{{.Tool.Name}}/toggle" class="inline">
+            <button class="iconbtn" type="submit" title="{{if .Favorite}}Unfavorite{{else}}Favorite{{end}}">
+              {{if .Favorite}}★{{else}}☆{{end}}
+            </button>
+          </form>
+        </td>
+        <td><a href="/tools/{{.Tool.Name}}" class="tool-link">{{.Tool.Name}}</a>{{if .Tool.DisplayName}} <span class="muted">{{.Tool.DisplayName}}</span>{{end}}</td>
+        <td><code>{{.Current}}</code></td>
+        <td><code class="badge update">⬆ {{.Latest}}</code></td>
+        <td>{{.Source}}</td>
+        <td><span class="muted small">Run <code>clim update {{.Tool.Name}}</code></span></td>
+      </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}

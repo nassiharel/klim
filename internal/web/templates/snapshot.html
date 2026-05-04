@@ -1,0 +1,27 @@
+{{define "content"}}
+{{$d := .Data}}
+{{$e := $d.Entry}}
+{{$s := $d.Snapshot}}
+<section class="page-header">
+  <a href="/trail" class="back">← Trail</a>
+  <h1>Snapshot <code>{{$e.Object.Short}}</code></h1>
+  <p class="muted">@{{$e.Index}} · {{$e.Time.Local.Format "2006-01-02 15:04"}} · {{$e.Operation}}{{if $e.Label}} · label “{{$e.Label}}”{{end}}</p>
+</section>
+
+<section class="card">
+  <h2>Platform</h2>
+  <p><code>{{$s.OS}}/{{$s.Arch}}</code> · {{len $s.Tools}} tools</p>
+</section>
+
+<section class="card">
+  <h2>Tools captured</h2>
+  <table class="grid">
+    <thead><tr><th>Name</th><th>Version</th><th>Source</th></tr></thead>
+    <tbody>
+      {{range $s.Tools}}
+        <tr><td>{{.Name}}</td><td><code>{{dash .Version}}</code></td><td>{{dash .Source}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}

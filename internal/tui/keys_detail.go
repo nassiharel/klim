@@ -84,7 +84,7 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		// Enter on related tool → open its detail view.
 		if m.detailRelCursor >= 0 && m.detailRelCursor < len(m.detailRelated) {
-			m.openDetailView(m.detailRelated[m.detailRelCursor].toolIdx)
+			m.openDetailView(m.detailRelated[m.detailRelCursor].ToolIdx)
 			return m, nil
 		}
 		// Enter on PM row → execute primary action (install or upgrade) directly.

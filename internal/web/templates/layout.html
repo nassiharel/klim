@@ -1,0 +1,51 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} — clim</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="brand">clim</a>
+    <nav>
+      <a href="/" class="{{if eq .ActiveTab "installed"}}active{{end}}">Installed</a>
+      <a href="/updates" class="{{if eq .ActiveTab "updates"}}active{{end}}">Updates</a>
+      <a href="/discover" class="{{if eq .ActiveTab "discover"}}active{{end}}">Discover</a>
+      <a href="/packs" class="{{if eq .ActiveTab "packs"}}active{{end}}">Packs</a>
+      <a href="/foryou" class="{{if eq .ActiveTab "foryou"}}active{{end}}">For You</a>
+      <a href="/favorites" class="{{if eq .ActiveTab "favorites"}}active{{end}}">★ Favorites</a>
+      <a href="/projects" class="{{if eq .ActiveTab "projects"}}active{{end}}">Projects</a>
+      <a href="/backup" class="{{if eq .ActiveTab "backup"}}active{{end}}">Backup</a>
+      <a href="/dashboard" class="{{if eq .ActiveTab "dashboard"}}active{{end}}">Dashboard</a>
+      <a href="/trail" class="{{if eq .ActiveTab "trail"}}active{{end}}">Trail</a>
+      <a href="/config" class="{{if eq .ActiveTab "config"}}active{{end}}">Config</a>
+    </nav>
+  </header>
+  <main>
+    {{template "content" .}}
+  </main>
+  <footer>
+    <span>clim · local server</span>
+  </footer>
+  <script>
+    // Keep an SSE connection open so the server knows this tab is
+    // alive. When the last tab closes, the server shuts itself down
+    // after a short grace period (see internal/web/lifecycle.go).
+    // The client doesn't need to do anything with the events — the
+    // connection itself is the heartbeat.
+    try {
+      var __climLifecycle = new EventSource('/api/lifecycle');
+      // Browsers close EventSource on page unload automatically; this
+      // explicit close on pagehide makes the unregister fire promptly
+      // even when the browser doesn't tear down the underlying TCP
+      // connection right away.
+      window.addEventListener('pagehide', function () {
+        try { __climLifecycle.close(); } catch (e) {}
+      });
+    } catch (e) { /* SSE unsupported — server stays up indefinitely. */ }
+  </script>
+</body>
+</html>{{end}}

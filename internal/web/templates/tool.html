@@ -1,0 +1,124 @@
+{{define "content"}}
+{{$d := .Data}}
+{{$t := $d.Tool}}
+<section class="page-header">
+  <a href="/" class="back">← Installed</a>
+  <h1>{{$t.Name}} {{if $t.DisplayName}}<span class="muted">/ {{$t.DisplayName}}</span>{{end}}</h1>
+  <p class="muted">
+    {{dash $t.Category}}
+    · {{if $d.Installed}}<span class="badge ok">✓ installed</span>{{else}}<span class="badge muted">not installed</span>{{end}}
+    {{if updateAvailable $t}}· <span class="badge update">⬆ update available</span>{{end}}
+  </p>
+  {{if and $t.GitHubInfo $t.GitHubInfo.Description}}<p>{{$t.GitHubInfo.Description}}</p>{{end}}
+</section>
+
+<section class="card">
+  <h2>Status</h2>
+  <table class="kv">
+    <tr><th>Installed</th><td>{{if $d.Installed}}<span class="badge ok">{{primaryVersion $t}}</span> <span class="muted">via {{primarySource $t}}</span>{{else}}<span class="badge muted">no</span>{{end}}</td></tr>
+    <tr><th>Latest</th><td><code>{{dash $d.Latest}}</code>{{if $t.LatestFrom}} <span class="muted">(via {{$t.LatestFrom}})</span>{{end}}</td></tr>
+    <tr><th>Binary names</th><td>{{if $d.BinaryNames}}{{range $i, $b := $d.BinaryNames}}{{if $i}}, {{end}}<code>{{$b}}</code>{{end}}{{else}}<span class="muted">{{$t.Name}}</span>{{end}}</td></tr>
+  </table>
+
+  <div class="actions">
+    {{if $d.Installed}}
+      {{if updateAvailable $t}}
+        <form method="POST" action="/tools/{{$t.Name}}/upgrade" class="inline">
+          <button type="submit" class="btn-primary">⬆ Upgrade</button>
+        </form>
+      {{end}}
+      <form method="POST" action="/tools/{{$t.Name}}/remove" class="inline">
+        <button type="submit" class="btn-danger" onclick="return confirm('Remove {{$t.Name}}?')">✗ Remove</button>
+      </form>
+    {{else}}
+      <form method="POST" action="/tools/{{$t.Name}}/install" class="inline">
+        <button type="submit" class="btn-primary">↓ Install</button>
+      </form>
+    {{end}}
+    <form method="POST" action="/favorites/{{$t.Name}}/toggle" class="inline">
+      <button type="submit" class="btn-link">{{if $d.IsFavorite}}★ Unfavorite{{else}}☆ Favorite{{end}}</button>
+    </form>
+  </div>
+</section>
+
+{{if $t.Instances}}
+<section class="card">
+  <h2>Detected installations</h2>
+  <table class="grid">
+    <thead><tr><th>Source</th><th>Version</th><th>Path</th></tr></thead>
+    <tbody>
+      {{range $t.Instances}}
+        <tr><td>{{.Source}}</td><td><code>{{dash .Version}}</code></td><td><code>{{.Path}}</code></td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+
+{{if $d.PMRows}}
+<section class="card">
+  <h2>Package managers</h2>
+  <p class="muted small">Every package manager clim has a configured ID for. Bold names are available on this machine.</p>
+  <table class="grid">
+    <thead><tr><th>Source</th><th>Package ID</th><th>Install command</th><th>Status</th></tr></thead>
+    <tbody>
+      {{range $d.PMRows}}
+        <tr>
+          <td>{{if .Available}}<strong>{{.Source}}</strong>{{else}}{{.Source}}{{end}}</td>
+          <td><code>{{.PackageID}}</code></td>
+          <td><code>{{.InstallCmd}}</code></td>
+          <td>{{if .Available}}<span class="badge ok">available</span>{{else}}<span class="badge muted">not on PATH</span>{{end}}</td>
+        </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+
+{{if $d.Tags}}
+<section class="card">
+  <h2>About</h2>
+  <ul class="chips">
+    {{range $d.Tags}}<li><span class="chip">{{.}}</span></li>{{end}}
+  </ul>
+</section>
+{{end}}
+
+{{if $d.GitHub.Slug}}
+<section class="card">
+  <h2>Community</h2>
+  <table class="kv">
+    <tr><th>Repo</th><td><a href="{{$d.GitHub.URL}}" target="_blank" rel="noopener">{{$d.GitHub.Slug}}</a></td></tr>
+    {{if $d.GitHub.Stars}}<tr><th>Stars</th><td>★ {{$d.GitHub.Stars}}</td></tr>{{end}}
+    {{if $d.GitHub.Forks}}<tr><th>Forks</th><td>⑂ {{$d.GitHub.Forks}}</td></tr>{{end}}
+    {{if $d.GitHub.License}}<tr><th>License</th><td>{{$d.GitHub.License}}</td></tr>{{end}}
+    {{if $d.GitHub.Topics}}<tr><th>Topics</th><td>{{join $d.GitHub.Topics ", "}}</td></tr>{{end}}
+    {{if $d.GitHub.Push}}<tr><th>Last push</th><td>{{$d.GitHub.Push}}</td></tr>{{end}}
+  </table>
+</section>
+{{end}}
+
+{{if $d.Related}}
+<section class="card">
+  <h2>You might also like</h2>
+  <div class="cards">
+    {{range $d.Related}}
+      <div class="card rec-card">
+        <div class="rec-header">
+          <a href="/tools/{{.Name}}" class="tool-link">{{.Name}}</a>
+          {{if .DisplayName}}<span class="muted">{{.DisplayName}}</span>{{end}}
+          <span class="match-pct">{{.MatchPct}}% match</span>
+        </div>
+        {{if .Description}}<p class="muted">{{.Description}}</p>{{end}}
+        <p class="muted small">
+          {{if .Category}}{{.Category}} · {{end}}
+          {{if .Stars}}★ {{.Stars}} · {{end}}
+          {{if .Reason}}because of: {{.Reason}}{{end}}
+        </p>
+      </div>
+    {{end}}
+  </div>
+</section>
+{{end}}
+{{end}}
+

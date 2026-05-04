@@ -171,8 +171,14 @@ var commandTemplates = map[InstallSource]sourceCommands{
 	},
 }
 
-// pkgID returns the package identifier for the given source, or "".
-func (p PackageIDs) pkgID(source InstallSource) string {
+// PkgID returns the package identifier for the given source, or ""
+// when this PackageIDs has nothing configured for that source.
+//
+// Exposed so callers (the web UI's per-tool Package Managers table,
+// for instance) can reuse the canonical mapping without re-implementing
+// the source→field switch and risking drift when new sources are
+// added.
+func (p PackageIDs) PkgID(source InstallSource) string {
 	switch source {
 	case SourceWinget:
 		return p.Winget
@@ -191,6 +197,10 @@ func (p PackageIDs) pkgID(source InstallSource) string {
 	}
 	return ""
 }
+
+// pkgID is kept for internal callers; delegates to the exported
+// version so the implementation lives in exactly one place.
+func (p PackageIDs) pkgID(source InstallSource) string { return p.PkgID(source) }
 
 // InstallArgs returns the command and arguments to install this tool.
 // Returns nil if no package ID is available for the given source.

@@ -46,6 +46,9 @@ testdata/fuzz/
 # Node.js (docs/ and website/)
 node_modules/
 
+# Generated marketplace data (website)
+website/src/data/marketplace.json
+
 # Environment
 .env
 .env.*

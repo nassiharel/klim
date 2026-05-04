@@ -151,10 +151,10 @@ const (
 // selected highlights both lines. compact omits row 2 (for inline use in detail views).
 
 func (m Model) renderRecCard(rec recommendation, selected, compact bool) string {
-	if rec.toolIdx >= len(m.tools) {
+	if rec.ToolIdx >= len(m.tools) {
 		return ""
 	}
-	tool := m.tools[rec.toolIdx]
+	tool := m.tools[rec.ToolIdx]
 
 	// --- Row 1: cursor + name + category + stars + gauge + pct ---
 	cursor := "  "
@@ -169,18 +169,18 @@ func (m Model) renderRecCard(rec recommendation, selected, compact bool) string 
 	nameCell := nameStyle.Render(fixedWidth(displayName, colNameWide))
 
 	catText := ""
-	if rec.category != "" {
-		catText = chipStyle.Render(rec.category)
+	if rec.Category != "" {
+		catText = chipStyle.Render(rec.Category)
 	}
 	catCell := fixedWidthANSI(catText, colCatFY)
 
 	starsText := ""
-	if rec.stars > 0 {
-		starsText = dimVersion.Render("★ " + formatStars(rec.stars))
+	if rec.Stars > 0 {
+		starsText = dimVersion.Render("★ " + formatStars(rec.Stars))
 	}
 	starsCell := fixedWidthANSI(starsText, colStarsFY)
 
-	pct := rec.matchPct
+	pct := rec.MatchPct
 	filled := pct * colGaugeFY / 100
 	if filled < 1 && pct > 0 {
 		filled = 1
@@ -203,7 +203,7 @@ func (m Model) renderRecCard(rec recommendation, selected, compact bool) string 
 	}
 
 	// --- Row 2: indent + description + reason ---
-	desc := rec.description
+	desc := rec.Description
 	if desc == "" {
 		desc = "No description"
 	}
@@ -211,8 +211,8 @@ func (m Model) renderRecCard(rec recommendation, selected, compact bool) string 
 	descCell := dimVersion.Render(desc)
 
 	reasonText := ""
-	if rec.reason != "" {
-		reasonText = "You use: " + rec.reason
+	if rec.Reason != "" {
+		reasonText = "You use: " + rec.Reason
 	}
 	reasonCell := dimVersion.Render(fixedWidth(reasonText, colReasonFY))
 

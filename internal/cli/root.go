@@ -140,6 +140,10 @@ func init() {
 	// Configuration.
 	configCmd.GroupID = "config"
 	rootCmd.AddCommand(configCmd)
+
+	// Browser UI.
+	browserCmd.GroupID = "core"
+	rootCmd.AddCommand(browserCmd)
 }
 
 // Run executes the root command and returns a process exit code.

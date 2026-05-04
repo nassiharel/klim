@@ -1,0 +1,40 @@
+---
+import '../../../styles/global.css';
+import Layout from '../../../layouts/Layout.astro';
+import Header from '../../../components/Header.astro';
+import Footer from '../../../components/Footer.astro';
+import ToolDetail from '../../../components/ToolDetail.astro';
+import marketplace from '../../../data/marketplace.json';
+
+export function getStaticPaths() {
+  return marketplace.tools.map((tool: any) => ({
+    params: { name: tool.name },
+    props: { tool },
+  }));
+}
+
+const { tool } = Astro.props;
+
+const pmData: Record<string, string> = {
+  brew: 'brew install', winget: 'winget install', scoop: 'scoop install',
+  choco: 'choco install', apt: 'sudo apt install', snap: 'sudo snap install',
+  npm: 'npm install -g',
+};
+const pmNames: Record<string, string> = {
+  brew: 'Homebrew', winget: 'winget', scoop: 'Scoop',
+  choco: 'Chocolatey', apt: 'apt', snap: 'snap', npm: 'npm',
+};
+const installEntries = Object.entries(tool.packages)
+  .filter((e) => e[0] in pmData)
+  .map((e) => ({ pm: e[0], pkgId: e[1] as string, cmd: pmData[e[0]], label: pmNames[e[0]] }));
+---
+
+<Layout title={`${tool.display_name} - clim Marketplace` } description={tool.github_info?.description || ''}>
+  <Header />
+  <main class="pt-28 pb-20">
+    <div class="mx-auto max-w-4xl px-6">
+      <ToolDetail tool={tool} installEntries={installEntries} />
+    </div>
+  </main>
+  <Footer />
+</Layout>

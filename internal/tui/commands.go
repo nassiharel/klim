@@ -22,6 +22,7 @@ import (
 	"github.com/nassiharel/clim/internal/fileutil"
 	"github.com/nassiharel/clim/internal/manifest"
 	"github.com/nassiharel/clim/internal/paths"
+	"github.com/nassiharel/clim/internal/recommend"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/share"
@@ -32,177 +33,16 @@ import (
 // subprocess calls that overwhelm package managers and cause timeouts.
 var resolveSem = make(chan struct{}, 4)
 
-// --- Recommendation types ---
+// recommendation is the TUI-local alias for recommend.Recommendation.
+// The shared algorithm lives in internal/recommend so the web UI can
+// share it; the alias keeps existing TUI call sites compact.
+type recommendation = recommend.Recommendation
 
-// recommendation represents a tool suggested based on tag/topic/category overlap
-// with installed tools, enriched with display metadata.
-type recommendation struct {
-	toolIdx     int    // index into the tools slice
-	score       int    // combined relevance score (higher = more relevant)
-	reason      string // sorted installed tool names, e.g. "helm, kubectl, stern"
-	category    string // tool's category for display
-	description string // from GitHubInfo.Description
-	stars       int    // from GitHubInfo.Stars
-	matchPct    int    // 0–100 normalized score for display
-}
-
-// maxRecommendations caps the number of recommendations shown.
-const maxRecommendations = 25
-
-// computeRecommendations ranks not-installed tools by tag/topic overlap with
-// installed tools, boosted by category match, GitHub stars, and recency.
+// computeRecommendations is a thin wrapper that delegates to
+// recommend.Compute. Kept as a function to minimise churn at call
+// sites; new code should call recommend.Compute directly.
 func computeRecommendations(tools []registry.Tool) []recommendation {
-	// Build tag+topic frequency from installed tools.
-	tagFreq := make(map[string]int)
-	tagSources := make(map[string][]string) // tag → installed tool names
-	installedCats := make(map[string]bool)
-
-	for _, t := range tools {
-		if !t.IsInstalled() {
-			continue
-		}
-		if t.Category != "" {
-			installedCats[t.Category] = true
-		}
-		for _, tag := range t.Tags {
-			tagFreq[tag]++
-			tagSources[tag] = append(tagSources[tag], t.Name)
-		}
-		// Merge GitHub Topics into the same frequency map.
-		if t.GitHubInfo != nil {
-			for _, topic := range t.GitHubInfo.Topics {
-				tagFreq[topic]++
-				tagSources[topic] = append(tagSources[topic], t.Name)
-			}
-		}
-	}
-
-	if len(tagFreq) == 0 {
-		return nil
-	}
-
-	// Score each not-installed tool.
-	var recs []recommendation
-	maxScore := 0
-	for i, t := range tools {
-		if t.IsInstalled() {
-			continue
-		}
-		// Skip archived tools.
-		if t.GitHubInfo != nil && t.GitHubInfo.Archived {
-			continue
-		}
-		// Skip tools not installable on this OS.
-		if !t.Packages.HasAnyPackageForOS() {
-			continue
-		}
-
-		score := 0
-		matchedTools := make(map[string]struct{})
-
-		// Tag overlap.
-		for _, tag := range t.Tags {
-			if freq, ok := tagFreq[tag]; ok {
-				score += freq
-				for _, src := range tagSources[tag] {
-					matchedTools[src] = struct{}{}
-				}
-			}
-		}
-		// GitHub Topics overlap.
-		if t.GitHubInfo != nil {
-			for _, topic := range t.GitHubInfo.Topics {
-				if freq, ok := tagFreq[topic]; ok {
-					score += freq
-					for _, src := range tagSources[topic] {
-						matchedTools[src] = struct{}{}
-					}
-				}
-			}
-		}
-
-		// Category match bonus.
-		if t.Category != "" && installedCats[t.Category] {
-			score += 2
-		}
-
-		// GitHub stars popularity boost.
-		if t.GitHubInfo != nil {
-			if t.GitHubInfo.Stars > 10000 {
-				score += 2
-			} else if t.GitHubInfo.Stars > 1000 {
-				score++
-			}
-		}
-
-		// Recency boost: pushed within last 6 months.
-		if t.GitHubInfo != nil && t.GitHubInfo.PushedAt != "" {
-			if pushed, err := time.Parse(time.RFC3339, t.GitHubInfo.PushedAt); err == nil {
-				if time.Since(pushed) < 6*30*24*time.Hour {
-					score++
-				}
-			}
-		}
-
-		if score == 0 {
-			continue
-		}
-
-		// Build reason from matched installed tool names (sorted, top 3).
-		var reasons []string
-		for name := range matchedTools {
-			reasons = append(reasons, name)
-		}
-		sort.Strings(reasons)
-		if len(reasons) > 3 {
-			reasons = reasons[:3]
-		}
-
-		desc := ""
-		stars := 0
-		if t.GitHubInfo != nil {
-			desc = t.GitHubInfo.Description
-			stars = t.GitHubInfo.Stars
-		}
-
-		rec := recommendation{
-			toolIdx:     i,
-			score:       score,
-			reason:      strings.Join(reasons, ", "),
-			category:    t.Category,
-			description: desc,
-			stars:       stars,
-		}
-		recs = append(recs, rec)
-		if score > maxScore {
-			maxScore = score
-		}
-	}
-
-	// Sort by score descending, then name ascending.
-	sort.Slice(recs, func(i, j int) bool {
-		if recs[i].score != recs[j].score {
-			return recs[i].score > recs[j].score
-		}
-		return tools[recs[i].toolIdx].Name < tools[recs[j].toolIdx].Name
-	})
-
-	// Cap at maxRecommendations.
-	if len(recs) > maxRecommendations {
-		recs = recs[:maxRecommendations]
-	}
-
-	// Compute normalized percentages.
-	if maxScore > 0 {
-		for i := range recs {
-			recs[i].matchPct = recs[i].score * 100 / maxScore
-			if recs[i].matchPct < 1 {
-				recs[i].matchPct = 1
-			}
-		}
-	}
-
-	return recs
+	return recommend.Compute(tools)
 }
 
 // --- Scan & version resolution messages ---
