@@ -17,15 +17,16 @@ import (
 //
 // ComputeHash is side-effect free: the input *p is never mutated.
 // We deep-copy slice/map fields before canonicalize because the
-// canonicalize helpers rewrite Tools, Packs, Favorites,
-// PackageManagers, and each Pack.Tools list.
+// canonicalize helpers rewrite Tools, Packs, Favorites, and each
+// Pack.Tools list.
 //
 // Determinism guarantees:
-//   - The deep clone's Tools/Favorites/Packs/PackageManagers are
-//     produced by canonicalize() before hashing — sorted, deduped,
-//     with pack tool lists also sorted+deduped.
-//   - yaml.v3 marshals maps with sorted keys, so PackageManagers
-//     stays stable across runs.
+//   - The deep clone's Tools/Favorites/Packs are produced by
+//     canonicalize() before hashing — sorted, deduped, with pack
+//     tool lists also sorted+deduped.
+//   - PackageManagers is a map[string]bool; yaml.v3 marshals maps
+//     with sorted keys, so the encoding is stable across runs
+//     without canonicalize touching the map.
 func ComputeHash(p *Profile) string {
 	if p == nil {
 		return ""

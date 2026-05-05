@@ -20,15 +20,24 @@ clim env apply <token-or-file>     # reproduce locally
 
 ## Privacy
 
-Tokens contain **only what `clim list` already shows** — catalog tool
-names, installed versions, install sources, GOOS/GOARCH, and which
-package manager binaries exist on `$PATH`. Hostname, username,
-absolute paths, and environment variables are deliberately **not**
-captured.
+A profile contains:
 
-The artifact is deterministic from environment state alone (modulo
-`generated_at`), so passing it to a coworker leaks nothing
-sensitive.
+- installed tools (catalog name, version, install source, category)
+- favorites
+- custom packs you've defined (name + tool list)
+- which package managers are available on `$PATH`
+- `clim` version + commit
+- OS, architecture, and (best-effort) distro
+- observational audit/security counts (warning/info totals; per-tool clean/watch/risk/unknown bucket counts)
+
+Deliberately **not** captured:
+
+- hostname, username
+- absolute paths or any file contents
+- environment variables
+- catalog metadata that would identify the host (no IPs, no ssh fingerprints, etc.)
+
+The artifact is deterministic from environment state alone (modulo `generated_at`), so passing it to a coworker leaks nothing beyond the inventory above. The hash recorded in the profile is recomputed by `clim env diff` from the decoded content, so an edited token can't fake a "matching hash".
 
 ## Output formats
 
@@ -122,8 +131,7 @@ security:              # observational; never gates apply
    the report as `skipped` rather than failing.
 2. **Favorites** — additive merge; never removes existing favorites.
 3. **Custom packs** — additive; existing packs with the same name
-   are kept (re-run with manual `clim packs delete <name>` first to
-   replace).
+   are kept; to replace one, edit it out of `~/.config/clim/marketplace/custom-packs.yaml` (or use the TUI's My Packs tab to delete) and re-run apply.
 
 Cross-OS gaps surface as informational entries, never as errors.
 

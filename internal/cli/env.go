@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -29,12 +30,21 @@ var envCmd = &cobra.Command{
 	Use:   "env [flags]",
 	Short: "Generate and apply environment fingerprints",
 	Long: `clim env captures the shape of your clim-managed environment
-(installed tools, favorites, custom packs, available package managers,
-clim version, OS, audit/security counts) into a portable artifact you
-can share via chat or commit to git.
+into a portable artifact you can share via chat or commit to git.
 
-Privacy: the token contains only what 'clim list' already shows. No
-hostname, username, paths, or environment variables are captured.
+A profile contains:
+  - installed tools (name, version, install source, category)
+  - favorites
+  - custom packs you've defined
+  - which package managers are available on this host
+  - clim version + commit
+  - OS, architecture, and (best-effort) distro
+  - observational audit/security counts
+
+Privacy: the profile is deterministic from environment state alone
+(plus a timestamp). It deliberately does NOT include hostname,
+username, absolute paths, environment variables, or any file
+contents.
 
 Examples:
   # Print the token for the current environment (paste into chat).
@@ -52,6 +62,7 @@ Examples:
   # Reproduce the env locally — installs missing tools, sets favorites,
   # registers custom packs. Cross-OS gaps are reported, never errors.
   clim env apply 'clim:env:v1:H4sIAAAAAA...'`,
+	Args: cobra.NoArgs, // subcommands take args; bare 'clim env' must not silently swallow extras.
 	RunE: runEnvIDPrint,
 }
 
@@ -260,7 +271,7 @@ func isUserCausedDecodeError(err error) bool {
 	return false
 }
 
-func renderProfileText(w *os.File, p *envid.Profile) {
+func renderProfileText(w io.Writer, p *envid.Profile) {
 	_, _ = fmt.Fprintf(w, "\n──── env %s ────\n\n", p.Hash)
 	_, _ = fmt.Fprintf(w, "  clim version:    %s\n", p.Clim.Version)
 	if p.Clim.Commit != "" {
@@ -317,14 +328,33 @@ func renderProfileText(w *os.File, p *envid.Profile) {
 	_, _ = fmt.Fprintln(w)
 }
 
-func renderProfileDiff(w *os.File, local, remote *envid.Profile) {
+// renderProfileDiffTo is the io.Writer-flavored variant used by
+// tests; production callers go through renderProfileDiff which
+// passes os.Stderr.
+func renderProfileDiffTo(w io.Writer, local, remote *envid.Profile) {
+	renderProfileDiff(w, local, remote)
+}
+
+func renderProfileDiff(w io.Writer, local, remote *envid.Profile) {
+	// Recompute both hashes from the decoded content so user-
+	// editable inputs (a hand-tweaked YAML, a forged token) can't
+	// claim "match" by lying in the hash field. The local profile
+	// was just built by Build (already trusted), but recomputing
+	// is cheap and keeps the comparison symmetric.
+	localHash := envid.ComputeHash(local)
+	remoteHash := envid.ComputeHash(remote)
+
 	_, _ = fmt.Fprintf(w, "\n──── env diff ────\n")
 	_, _ = fmt.Fprintf(w, "  local:  %s   tools=%d favorites=%d packs=%d\n",
-		local.Hash, len(local.Tools), len(local.Favorites), len(local.Packs))
+		localHash, len(local.Tools), len(local.Favorites), len(local.Packs))
 	_, _ = fmt.Fprintf(w, "  remote: %s   tools=%d favorites=%d packs=%d\n",
-		remote.Hash, len(remote.Tools), len(remote.Favorites), len(remote.Packs))
+		remoteHash, len(remote.Tools), len(remote.Favorites), len(remote.Packs))
+	if remote.Hash != "" && remote.Hash != remoteHash {
+		_, _ = fmt.Fprintf(w, "  ⚠ remote claimed hash %s; recomputed %s (token may have been edited)\n",
+			remote.Hash, remoteHash)
+	}
 
-	if local.Hash == remote.Hash {
+	if localHash == remoteHash {
 		_, _ = fmt.Fprintln(w, "\n  Same hash — environments match.")
 		return
 	}

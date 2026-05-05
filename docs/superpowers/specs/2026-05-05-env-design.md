@@ -105,7 +105,7 @@ All commands follow CLI conventions: human text on stderr, machine output (`--ou
 1. Resolves the manifest from the token.
 2. Calls into the existing install-plan machinery (`internal/cli/installplan.go`) for tool install — same code path as `clim import` so we don't duplicate logic.
 3. Adds favorites via the existing `favorites.Add`/`Set`.
-4. Registers custom packs via `custompacks.Save`.
+4. Registers custom packs via `custompacks.Add` (existing packs with the same name are preserved; users delete from `~/.config/clim/marketplace/custom-packs.yaml` or via the TUI to replace).
 
 Cross-OS / cross-PM gaps surface in the report as "skipped: no winget package on linux" etc., never as errors.
 
