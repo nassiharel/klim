@@ -61,6 +61,7 @@ func Build(ctx context.Context, svc *service.ToolService, cfg *config.Config, op
 		Security:        collectSecurity(tools, cfg),
 	}
 
+	canonicalize(p)
 	p.Hash = ComputeHash(p)
 	return p, nil
 }
@@ -106,15 +107,10 @@ func collectFavorites() []string {
 	if err != nil || len(names) == 0 {
 		return nil
 	}
-	cleaned := make([]string, 0, len(names))
-	for _, n := range names {
-		n = strings.TrimSpace(n)
-		if n != "" {
-			cleaned = append(cleaned, n)
-		}
-	}
-	sort.Strings(cleaned)
-	return cleaned
+	// dedupSorted (canonicalize helper) trims, dedupes, and sorts —
+	// yields a stable favorite list that doesn't perturb the hash
+	// from manual file edits.
+	return dedupSorted(names)
 }
 
 func collectCustomPacks() []Pack {
@@ -127,10 +123,10 @@ func collectCustomPacks() []Pack {
 		out = append(out, Pack{
 			Name:        p.Name,
 			DisplayName: p.DisplayName,
-			Tools:       append([]string(nil), p.ToolNames...),
+			Tools:       dedupSorted(p.ToolNames),
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sortPacksByName(out)
 	return out
 }
 

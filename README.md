@@ -57,7 +57,7 @@ Export your installed tools to a portable manifest. Import it on a new machine �
 Generate a compact share token and paste it in Slack, Teams, or email. Recipients run `clim share open <token>` to get your exact toolchain. No files to send.
 
 ### 🪪 Env ID — Reproduce Whole Environments
-`clim env-id` packs your tools, favorites, custom packs, package managers, clim version, OS, and security state into a single paste-friendly token. Recipients run `clim env-id show` to inspect, `clim env-id diff` to compare with their own setup, or `clim env-id apply` to reproduce. Privacy-safe — only what `clim list` already shows.
+`clim env-id` packs your tools, favorites, custom packs, package managers, clim version, OS, and security state into a single paste-friendly token. Recipients run `clim env-id show <token>` to inspect, `clim env-id diff <token>` to compare with their own setup, or `clim env-id apply <token>` to reproduce. Privacy-safe — only what `clim list` already shows.
 
 ### 🖥️ Move Between OSes
 Installed everything on macOS? Export and import on your new Linux box. clim maps each tool to the best available package manager on the target OS — winget, brew, apt, choco, scoop, snap, or npm.

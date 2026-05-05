@@ -34,8 +34,7 @@ sensitive.
 
 | Flag | Output |
 | --- | --- |
-| (default) | `clim:env:v1:<base64>` token, single line, paste-friendly |
-| `--output token` | Same as default — explicit |
+| (default, or `--output text`) | `clim:env:v1:<base64>` token, single line, paste-friendly |
 | `--output yaml` | Multi-line YAML document |
 | `--output json` | JSON document |
 

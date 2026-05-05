@@ -93,7 +93,7 @@ clim:env:v1:<base64url(gzip(yaml(profile)))>
 
 ```
 clim env-id                              # print token to stdout
-clim env-id --output {token,yaml,json}   # explicit form (default: token)
+clim env-id --output {text,yaml,json}    # explicit form (default text = token)
 clim env-id show <token-or-file>         # decode + pretty-print
 clim env-id diff <token-or-file>         # diff vs current env
 clim env-id apply <token-or-file>        # install missing tools + set favorites + add packs (--yes to skip prompts)
@@ -113,11 +113,15 @@ Cross-OS / cross-PM gaps surface in the report as "skipped: no winget package on
 
 | File | Responsibility |
 |------|---------------|
-| `types.go` | `Profile`, `Tool`, `Pack`, `Security` types with yaml/json tags + `Hash()` method |
-| `build.go` | `Build(ctx, svc, cfg) (*Profile, error)` — assembles a profile from the live system |
-| `token.go` | `Encode(p) (string, error)` / `Decode(s) (*Profile, error)` — gzip+b64 token I/O |
-| `redact.go` | filters and normalization to keep tokens reproducible/private |
-| `*_test.go` | round-trip, redaction, schema-version mismatch, decode-tampered, hash stability |
+| `types.go` | `Profile`, `Tool`, `Pack`, `Security` types with yaml/json tags |
+| `build.go` | `Build(ctx, svc, cfg) (*Profile, error)` — assembles a profile from the live system; canonicalizes favorites and pack tool lists at collection time |
+| `token.go` | `Encode(p) (string, error)` / `Decode(s) (*Profile, error)` — gzip+b64 token I/O with versioned `clim:env:v1:` prefix |
+| `file.go` | `ReadFile` / `WriteFile` for the YAML form |
+| `hash.go` | `ComputeHash` + `canonicalize` helpers — sorts/dedups slices and zeros `GeneratedAt`/`Hash` so two captures of the same env share an identifier |
+| `distro.go` | best-effort Linux distro hint via `/etc/os-release`; macOS / Windows return canonical names |
+| `*_test.go` | round-trip, schema-version mismatch, decode-tampered, hash stability across time, hash sensitivity to content |
+
+Privacy is achieved by never collecting hostname/username/paths/env-vars in the first place — the spec previously mentioned a `redact.go` layer, but with the actual `Build` keeping its scope tight there's nothing to filter out at marshal time. If a future schema field needs scrubbing, that's where it would land.
 
 Public API surface:
 ```go

@@ -206,8 +206,9 @@ func runEnvIDApply(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "  ⚠ favorites: %v\n", err)
 	}
 
-	// 3. Custom packs — additive (existing names preserved unless
-	// remote replaces with same name).
+	// 3. Custom packs — additive: existing packs with the same name
+	// are preserved (the user must explicitly delete them first to
+	// replace). Documented in env-id.md so this isn't surprising.
 	if err := applyPacks(p.Packs); err != nil {
 		fmt.Fprintf(os.Stderr, "  ⚠ packs: %v\n", err)
 	}
@@ -221,11 +222,38 @@ func runEnvIDApply(cmd *cobra.Command, args []string) error {
 // loadProfile reads either a token (clim:env:v1:...) or a file path.
 // Distinguishing is unambiguous because tokens always start with the
 // fixed prefix.
+//
+// Decode errors that are clearly user-caused (malformed token, empty
+// token, schema-version mismatch) are wrapped in *UsageError so they
+// exit with ExitUsage (2) per the documented contract; other errors
+// (file I/O, unmarshal of a corrupted YAML on disk) propagate as
+// runtime errors (ExitRuntime 1).
 func loadProfile(arg string) (*envid.Profile, error) {
 	if strings.HasPrefix(strings.TrimSpace(arg), "clim:env:") {
-		return envid.Decode(arg)
+		p, err := envid.Decode(arg)
+		if err != nil && isUserCausedDecodeError(err) {
+			return nil, usageErrorf("invalid env-id token: %v", err)
+		}
+		return p, err
 	}
 	return envid.ReadFile(arg)
+}
+
+// isUserCausedDecodeError returns true when err matches one of the
+// envid sentinels that signal a malformed input (as opposed to an
+// internal/I/O failure). Used to map to ExitUsage instead of
+// ExitRuntime.
+func isUserCausedDecodeError(err error) bool {
+	for _, sentinel := range []error{
+		envid.ErrInvalidToken, envid.ErrEmptyToken,
+		envid.ErrUnknownVersion, envid.ErrTokenTooLarge,
+		envid.ErrPayloadTooLarge, envid.ErrSchemaMismatch,
+	} {
+		if errors.Is(err, sentinel) {
+			return true
+		}
+	}
+	return false
 }
 
 func renderProfileText(w *os.File, p *envid.Profile) {
@@ -443,6 +471,11 @@ func applyTools(_ context.Context, cmd *cobra.Command, p *envid.Profile) (int, e
 	return failed, nil
 }
 
+// applyFavorites merges the env-id's favorites into the local list.
+// Names are trimmed of whitespace and empties dropped — applying a
+// hand-edited file/token with " jq " or "" entries shouldn't persist
+// invalid favorite names. The merge is additive: existing favorites
+// are preserved.
 func applyFavorites(names []string) error {
 	if len(names) == 0 {
 		return nil
@@ -453,6 +486,10 @@ func applyFavorites(names []string) error {
 	}
 	added := 0
 	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
 		if _, ok := existing[n]; ok {
 			continue
 		}
@@ -465,17 +502,28 @@ func applyFavorites(names []string) error {
 	return nil
 }
 
+// applyPacks adds env-id custom packs that don't already exist
+// locally. Existing packs with the same name are preserved (the user
+// must explicitly delete them first to replace).
+//
+// The "exists" check loads the on-disk pack list ONCE up front and
+// builds an in-memory set; iterating with custompacks.Exists per
+// pack would re-parse the YAML on every loop iteration.
 func applyPacks(packs []envid.Pack) error {
 	if len(packs) == 0 {
 		return nil
 	}
+	existing, err := custompacks.Load()
+	if err != nil {
+		return err
+	}
+	existingSet := make(map[string]struct{}, len(existing))
+	for _, p := range existing {
+		existingSet[strings.ToLower(p.Name)] = struct{}{}
+	}
 	added := 0
 	for _, p := range packs {
-		exists, err := custompacks.Exists(p.Name)
-		if err != nil {
-			return err
-		}
-		if exists {
+		if _, ok := existingSet[strings.ToLower(p.Name)]; ok {
 			continue
 		}
 		if err := custompacks.Add(registry.Pack{
@@ -485,12 +533,9 @@ func applyPacks(packs []envid.Pack) error {
 		}); err != nil {
 			return err
 		}
+		existingSet[strings.ToLower(p.Name)] = struct{}{}
 		added++
 	}
 	fmt.Fprintf(os.Stderr, "  Custom packs: %d added (of %d in env-id)\n", added, len(packs))
 	return nil
 }
-
-// silence unused-import warning until errors.Is is added to the apply
-// flow if we extend it later.
-var _ = errors.Is
