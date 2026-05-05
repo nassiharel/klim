@@ -11,7 +11,7 @@ all subcommands; otherwise, dispatch to a specific check.
 
 ```
 clim security                       # aggregated summary
-clim security health                # PATH / shell / network diagnostics
+clim security health                # PATH integrity / shadowing / multi-install / cache
 clim security audit                 # archived/stale/license findings
 clim security vuln                  # CVE/GHSA scan via OSV.dev
 clim security compliance            # validate against a policy
@@ -50,8 +50,9 @@ GitHub-slug-only tools are listed under `skipped`. See the dedicated
 [`clim security vuln`](/reference/commands/vuln/) reference for full
 flag documentation.
 
-Exit codes: `0` = clean or `--fail-on` not set, `3` = findings meet
-or exceed `--fail-on` (or vuln lookup hard-failed).
+Exit codes: `0` = clean or `--fail-on` not set, `1` = vuln lookup
+hard-failed (network, OSV down, etc.), `3` = findings meet or
+exceed `--fail-on`.
 
 ### `clim security compliance`
 

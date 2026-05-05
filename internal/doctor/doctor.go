@@ -448,6 +448,37 @@ func checkUserWritablePathOrder() []Issue {
 	return issues
 }
 
+// hasPathPrefix reports whether dir is the same path as parent or a
+// descendant of it, with proper path-boundary handling. Avoids false
+// positives like HasPrefix("/home/joel/bin", "/home/joe"). Both inputs
+// are cleaned; comparison is case-insensitive on Windows (filesystem
+// semantics) and exact elsewhere.
+func hasPathPrefix(dir, parent string) bool {
+	if parent == "" {
+		return false
+	}
+	dirClean := filepath.Clean(dir)
+	parentClean := filepath.Clean(parent)
+	if runtime.GOOS == "windows" {
+		dirClean = strings.ToLower(dirClean)
+		parentClean = strings.ToLower(parentClean)
+	}
+	if dirClean == parentClean {
+		return true
+	}
+	rel, err := filepath.Rel(parentClean, dirClean)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	if strings.HasPrefix(rel, "..") {
+		return false
+	}
+	return true
+}
+
 // isUserWritableDir reports whether dir exists and is writable by the
 // calling user. POSIX-only meaning: we test the owner-write bit OR
 // world-write bit when stat's owner UID matches the process EUID.
@@ -467,11 +498,7 @@ func isUserWritableDir(dir string) bool {
 		// user-writable. The ACL machinery to check properly isn't
 		// worth the complexity for what's already a hardening
 		// suggestion.
-		profile := os.Getenv("USERPROFILE")
-		if profile != "" && strings.HasPrefix(strings.ToLower(dir), strings.ToLower(profile)) {
-			return true
-		}
-		return false
+		return hasPathPrefix(dir, os.Getenv("USERPROFILE"))
 	}
 	mode := info.Mode().Perm()
 	// World-writable always counts.
@@ -481,10 +508,8 @@ func isUserWritableDir(dir string) bool {
 	// Owner-writable counts when current user owns the dir. On non-
 	// Windows we can't easily get the file owner without syscalls; a
 	// good-enough heuristic is "user dir under HOME".
-	if home := os.Getenv("HOME"); home != "" {
-		if strings.HasPrefix(dir, home) {
-			return mode&0o200 != 0
-		}
+	if hasPathPrefix(dir, os.Getenv("HOME")) {
+		return mode&0o200 != 0
 	}
 	return false
 }

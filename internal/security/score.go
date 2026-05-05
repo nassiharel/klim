@@ -166,12 +166,19 @@ func BuildIndex(tools []registry.Tool, findings []audit.Finding, vulnReport *vul
 	return idx
 }
 
-// Verdict returns the per-tool verdict, or zero-value Unknown.
+// Verdict returns the per-tool verdict. If the tool isn't in the
+// index (no Score call ever ran for it), returns a Verdict with the
+// tool name populated and StatusUnknown so callers don't lose the
+// identity in error messages or rendering.
 func (i *Index) Verdict(toolName string) Verdict {
 	if i == nil {
 		return Verdict{Tool: toolName}
 	}
-	return i.verdicts[toolName]
+	v, ok := i.verdicts[toolName]
+	if !ok {
+		return Verdict{Tool: toolName}
+	}
+	return v
 }
 
 // Counts returns (clean, watch, risk, unknown).

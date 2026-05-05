@@ -102,9 +102,9 @@ Adding PyPI/Go/crates is unblocked by future catalog metadata work.
 
 Exit codes:
   0  No findings, OR --fail-on not set / threshold not met
+  1  Vuln lookup hard-failed (network, OSV down, etc.)
   2  Usage error (bad --fail-on / --output value)
-  3  Findings present at or above --fail-on threshold,
-     OR vuln lookup hard-failed (network, OSV down, etc.)`,
+  3  Findings present at or above --fail-on threshold`,
 	RunE: runVuln,
 }
 

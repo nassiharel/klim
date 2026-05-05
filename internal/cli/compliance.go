@@ -37,7 +37,7 @@ Subcommands:
   init     Generate a sample .clim-policy.yaml.
   refresh  Force-refetch the policy from compliance.url (or --url) and update the cache.
 
-Generate a default policy with: clim compliance init`,
+Generate a default policy with: clim security compliance init`,
 }
 
 var compliancePolicyFlag string
@@ -124,7 +124,7 @@ func loadPolicyForCmd(cmd *cobra.Command, forceRefresh bool) (*compliance.Policy
 	// Fall back to local file.
 	path := findPolicyPath(cfg)
 	if path == "" {
-		return nil, "", errors.New("no policy file or URL configured\n\nGenerate one:\n  clim compliance init\n\nOr configure a URL in config.yaml:\n  compliance:\n    url: https://example.com/policy.yaml")
+		return nil, "", errors.New("no policy file or URL configured\n\nGenerate one:\n  clim security compliance init\n\nOr configure a URL in config.yaml:\n  compliance:\n    url: https://example.com/policy.yaml")
 	}
 	p, err := compliance.LoadPolicy(path)
 	return p, path, err
@@ -340,7 +340,7 @@ required_tools:
 	}
 	fmt.Fprintf(os.Stderr, "✓ Policy file created: %s\n", path)
 	fmt.Fprintln(os.Stderr, "  Edit it to match your company's requirements, then run:")
-	fmt.Fprintln(os.Stderr, "  clim compliance check")
+	fmt.Fprintln(os.Stderr, "  clim security compliance check")
 	return nil
 }
 

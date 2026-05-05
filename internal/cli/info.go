@@ -103,11 +103,13 @@ type infoReport struct {
 // infoSecurity surfaces the current security verdict in `clim info`.
 // Vulnerability data comes from the local cache only — running
 // `clim info` should never make a network call. Encourage the user
-// to run `clim security vuln` for fresh data when Vulns is nil.
+// to run `clim security vuln` for fresh data when CacheLoaded is
+// false (which is what triggers the "vulnerability cache empty"
+// hint).
 type infoSecurity struct {
 	Status      string   `json:"status"`            // clean/watch/risk/unknown
 	Reasons     []string `json:"reasons,omitempty"` // human-readable contributors
-	VulnsLoaded bool     `json:"vulns_loaded"`      // true when cache had data for this tool
+	CacheLoaded bool     `json:"cache_loaded"`      // true when the vuln cache file was readable (regardless of per-tool match)
 }
 
 func runInfo(cmd *cobra.Command, args []string) error {
@@ -276,7 +278,7 @@ func computeInfoSecurity(t registry.Tool, allTools []registry.Tool) *infoSecurit
 	return &infoSecurity{
 		Status:      verdict.Status.String(),
 		Reasons:     verdict.Reasons,
-		VulnsLoaded: loaded,
+		CacheLoaded: loaded,
 	}
 }
 
@@ -477,7 +479,7 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 		for _, reason := range r.Security.Reasons {
 			_, _ = fmt.Fprintf(w, "    · %s\n", reason)
 		}
-		if !r.Security.VulnsLoaded {
+		if !r.Security.CacheLoaded {
 			_, _ = fmt.Fprintf(w, "    Note: vulnerability cache empty — run `clim security vuln` for CVE/GHSA data\n")
 		}
 		_, _ = fmt.Fprintln(w, "")
