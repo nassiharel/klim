@@ -304,6 +304,9 @@ func (c *toolActionCmd) Run() error {
 		} else {
 			_, _ = fmt.Fprintf(stderr, "\n✗ %s failed: %s\n", c.action, runErr)
 		}
+		if hint := actionFailureHint(c.args, exitCode); hint != "" {
+			_, _ = fmt.Fprintf(stderr, "\n%s\n", hint)
+		}
 	} else {
 		_, _ = fmt.Fprintf(stderr, "\n✓ %s completed (exit code 0)\n", c.action)
 	}

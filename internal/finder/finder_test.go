@@ -148,10 +148,20 @@ func TestDetectSource(t *testing.T) {
 			registry.SourceWinget,
 		},
 
-		// WinGet — ProgramData.
+		// ProgramData / DockerDesktop / etc.: not a winget signal —
+		// the path is shared by Docker, Chocolatey (caught earlier),
+		// and various installers. We can't attribute it without more
+		// context, so call it manual.
 		{
-			"programdata",
+			"programdata docker desktop",
 			`C:\ProgramData\DockerDesktop\version-bin\docker.exe`,
+			registry.SourceManual,
+		},
+
+		// WinGet — explicit packages dir under AppData.
+		{
+			"winget packages dir",
+			`C:\Users\user\AppData\Local\Microsoft\WinGet\Packages\jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe\jq.exe`,
 			registry.SourceWinget,
 		},
 

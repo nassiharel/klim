@@ -388,8 +388,10 @@ func detectSource(path string) registry.InstallSource {
 		strings.Contains(lower, "/git/mingw64/bin/"):
 		return registry.SourceManual
 
-	// Windows: winget installs to many locations beyond Program Files.
-	case strings.Contains(lower, "program files"):
+	// Windows: WinGet stores its package metadata under
+	// %LOCALAPPDATA%\Microsoft\WinGet\Packages\<id_<source>>. Binaries
+	// living there are unambiguously winget-managed.
+	case strings.Contains(lower, "/microsoft/winget/packages/"):
 		return registry.SourceWinget
 	case strings.Contains(lower, "8wekyb3d8bbwe"):
 		// 8wekyb3d8bbwe is the package family suffix for Microsoft Store (MSIX)
@@ -399,11 +401,24 @@ func detectSource(path string) registry.InstallSource {
 		// Windows Store / App Execution Aliases (e.g. python)
 		return registry.SourceWinget
 	case strings.Contains(lower, "appdata/local/programs/"):
-		// Per-user installs (VS Code, Azure Dev CLI, etc.)
-		return registry.SourceWinget
-	case strings.Contains(lower, "programdata/"):
+		// Per-user installs (VS Code, Azure Dev CLI, etc.) — winget's
+		// per-user scope lands here.
 		return registry.SourceWinget
 
+	// Windows: Program Files is shared by winget MSIs, manual MSI
+	// installers, third-party installers (Docker Desktop, etc.) and
+	// previously-installed Chocolatey packages whose dirs contain
+	// "chocolatey/" (caught earlier). We can't tell who owns a given
+	// binary from the path alone, so call it winget — the most
+	// common managed source — and let runWingetCheck surface a
+	// friendlier error if uninstall fails because winget doesn't
+	// know about it.
+	case strings.Contains(lower, "program files"):
+		return registry.SourceWinget
+
+	// ProgramData is commonly used by Docker Desktop, Chocolatey
+	// (caught earlier), and other installers — it's NOT a reliable
+	// winget signal, so don't classify it.
 	default:
 		return registry.SourceManual
 	}
