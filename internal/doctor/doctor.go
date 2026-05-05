@@ -383,10 +383,16 @@ func checkPATHShadowing(tools []registry.Tool) []Issue {
 		if winnerIsUserWritableShadowingSystem(winner, shadowed) {
 			sev = SeverityWarning
 		}
+		// DisplayName is optional in the catalog; fall back to the
+		// canonical name so titles are never " shadowed on PATH".
+		label := t.DisplayName
+		if label == "" {
+			label = t.Name
+		}
 		issues = append(issues, Issue{
 			Severity: sev,
 			Category: CategoryPATH,
-			Title:    t.DisplayName + " shadowed on PATH",
+			Title:    label + " shadowed on PATH",
 			Detail:   fmt.Sprintf("Active: %s\nShadowed: %s", winner, strings.Join(shadowed, ", ")),
 			Fix:      "Reorder your PATH so the trusted location comes first, or remove duplicate copies",
 		})

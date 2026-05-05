@@ -253,10 +253,6 @@ func parseCVSSBaseScore(s string) (float64, bool) {
 	return 0, false
 }
 
-// pickFixedIn returns the first "fixed" event in an ECOSYSTEM-typed
-// range whose package matches the queried coordinate. SEMVER ranges
-// are also acceptable. Returns "" when the advisory hasn't recorded
-// a fix yet.
 // pickFixedIn returns the first "fixed" version from a matching
 // affected entry's range events. Only ECOSYSTEM and SEMVER range
 // types are considered — GIT ranges contain commit hashes, not
