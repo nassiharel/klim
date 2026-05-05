@@ -1,0 +1,153 @@
+package envid
+
+import (
+	"errors"
+	"strings"
+	"testing"
+	"time"
+)
+
+// fixtureProfile builds a small but realistic Profile for round-trip
+// testing. Keep field coverage broad — adding a field to Profile
+// without updating this fixture would silently miss test coverage.
+func fixtureProfile() *Profile {
+	return &Profile{
+		SchemaVersion: SchemaVersion,
+		Clim:          ClimInfo{Version: "v1.2.3", Commit: "abc1234"},
+		GeneratedAt:   time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC),
+		OS:            OSInfo{GOOS: "linux", Arch: "amd64", Distro: "Ubuntu 22.04"},
+		PackageManagers: map[string]bool{
+			"brew": true, "apt": true, "npm": false,
+		},
+		Tools: []Tool{
+			{Name: "fzf", Version: "0.42.0", Source: "brew", Category: "CLI"},
+			{Name: "jq", Version: "1.7", Source: "apt", Category: "CLI"},
+		},
+		Favorites: []string{"fzf", "jq"},
+		Packs: []Pack{
+			{Name: "my-cli", DisplayName: "My CLI", Tools: []string{"fzf", "jq"}},
+		},
+		Security: Security{
+			AuditWarnings: 3,
+			AuditInfos:    1,
+			Verdicts:      VerdictsCounts{Clean: 5, Watch: 2, Risk: 0, Unknown: 0},
+		},
+	}
+}
+
+func TestEncodeDecode_RoundTrip(t *testing.T) {
+	p := fixtureProfile()
+	p.Hash = ComputeHash(p)
+
+	token, err := Encode(p)
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	if !strings.HasPrefix(token, "clim:env:v1:") {
+		t.Errorf("token missing prefix: %s", token[:min(40, len(token))])
+	}
+
+	got, err := Decode(token)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if got.Clim.Version != p.Clim.Version {
+		t.Errorf("Clim.Version = %q, want %q", got.Clim.Version, p.Clim.Version)
+	}
+	if len(got.Tools) != 2 || got.Tools[0].Name != "fzf" {
+		t.Errorf("Tools round-trip mismatch: %+v", got.Tools)
+	}
+	if !equalStringSlices(got.Favorites, p.Favorites) {
+		t.Errorf("Favorites = %v, want %v", got.Favorites, p.Favorites)
+	}
+	if got.Hash != p.Hash {
+		t.Errorf("Hash drift across round-trip: got %q, want %q", got.Hash, p.Hash)
+	}
+}
+
+func TestComputeHash_StableAcrossTime(t *testing.T) {
+	a := fixtureProfile()
+	b := fixtureProfile()
+	b.GeneratedAt = a.GeneratedAt.Add(48 * time.Hour)
+	if ComputeHash(a) != ComputeHash(b) {
+		t.Errorf("hash should ignore GeneratedAt; got %q vs %q", ComputeHash(a), ComputeHash(b))
+	}
+}
+
+func TestComputeHash_ChangesOnContent(t *testing.T) {
+	a := fixtureProfile()
+	b := fixtureProfile()
+	b.Tools = append(b.Tools, Tool{Name: "ripgrep", Source: "brew"})
+	if ComputeHash(a) == ComputeHash(b) {
+		t.Error("hash should change when Tools differ")
+	}
+}
+
+func TestDecode_InvalidPrefix(t *testing.T) {
+	_, err := Decode("not-a-token")
+	if !errors.Is(err, ErrInvalidToken) {
+		t.Errorf("err = %v, want ErrInvalidToken", err)
+	}
+}
+
+func TestDecode_UnknownVersion(t *testing.T) {
+	_, err := Decode("clim:env:v99:abcdef")
+	if !errors.Is(err, ErrUnknownVersion) {
+		t.Errorf("err = %v, want ErrUnknownVersion", err)
+	}
+}
+
+func TestDecode_EmptyToken(t *testing.T) {
+	_, err := Decode("clim:env:v1:")
+	if !errors.Is(err, ErrEmptyToken) {
+		t.Errorf("err = %v, want ErrEmptyToken", err)
+	}
+}
+
+func TestDecode_CorruptBase64(t *testing.T) {
+	_, err := Decode("clim:env:v1:!!!notbase64!!!")
+	if !errors.Is(err, ErrCorruptToken) {
+		t.Errorf("err = %v, want ErrCorruptToken", err)
+	}
+}
+
+func TestDecode_TamperedGzip(t *testing.T) {
+	// Valid base64 of garbage bytes that aren't a gzip stream.
+	_, err := Decode("clim:env:v1:AAECAwQFBgc")
+	if !errors.Is(err, ErrCorruptToken) {
+		t.Errorf("err = %v, want ErrCorruptToken", err)
+	}
+}
+
+func TestDecode_TooLarge(t *testing.T) {
+	huge := "clim:env:v1:" + strings.Repeat("A", maxEncodedLen+1)
+	_, err := Decode(huge)
+	if !errors.Is(err, ErrTokenTooLarge) {
+		t.Errorf("err = %v, want ErrTokenTooLarge", err)
+	}
+}
+
+func TestDecode_SchemaMismatch(t *testing.T) {
+	p := fixtureProfile()
+	p.SchemaVersion = 999
+	token, err := Encode(p)
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	_, err = Decode(token)
+	if !errors.Is(err, ErrSchemaMismatch) {
+		t.Errorf("err = %v, want ErrSchemaMismatch", err)
+	}
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
