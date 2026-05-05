@@ -26,18 +26,27 @@ import (
 //
 // Permission preservation. When the target already exists, AtomicWrite
 // reuses its current mode bits and ignores the supplied perm — matches
-// os.WriteFile's overwrite behavior and prevents a re-init from
-// silently broadening a manually-restricted .clim.yaml. The perm
-// argument is used only when the target is being created.
+// os.WriteFile's overwrite behavior and prevents a rewrite from
+// silently broadening a manually-restricted file. The perm argument
+// is used only when the target is being created.
 //
 // Symlink preservation. When path is a symlink (including a *dangling*
-// symlink whose target doesn't exist yet), the temp file is created
-// next to the resolved target and the rename writes to that target.
-// The symlink itself is left intact — repos that keep `.clim.yaml` as
-// a link to a shared template don't lose that setup on overwrite.
-// Symlink chains are followed up to maxSymlinkDepth hops; if a cycle
-// is detected, resolveLinkTarget returns an error *before* any temp
+// symlink whose target doesn't exist yet, provided the target's
+// parent directory exists), the temp file is created next to the
+// resolved target and the rename writes to that target. The symlink
+// itself is left intact — callers that keep a cache file as a link
+// to a shared mount don't lose that setup on overwrite. Symlink
+// chains are followed up to maxSymlinkDepth hops; if a cycle is
+// detected, resolveLinkTarget returns an error *before* any temp
 // file is created and AtomicWrite never attempts the rename.
+//
+// Used by the catalog cache (internal/catalog), the scan cache
+// (internal/scancache), the compliance cache, and similar shared
+// state where concurrent readers care about consistency.
+// `clim init` deliberately does NOT use AtomicWrite — see
+// internal/teamfile.Write for the rationale (inode/ACL/xattr
+// preservation outweighs crash-atomicity for a single-writer,
+// interactive command).
 //
 // Read-only-dir fallback. Atomicity requires creating a temp file in
 // the target's directory. When that fails *with a permission-denied

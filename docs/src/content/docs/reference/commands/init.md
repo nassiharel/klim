@@ -74,11 +74,11 @@ optional:
 
 ## Symlinks
 
-If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` writes through the link to the target file rather than replacing the link with a regular file. This works even when the link is dangling — the target file is created on first write and the link is left intact. Symlink chains are followed by the OS (Linux up to 40 hops, Windows configurable); cycles are reported as `ELOOP`.
+If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` writes through the link to the target file rather than replacing the link with a regular file. This works even when the link is dangling — the target file is created on first write **as long as the target's parent directory already exists**. A link like `.clim.yaml → ../shared/missing/manifest.yaml` will fail with `ENOENT` if `../shared/missing/` doesn't exist; clim does not auto-create parent directories under shared mounts. Symlink chains are followed by the OS (Linux up to 40 hops, Windows configurable); cycles are reported as `ELOOP`.
 
 ## Permissions and metadata
 
-When a `.clim.yaml` already exists, `clim init --force` preserves its current mode bits, ownership, ACLs (POSIX and Windows), extended attributes, and inode — the file is rewritten in place rather than replaced. A manually-restricted manifest (e.g. `chmod 600 .clim.yaml` because the manifest contains sensitive tool/version data) keeps those bits across re-inits. Hardlinks pointing at the manifest stay live. The default mode for a freshly-created manifest is `0644`.
+When a `.clim.yaml` already exists as a regular file (or as a symlink to an existing target), `clim init --force` preserves its current mode bits, ownership, ACLs (POSIX and Windows), extended attributes, and inode — the file is rewritten in place rather than replaced. A manually-restricted manifest (e.g. `chmod 600 .clim.yaml` because the manifest contains sensitive tool/version data) keeps those bits across re-inits. Hardlinks pointing at the manifest stay live. The default mode for a freshly-created manifest is `0644`. Note: when `--force` overwrites a *dangling* symlink, the target file is being created for the first time, so there is no prior metadata to preserve — the new file is owned by the calling user and gets `0644`.
 
 ## See Also
 
