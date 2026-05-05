@@ -386,7 +386,7 @@ func checkPATHShadowing(tools []registry.Tool) []Issue {
 		issues = append(issues, Issue{
 			Severity: sev,
 			Category: CategoryPATH,
-			Title:    fmt.Sprintf("%s shadowed on PATH", t.DisplayName),
+			Title:    t.DisplayName + " shadowed on PATH",
 			Detail:   fmt.Sprintf("Active: %s\nShadowed: %s", winner, strings.Join(shadowed, ", ")),
 			Fix:      "Reorder your PATH so the trusted location comes first, or remove duplicate copies",
 		})
@@ -458,7 +458,7 @@ func isUserWritableDir(dir string) bool {
 	if dir == "" {
 		return false
 	}
-	info, err := os.Stat(dir)
+	info, err := os.Stat(dir) // #nosec G304 -- dir originates from PATH; checking PATH integrity is the purpose.
 	if err != nil || !info.IsDir() {
 		return false
 	}

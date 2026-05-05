@@ -52,7 +52,9 @@ func TestMap_NPMOnly(t *testing.T) {
 	}
 }
 
-func TestMap_BrewAndGitHubBoth(t *testing.T) {
+func TestMap_BrewOnlyIsSkipped(t *testing.T) {
+	// Homebrew is not a valid OSV ecosystem, so a brew-only tool
+	// is skipped (npm is the only currently-supported ecosystem).
 	tool := registry.Tool{
 		Name:       "jq",
 		GitHubSlug: "stedolan/jq",
@@ -64,17 +66,11 @@ func TestMap_BrewAndGitHubBoth(t *testing.T) {
 		},
 	}
 	coords, reason := Map(tool)
-	if reason != "" {
-		t.Fatalf("unexpected skip: %q", reason)
+	if coords != nil {
+		t.Errorf("brew-only tool should not produce coords, got %v", coords)
 	}
-	if len(coords) != 2 {
-		t.Fatalf("expected 2 coords (Homebrew + GitHub), got %d: %+v", len(coords), coords)
-	}
-	if coords[0].Ecosystem != EcosystemHomebrew {
-		t.Errorf("coord[0].Ecosystem = %q, want Homebrew", coords[0].Ecosystem)
-	}
-	if coords[1].Ecosystem != EcosystemGitHub || coords[1].Package != "stedolan/jq" {
-		t.Errorf("coord[1] = %+v", coords[1])
+	if reason == "" {
+		t.Error("expected a skip reason for brew-only tool")
 	}
 }
 

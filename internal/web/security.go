@@ -16,6 +16,7 @@ type securityView struct {
 	VulnRiskCount        int
 	VulnMatches          []vuln.Match
 	VulnCacheLoaded      bool
+	VulnSource           string
 	SkippedTools         []vuln.Skip
 	ComplianceLoaded     bool
 	ComplianceViolations int
@@ -46,8 +47,15 @@ func (s *Server) pageSecurity(w http.ResponseWriter, r *http.Request) {
 		AuditFindings: findings,
 	}
 
-	// Cached vuln data — passive read.
-	if rep, ok := vuln.ReadCache(""); ok {
+	// Cached vuln data — passive read keyed by the configured OSV URL
+	// so we hit the same cache file the CLI populates.
+	cfg := s.snapshotConfig()
+	vulnURL := cfg.Vuln.URL
+	if vulnURL == "" {
+		vulnURL = vuln.DefaultOSVURL
+	}
+	view.VulnSource = vulnURL
+	if rep, ok := vuln.ReadCache(vulnURL); ok {
 		view.VulnCacheLoaded = true
 		view.VulnMatches = rep.Matches
 		view.SkippedTools = rep.Skipped
@@ -57,12 +65,6 @@ func (s *Server) pageSecurity(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
-	// Compliance — if the snapshot we already have on the server has
-	// loaded a policy, count violations. The web view doesn't load
-	// policy itself today (compliance.url loading lives in the TUI/
-	// CLI). Keep this simple: zero unless the server has been wired
-	// up. Future work can mirror the compliance loading pattern.
 
 	s.renderPage(w, r, "security.html", pageData{
 		Title:     "Security",

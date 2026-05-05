@@ -261,7 +261,7 @@ func computeInfoSecurity(t registry.Tool, allTools []registry.Tool) *infoSecurit
 	// the unkeyed default cache path.
 	var match *vuln.Match
 	loaded := false
-	if rep, ok := vuln.ReadCache(""); ok {
+	if rep, ok := vuln.ReadCache(ResolveVulnSourceKey()); ok {
 		loaded = true
 		for i := range rep.Matches {
 			if rep.Matches[i].Tool == t.Name {

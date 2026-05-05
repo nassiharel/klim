@@ -150,7 +150,6 @@ func fetch(ctx context.Context, looker Looker, tools []registry.Tool, sourceKey 
 	type plan struct {
 		tool   registry.Tool
 		coords []Coord
-		skip   string
 	}
 	plans := make([]plan, 0, len(tools))
 	skipped := make([]Skip, 0)
@@ -240,7 +239,7 @@ func fetch(ctx context.Context, looker Looker, tools []registry.Tool, sourceKey 
 	}
 
 	if successCount == 0 && len(plans) > 0 {
-		return nil, fmt.Errorf("vuln lookup failed for all %d candidate tools (first: %v)", len(plans), resultErrs[0])
+		return nil, fmt.Errorf("vuln lookup failed for all %d candidate tools: %w", len(plans), resultErrs[0])
 	}
 
 	return &Report{

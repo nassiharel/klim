@@ -9,21 +9,24 @@ import (
 // Map returns the OSV coordinates we can query for a given installed
 // tool, plus a non-empty reason string when the tool was *not*
 // mappable (e.g. no version detected, no ecosystem-mappable package
-// id, no GitHub slug). The reason becomes the Skip entry in Report.
+// id). The reason becomes the Skip entry in Report.
 //
-// A single tool may produce multiple coords: a tool installed via
-// brew that is also a node package (e.g. yarn) may legitimately
-// match advisories under both ecosystems. Callers query each coord
-// and de-duplicate by Vulnerability.ID.
-//
-// Mapping rules (in order of preference):
+// Mapping rules:
 //
 //   - tool.Packages.NPM     → npm
-//   - tool.Packages.Brew    → Homebrew
-//   - tool.GitHubInfo + slug→ GitHub (synthetic ecosystem; see types.go)
 //
-// Additional ecosystems (Go modules via go.mod, PyPI, crates.io)
-// would slot in cleanly once we have catalog metadata for them.
+// We deliberately limit ourselves to OSV ecosystems that respond
+// successfully to /v1/query without authentication. Notably:
+//
+//   - "Homebrew" is NOT a valid OSV ecosystem (OSV returns HTTP 400
+//     "Invalid ecosystem"). GHSA mirrors brew formulas through the
+//     underlying language ecosystems instead, which we already cover
+//     when the tool also has an npm id.
+//   - "GitHub" by repo slug is not a query path either; OSV models
+//     advisories per-ecosystem, not per-repo.
+//
+// Adding Go modules / PyPI / crates / RubyGems would slot in cleanly
+// once the marketplace catalog grows package ids for them.
 func Map(t registry.Tool) (coords []Coord, skipReason string) {
 	if !t.IsInstalled() {
 		return nil, "not installed"
@@ -41,23 +44,9 @@ func Map(t registry.Tool) (coords []Coord, skipReason string) {
 			Version:   v,
 		})
 	}
-	if t.Packages.Brew != "" {
-		coords = append(coords, Coord{
-			Ecosystem: EcosystemHomebrew,
-			Package:   t.Packages.Brew,
-			Version:   v,
-		})
-	}
-	if slug := strings.TrimSpace(t.GitHubSlug); slug != "" {
-		coords = append(coords, Coord{
-			Ecosystem: EcosystemGitHub,
-			Package:   slug,
-			Version:   v,
-		})
-	}
 
 	if len(coords) == 0 {
-		return nil, "no ecosystem mapping (no npm/brew package id and no GitHub slug)"
+		return nil, "no OSV-queryable ecosystem (only npm packages currently supported)"
 	}
 	return coords, ""
 }

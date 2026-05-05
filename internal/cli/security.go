@@ -12,9 +12,26 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/clim/internal/audit"
+	"github.com/nassiharel/clim/internal/config"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/vuln"
 )
+
+// ResolveVulnSourceKey returns the OSV endpoint string used as the
+// cache key for vulnerability scan results. Surfaces that read the
+// cache passively (`clim info`, web `/security`) must use the same
+// key as `clim security vuln`, otherwise they look at a different
+// file. Falls back to vuln.DefaultOSVURL when config is unreadable
+// or the URL is unset.
+func ResolveVulnSourceKey() string {
+	cfg, _ := config.Load()
+	if cfg != nil {
+		if u := strings.TrimSpace(cfg.Vuln.URL); u != "" {
+			return u
+		}
+	}
+	return vuln.DefaultOSVURL
+}
 
 // securityCmd is the parent of all security-related subcommands.
 //
@@ -200,7 +217,7 @@ func printVulnText(rep *vuln.Report) {
 			}
 			return sorted[i].Tool < sorted[j].Tool
 		})
-		fmt.Fprintln(w, "TOOL\tVERSION\tSEVERITY\tID\tFIXED IN\tSUMMARY")
+		_, _ = fmt.Fprintln(w, "TOOL\tVERSION\tSEVERITY\tID\tFIXED IN\tSUMMARY")
 		for _, m := range sorted {
 			if len(m.Vulnerabilities) == 0 {
 				continue
@@ -216,7 +233,7 @@ func printVulnText(rep *vuln.Report) {
 				if len(summary) > 60 {
 					summary = summary[:57] + "…"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 					tool, ver, v.Severity, v.ID, v.FixedIn, summary)
 			}
 		}

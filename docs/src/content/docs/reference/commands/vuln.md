@@ -55,16 +55,18 @@ clim does not ship a CVSS calculator.
 ## Coverage
 
 `clim security vuln` only scans tools with a recognized OSV ecosystem
-mapping:
+mapping. Currently that's:
 
-- npm globals (mapped via `packages.npm`)
-- Homebrew formulas (`packages.brew`) — best-effort, mapped to OSV
-  Homebrew namespace
-- Tools with a `github: owner/repo` annotation in the marketplace
-  catalog
+- **npm globals** — mapped via `packages.npm` in the marketplace catalog
 
-Other package managers (winget, scoop, choco, apt, snap) are listed
-under `skipped` in the JSON output and noted with a reason.
+OSV.dev does **not** accept `Homebrew` or `GitHub` as query
+ecosystems (the API returns HTTP 400 "Invalid ecosystem"), so brew
+formulas and GitHub-by-slug tools are listed under `skipped`. We're
+tracking adding Go modules / PyPI / crates / RubyGems support as
+catalog metadata grows.
+
+Tools installed via winget, scoop, choco, apt, snap, or brew without
+a parallel npm id will appear under `skipped` with a reason.
 
 ## Cache
 

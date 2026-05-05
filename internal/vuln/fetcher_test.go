@@ -58,7 +58,7 @@ func TestLookup_HappyPath(t *testing.T) {
 	}}
 
 	tools := []registry.Tool{
-		mkTool("node", "18.10.0", "", "node", "nodejs/node"),
+		mkTool("node", "18.10.0", "node", "", ""),
 		mkTool("yarn", "1.22.0", "yarn", "", ""),
 	}
 
@@ -90,7 +90,7 @@ func TestLookup_HappyPath(t *testing.T) {
 func TestLookup_UsesFreshCache(t *testing.T) {
 	setEnvDir(t, t.TempDir())
 
-	tools := []registry.Tool{mkTool("node", "18.10.0", "", "node", "nodejs/node")}
+	tools := []registry.Tool{mkTool("node", "18.10.0", "node", "", "")}
 	srcKey := "https://api.osv.dev"
 
 	first := &stubLooker{byPackage: map[string][]Vulnerability{
@@ -122,7 +122,7 @@ func TestLookup_UsesFreshCache(t *testing.T) {
 func TestLookup_StaleCacheRefetches(t *testing.T) {
 	setEnvDir(t, t.TempDir())
 
-	tools := []registry.Tool{mkTool("node", "18.10.0", "", "node", "nodejs/node")}
+	tools := []registry.Tool{mkTool("node", "18.10.0", "node", "", "")}
 	srcKey := "https://api.osv.dev"
 
 	// Seed cache.
@@ -158,7 +158,7 @@ func TestLookup_StaleCacheRefetches(t *testing.T) {
 func TestLookup_FetchFailureFallsBackToStaleCache(t *testing.T) {
 	setEnvDir(t, t.TempDir())
 
-	tools := []registry.Tool{mkTool("node", "18.10.0", "", "node", "nodejs/node")}
+	tools := []registry.Tool{mkTool("node", "18.10.0", "node", "", "")}
 	srcKey := "https://api.osv.dev"
 
 	// Seed an old cache.
@@ -184,7 +184,7 @@ func TestLookup_FetchFailureFallsBackToStaleCache(t *testing.T) {
 func TestLookup_FetchFailureNoCachePropagates(t *testing.T) {
 	setEnvDir(t, t.TempDir())
 
-	tools := []registry.Tool{mkTool("node", "18.10.0", "", "node", "nodejs/node")}
+	tools := []registry.Tool{mkTool("node", "18.10.0", "node", "", "")}
 	srcKey := "https://api.osv.dev"
 
 	failing := &stubLooker{err: errors.New("network down")}
@@ -198,7 +198,7 @@ func TestLookup_SkipsUnmappableTool(t *testing.T) {
 	setEnvDir(t, t.TempDir())
 
 	tools := []registry.Tool{
-		mkTool("node", "18.10.0", "", "node", "nodejs/node"),
+		mkTool("node", "18.10.0", "node", "", ""),
 		// No NPM, no Brew, no GitHub slug → unmappable.
 		{
 			Name: "exotic",

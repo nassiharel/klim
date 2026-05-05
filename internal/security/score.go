@@ -4,6 +4,8 @@
 package security
 
 import (
+	"strings"
+
 	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/vuln"
@@ -63,9 +65,9 @@ func Score(t registry.Tool, findings []audit.Finding, match *vuln.Match) Verdict
 
 	if match != nil && len(match.Vulnerabilities) > 0 {
 		v.Status = upgrade(v.Status, StatusRisk)
-		max := match.MaxSeverity()
+		topSev := match.MaxSeverity()
 		v.Reasons = append(v.Reasons,
-			"known vulnerability"+severitySuffix(max)+" — "+vulnIDsSummary(match.Vulnerabilities))
+			"known vulnerability"+severitySuffix(topSev)+" — "+vulnIDsSummary(match.Vulnerabilities))
 	}
 
 	for _, f := range findings {
@@ -112,23 +114,22 @@ func severitySuffix(s vuln.Severity) string {
 }
 
 func vulnIDsSummary(vulns []vuln.Vulnerability) string {
-	const max = 3
-	switch {
-	case len(vulns) == 0:
+	const limit = 3
+	if len(vulns) == 0 {
 		return ""
-	case len(vulns) <= max:
-		out := vulns[0].ID
-		for _, v := range vulns[1:] {
-			out += ", " + v.ID
-		}
-		return out
-	default:
-		out := vulns[0].ID
-		for _, v := range vulns[1:max] {
-			out += ", " + v.ID
-		}
-		return out + " +" + itoa(len(vulns)-max) + " more"
 	}
+	ids := make([]string, 0, limit+1)
+	for i, v := range vulns {
+		if i >= limit {
+			break
+		}
+		ids = append(ids, v.ID)
+	}
+	out := strings.Join(ids, ", ")
+	if len(vulns) > limit {
+		out += " +" + itoa(len(vulns)-limit) + " more"
+	}
+	return out
 }
 
 func itoa(n int) string {
