@@ -1,6 +1,8 @@
 package envid
 
 import (
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -24,5 +26,25 @@ func TestReadWriteFile_RoundTrip(t *testing.T) {
 	}
 	if len(got.Tools) != len(p.Tools) {
 		t.Errorf("Tools length mismatch: got %d want %d", len(got.Tools), len(p.Tools))
+	}
+}
+
+func TestReadFile_RejectsOversize(t *testing.T) {
+	// File-form should reject inputs larger than the same cap
+	// Decode applies, so a malicious profile.yaml can't exhaust
+	// memory.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.yaml")
+	huge := make([]byte, maxDecompressedLen+10)
+	for i := range huge {
+		huge[i] = 'x'
+	}
+	if err := os.WriteFile(path, huge, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, err := ReadFile(path); err == nil {
+		t.Error("ReadFile should refuse oversize input")
+	} else if !errors.Is(err, ErrPayloadTooLarge) {
+		t.Errorf("err = %v; want ErrPayloadTooLarge", err)
 	}
 }

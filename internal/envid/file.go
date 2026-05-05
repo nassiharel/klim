@@ -3,6 +3,7 @@ package envid
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -10,12 +11,26 @@ import (
 	"github.com/nassiharel/clim/internal/fileutil"
 )
 
-// ReadFile loads a Profile from a YAML file on disk.
+// ReadFile loads a Profile from a YAML file on disk. The file is
+// capped at maxDecompressedLen bytes (same limit Decode applies to
+// the compressed-token form) so a maliciously-large profile.yaml
+// can't be used to exhaust memory. Streamed via io.LimitReader so
+// even a multi-GB file allocates at most maxDecompressedLen+1.
 func ReadFile(path string) (*Profile, error) {
-	data, err := os.ReadFile(path) // #nosec G304 -- caller-supplied path
+	f, err := os.Open(path) // #nosec G304 -- caller-supplied path
 	if err != nil {
 		return nil, fmt.Errorf("envid.ReadFile: %w", err)
 	}
+	defer func() { _ = f.Close() }()
+
+	data, err := io.ReadAll(io.LimitReader(f, int64(maxDecompressedLen+1)))
+	if err != nil {
+		return nil, fmt.Errorf("envid.ReadFile: %w", err)
+	}
+	if len(data) > maxDecompressedLen {
+		return nil, fmt.Errorf("%w: file %s exceeds %d bytes", ErrPayloadTooLarge, path, maxDecompressedLen)
+	}
+
 	p, err := unmarshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("envid.ReadFile: parse %s: %w", path, err)

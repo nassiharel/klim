@@ -511,42 +511,58 @@ func applyTools(cmd *cobra.Command, p *envid.Profile) (int, error) {
 
 // applyFavorites merges the env's favorites into the local list.
 // Names are trimmed of whitespace and empties dropped — applying a
-// hand-edited file/token with " jq " or "" entries shouldn't persist
-// invalid favorite names. The merge is additive: existing favorites
-// are preserved.
+// hand-edited file/token with " jq " or "" entries shouldn't
+// persist invalid favorite names.
+//
+// The merge is additive (existing favorites preserved) and writes
+// the favorites file ONCE at the end. The earlier per-name
+// favorites.Add loop reloaded and rewrote the YAML for every
+// addition; with N new names that's N reads + N writes. Now it's
+// 1 read + 1 write regardless of N.
 func applyFavorites(names []string) error {
 	if len(names) == 0 {
 		return nil
 	}
-	existing, err := favorites.Set()
+	existing, err := favorites.Load()
 	if err != nil {
 		return err
 	}
+	existingSet := make(map[string]struct{}, len(existing))
+	for _, n := range existing {
+		existingSet[n] = struct{}{}
+	}
+	merged := append([]string(nil), existing...)
 	added := 0
 	for _, n := range names {
 		n = strings.TrimSpace(n)
 		if n == "" {
 			continue
 		}
-		if _, ok := existing[n]; ok {
+		if _, ok := existingSet[n]; ok {
 			continue
 		}
-		if err := favorites.Add(n); err != nil {
-			return err
-		}
+		existingSet[n] = struct{}{}
+		merged = append(merged, n)
 		added++
+	}
+	if added == 0 {
+		fmt.Fprintf(os.Stderr, "  Favorites: 0 added (of %d in env)\n", len(names))
+		return nil
+	}
+	if err := favorites.Save(merged); err != nil {
+		return err
 	}
 	fmt.Fprintf(os.Stderr, "  Favorites: %d added (of %d in env)\n", added, len(names))
 	return nil
 }
 
 // applyPacks adds env custom packs that don't already exist
-// locally. Existing packs with the same name are preserved (the user
-// must explicitly delete them first to replace).
+// locally. Existing packs with the same name are preserved (users
+// must delete first to replace).
 //
-// The "exists" check loads the on-disk pack list ONCE up front and
-// builds an in-memory set; iterating with custompacks.Exists per
-// pack would re-parse the YAML on every loop iteration.
+// Same I/O-batching pattern as applyFavorites: load the existing
+// pack list once, merge in the new ones, write once. Avoids
+// rewriting the custom-packs YAML for every additional pack.
 func applyPacks(packs []envid.Pack) error {
 	if len(packs) == 0 {
 		return nil
@@ -559,20 +575,27 @@ func applyPacks(packs []envid.Pack) error {
 	for _, p := range existing {
 		existingSet[strings.ToLower(p.Name)] = struct{}{}
 	}
+	merged := append([]registry.Pack(nil), existing...)
 	added := 0
 	for _, p := range packs {
-		if _, ok := existingSet[strings.ToLower(p.Name)]; ok {
+		key := strings.ToLower(p.Name)
+		if _, ok := existingSet[key]; ok {
 			continue
 		}
-		if err := custompacks.Add(registry.Pack{
+		existingSet[key] = struct{}{}
+		merged = append(merged, registry.Pack{
 			Name:        p.Name,
 			DisplayName: p.DisplayName,
 			ToolNames:   p.Tools,
-		}); err != nil {
-			return err
-		}
-		existingSet[strings.ToLower(p.Name)] = struct{}{}
+		})
 		added++
+	}
+	if added == 0 {
+		fmt.Fprintf(os.Stderr, "  Custom packs: 0 added (of %d in env)\n", len(packs))
+		return nil
+	}
+	if err := custompacks.Save(merged); err != nil {
+		return err
 	}
 	fmt.Fprintf(os.Stderr, "  Custom packs: %d added (of %d in env)\n", added, len(packs))
 	return nil

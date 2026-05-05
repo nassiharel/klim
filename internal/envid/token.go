@@ -46,6 +46,12 @@ func Encode(p *Profile) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("envid.Encode: marshal: %w", err)
 	}
+	// Reject payloads that Decode would refuse on the way back in,
+	// rather than emitting a token that round-trip is guaranteed to
+	// fail. The check mirrors the cap in Decode.
+	if len(yml) > maxDecompressedLen {
+		return "", fmt.Errorf("%w: marshalled %d bytes (max %d)", ErrPayloadTooLarge, len(yml), maxDecompressedLen)
+	}
 
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
@@ -55,7 +61,11 @@ func Encode(p *Profile) (string, error) {
 	if err := gz.Close(); err != nil {
 		return "", fmt.Errorf("envid.Encode: gzip close: %w", err)
 	}
-	return tokenPrefix + base64.RawURLEncoding.EncodeToString(buf.Bytes()), nil
+	encoded := base64.RawURLEncoding.EncodeToString(buf.Bytes())
+	if len(encoded) > maxEncodedLen {
+		return "", fmt.Errorf("%w: encoded %d bytes (max %d)", ErrTokenTooLarge, len(encoded), maxEncodedLen)
+	}
+	return tokenPrefix + encoded, nil
 }
 
 // Decode extracts a Profile from a compact token. Returns a typed

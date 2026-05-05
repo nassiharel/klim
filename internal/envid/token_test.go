@@ -218,3 +218,17 @@ func equalTools(a, b []Tool) bool {
 	}
 	return true
 }
+
+func TestEncode_RejectsOversizePayload(t *testing.T) {
+	// Synthesize a profile whose marshalled YAML exceeds the
+	// decompressed cap — Encode must refuse rather than emit a
+	// token Decode would always reject.
+	p := &Profile{SchemaVersion: SchemaVersion}
+	huge := strings.Repeat("x", maxDecompressedLen)
+	p.Tools = []Tool{{Name: huge}}
+	if _, err := Encode(p); err == nil {
+		t.Error("Encode should refuse oversize payload")
+	} else if !errors.Is(err, ErrPayloadTooLarge) {
+		t.Errorf("err = %v; want ErrPayloadTooLarge", err)
+	}
+}
