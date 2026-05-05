@@ -15,22 +15,27 @@ import (
 // blanked out. Two profiles that differ only in capture time share a
 // hash, which makes "are these the same env?" cheap and stable.
 //
+// ComputeHash is side-effect free: the input *p is never mutated.
+// We deep-copy slice/map fields before canonicalize because the
+// canonicalize helpers rewrite Tools, Packs, Favorites,
+// PackageManagers, and each Pack.Tools list.
+//
 // Determinism guarantees:
-//   - The clone's Tools/Favorites/Packs/PackageManagers are produced
-//     by canonicalize() before hashing — sorted, deduped, with
-//     pack tool lists also sorted+deduped.
+//   - The deep clone's Tools/Favorites/Packs/PackageManagers are
+//     produced by canonicalize() before hashing — sorted, deduped,
+//     with pack tool lists also sorted+deduped.
 //   - yaml.v3 marshals maps with sorted keys, so PackageManagers
 //     stays stable across runs.
 func ComputeHash(p *Profile) string {
 	if p == nil {
 		return ""
 	}
-	clone := *p
-	canonicalize(&clone)
+	clone := deepClone(p)
+	canonicalize(clone)
 	clone.Hash = ""
 	clone.GeneratedAt = time.Time{}
 
-	data, err := yaml.Marshal(&clone)
+	data, err := yaml.Marshal(clone)
 	if err != nil {
 		return ""
 	}
@@ -38,12 +43,51 @@ func ComputeHash(p *Profile) string {
 	return hex.EncodeToString(sum[:])[:12]
 }
 
+// deepClone returns a copy of p with new backing arrays/maps for
+// every slice and map field, so subsequent in-place mutation of the
+// clone never affects the caller. ClimInfo, OSInfo, Security, and
+// VerdictsCounts are value types — copied as part of the struct
+// literal — and need no further treatment.
+func deepClone(p *Profile) *Profile {
+	if p == nil {
+		return nil
+	}
+	out := *p
+
+	if p.Tools != nil {
+		out.Tools = append([]Tool(nil), p.Tools...)
+	}
+	if p.Favorites != nil {
+		out.Favorites = append([]string(nil), p.Favorites...)
+	}
+	if p.Packs != nil {
+		out.Packs = make([]Pack, len(p.Packs))
+		for i, pk := range p.Packs {
+			out.Packs[i] = pk
+			if pk.Tools != nil {
+				out.Packs[i].Tools = append([]string(nil), pk.Tools...)
+			}
+		}
+	}
+	if p.PackageManagers != nil {
+		out.PackageManagers = make(map[string]bool, len(p.PackageManagers))
+		for k, v := range p.PackageManagers {
+			out.PackageManagers[k] = v
+		}
+	}
+	return &out
+}
+
 // canonicalize normalises in-place the slices/maps that drive the
 // hash so semantically-equivalent profiles produce identical bytes.
 // Idempotent.
+//
+// MUTATES the receiver: Tools, Favorites, Packs, and each
+// Pack.Tools are rewritten. Callers (notably ComputeHash) must
+// either own the Profile already or pass a deep clone.
 func canonicalize(p *Profile) {
 	p.Favorites = dedupSorted(p.Favorites)
-	p.Tools = sortToolsByName(p.Tools)
+	p.Tools = dedupSortToolsByName(p.Tools)
 	for i := range p.Packs {
 		p.Packs[i].Tools = dedupSorted(p.Packs[i].Tools)
 	}
@@ -71,12 +115,25 @@ func dedupSorted(in []string) []string {
 	return out
 }
 
-func sortToolsByName(tools []Tool) []Tool {
+// dedupSortToolsByName sorts and deduplicates by Name (first
+// occurrence wins). A profile that contains the same tool listed
+// twice (manual edit, malformed token, future merge bug) shouldn't
+// perturb the hash.
+func dedupSortToolsByName(tools []Tool) []Tool {
 	if len(tools) == 0 {
 		return tools
 	}
 	sort.SliceStable(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
-	return tools
+	out := tools[:0]
+	var prev string
+	for i, t := range tools {
+		if i > 0 && t.Name == prev {
+			continue
+		}
+		prev = t.Name
+		out = append(out, t)
+	}
+	return out
 }
 
 func sortPacksByName(packs []Pack) {

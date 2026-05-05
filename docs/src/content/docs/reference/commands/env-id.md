@@ -132,8 +132,8 @@ Cross-OS gaps surface as informational entries, never as errors.
 | Code | Meaning |
 | --- | --- |
 | 0 | Success (or nothing to do) |
-| 1 | Runtime failure (token decode, scan, file I/O) |
-| 2 | Usage error (bad token format, missing arg) |
+| 1 | Runtime failure (file I/O, scan, internal error) |
+| 2 | Usage error: missing/invalid arg, or **malformed token** — invalid prefix, unknown schema version, oversize, corrupt base64/gzip/yaml, schema-version mismatch |
 | 3 | Partial failure — some installs failed but others succeeded |
 
 ## Related

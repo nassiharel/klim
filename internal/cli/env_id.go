@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -194,7 +193,7 @@ func runEnvIDApply(cmd *cobra.Command, args []string) error {
 	// 1. Tools — delegate to the existing import plan / install flow.
 	failed := 0
 	if len(p.Tools) > 0 {
-		f, err := applyTools(cmd.Context(), cmd, p)
+		f, err := applyTools(cmd, p)
 		if err != nil {
 			return err
 		}
@@ -243,11 +242,16 @@ func loadProfile(arg string) (*envid.Profile, error) {
 // envid sentinels that signal a malformed input (as opposed to an
 // internal/I/O failure). Used to map to ExitUsage instead of
 // ExitRuntime.
+//
+// ErrCorruptToken covers tampered base64 / gzip / yaml — all of
+// which are user-caused (someone edited or pasted a bad token), so
+// they belong in the usage-error bucket.
 func isUserCausedDecodeError(err error) bool {
 	for _, sentinel := range []error{
 		envid.ErrInvalidToken, envid.ErrEmptyToken,
 		envid.ErrUnknownVersion, envid.ErrTokenTooLarge,
 		envid.ErrPayloadTooLarge, envid.ErrSchemaMismatch,
+		envid.ErrCorruptToken,
 	} {
 		if errors.Is(err, sentinel) {
 			return true
@@ -435,7 +439,11 @@ func joinOrDash(s []string) string {
 // Returns the count of failed installs (so the caller can surface
 // PartialFailureError); a nil error means the apply pass completed
 // (with possible per-tool failures captured in the count).
-func applyTools(_ context.Context, cmd *cobra.Command, p *envid.Profile) (int, error) {
+//
+// The cancellation context comes from cmd.Context(); we don't take
+// a separate ctx parameter to avoid the confusion of two contexts
+// on the call site.
+func applyTools(cmd *cobra.Command, p *envid.Profile) (int, error) {
 	mtools := make([]manifest.Tool, 0, len(p.Tools))
 	for _, t := range p.Tools {
 		mtools = append(mtools, manifest.Tool{
