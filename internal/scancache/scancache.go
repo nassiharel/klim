@@ -19,7 +19,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -238,13 +237,16 @@ func pathExists(path string) bool {
 // cached path is stale (e.g. external brew upgrade rotated the
 // versioned directory).
 //
+// We delegate the candidate-name expansion to finder.BinaryCandidateNames
+// so PATHEXT-driven Windows extensions (.exe / .cmd / .bat / .com /
+// …) are handled identically to the main scan. Hardcoding a smaller
+// list would silently drop tools whose command resolves via a less
+// common PATHEXT entry, defeating the recovery's purpose.
+//
 // Walking finder.PathDirectories() rather than relying on
 // exec.LookPath alone matters on Windows: registry PATH entries
 // that winget/scoop installs add post-launch are visible through
 // the finder helper but not through the inherited process PATH.
-// Without this, the cache fast path would drop a still-installed
-// tool whose dir was added to the registry PATH after the launching
-// shell started, even though a fresh scan would find it.
 func lookupOnPATH(binaryNames []string) (string, bool) {
 	if len(binaryNames) == 0 {
 		return "", false
@@ -256,23 +258,17 @@ func lookupOnPATH(binaryNames []string) (string, bool) {
 		// environments).
 		return lookupViaExec(binaryNames)
 	}
-	exts := []string{""}
-	if runtime.GOOS == "windows" {
-		// PATHEXT extensions used by Windows. Mirrors the finder's
-		// candidate-name expansion for executable suffixes.
-		exts = []string{".exe", ".cmd", ".bat", ""}
-	}
 	for _, name := range binaryNames {
 		for _, dir := range dirs {
-			for _, ext := range exts {
-				candidate := filepath.Join(dir, name+ext)
-				info, err := os.Stat(candidate)
+			for _, candidate := range finder.BinaryCandidateNames(name) {
+				full := filepath.Join(dir, candidate)
+				info, err := os.Stat(full)
 				if err != nil || info.IsDir() {
 					continue
 				}
-				resolved, err := filepath.EvalSymlinks(candidate)
+				resolved, err := filepath.EvalSymlinks(full)
 				if err != nil || resolved == "" {
-					resolved = candidate
+					resolved = full
 				}
 				return resolved, true
 			}

@@ -278,6 +278,15 @@ func normaliseName(name string) string {
 	return name
 }
 
+// BinaryCandidateNames returns the OS-aware list of file names to
+// look for when resolving a binary by its catalog name. On Windows
+// the list expands by PATHEXT (.exe, .cmd, .bat, .com, …) so a tool
+// listed as "go" matches "go.exe" / "go.cmd" / etc. Exported so the
+// scancache fast-path uses the same expansion the full scan does.
+func BinaryCandidateNames(name string) []string {
+	return binaryCandidateNames(name)
+}
+
 // binaryCandidateNames returns the normalised file names to look for in a directory.
 func binaryCandidateNames(name string) []string {
 	if runtime.GOOS == "windows" {
