@@ -190,8 +190,12 @@ table.kv td {
 .sec-card.sec-watch { border-left: 4px solid var(--warn); }
 .sec-card.sec-clean { border-left: 4px solid var(--accent); }
 .sec-card h2 { display: flex; align-items: center; gap: 0.5rem; }
+/* Per-tool vulnerabilities table on /tools/{name} (Severity is col 1). */
 tr.sev-CRITICAL td:first-child, tr.sev-HIGH td:first-child { color: #dc2626; font-weight: 600; }
 tr.sev-MEDIUM td:first-child { color: var(--warn); font-weight: 600; }
+/* Aggregate vuln table on /security (Severity is col 3 — Tool, Version, Severity, ID, …). */
+.vuln-table tr.sev-CRITICAL td:nth-child(3), .vuln-table tr.sev-HIGH td:nth-child(3) { color: #dc2626; font-weight: 600; }
+.vuln-table tr.sev-MEDIUM td:nth-child(3) { color: var(--warn); font-weight: 600; }
 
 .empty {
   background: var(--surface);

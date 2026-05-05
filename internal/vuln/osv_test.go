@@ -175,3 +175,34 @@ func TestPickFixedIn(t *testing.T) {
 		t.Errorf("missing package should give empty FixedIn, got %q", got)
 	}
 }
+
+func TestPickFixedIn_RejectsGitRanges(t *testing.T) {
+// OSV GIT ranges contain commit hashes, not version strings —
+// surfacing them as 'FixedIn' would render junk in the CLI/web
+// (e.g. 'fixed in abc123...'). Filter them out.
+affected := []osvAffected{
+{Package: osvPackage{Name: "node", Ecosystem: "npm"}, Ranges: []osvRange{
+{Type: "GIT", Events: []osvEvent{{Fixed: "abc123def456"}}},
+{Type: "ECOSYSTEM", Events: []osvEvent{{Fixed: "18.19.1"}}},
+}},
+}
+got := pickFixedIn(affected, Coord{Package: "node", Ecosystem: EcosystemNPM})
+if got != "18.19.1" {
+t.Errorf("got %q, want 18.19.1 (GIT range commit hash should be skipped)", got)
+}
+}
+
+func TestPickFixedIn_AllowsEmptyType(t *testing.T) {
+// Some OSV records omit the range type. Be permissive there —
+// the value still has to be version-shaped, but we don't have a
+// way to enforce that without parsing. Common case in the wild.
+affected := []osvAffected{
+{Package: osvPackage{Name: "node", Ecosystem: "npm"}, Ranges: []osvRange{
+{Type: "", Events: []osvEvent{{Fixed: "1.2.3"}}},
+}},
+}
+got := pickFixedIn(affected, Coord{Package: "node", Ecosystem: EcosystemNPM})
+if got != "1.2.3" {
+t.Errorf("got %q, want 1.2.3 (empty type is allowed)", got)
+}
+}

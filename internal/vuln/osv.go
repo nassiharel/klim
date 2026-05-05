@@ -257,6 +257,13 @@ func parseCVSSBaseScore(s string) (float64, bool) {
 // range whose package matches the queried coordinate. SEMVER ranges
 // are also acceptable. Returns "" when the advisory hasn't recorded
 // a fix yet.
+// pickFixedIn returns the first "fixed" version from a matching
+// affected entry's range events. Only ECOSYSTEM and SEMVER range
+// types are considered — GIT ranges contain commit hashes, not
+// version strings, and would surface as junk in FixedIn ("fixed in
+// abc123..." isn't useful to the user). Empty range type is
+// allowed because some OSV records omit it; the value still has to
+// be a version-shaped string for the UI to render usefully.
 func pickFixedIn(affected []osvAffected, coord Coord) string {
 	for _, a := range affected {
 		if !strings.EqualFold(a.Package.Name, coord.Package) {
@@ -266,6 +273,12 @@ func pickFixedIn(affected []osvAffected, coord Coord) string {
 			continue
 		}
 		for _, r := range a.Ranges {
+			switch strings.ToUpper(strings.TrimSpace(r.Type)) {
+			case "", "ECOSYSTEM", "SEMVER":
+				// allowed
+			default:
+				continue
+			}
 			for _, e := range r.Events {
 				if e.Fixed != "" {
 					return e.Fixed
