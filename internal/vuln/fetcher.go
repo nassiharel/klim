@@ -2,9 +2,7 @@ package vuln
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -130,13 +128,11 @@ func readCache(path string, maxAge time.Duration) (*Report, bool) {
 
 // writeCache serializes the report through fileutil.AtomicWrite —
 // concurrent readers (TUI + CLI in two terminals) get a consistent
-// view, never a half-written file.
+// view, never a half-written file. Caller decides whether to log or
+// surface a write failure (Lookup just slog.Warn's it).
 func writeCache(path string, r *Report) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		// Don't fail Lookup over a cache write — log and move on.
-		if !errors.Is(err, fs.ErrExist) {
-			return fmt.Errorf("creating vuln cache dir: %w", err)
-		}
+		return fmt.Errorf("creating vuln cache dir: %w", err)
 	}
 	data, err := yaml.Marshal(r)
 	if err != nil {
