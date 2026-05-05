@@ -39,6 +39,7 @@ var pageTemplates = []string{
 	"backup.html",
 	"backup_preview.html",
 	"config.html",
+	"security.html",
 }
 
 // loadTemplates returns one fully-parsed template per page. Each tree

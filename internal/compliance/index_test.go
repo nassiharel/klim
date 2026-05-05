@@ -165,3 +165,43 @@ func TestIndex_BlockedToolVsRequiredMissing(t *testing.T) {
 		t.Error("required-missing tool must be CanInstall=true so the user can install it")
 	}
 }
+
+func TestIndex_ApplyVulnSeverities(t *testing.T) {
+	policy := &Policy{
+		Name:            "test",
+		MaxVulnSeverity: "high",
+	}
+	tools := []registry.Tool{
+		{Name: "node"},
+		{Name: "git"},
+	}
+	idx := BuildIndex(policy, tools)
+	idx.ApplyVulnSeverities(map[string]string{
+		"node": "CRITICAL", // >= HIGH → block
+		"git":  "MEDIUM",   // <  HIGH → allow
+	})
+	if ok, reason := idx.CanInstall("node"); ok {
+		t.Errorf("CRITICAL CVE on node should block install (threshold=HIGH); reason=%q", reason)
+	}
+	if ok, _ := idx.CanInstall("git"); !ok {
+		t.Errorf("MEDIUM CVE on git should NOT block install when threshold=HIGH")
+	}
+}
+
+func TestIndex_ApplyVulnSeverities_NoThresholdNoOp(t *testing.T) {
+	policy := &Policy{Name: "test"} // no MaxVulnSeverity set
+	idx := BuildIndex(policy, []registry.Tool{{Name: "node"}})
+	idx.ApplyVulnSeverities(map[string]string{"node": "CRITICAL"})
+	if ok, _ := idx.CanInstall("node"); !ok {
+		t.Error("with no MaxVulnSeverity, vuln data should NOT block installs")
+	}
+}
+
+func TestIndex_ApplyVulnSeverities_BadThresholdNoOp(t *testing.T) {
+	policy := &Policy{Name: "test", MaxVulnSeverity: "bogus"}
+	idx := BuildIndex(policy, []registry.Tool{{Name: "node"}})
+	idx.ApplyVulnSeverities(map[string]string{"node": "CRITICAL"})
+	if ok, _ := idx.CanInstall("node"); !ok {
+		t.Error("invalid threshold should be a no-op (config.Validate warns separately)")
+	}
+}

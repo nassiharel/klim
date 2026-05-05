@@ -405,7 +405,7 @@ func (m Model) renderTabBar() string {
 		{"Project", tabProject},
 		{"Dashboard", tabDashboard},
 		{"Config", tabConfig},
-		{"Doctor", tabDoctor},
+		{"Security", tabDoctor},
 	}
 
 	var parts []string

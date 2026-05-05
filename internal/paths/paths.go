@@ -94,6 +94,25 @@ func ComplianceCachePathFor(key string) (string, error) {
 	return Join("compliance", "policy-cache-"+short+".yaml")
 }
 
+// VulnCachePath returns the unkeyed default path for the vulnerability
+// scan cache. Per-source variants live alongside via VulnCachePathFor.
+func VulnCachePath() (string, error) {
+	return Join("vuln", "cache.yaml")
+}
+
+// VulnCachePathFor returns a per-source vulnerability cache path,
+// keyed by sha256 of the source URL. Same machinery as
+// ComplianceCachePathFor — switching vuln.url to a different mirror
+// produces a distinct cache file.
+func VulnCachePathFor(key string) (string, error) {
+	if key == "" {
+		return VulnCachePath()
+	}
+	sum := sha256.Sum256([]byte(key))
+	short := hex.EncodeToString(sum[:6])
+	return Join("vuln", "cache-"+short+".yaml")
+}
+
 // TrailDir returns the path to the trail (env-history) directory.
 func TrailDir() (string, error) {
 	return Join("trail")

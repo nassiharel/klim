@@ -95,9 +95,8 @@ export default defineConfig({
             {
               label: 'Health & Security',
               items: [
-                { label: 'doctor', slug: 'reference/commands/doctor' },
-                { label: 'audit', slug: 'reference/commands/audit' },
-                { label: 'compliance', slug: 'reference/commands/compliance' },
+                { label: 'security', slug: 'reference/commands/security' },
+                { label: 'security vuln', slug: 'reference/commands/vuln' },
                 { label: 'score', slug: 'reference/commands/score' },
               ],
             },

@@ -16,7 +16,7 @@ var doctorRefreshFlag bool
 var doctorOutput func() (OutputFormat, error)
 
 var doctorCmd = &cobra.Command{
-	Use:   "doctor",
+	Use:   "health",
 	Short: "Check environment health and diagnose common issues",
 	Long: `Run environment diagnostics to detect PATH problems, conflicting
 tool installations, missing package managers, stale caches, and

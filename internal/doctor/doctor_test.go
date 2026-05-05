@@ -255,3 +255,69 @@ func TestCheckMissingPMs_noInstalledTools(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckPATHShadowing_singleInstance(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "git", DisplayName: "git", Instances: []registry.Instance{
+			{Path: "/usr/bin/git", Version: "2.40", Source: registry.SourceApt},
+		}},
+	}
+	if got := checkPATHShadowing(tools); len(got) != 0 {
+		t.Errorf("expected no issues for single-instance, got %d", len(got))
+	}
+}
+
+func TestCheckPATHShadowing_multipleInstances(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "git", DisplayName: "git", Instances: []registry.Instance{
+			{Path: "/usr/local/bin/git", Version: "2.43", Source: registry.SourceBrew},
+			{Path: "/usr/bin/git", Version: "2.40", Source: registry.SourceApt},
+		}},
+	}
+	got := checkPATHShadowing(tools)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(got))
+	}
+	if !strings.Contains(got[0].Title, "shadowed") {
+		t.Errorf("title = %q", got[0].Title)
+	}
+	if !strings.Contains(got[0].Detail, "/usr/local/bin/git") {
+		t.Errorf("detail should mention winner: %q", got[0].Detail)
+	}
+}
+
+func TestIsSystemDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		if !isSystemDir("C:\\Windows\\System32") {
+			t.Error("System32 should be a system dir")
+		}
+		if isSystemDir("C:\\Users\\joe\\bin") {
+			t.Error("user bin should not be system")
+		}
+	} else {
+		if !isSystemDir("/usr/bin") {
+			t.Error("/usr/bin should be a system dir")
+		}
+		if isSystemDir("/home/joe/bin") {
+			t.Error("/home/joe/bin should not be system")
+		}
+	}
+}
+
+func TestCheckUserWritablePathOrder_emptyPath(t *testing.T) {
+	t.Setenv("PATH", "")
+	if got := checkUserWritablePathOrder(); len(got) != 0 {
+		t.Errorf("empty PATH should produce no issues, got %d", len(got))
+	}
+}
+
+func TestCheckUserWritablePathOrder_systemOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Setenv("PATH", "C:\\Windows\\System32")
+	} else {
+		t.Setenv("PATH", "/usr/bin:/bin")
+	}
+	if got := checkUserWritablePathOrder(); len(got) != 0 {
+		t.Errorf("system-only PATH should produce no issues, got %d", len(got))
+	}
+}

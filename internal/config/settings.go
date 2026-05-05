@@ -295,6 +295,32 @@ func AllSettings() []Setting {
 			GetBool: func(c *Config) bool { return c.Compliance.BlockInstalls },
 			SetBool: func(c *Config, v bool) { c.Compliance.BlockInstalls = v },
 		},
+		// --- Vuln (clim security vuln) ---
+		{
+			Section: "Vulnerability scan", Label: "Endpoint URL", Key: "vuln_url", Type: SettingString,
+			Help:      "OSV-compatible HTTP endpoint. Empty = https://api.osv.dev (the public default).",
+			GetString: func(c *Config) string { return c.Vuln.URL },
+			SetString: func(c *Config, v string) { c.Vuln.URL = v },
+		},
+		{
+			Label: "Auto Refresh", Key: "vuln_auto_refresh", Type: SettingBool,
+			Help:    "Re-fetch vulnerability data when the cache is older than refresh_interval.",
+			GetBool: func(c *Config) bool { return c.Vuln.AutoRefresh },
+			SetBool: func(c *Config, v bool) { c.Vuln.AutoRefresh = v },
+		},
+		{
+			Label: "Refresh Interval", Key: "vuln_refresh_interval", Type: SettingDuration,
+			Help:        "Used when Auto Refresh is on. Examples: 6h, 24h.",
+			GetDuration: func(c *Config) time.Duration { return c.Vuln.RefreshInterval.Duration },
+			SetDuration: func(c *Config, v time.Duration) { c.Vuln.RefreshInterval = Duration{Duration: v} },
+		},
+		{
+			Label: "Fail on Severity", Key: "vuln_fail_on_severity", Type: SettingChoice,
+			Help:      "When set, clim security vuln exits non-zero if any finding meets this severity. Empty = never fail.",
+			Choices:   []string{"", "low", "medium", "high", "critical"},
+			GetString: func(c *Config) string { return c.Vuln.FailOnSeverity },
+			SetString: func(c *Config, v string) { c.Vuln.FailOnSeverity = v },
+		},
 	}
 }
 

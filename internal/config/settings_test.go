@@ -15,6 +15,7 @@ func TestAllSettings_CoversAllConfigFields(t *testing.T) {
 		"defaults_preferred_source",
 		"compliance_policy", "compliance_url", "compliance_auto_refresh",
 		"compliance_refresh_interval", "compliance_block_installs",
+		"vuln_url", "vuln_auto_refresh", "vuln_refresh_interval", "vuln_fail_on_severity",
 	}
 	got := map[string]bool{}
 	for _, s := range settings {

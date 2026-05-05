@@ -42,7 +42,7 @@ func (m Model) renderDoctorView() string {
 		text string
 		idx  int
 	}{
-		{"Doctor", doctorSubDoctor},
+		{"Health", doctorSubDoctor},
 		{"Audit", doctorSubAudit},
 		{"Compliance", doctorSubCompliance},
 	}

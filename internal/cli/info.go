@@ -8,10 +8,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/githubfmt"
 	"github.com/nassiharel/clim/internal/progress"
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/security"
 	"github.com/nassiharel/clim/internal/textwrap"
+	"github.com/nassiharel/clim/internal/vuln"
 )
 
 var (
@@ -91,9 +94,20 @@ type infoReport struct {
 	Instances       []infoInstance `json:"instances"`
 	Packages        []infoPackage  `json:"packages"`
 	GitHub          *infoGitHub    `json:"github,omitempty"`
+	Security        *infoSecurity  `json:"security,omitempty"`
 	References      []Reference    `json:"references"`
 	RelatedTools    []string       `json:"related_tools"`
 	Warnings        []string       `json:"warnings"`
+}
+
+// infoSecurity surfaces the current security verdict in `clim info`.
+// Vulnerability data comes from the local cache only — running
+// `clim info` should never make a network call. Encourage the user
+// to run `clim security vuln` for fresh data when Vulns is nil.
+type infoSecurity struct {
+	Status      string   `json:"status"`            // clean/watch/risk/unknown
+	Reasons     []string `json:"reasons,omitempty"` // human-readable contributors
+	VulnsLoaded bool     `json:"vulns_loaded"`      // true when cache had data for this tool
 }
 
 func runInfo(cmd *cobra.Command, args []string) error {
@@ -226,7 +240,42 @@ func buildInfoReport(cmd *cobra.Command, t *registry.Tool, tools []registry.Tool
 	r.References = refs
 	r.Warnings = append(r.Warnings, warnings...)
 	r.RelatedTools = relatedInstalledTools(t.Name, t, tools)
+	r.Security = computeInfoSecurity(*t, tools)
 	return r
+}
+
+// computeInfoSecurity builds the per-tool security verdict for the
+// info report. Audit signals are computed from the in-memory tool
+// list (no I/O); vulnerability data is read from the cache only —
+// `clim info` never makes a network call. Returns nil when the tool
+// isn't installed (security verdict only makes sense for installed
+// tools).
+func computeInfoSecurity(t registry.Tool, allTools []registry.Tool) *infoSecurity {
+	if !t.IsInstalled() {
+		return nil
+	}
+	findings, _ := audit.Analyze(allTools)
+	// Read whatever vuln cache we have for the default endpoint —
+	// if compliance.url is configured, the user can see fresh data
+	// via `clim security vuln`. We pass empty source key so we hit
+	// the unkeyed default cache path.
+	var match *vuln.Match
+	loaded := false
+	if rep, ok := vuln.ReadCache(""); ok {
+		loaded = true
+		for i := range rep.Matches {
+			if rep.Matches[i].Tool == t.Name {
+				match = &rep.Matches[i]
+				break
+			}
+		}
+	}
+	verdict := security.Score(t, findings, match)
+	return &infoSecurity{
+		Status:      verdict.Status.String(),
+		Reasons:     verdict.Reasons,
+		VulnsLoaded: loaded,
+	}
 }
 
 // infoPackage is now an alias for cli.PackageEntry to keep the JSON
@@ -416,6 +465,20 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 	// Tags.
 	if len(r.Tags) > 0 {
 		_, _ = fmt.Fprintf(w, "  Tags: %s\n\n", strings.Join(r.Tags, ", "))
+	}
+
+	// Security verdict (computed from audit + cached vuln data; no
+	// network I/O at info time).
+	if r.Security != nil {
+		_, _ = fmt.Fprintln(w, "  Security:")
+		_, _ = fmt.Fprintf(w, "    Status: %s\n", r.Security.Status)
+		for _, reason := range r.Security.Reasons {
+			_, _ = fmt.Fprintf(w, "    · %s\n", reason)
+		}
+		if !r.Security.VulnsLoaded {
+			_, _ = fmt.Fprintf(w, "    Note: vulnerability cache empty — run `clim security vuln` for CVE/GHSA data\n")
+		}
+		_, _ = fmt.Fprintln(w, "")
 	}
 
 	// References.

@@ -166,6 +166,65 @@ func BuildIndex(policy *Policy, tools []registry.Tool) *Index {
 	return idx
 }
 
+// ApplyVulnSeverities folds vulnerability scan results into the
+// existing index. For each tool with a recorded MaxSeverity at or
+// above the policy's MaxVulnSeverity threshold, BlocksInstall is set
+// to true and a "vulnerability X meets policy threshold Y" reason
+// is appended.
+//
+// severityByTool maps tool name → highest-severity severity string
+// (one of the vuln package's Severity values, case-insensitive).
+// Pass an empty map to no-op (e.g. when vuln scanning is disabled).
+//
+// Safe to call when policy.MaxVulnSeverity is empty (no-op) or when
+// idx has no policy (no-op).
+func (idx *Index) ApplyVulnSeverities(severityByTool map[string]string) {
+	if idx == nil || !idx.policyOK || idx.policy == nil {
+		return
+	}
+	threshold := strings.TrimSpace(idx.policy.MaxVulnSeverity)
+	if threshold == "" {
+		return
+	}
+	thresholdRank := severityRank(threshold)
+	if thresholdRank == 0 {
+		// Unknown threshold value — don't enforce. config.Validate
+		// already warns on bad values; we trust the operator.
+		return
+	}
+	for tool, sevRaw := range severityByTool {
+		if severityRank(sevRaw) < thresholdRank {
+			continue
+		}
+		key := strings.ToLower(tool)
+		entry := idx.entries[key]
+		entry.Status = StatusViolation
+		entry.BlocksInstall = true
+		entry.Reasons = append(entry.Reasons,
+			"vulnerability severity "+strings.ToUpper(sevRaw)+
+				" meets policy threshold "+strings.ToUpper(threshold))
+		idx.entries[key] = entry
+	}
+}
+
+// severityRank converts a free-form severity string into the same
+// ordering vuln.Severity.Rank uses. Duplicated locally so
+// internal/compliance doesn't depend on internal/vuln (avoiding an
+// import cycle if vuln ever needed compliance types).
+func severityRank(s string) int {
+	switch strings.ToUpper(strings.TrimSpace(s)) {
+	case "CRITICAL":
+		return 4
+	case "HIGH":
+		return 3
+	case "MEDIUM", "MODERATE":
+		return 2
+	case "LOW":
+		return 1
+	}
+	return 0
+}
+
 // Status returns the compliance status for a tool.
 //
 //   - StatusUnknown when the index is nil or no policy is configured.

@@ -271,6 +271,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /backup", s.pageBackup)
 	s.mux.HandleFunc("GET /backup/export.yaml", s.downloadExport)
 	s.mux.HandleFunc("GET /backup/saved/{name}", s.downloadSavedBackup)
+	s.mux.HandleFunc("GET /security", s.pageSecurity)
 	s.mux.Handle("POST /backup/save", csrfProtect(s, http.HandlerFunc(s.pageBackupSave)))
 	s.mux.Handle("POST /backup/saved/{name}/delete", csrfProtect(s, http.HandlerFunc(s.pageBackupSavedDelete)))
 	s.mux.Handle("POST /backup/preview", csrfProtect(s, http.HandlerFunc(s.pageBackupPreview)))

@@ -21,6 +21,12 @@ type Policy struct {
 	BlockedTools    []string       `yaml:"blocked_tools,omitempty"`
 	BlockedLicenses []string       `yaml:"blocked_licenses,omitempty"`
 	RequiredTools   []RequiredTool `yaml:"required_tools,omitempty"`
+	// MaxVulnSeverity, when set, makes Index.CanInstall return false
+	// for any tool whose vuln scan found a CVE/GHSA at or above this
+	// severity. Values: "low" / "medium" / "high" / "critical".
+	// Empty (default) means vuln findings don't block installs (they
+	// still surface in the security badge and `clim security vuln`).
+	MaxVulnSeverity string `yaml:"max_vuln_severity,omitempty"`
 }
 
 // RequiredTool defines a tool that must be installed.
