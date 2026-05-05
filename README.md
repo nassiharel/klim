@@ -69,7 +69,7 @@ clim analyzes your installed tools and suggests related ones you might like, ran
 Tune clim from inside the TUI — log level, refresh interval, concurrency, default tab, sidebar position. Toggle, cycle, type, save. No need to find and edit a YAML file.
 
 ### 🩺 Environment Doctor
-Run `clim doctor` to diagnose your environment — detects duplicate and broken PATH entries, conflicting tool versions (multiple installations), missing package managers, stale caches, and unresolved versions. JSON output for CI with `--json`. TUI Doctor tab shows color-coded issues with fix suggestions.
+Run `clim security health` to diagnose your environment — detects duplicate and broken PATH entries, conflicting tool versions (multiple installations), missing package managers, stale caches, and unresolved versions. JSON output for CI with `--json`. TUI Security tab shows color-coded issues with fix suggestions.
 
 ### 🐚 Shell Integration
 Native tab completion for bash, zsh, fish, and PowerShell via `clim shell completion`. Shell hooks via `clim shell hook` that auto-check `.clim.yaml` when you `cd` into a project — like nvm/direnv for your entire toolchain.
@@ -78,7 +78,7 @@ Native tab completion for bash, zsh, fish, and PowerShell via `clim shell comple
 Compare your local tools against a colleague's manifest or share token with `clim diff`. See which tools match, differ in version, or are missing on either side — the "works on my machine" killer.
 
 ### 🔐 Security Audit & SBOM
-Run `clim audit` to flag unmanaged installs, archived projects, stale repos, and missing versions. Get a license inventory across your toolchain. Generate a CycloneDX SBOM with `clim audit --sbom` for compliance pipelines.
+Run `clim security audit` to flag unmanaged installs, archived projects, stale repos, and missing versions. Get a license inventory across your toolchain. Generate a CycloneDX SBOM with `clim security audit --sbom` for compliance pipelines.
 
 ### ⚡ Auto-Install Shims
 Create lightweight shims with `clim proxy add kubectl terraform` that auto-install tools on first use. Run a shimmed tool that isn't installed — clim installs it transparently via the best available package manager, then runs it. Like `npx` but for any CLI tool.
@@ -268,7 +268,7 @@ clim config edit   # open config.yaml in $EDITOR
 | `clim: command not found` | Ensure install directory is in `$PATH`. Run `which clim` (macOS/Linux) or `where clim` (Windows) to check. |
 | Tool not detected | Verify binary is in `$PATH` with `which <tool>` / `where <tool>`. Run `clim` then press `r` to refresh. |
 | Permission denied on upgrade | Package manager may need elevated privileges. Use `sudo` (Linux/macOS) or run as Administrator (Windows). |
-| Stale version info | Run `clim doctor` to diagnose, or delete local cache (`clim tools path` shows location) and relaunch to re-fetch from GitHub. |
+| Stale version info | Run `clim security health` to diagnose, or delete local cache (`clim tools path` shows location) and relaunch to re-fetch from GitHub. |
 | Self-update fails | Download manually from [Releases](https://github.com/nassiharel/clim/releases/latest) and replace binary. |
 
 ---

@@ -80,10 +80,15 @@ func Lookup(ctx context.Context, looker Looker, tools []registry.Tool, sourceKey
 	report, fetchErr := fetch(ctx, looker, tools, sourceKey, opts.Concurrency)
 	if fetchErr != nil {
 		// Fall back to stale cache when available — this is what makes
-		// `clim security vuln` work on a plane / disconnected.
-		if cached, ok := readCache(cachePath, 0); ok {
-			slog.Warn("vuln fetch failed, serving stale cache", "path", cachePath, "error", fetchErr)
-			return cached, nil
+		// `clim security vuln` work on a plane / disconnected. But not
+		// when the caller explicitly asked for fresh data: returning a
+		// silent stale value to a `--force-refresh-vulns` user makes
+		// CI gating unsafe.
+		if !opts.ForceRefresh {
+			if cached, ok := readCache(cachePath, 0); ok {
+				slog.Warn("vuln fetch failed, serving stale cache", "path", cachePath, "error", fetchErr)
+				return cached, nil
+			}
 		}
 		return nil, fetchErr
 	}

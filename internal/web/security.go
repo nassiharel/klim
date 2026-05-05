@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
@@ -11,31 +10,31 @@ import (
 	"github.com/nassiharel/clim/internal/vuln"
 )
 
-// securityView is the data shape for the /security page.
+// securityView is the data shape for the /security page. We
+// deliberately don't surface compliance here today — wiring up the
+// web compliance loader is a separate piece of work, and showing a
+// hard-coded "0 violations" was actively misleading.
 type securityView struct {
-	AuditWarnings        int
-	AuditInfos           int
-	AuditFindings        []audit.Finding
-	VulnRiskCount        int
-	VulnMatches          []vuln.Match
-	VulnCacheLoaded      bool
-	VulnSource           string
-	SkippedTools         []vuln.Skip
-	ComplianceLoaded     bool
-	ComplianceViolations int
+	AuditWarnings   int
+	AuditInfos      int
+	AuditFindings   []audit.Finding
+	VulnRiskCount   int
+	VulnMatches     []vuln.Match
+	VulnCacheLoaded bool
+	VulnSource      string
+	SkippedTools    []vuln.Skip
 }
 
 // pageSecurity renders the umbrella Security page. It aggregates:
 //   - audit findings (in-memory; cheap)
 //   - cached vulnerability scan results (no network — tells the user
 //     to run `clim security vuln` if no cache exists)
-//   - compliance state when a policy is loaded
 //
 // We deliberately don't fetch fresh vuln data here — the web view
 // shouldn't block its render on a 30s OSV.dev round-trip. The user
 // triggers a refresh from the CLI; the page picks it up next reload.
 func (s *Server) pageSecurity(w http.ResponseWriter, r *http.Request) {
-	tools, _, _, err := s.opts.Service.LoadAndResolveCached(context.Background(), false)
+	tools, _, err := s.loader.LoadInstalled(r.Context())
 	if err != nil {
 		s.serveError(w, r, err, http.StatusInternalServerError)
 		return

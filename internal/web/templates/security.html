@@ -13,11 +13,6 @@
       <p>Tools with known CVEs/GHSAs in the local cache.
       {{if not .Data.VulnCacheLoaded}}<br><em>Run <code>clim security vuln</code> to populate.</em>{{end}}</p>
     </div>
-    <div class="card">
-      <h2>{{.Data.ComplianceViolations}} <small>violations</small></h2>
-      <p>Compliance policy verdicts.
-      {{if not .Data.ComplianceLoaded}}<br><em>No policy configured.</em>{{end}}</p>
-    </div>
   </div>
 
   {{if .Data.VulnMatches}}

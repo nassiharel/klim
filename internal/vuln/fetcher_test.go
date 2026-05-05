@@ -236,3 +236,25 @@ func TestLookup_CacheUsesPlatformPathSeparator(t *testing.T) {
 		t.Errorf("cache path should be absolute, got %q", cachePath)
 	}
 }
+
+func TestLookup_ForceRefreshDoesNotMaskFetchFailure(t *testing.T) {
+	// When the user explicitly asks for fresh data, a fetch failure
+	// must propagate as an error — silently returning stale cache
+	// (the offline-friendly fallback) makes CI gating unsafe.
+	setEnvDir(t, t.TempDir())
+	tools := []registry.Tool{mkTool("node", "18.10.0", "node", "", "")}
+	srcKey := "https://api.osv.dev"
+
+	// Seed the cache with a successful run.
+	first := &stubLooker{byPackage: map[string][]Vulnerability{"node": nil}}
+	if _, err := Lookup(context.Background(), first, tools, srcKey, LookupOptions{}); err != nil {
+		t.Fatalf("first lookup (cache seeding): %v", err)
+	}
+
+	// Now force a refresh against a failing looker.
+	failing := &stubLooker{err: errors.New("network down")}
+	_, err := Lookup(context.Background(), failing, tools, srcKey, LookupOptions{ForceRefresh: true})
+	if err == nil {
+		t.Fatal("ForceRefresh + fetch failure should return an error, not stale cache")
+	}
+}

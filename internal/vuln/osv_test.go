@@ -34,7 +34,7 @@ func TestOSVClient_Query_HappyPath(t *testing.T) {
 				Summary:          "Bad stuff in node",
 				DatabaseSpecific: osvDatabaseSpecific{Severity: "HIGH"},
 				Affected: []osvAffected{{
-					Package: osvPackage{Name: "node", Ecosystem: "GitHub"},
+					Package: osvPackage{Name: "node", Ecosystem: "npm"},
 					Ranges: []osvRange{{
 						Type: "ECOSYSTEM",
 						Events: []osvEvent{
@@ -53,7 +53,7 @@ func TestOSVClient_Query_HappyPath(t *testing.T) {
 
 	c := &OSVClient{URL: url}
 	vulns, err := c.Query(context.Background(), Coord{
-		Ecosystem: EcosystemGitHub,
+		Ecosystem: EcosystemNPM,
 		Package:   "node",
 		Version:   "18.10.0",
 	})
@@ -159,14 +159,14 @@ func TestPickFixedIn(t *testing.T) {
 		{Package: osvPackage{Name: "other", Ecosystem: "npm"}, Ranges: []osvRange{
 			{Events: []osvEvent{{Fixed: "0.0.1"}}},
 		}},
-		{Package: osvPackage{Name: "node", Ecosystem: "GitHub"}, Ranges: []osvRange{
+		{Package: osvPackage{Name: "node", Ecosystem: "npm"}, Ranges: []osvRange{
 			{Type: "ECOSYSTEM", Events: []osvEvent{
 				{Introduced: "0"},
 				{Fixed: "18.19.1"},
 			}},
 		}},
 	}
-	got := pickFixedIn(affected, Coord{Package: "node", Ecosystem: EcosystemGitHub})
+	got := pickFixedIn(affected, Coord{Package: "node", Ecosystem: EcosystemNPM})
 	if got != "18.19.1" {
 		t.Errorf("got %q, want 18.19.1", got)
 	}

@@ -34,9 +34,9 @@ clim security vuln --output json
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--output {text,json}` | `text` | Output format. JSON goes to stdout; human progress to stderr. |
-| `--fail-on {none,low,medium,high,critical}` | from `config.yaml` (default `high`) | Exit with code 3 if any finding meets or exceeds this severity. |
-| `--force-refresh-vulns` | `false` | Bypass the local cache and re-query OSV.dev. |
-| `--vuln-url <url>` | `https://api.osv.dev` | Override the OSV.dev endpoint (testing / mirrors). |
+| `--fail-on {none,low,medium,high,critical}` | from `config.yaml` (default `high`) | Exit non-zero if any finding meets or exceeds this severity. |
+| `--force-refresh-vulns` | `false` | Bypass the local cache and re-query OSV.dev. With this flag, a fetch failure is **not** masked by stale cache fallback — useful in CI. |
+| `--url <url>` | from `config.yaml` (default `https://api.osv.dev`) | Override the OSV.dev endpoint (testing / mirrors). Note: cache is keyed by URL, so a one-shot override writes to a different cache file than passive surfaces (`clim info`, web `/security`) read. |
 
 ## Severity model
 
@@ -70,35 +70,38 @@ a parallel npm id will appear under `skipped` with a reason.
 
 ## Cache
 
-Results are cached at
-`~/.config/clim/cache/vulns/<sha256-of-url>.yaml`. The cache is
-keyed by OSV URL (allowing private mirrors). On fetch failure the
-last successful payload is used (stale-fallback) and the operation
-prints a warning to stderr.
+Results are cached at `~/.config/clim/vuln/cache-<sha256-prefix>.yaml`.
+The cache file is keyed by OSV URL (allowing private mirrors); the
+default endpoint and any custom `vuln.url` get separate files. On
+fetch failure the last successful payload is used (stale-fallback)
+unless `--force-refresh-vulns` is set, in which case the fetch error
+is propagated.
 
 ## JSON schema (excerpt)
 
 ```json
 {
-  "fetched_at": "2026-05-02T12:34:56Z",
+  "scanned_at": "2026-05-02T12:34:56Z",
+  "tools_scanned": 14,
   "source": "https://api.osv.dev",
   "matches": [
     {
-      "tool": "left-pad",
-      "installed_ver": "1.3.0",
+      "tool": "yarn",
+      "installed_version": "1.22.0",
+      "coord": { "ecosystem": "npm", "package": "yarn", "version": "1.22.0" },
       "vulnerabilities": [
         {
           "id": "GHSA-xxxx-yyyy-zzzz",
-          "severity": "high",
+          "severity": "HIGH",
           "summary": "...",
-          "fixed_in": "1.3.1",
+          "fixed_in": "1.22.1",
           "url": "https://github.com/advisories/GHSA-..."
         }
       ]
     }
   ],
   "skipped": [
-    { "tool": "winget-only-tool", "reason": "no OSV ecosystem mapping" }
+    { "tool": "winget-only-tool", "reason": "no OSV-queryable ecosystem (only npm packages currently supported)" }
   ]
 }
 ```

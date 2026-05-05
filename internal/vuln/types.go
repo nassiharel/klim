@@ -81,16 +81,17 @@ func FromCVSSScore(score float64) Severity {
 // Ecosystem identifies an OSV ecosystem.
 type Ecosystem string
 
-// Ecosystem values supported by the mapper.
+// Ecosystem values currently used by the mapper. We only list the
+// ecosystems whose names OSV.dev's /v1/query endpoint actually
+// accepts. Notably absent: "Homebrew" and "GitHub" — both are
+// rejected with HTTP 400 "Invalid ecosystem". Adding PyPI / Go /
+// crates.io is unblocked by future catalog metadata; they're
+// listed here as forward-looking constants.
 const (
-	EcosystemNPM      Ecosystem = "npm"
-	EcosystemPyPI     Ecosystem = "PyPI"
-	EcosystemGo       Ecosystem = "Go"
-	EcosystemCargo    Ecosystem = "crates.io"
-	EcosystemHomebrew Ecosystem = "Homebrew"
-	// EcosystemGitHub is a synthetic marker for "match by repo slug".
-	// Translates into a query that scopes by the tool's GitHub slug.
-	EcosystemGitHub Ecosystem = "GitHub"
+	EcosystemNPM   Ecosystem = "npm"
+	EcosystemPyPI  Ecosystem = "PyPI"
+	EcosystemGo    Ecosystem = "Go"
+	EcosystemCargo Ecosystem = "crates.io"
 )
 
 // Coord identifies a package version inside a single ecosystem.

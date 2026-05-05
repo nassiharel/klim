@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/nassiharel/clim/internal/audit"
 	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/vuln"
 )
 
@@ -263,7 +261,13 @@ func reportTriggers(rep *vuln.Report, threshold vuln.Severity) bool {
 
 // --- bare `clim security` aggregator ---
 
-func runSecurityAggregate(cmd *cobra.Command, args []string) error {
+// runSecurityAggregate runs the cheap subset of security checks
+// (audit + vuln) and prints a one-paragraph summary. Returns a
+// non-nil error when there's something the user should act on:
+// audit warnings, vulnerabilities at any severity, or a hard
+// failure of the vuln lookup. The umbrella exit code lets CI gate
+// on `clim security` directly.
+func runSecurityAggregate(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
 	fmt.Fprintln(os.Stderr, "──── clim security ────")
 
@@ -292,10 +296,10 @@ func runSecurityAggregate(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintf(os.Stderr, "  audit:    %d warnings, %d infos\n", auditWarn, auditInfo)
+	risky := 0
 	if vulnErr != nil {
-		fmt.Fprintf(os.Stderr, "  vuln:     skipped (%v)\n", vulnErr)
+		fmt.Fprintf(os.Stderr, "  vuln:     lookup failed (%v)\n", vulnErr)
 	} else {
-		risky := 0
 		for _, m := range report.Matches {
 			if len(m.Vulnerabilities) > 0 {
 				risky++
@@ -310,10 +314,26 @@ func runSecurityAggregate(cmd *cobra.Command, args []string) error {
 	fmt.Fprintln(os.Stderr, "  health:   run `clim security health` for full output")
 	fmt.Fprintln(os.Stderr, "  compliance: run `clim security compliance` for policy verdict")
 
-	// Suppress unused-imports for the aggregate path.
-	_ = ctx
-	_ = json.RawMessage{}
-	_ = registry.Tool{}
-
+	// Aggregate exit code:
+	//   - vuln lookup hard failure: return error so CI fails closed
+	//     (a transient OSV outage shouldn't claim "no vulns").
+	//   - any vulns OR audit warnings: non-nil error so CI gates
+	//     correctly. Audit *infos* alone are not gating — they're
+	//     observational.
+	//
+	// Use a clean error type that prints to stderr without the
+	// usual "Error:" prefix, since we already printed a summary.
+	if vulnErr != nil {
+		return cleanError(fmt.Sprintf("vuln lookup failed: %v", vulnErr))
+	}
+	if risky > 0 || auditWarn > 0 {
+		return cleanError(fmt.Sprintf("%d vuln, %d audit warning(s) — see subcommands for detail", risky, auditWarn))
+	}
 	return nil
 }
+
+// cleanError is a sentinel error type the aggregate uses so cobra
+// doesn't double-print "Error: ..." on top of our pretty summary.
+type cleanError string
+
+func (e cleanError) Error() string { return string(e) }

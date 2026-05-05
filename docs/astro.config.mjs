@@ -36,7 +36,7 @@ export default defineConfig({
             { label: 'Backup & Restore', slug: 'guides/backup-restore' },
             { label: 'Team Manifests', slug: 'guides/team-manifests' },
             { label: 'Dashboard', slug: 'guides/dashboard' },
-            { label: 'Doctor & Audit', slug: 'guides/doctor-audit' },
+            { label: 'Security', slug: 'guides/security' },
             { label: 'Shell Integration', slug: 'guides/shell-integration' },
             { label: 'Environment Diff', slug: 'guides/environment-diff' },
             { label: 'Adding Tools', slug: 'guides/adding-tools' },

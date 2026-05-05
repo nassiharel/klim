@@ -197,7 +197,15 @@ func (idx *Index) ApplyVulnSeverities(severityByTool map[string]string) {
 			continue
 		}
 		key := strings.ToLower(tool)
-		entry := idx.entries[key]
+		entry, ok := idx.entries[key]
+		if !ok {
+			// Vuln scan returned a tool the policy doesn't know
+			// about (e.g. installed locally but not in the catalog
+			// the policy was built against). Don't synthesize a
+			// phantom violation — the operator will only see it as
+			// noise in the index.
+			continue
+		}
 		entry.Status = StatusViolation
 		entry.BlocksInstall = true
 		entry.Reasons = append(entry.Reasons,

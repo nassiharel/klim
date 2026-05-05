@@ -45,7 +45,7 @@ ecosystem (npm, Homebrew formula, GitHub-by-slug). See the dedicated
 [`clim security vuln`](/reference/commands/vuln/) reference for full
 flag documentation.
 
-Exit codes: `0` = clean, `3` = vulnerabilities at or above
+Exit codes: `0` = clean, non-zero when findings meet or exceed
 `--fail-on` (default `high`).
 
 ### `clim security compliance`

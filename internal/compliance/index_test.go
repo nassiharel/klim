@@ -205,3 +205,41 @@ func TestIndex_ApplyVulnSeverities_BadThresholdNoOp(t *testing.T) {
 		t.Error("invalid threshold should be a no-op (config.Validate warns separately)")
 	}
 }
+
+func TestIndex_ApplyVulnSeverities_UnknownToolIsSkipped(t *testing.T) {
+	// A vuln scan may legitimately report on tools that aren't in
+	// the policy/index (e.g. installed locally but not part of the
+	// catalog the policy was built against). Those entries must
+	// not become synthetic violations.
+	idx := BuildIndex(&Policy{Name: "test", MaxVulnSeverity: "high"}, []registry.Tool{{Name: "node"}})
+	idx.ApplyVulnSeverities(map[string]string{"unknown-tool": "CRITICAL"})
+	if _, ok := idx.entries["unknown-tool"]; ok {
+		t.Error("unknown tool should not have been added to the index")
+	}
+}
+
+// TestSeverityRank_ParityWithVuln guards against silent drift
+// between compliance.severityRank and vuln.Severity.Rank. They are
+// intentionally duplicated to avoid an import cycle, but must agree
+// for ApplyVulnSeverities to enforce the policy threshold the user
+// configured. If you add a new severity bucket, update both.
+func TestSeverityRank_ParityWithVuln(t *testing.T) {
+	pairs := []struct {
+		input        string
+		expectedRank int
+	}{
+		{"", 0},
+		{"unknown", 0},
+		{"low", 1},
+		{"medium", 2},
+		{"moderate", 2},
+		{"high", 3},
+		{"critical", 4},
+	}
+	for _, p := range pairs {
+		got := severityRank(p.input)
+		if got != p.expectedRank {
+			t.Errorf("severityRank(%q) = %d, want %d (must match vuln.Severity.Rank)", p.input, got, p.expectedRank)
+		}
+	}
+}
