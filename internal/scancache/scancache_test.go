@@ -72,13 +72,22 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 func TestApplyOverlaysFields(t *testing.T) {
 	withTempCache(t)
 
+	// Apply now drops cached instances whose path no longer exists,
+	// so the fixture has to point at a real file. Use a temp file
+	// the test owns and tears down.
+	dir := t.TempDir()
+	binPath := filepath.Join(dir, "kubectl")
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write fake binary: %v", err)
+	}
+
 	catalog := []registry.Tool{
 		{Name: "kubectl", DisplayName: "kubectl", Category: "Kubernetes"},
 		{Name: "helm", DisplayName: "helm", Category: "Kubernetes"},
 	}
 	entries := map[string]Entry{
 		"kubectl": {
-			Instances:  []instanceYAML{{Path: "/bin/kubectl", Version: "1.30.0", Source: "brew"}},
+			Instances:  []instanceYAML{{Path: binPath, Version: "1.30.0", Source: "brew"}},
 			Latest:     "1.30.1",
 			LatestFrom: "brew",
 		},
@@ -86,7 +95,7 @@ func TestApplyOverlaysFields(t *testing.T) {
 
 	got := Apply(catalog, entries)
 
-	if len(got[0].Instances) != 1 || got[0].Instances[0].Path != "/bin/kubectl" {
+	if len(got[0].Instances) != 1 || got[0].Instances[0].Path != binPath {
 		t.Errorf("kubectl instances not applied: %+v", got[0].Instances)
 	}
 	if got[0].Latest != "1.30.1" {
@@ -94,6 +103,30 @@ func TestApplyOverlaysFields(t *testing.T) {
 	}
 	if len(got[1].Instances) != 0 {
 		t.Errorf("helm should remain uninstalled: %+v", got[1].Instances)
+	}
+}
+
+// TestApplyDropsStaleInstances locks in the fix for the
+// 'jq shows installed via winget but where jq finds nothing'
+// bug: a cached instance whose path no longer exists must be
+// dropped on Apply, otherwise the TUI will offer a remove plan
+// that ultimately fails (winget rejects with NO_APPLICATIONS_FOUND
+// or the user gets a confusing 'no such file' error).
+func TestApplyDropsStaleInstances(t *testing.T) {
+	withTempCache(t)
+
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "ghost")
+
+	catalog := []registry.Tool{{Name: "ghost", DisplayName: "ghost"}}
+	entries := map[string]Entry{
+		"ghost": {
+			Instances: []instanceYAML{{Path: missing, Version: "1.0", Source: "winget"}},
+		},
+	}
+	got := Apply(catalog, entries)
+	if len(got[0].Instances) != 0 {
+		t.Errorf("stale instance should be dropped: %+v", got[0].Instances)
 	}
 }
 

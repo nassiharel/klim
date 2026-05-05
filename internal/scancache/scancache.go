@@ -142,6 +142,13 @@ func Load() (map[string]Entry, time.Time, error) {
 // Apply overlays cached scan data onto the catalog tools. Tools not present
 // in the cache are left untouched (they will look "not installed"), which
 // is the correct behaviour for newly-added catalog entries.
+//
+// Cached instances whose recorded path no longer exists on disk are
+// dropped. Without this guard a tool uninstalled outside clim's own
+// install/upgrade/remove flow would still appear "installed" until
+// the user explicitly refreshed the scan, which surfaced as a
+// confusing "winget reports no installed package" error when the
+// user then tried to remove it via the TUI.
 func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 	for i := range tools {
 		entry, ok := entries[tools[i].Name]
@@ -156,6 +163,9 @@ func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 		}
 		insts := make([]registry.Instance, 0, len(entry.Instances))
 		for _, e := range entry.Instances {
+			if !pathExists(e.Path) {
+				continue
+			}
 			insts = append(insts, registry.Instance{
 				Path:    e.Path,
 				Version: e.Version,
@@ -165,6 +175,18 @@ func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 		tools[i].Instances = insts
 	}
 	return tools
+}
+
+// pathExists is a tiny wrapper around os.Stat used by Apply to drop
+// cached instances whose binary has been removed since the last
+// scan. Symlinks resolve through Stat (vs Lstat) so a broken symlink
+// is treated as gone.
+func pathExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // Delete removes the cache file. A missing file is not an error.
