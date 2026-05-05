@@ -29,6 +29,7 @@ type Config struct {
 	UI          UIConfig          `yaml:"ui"`
 	Defaults    DefaultsConfig    `yaml:"defaults,omitempty"`
 	Compliance  ComplianceConfig  `yaml:"compliance,omitempty"`
+	Vuln        VulnConfig        `yaml:"vuln,omitempty"`
 }
 
 // LoggingConfig controls log output.
@@ -77,6 +78,14 @@ type DefaultsConfig struct {
 	// means "use the OS-priority fallback" (registry.BestInstallSource).
 	// Examples: "brew", "winget", "scoop", "apt", "snap", "npm".
 	PreferredSource string `yaml:"preferred_source,omitempty"`
+}
+
+// VulnConfig controls vulnerability scanning (clim security vuln).
+type VulnConfig struct {
+	URL             string   `yaml:"url,omitempty"`              // OSV-compatible endpoint; empty → https://api.osv.dev
+	AutoRefresh     bool     `yaml:"auto_refresh,omitempty"`     // refetch when cache older than RefreshInterval
+	RefreshInterval Duration `yaml:"refresh_interval,omitempty"` // default 24h
+	FailOnSeverity  string   `yaml:"fail_on_severity,omitempty"` // "critical"/"high"/"medium"/"low"; empty = never fail
 }
 
 // Duration wraps time.Duration for YAML marshaling as a human-readable string
@@ -129,6 +138,10 @@ func Default() *Config {
 			AutoRefresh:     true,
 			RefreshInterval: Duration{24 * time.Hour},
 			BlockInstalls:   true,
+		},
+		Vuln: VulnConfig{
+			AutoRefresh:     true,
+			RefreshInterval: Duration{24 * time.Hour},
 		},
 	}
 }
@@ -253,6 +266,30 @@ func (c *Config) Validate() []string {
 	}
 	if c.Compliance.RefreshInterval.Duration < 0 {
 		w = append(w, "compliance.refresh_interval: negative duration")
+	}
+
+	// Vuln URL — same rules as compliance.url.
+	if c.Vuln.URL != "" {
+		raw := c.Vuln.URL
+		if strings.TrimSpace(raw) != raw {
+			w = append(w, fmt.Sprintf("vuln.url: %q has surrounding whitespace; trim it", raw))
+		}
+		parsed, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			w = append(w, fmt.Sprintf("vuln.url: %q is not a valid http/https URL", raw))
+		}
+	}
+	if c.Vuln.RefreshInterval.Duration < 0 {
+		w = append(w, "vuln.refresh_interval: negative duration")
+	}
+	// Vuln.FailOnSeverity validation: empty (never fail) or one of the
+	// 4 buckets, case-insensitive.
+	if sev := strings.ToUpper(strings.TrimSpace(c.Vuln.FailOnSeverity)); sev != "" {
+		switch sev {
+		case "CRITICAL", "HIGH", "MEDIUM", "LOW":
+		default:
+			w = append(w, fmt.Sprintf("vuln.fail_on_severity: unknown value %q (expected critical/high/medium/low)", c.Vuln.FailOnSeverity))
+		}
 	}
 
 	// Defaults.PreferredSource — validate against known package managers.

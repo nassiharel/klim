@@ -72,7 +72,7 @@ For each target:
   terminal.
 
 After execution clim invalidates its scan cache so subsequent commands
-(`clim list`, `clim info`, `clim doctor`) rescan PATH.
+(`clim list`, `clim info`, `clim security health`) rescan PATH.
 
 ## Exit codes
 

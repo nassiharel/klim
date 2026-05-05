@@ -92,6 +92,17 @@ func (s *Spinner) Done(msg string) {
 	}
 }
 
+// Stop halts the spinner and clears the line WITHOUT printing a final
+// success message. Use this when the command's structured output
+// itself is the success signal (e.g. `clim info`, `clim list`) and a
+// trailing "✓ Done" would be redundant noise.
+func (s *Spinner) Stop() {
+	s.stop()
+	if s.isTTY {
+		fmt.Fprint(os.Stderr, "\r\033[K")
+	}
+}
+
 // Fail stops the spinner and prints an error message with a ✗ prefix.
 func (s *Spinner) Fail(msg string) {
 	s.stop()

@@ -72,6 +72,6 @@ The score is shown in the **Dashboard** tab as a prominent gauge with grade.
 
 ## See Also
 
-- [clim doctor](/reference/commands/doctor) — Environment diagnostics
-- [clim audit](/reference/commands/audit) — Security audit
-- [clim compliance](/reference/commands/compliance) — Policy validation
+- [clim security health](/reference/commands/security/) — Environment diagnostics
+- [clim security audit](/reference/commands/security/) — Security audit
+- [clim security compliance](/reference/commands/security/) — Policy validation

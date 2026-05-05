@@ -159,7 +159,7 @@ func TestLoadPolicyForCmd_NoSource_ReturnsHelpfulError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when nothing is configured")
 	}
-	if !strings.Contains(err.Error(), "clim compliance init") {
+	if !strings.Contains(err.Error(), "clim security compliance init") {
 		t.Errorf("error should suggest `clim compliance init`, got: %v", err)
 	}
 }

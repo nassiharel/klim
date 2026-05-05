@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -187,6 +189,13 @@ func CollectReferences(cmd *cobra.Command, toolName string) ([]Reference, []stri
 		}
 		tf, err := teamfile.Parse(climPath)
 		if err != nil {
+			// Silently skip stale registry entries whose project
+			// directory has been deleted (common after temp-dir test
+			// runs). The user can clean these up with
+			// `clim projects prune` if they care.
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
 			warnings = append(warnings, fmt.Sprintf("could not parse %s: %v", climPath, err))
 			continue
 		}

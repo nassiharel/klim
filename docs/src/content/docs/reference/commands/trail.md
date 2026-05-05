@@ -144,4 +144,4 @@ show <label>`.
 
 - [`clim export`](/reference/commands/export) — One-shot YAML manifest of installed tools.
 - [`clim diff`](/reference/commands/diff) — Compare your env to an external manifest or share token.
-- [`clim audit`](/reference/commands/audit) — Security / compliance / SBOM audit.
+- [`clim security`](/reference/commands/security/) — Security / compliance / SBOM audit.

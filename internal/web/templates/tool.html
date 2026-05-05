@@ -8,6 +8,7 @@
     {{dash $t.Category}}
     · {{if $d.Installed}}<span class="badge ok">✓ installed</span>{{else}}<span class="badge muted">not installed</span>{{end}}
     {{if updateAvailable $t}}· <span class="badge update">⬆ update available</span>{{end}}
+    {{with $d.Security}}· <span class="badge sec-{{.Status}}">{{if eq .Status "clean"}}🛡 clean{{else if eq .Status "watch"}}⚠ watch{{else if eq .Status "risk"}}⛔ at risk{{else}}? unknown{{end}}</span>{{end}}
   </p>
   {{if and $t.GitHubInfo $t.GitHubInfo.Description}}<p>{{$t.GitHubInfo.Description}}</p>{{end}}
 </section>
@@ -72,6 +73,40 @@
       {{end}}
     </tbody>
   </table>
+</section>
+{{end}}
+
+{{with $d.Security}}
+<section class="card sec-card sec-{{.Status}}">
+  <h2>Security
+    {{if eq .Status "clean"}}<span class="badge sec-clean">🛡 clean</span>
+    {{else if eq .Status "watch"}}<span class="badge sec-watch">⚠ watch</span>
+    {{else if eq .Status "risk"}}<span class="badge sec-risk">⛔ at risk</span>
+    {{else}}<span class="badge sec-unknown">? unknown</span>{{end}}
+  </h2>
+  {{if .Reasons}}
+  <ul>
+    {{range .Reasons}}<li>{{.}}</li>{{end}}
+  </ul>
+  {{end}}
+  {{if .Vulns}}
+  <h3>Known vulnerabilities</h3>
+  <table>
+    <thead><tr><th>Severity</th><th>ID</th><th>Fixed in</th><th>Summary</th></tr></thead>
+    <tbody>
+      {{range .Vulns}}
+      <tr class="sev-{{.Severity}}">
+        <td>{{.Severity}}</td>
+        <td>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.ID}}</a>{{else}}{{.ID}}{{end}}</td>
+        <td>{{.FixedIn}}</td>
+        <td>{{.Summary}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else if not .VulnsCacheLoaded}}
+  <p class="muted">No vulnerability cache yet — run <code>clim security vuln</code> to populate.</p>
+  {{end}}
 </section>
 {{end}}
 

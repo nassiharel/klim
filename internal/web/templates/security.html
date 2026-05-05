@@ -1,0 +1,61 @@
+{{define "content"}}
+<section class="security">
+  <h1>Security</h1>
+  <p class="meta">Aggregated view of audit findings and known vulnerabilities. Run <code>clim security compliance</code> for policy verdicts.</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h2>{{.Data.AuditWarnings}} <small>warnings</small></h2>
+      <p>Audit findings (archived upstream, stale, license, …)</p>
+    </div>
+    <div class="card">
+      <h2>{{.Data.VulnRiskCount}} <small>at risk</small></h2>
+      <p>Tools with known CVEs/GHSAs in the local cache.
+      {{if not .Data.VulnCacheLoaded}}<br><em>Run <code>clim security vuln</code> to populate.</em>{{end}}</p>
+    </div>
+  </div>
+
+  {{if .Data.VulnMatches}}
+  <h2>Vulnerabilities</h2>
+  <table class="vuln-table">
+    <thead><tr><th>Tool</th><th>Version</th><th>Severity</th><th>ID</th><th>Fixed in</th><th>Summary</th></tr></thead>
+    <tbody>
+      {{range .Data.VulnMatches}}
+        {{$tool := .Tool}}{{$ver := .InstalledVer}}
+        {{range $i, $v := .Vulnerabilities}}
+        <tr class="sev-{{$v.Severity}}">
+          <td>{{if eq $i 0}}{{$tool}}{{end}}</td>
+          <td>{{if eq $i 0}}{{$ver}}{{end}}</td>
+          <td>{{$v.Severity}}</td>
+          <td>{{if $v.URL}}<a href="{{$v.URL}}" target="_blank" rel="noopener noreferrer">{{$v.ID}}</a>{{else}}{{$v.ID}}{{end}}</td>
+          <td>{{$v.FixedIn}}</td>
+          <td>{{$v.Summary}}</td>
+        </tr>
+        {{end}}
+      {{end}}
+    </tbody>
+  </table>
+  {{end}}
+
+  {{if .Data.AuditFindings}}
+  <h2>Audit findings</h2>
+  <table>
+    <thead><tr><th>Severity</th><th>Tool</th><th>Category</th><th>Message</th></tr></thead>
+    <tbody>
+      {{range .Data.AuditFindings}}
+      <tr><td>{{.Severity}}</td><td>{{.Tool}}</td><td>{{.Category}}</td><td>{{.Message}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{end}}
+
+  {{if .Data.SkippedTools}}
+  <h2>Skipped (no OSV ecosystem mapping)</h2>
+  <ul>
+    {{range .Data.SkippedTools}}
+    <li><code>{{.Tool}}</code> — {{.Reason}}</li>
+    {{end}}
+  </ul>
+  {{end}}
+</section>
+{{end}}

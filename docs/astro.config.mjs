@@ -36,7 +36,7 @@ export default defineConfig({
             { label: 'Backup & Restore', slug: 'guides/backup-restore' },
             { label: 'Team Manifests', slug: 'guides/team-manifests' },
             { label: 'Dashboard', slug: 'guides/dashboard' },
-            { label: 'Doctor & Audit', slug: 'guides/doctor-audit' },
+            { label: 'Security', slug: 'guides/security' },
             { label: 'Shell Integration', slug: 'guides/shell-integration' },
             { label: 'Environment Diff', slug: 'guides/environment-diff' },
             { label: 'Adding Tools', slug: 'guides/adding-tools' },
@@ -95,9 +95,8 @@ export default defineConfig({
             {
               label: 'Health & Security',
               items: [
-                { label: 'doctor', slug: 'reference/commands/doctor' },
-                { label: 'audit', slug: 'reference/commands/audit' },
-                { label: 'compliance', slug: 'reference/commands/compliance' },
+                { label: 'security', slug: 'reference/commands/security' },
+                { label: 'security vuln', slug: 'reference/commands/vuln' },
                 { label: 'score', slug: 'reference/commands/score' },
               ],
             },

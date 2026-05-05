@@ -210,7 +210,7 @@ func TestServer_DashboardPage(t *testing.T) {
 // that's a regression worth catching.
 func TestServer_NoStubsRemain(t *testing.T) {
 	ts, _ := startTestServer(t)
-	for _, path := range []string{"/", "/updates", "/discover", "/favorites", "/dashboard", "/trail", "/backup", "/config"} {
+	for _, path := range []string{"/", "/updates", "/discover", "/favorites", "/dashboard", "/trail", "/backup", "/security", "/config"} {
 		resp, body := get(t, ts.URL+path)
 		if resp.StatusCode != 200 {
 			t.Errorf("%s: status %d", path, resp.StatusCode)

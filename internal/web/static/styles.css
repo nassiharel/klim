@@ -182,6 +182,20 @@ table.kv td {
 .badge.ok { background: var(--accent-soft); color: var(--accent); }
 .badge.update { background: var(--warn-soft); color: var(--warn); }
 .badge.muted { background: var(--bg-soft); color: var(--muted); }
+.badge.sec-clean { background: var(--accent-soft); color: var(--accent); }
+.badge.sec-watch { background: var(--warn-soft); color: var(--warn); }
+.badge.sec-risk { background: rgba(220, 38, 38, 0.15); color: #dc2626; }
+.badge.sec-unknown { background: var(--bg-soft); color: var(--muted); }
+.sec-card.sec-risk { border-left: 4px solid #dc2626; }
+.sec-card.sec-watch { border-left: 4px solid var(--warn); }
+.sec-card.sec-clean { border-left: 4px solid var(--accent); }
+.sec-card h2 { display: flex; align-items: center; gap: 0.5rem; }
+/* Per-tool vulnerabilities table on /tools/{name} (Severity is col 1). */
+tr.sev-CRITICAL td:first-child, tr.sev-HIGH td:first-child { color: #dc2626; font-weight: 600; }
+tr.sev-MEDIUM td:first-child { color: var(--warn); font-weight: 600; }
+/* Aggregate vuln table on /security (Severity is col 3 — Tool, Version, Severity, ID, …). */
+.vuln-table tr.sev-CRITICAL td:nth-child(3), .vuln-table tr.sev-HIGH td:nth-child(3) { color: #dc2626; font-weight: 600; }
+.vuln-table tr.sev-MEDIUM td:nth-child(3) { color: var(--warn); font-weight: 600; }
 
 .empty {
   background: var(--surface);

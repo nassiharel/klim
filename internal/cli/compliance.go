@@ -14,7 +14,20 @@ import (
 	"github.com/nassiharel/clim/internal/fileutil"
 	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/progress"
+	"github.com/nassiharel/clim/internal/vuln"
 )
+
+// loadVulnSeveritiesForCompliance reads the vuln cache (passive — no
+// network) and returns a tool→severity map suitable for
+// compliance.Check. Returns nil if no cache exists; the compliance
+// gate then silently skips the vuln check (the operator can populate
+// the cache via `clim security vuln`).
+func loadVulnSeveritiesForCompliance() map[string]string {
+	if rep, ok := vuln.ReadCache(ResolveVulnSourceKey()); ok {
+		return rep.SeverityByTool()
+	}
+	return nil
+}
 
 var complianceCmd = &cobra.Command{
 	Use:   "compliance",
@@ -37,7 +50,7 @@ Subcommands:
   init     Generate a sample .clim-policy.yaml.
   refresh  Force-refetch the policy from compliance.url (or --url) and update the cache.
 
-Generate a default policy with: clim compliance init`,
+Generate a default policy with: clim security compliance init`,
 }
 
 var compliancePolicyFlag string
@@ -124,7 +137,7 @@ func loadPolicyForCmd(cmd *cobra.Command, forceRefresh bool) (*compliance.Policy
 	// Fall back to local file.
 	path := findPolicyPath(cfg)
 	if path == "" {
-		return nil, "", errors.New("no policy file or URL configured\n\nGenerate one:\n  clim compliance init\n\nOr configure a URL in config.yaml:\n  compliance:\n    url: https://example.com/policy.yaml")
+		return nil, "", errors.New("no policy file or URL configured\n\nGenerate one:\n  clim security compliance init\n\nOr configure a URL in config.yaml:\n  compliance:\n    url: https://example.com/policy.yaml")
 	}
 	p, err := compliance.LoadPolicy(path)
 	return p, path, err
@@ -186,7 +199,7 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 	}
 	sp.Done("Done")
 
-	result := compliance.Check(policy, tools)
+	result := compliance.Check(policy, tools, loadVulnSeveritiesForCompliance())
 
 	if out == OutputJSON {
 		if err := printJSON(result); err != nil {
@@ -340,7 +353,7 @@ required_tools:
 	}
 	fmt.Fprintf(os.Stderr, "✓ Policy file created: %s\n", path)
 	fmt.Fprintln(os.Stderr, "  Edit it to match your company's requirements, then run:")
-	fmt.Fprintln(os.Stderr, "  clim compliance check")
+	fmt.Fprintln(os.Stderr, "  clim security compliance check")
 	return nil
 }
 

@@ -55,6 +55,8 @@ func Diagnose(tools []registry.Tool, meta ScanMeta) []Issue {
 	var issues []Issue
 	issues = append(issues, checkDuplicatePATH()...)
 	issues = append(issues, checkBrokenPATH()...)
+	issues = append(issues, checkPATHShadowing(tools)...)
+	issues = append(issues, checkUserWritablePathOrder()...)
 	issues = append(issues, checkMultipleInstallations(tools)...)
 	issues = append(issues, checkMissingPMs(tools)...)
 	issues = append(issues, checkStaleCache()...)
@@ -352,6 +354,210 @@ func checkOutdatedSummary(tools []registry.Tool, meta ScanMeta) []Issue {
 		Detail:   detail,
 		Fix:      "Switch to the Updates tab or run clim list to see details",
 	}}
+}
+
+// checkPATHShadowing detects tools with multiple Instances on PATH and
+// reports which path "wins" (first match per shell-style PATH lookup).
+// Mostly an info-level diagnostic, but bumps to warning when the
+// winning path is in a user-writable directory ahead of a system one
+// — that's a privilege-escalation pattern (an attacker with write
+// access to your bin/ dir can shadow sudo, kubectl, etc.).
+func checkPATHShadowing(tools []registry.Tool) []Issue {
+	var issues []Issue
+	for _, t := range tools {
+		if len(t.Instances) < 2 {
+			continue
+		}
+		// Build "tool found at A, B, C" — A wins.
+		paths := make([]string, 0, len(t.Instances))
+		for _, inst := range t.Instances {
+			paths = append(paths, inst.Path)
+		}
+		winner := paths[0]
+		shadowed := paths[1:]
+
+		// Severity: info by default; warning when the winner sits in a
+		// user-writable dir that precedes a system one for any of the
+		// shadowed paths.
+		sev := SeverityInfo
+		if winnerIsUserWritableShadowingSystem(winner, shadowed) {
+			sev = SeverityWarning
+		}
+		// DisplayName is optional in the catalog; fall back to the
+		// canonical name so titles are never " shadowed on PATH".
+		label := t.DisplayName
+		if label == "" {
+			label = t.Name
+		}
+		issues = append(issues, Issue{
+			Severity: sev,
+			Category: CategoryPATH,
+			Title:    label + " shadowed on PATH",
+			Detail:   fmt.Sprintf("Active: %s\nShadowed: %s", winner, strings.Join(shadowed, ", ")),
+			Fix:      "Reorder your PATH so the trusted location comes first, or remove duplicate copies",
+		})
+	}
+	return issues
+}
+
+// winnerIsUserWritableShadowingSystem reports whether the active path
+// sits in a user-writable directory while any of the shadowed paths
+// is in a system directory. Best-effort; missing files / unreadable
+// dirs return false.
+func winnerIsUserWritableShadowingSystem(winner string, shadowed []string) bool {
+	if !isUserWritableDir(filepath.Dir(winner)) {
+		return false
+	}
+	for _, p := range shadowed {
+		if isSystemDir(filepath.Dir(p)) {
+			return true
+		}
+	}
+	return false
+}
+
+// checkUserWritablePathOrder walks PATH left-to-right and flags
+// user-writable directories that precede system directories. This is
+// a privilege-escalation hardening check: if `~/.local/bin` is ahead
+// of `/usr/local/bin` on PATH, an attacker who lands a file in
+// `~/.local/bin/sudo` shadows the real sudo.
+func checkUserWritablePathOrder() []Issue {
+	raw := os.Getenv("PATH")
+	if raw == "" {
+		return nil
+	}
+	parts := filepath.SplitList(raw)
+	var issues []Issue
+	seenUserWritable := []string{}
+	for _, dir := range parts {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			continue
+		}
+		switch {
+		case isUserWritableDir(dir):
+			seenUserWritable = append(seenUserWritable, dir)
+		case isSystemDir(dir) && len(seenUserWritable) > 0:
+			issues = append(issues, Issue{
+				Severity: SeverityInfo,
+				Category: CategoryPATH,
+				Title:    "User-writable PATH dir precedes system dir",
+				Detail: fmt.Sprintf("System dir: %s\nUser-writable dirs ahead of it: %s",
+					dir, strings.Join(seenUserWritable, ", ")),
+				Fix: "Move user-writable bin dirs after system dirs to avoid shadowing trusted binaries",
+			})
+			// Only report the first system dir; one warning per
+			// problematic ordering is enough to make the point.
+			return issues
+		}
+	}
+	return issues
+}
+
+// hasPathPrefix reports whether dir is the same path as parent or a
+// descendant of it, with proper path-boundary handling. Avoids false
+// positives like HasPrefix("/home/joel/bin", "/home/joe"). Both inputs
+// are cleaned; comparison is case-insensitive on Windows (filesystem
+// semantics) and exact elsewhere.
+func hasPathPrefix(dir, parent string) bool {
+	if parent == "" {
+		return false
+	}
+	dirClean := filepath.Clean(dir)
+	parentClean := filepath.Clean(parent)
+	if runtime.GOOS == "windows" {
+		dirClean = strings.ToLower(dirClean)
+		parentClean = strings.ToLower(parentClean)
+	}
+	if dirClean == parentClean {
+		return true
+	}
+	rel, err := filepath.Rel(parentClean, dirClean)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	if strings.HasPrefix(rel, "..") {
+		return false
+	}
+	return true
+}
+
+// isUserWritableDir reports whether dir is in a location an
+// unprivileged user can drop binaries into. This is intentionally a
+// heuristic, not an authoritative permission check:
+//
+//   - World-writable dirs (mode bits include 0o002) always count.
+//   - Dirs under $HOME with the owner-write bit set count, on the
+//     assumption that the calling user owns their own home tree.
+//     We don't syscall to compare the dir's stat UID against EUID
+//     (would require platform-specific syscall.Stat_t and pull in
+//     extra build constraints) — accuracy isn't worth the
+//     complexity for what's already a hardening *suggestion*.
+//   - On Windows, the heuristic is "lives under USERPROFILE".
+//
+// False positives just inflate severity on the PATH-shadowing
+// diagnostic; they don't break installs or fail builds.
+func isUserWritableDir(dir string) bool {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return false
+	}
+	info, err := os.Stat(dir) // #nosec G304 -- dir originates from PATH; checking PATH integrity is the purpose.
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		// Heuristic: directories under the user profile are typically
+		// user-writable. The ACL machinery to check properly isn't
+		// worth the complexity for what's already a hardening
+		// suggestion.
+		return hasPathPrefix(dir, os.Getenv("USERPROFILE"))
+	}
+	mode := info.Mode().Perm()
+	// World-writable always counts.
+	if mode&0o002 != 0 {
+		return true
+	}
+	// Owner-writable counts when current user owns the dir. On non-
+	// Windows we can't easily get the file owner without syscalls; a
+	// good-enough heuristic is "user dir under HOME".
+	if hasPathPrefix(dir, os.Getenv("HOME")) {
+		return mode&0o200 != 0
+	}
+	return false
+}
+
+// isSystemDir reports whether dir is one of the canonical OS-trusted
+// PATH entries. Hard-coded list keeps the check predictable; missing
+// a non-standard system dir just means we don't flag a potential
+// shadowing — preferable to false positives.
+func isSystemDir(dir string) bool {
+	dir = filepath.Clean(strings.TrimSpace(dir))
+	switch runtime.GOOS {
+	case "windows":
+		dl := strings.ToLower(dir)
+		for _, sys := range []string{
+			`c:\windows`, `c:\windows\system32`, `c:\windows\syswow64`,
+			`c:\program files`, `c:\program files (x86)`,
+		} {
+			if strings.HasPrefix(dl, sys) {
+				return true
+			}
+		}
+		return false
+	default:
+		switch dir {
+		case "/usr/local/sbin", "/usr/local/bin",
+			"/usr/sbin", "/usr/bin",
+			"/sbin", "/bin",
+			"/opt/homebrew/bin", "/opt/homebrew/sbin":
+			return true
+		}
+		return false
+	}
 }
 
 // normalizePath normalizes a path for deduplication. On Windows, it

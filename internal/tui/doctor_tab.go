@@ -14,6 +14,7 @@ import (
 	"github.com/nassiharel/clim/internal/doctor"
 	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/vuln"
 )
 
 // Doctor sub-tab indices.
@@ -42,7 +43,7 @@ func (m Model) renderDoctorView() string {
 		text string
 		idx  int
 	}{
-		{"Doctor", doctorSubDoctor},
+		{"Health", doctorSubDoctor},
 		{"Audit", doctorSubAudit},
 		{"Compliance", doctorSubCompliance},
 	}
@@ -344,9 +345,27 @@ func runComplianceForTUI(tools []registry.Tool, cfg *config.Config, policyPath s
 	if policy == nil {
 		return nil, nil, errMsg
 	}
-	result := compliance.Check(policy, tools)
+	result := compliance.Check(policy, tools, loadVulnSeveritiesFromConfig(cfg))
 	idx := compliance.BuildIndex(policy, tools)
+	idx.ApplyVulnSeverities(loadVulnSeveritiesFromConfig(cfg))
 	return &result, idx, ""
+}
+
+// loadVulnSeveritiesFromConfig reads the vuln cache that
+// `clim security vuln` wrote, keyed by the configured OSV URL.
+// Returns nil when no cache exists; compliance silently skips the
+// vuln gate in that case.
+func loadVulnSeveritiesFromConfig(cfg *config.Config) map[string]string {
+	url := vuln.DefaultOSVURL
+	if cfg != nil {
+		if u := strings.TrimSpace(cfg.Vuln.URL); u != "" {
+			url = u
+		}
+	}
+	if rep, ok := vuln.ReadCache(url); ok {
+		return rep.SeverityByTool()
+	}
+	return nil
 }
 
 // loadPolicyForTUISync is the non-blocking half of policy loading:

@@ -12,7 +12,7 @@ The doctor checks your environment for common issues that can cause confusion or
 ### CLI
 
 ```bash
-clim doctor
+clim security health
 ```
 
 ### What It Checks
@@ -27,7 +27,7 @@ clim doctor
 
 ### TUI
 
-Press `9` to open the Doctor tab. Issues are grouped by category with color-coded severity:
+Press `9` to open the Security tab. Issues are grouped by category with color-coded severity:
 
 - 🔴 **Error** — something is broken
 - 🟡 **Warning** — potential problem
@@ -41,10 +41,10 @@ The audit analyzes your installed tools for security and compliance concerns.
 
 ```bash
 # Human-readable report
-clim audit
+clim security audit
 
 # CycloneDX 1.5 SBOM
-clim audit --sbom > sbom.json
+clim security audit --sbom > sbom.json
 ```
 
 ### What It Checks
@@ -59,7 +59,7 @@ It also generates a **license inventory** showing the distribution of licenses a
 
 ### TUI
 
-In the Doctor tab, press Tab or → to switch to the **Audit** sub-tab. It shows the same findings as `clim audit` with color-coded severity and a license summary.
+In the Security tab, press Tab or → to switch to the **Audit** sub-tab. It shows the same findings as `clim security audit` with color-coded severity and a license summary.
 
 ### SBOM Generation
 
@@ -67,10 +67,10 @@ The `--sbom` flag generates a [CycloneDX 1.5](https://cyclonedx.org/) JSON docum
 
 ```bash
 # Generate and save
-clim audit --sbom > sbom.json
+clim security audit --sbom > sbom.json
 
 # Pipe to a compliance tool
-clim audit --sbom | cyclonedx-cli validate --input-format json
+clim security audit --sbom | cyclonedx-cli validate --input-format json
 ```
 
 ## CI Integration
@@ -80,8 +80,8 @@ Both commands support JSON output and meaningful exit codes:
 ```yaml
 # GitHub Actions example
 - name: Environment health check
-  run: clim doctor --json
+  run: clim security health --output json
 
 - name: Security audit
-  run: clim audit --json
+  run: clim security audit --output json
 ```

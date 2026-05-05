@@ -127,12 +127,8 @@ func init() {
 	rootCmd.AddCommand(trailCmd)
 
 	// Health & security.
-	doctorCmd.GroupID = "health"
-	rootCmd.AddCommand(doctorCmd)
-	auditCmd.GroupID = "health"
-	rootCmd.AddCommand(auditCmd)
-	complianceCmd.GroupID = "health"
-	rootCmd.AddCommand(complianceCmd)
+	securityCmd.GroupID = "health"
+	rootCmd.AddCommand(securityCmd)
 	scoreCmd.GroupID = "health"
 	rootCmd.AddCommand(scoreCmd)
 
