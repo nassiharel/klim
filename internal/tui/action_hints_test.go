@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -38,5 +39,25 @@ func TestActionFailureHint_UnknownExitCode(t *testing.T) {
 func TestActionFailureHint_EmptyArgs(t *testing.T) {
 	if got := actionFailureHint(nil, wingetExitNotInstalled); got != "" {
 		t.Errorf("empty args should produce no hint, got %q", got)
+	}
+}
+
+func TestErrMsgWithHint_NoErr(t *testing.T) {
+	if got := errMsgWithHint([]string{"winget"}, nil); got != "" {
+		t.Errorf("nil err should produce empty string, got %q", got)
+	}
+}
+
+func TestErrMsgWithHint_NonExitError(t *testing.T) {
+	// A plain error (not *exec.ExitError) gets its message but no hint.
+	got := errMsgWithHint([]string{"winget"}, errors.New("boom"))
+	if got != "boom" {
+		t.Errorf("got %q, want plain message", got)
+	}
+}
+
+func TestHintFromError_NotExecExitError(t *testing.T) {
+	if got := hintFromError([]string{"winget"}, errors.New("boom")); got != "" {
+		t.Errorf("non-exit error should produce no hint, got %q", got)
 	}
 }

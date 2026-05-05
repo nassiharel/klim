@@ -409,16 +409,15 @@ func detectSource(path string) registry.InstallSource {
 	// installers, third-party installers (Docker Desktop, etc.) and
 	// previously-installed Chocolatey packages whose dirs contain
 	// "chocolatey/" (caught earlier). We can't tell who owns a given
-	// binary from the path alone, so call it winget — the most
-	// common managed source — and let runWingetCheck surface a
-	// friendlier error if uninstall fails because winget doesn't
-	// know about it.
+	// binary from the path alone, so call it Manual rather than
+	// optimistically attributing to winget — that produced bad
+	// remove plans for non-winget tools (winget rejecting with
+	// NO_APPLICATIONS_FOUND). The user can still install via winget
+	// from the catalog menu; we just won't pretend we already know
+	// who owns an existing Program Files binary.
 	case strings.Contains(lower, "program files"):
-		return registry.SourceWinget
+		return registry.SourceManual
 
-	// ProgramData is commonly used by Docker Desktop, Chocolatey
-	// (caught earlier), and other installers — it's NOT a reliable
-	// winget signal, so don't classify it.
 	default:
 		return registry.SourceManual
 	}

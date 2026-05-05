@@ -115,16 +115,19 @@ func TestDetectSource(t *testing.T) {
 			registry.SourceManual,
 		},
 
-		// WinGet — Program Files.
+		// Program Files is ambiguous (winget MSIs, manual installers,
+		// third-party installers all land here) — classify as Manual
+		// so the TUI doesn't optimistically offer a winget remove
+		// plan that fails with NO_APPLICATIONS_FOUND.
 		{
 			"program files",
 			`C:\Program Files\Git\cmd\git.exe`,
-			registry.SourceWinget,
+			registry.SourceManual,
 		},
 		{
 			"program files x86",
 			`C:\Program Files (x86)\Something\tool.exe`,
-			registry.SourceWinget,
+			registry.SourceManual,
 		},
 
 		// WinGet — MSIX packages.

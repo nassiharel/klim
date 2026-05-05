@@ -1,6 +1,10 @@
 package tui
 
-import "strings"
+import (
+	"errors"
+	"os/exec"
+	"strings"
+)
 
 // Known winget exit codes (from
 // https://github.com/microsoft/winget-cli/blob/master/src/AppInstallerSharedLib/Public/AppInstallerSharedLib/AppInstallerErrors.h)
@@ -22,7 +26,8 @@ const (
 // (which clim repeatedly hit when its source-detection heuristic
 // optimistically called Program Files binaries winget-managed even
 // when winget had no record of them) and "no package available"
-// (catalog id mismatch).
+// (catalog id mismatch). 'where.exe' is used (rather than 'where')
+// because PowerShell aliases 'where' to Where-Object.
 func actionFailureHint(args []string, exitCode int) string {
 	if len(args) == 0 {
 		return ""
@@ -36,12 +41,45 @@ func actionFailureHint(args []string, exitCode int) string {
 		return "  ℹ winget reports this package isn't installed under that ID.\n" +
 			"    The binary may have been installed by another method (manual\n" +
 			"    download, Chocolatey, scoop, MSI installer). Try:\n" +
-			"      winget list <name>     # check what winget knows about\n" +
-			"      where <command>        # find the actual binary location"
+			"      winget list <name>     # what winget actually knows about\n" +
+			"      where.exe <command>    # where the binary lives (use where.exe,\n" +
+			"                             # not 'where' — that's a PowerShell alias)"
 	case wingetExitNoPackageAvailable:
 		return "  ℹ winget has no package matching that ID. The catalog entry\n" +
 			"    may be stale or use a different ID than your local winget source.\n" +
 			"    Try: winget search <name>"
 	}
 	return ""
+}
+
+// hintFromError returns a friendly hint by inspecting err for an
+// *exec.ExitError and translating the exit code via
+// actionFailureHint. Returns "" when err is nil, isn't an exit
+// failure, or has no hint registered. Used by the pack and backup
+// install/remove flows whose tea.ExecProcess callback only receives
+// the wrapped error (not the exit code directly).
+func hintFromError(args []string, err error) string {
+	if err == nil {
+		return ""
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		return ""
+	}
+	return actionFailureHint(args, exitErr.ExitCode())
+}
+
+// errMsgWithHint joins err.Error() and any registered hint with a
+// blank line so the TUI item renderer can show both. Pack/backup
+// flows write the result to item.errMsg; the renderer prints it as-
+// is. Returns "" when err is nil.
+func errMsgWithHint(args []string, err error) string {
+	if err == nil {
+		return ""
+	}
+	out := err.Error()
+	if hint := hintFromError(args, err); hint != "" {
+		out += "\n" + hint
+	}
+	return out
 }
