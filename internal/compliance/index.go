@@ -188,8 +188,10 @@ func (idx *Index) ApplyVulnSeverities(severityByTool map[string]string) {
 	}
 	thresholdRank := severityRank(threshold)
 	if thresholdRank == 0 {
-		// Unknown threshold value — don't enforce. config.Validate
-		// already warns on bad values; we trust the operator.
+		// Unknown threshold value — don't enforce. compliance.Check
+		// surfaces this as an "invalid_max_vuln_severity" warning
+		// violation when invoked with the same policy, so the
+		// operator notices.
 		return
 	}
 	for tool, sevRaw := range severityByTool {

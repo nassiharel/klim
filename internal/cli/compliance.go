@@ -14,7 +14,20 @@ import (
 	"github.com/nassiharel/clim/internal/fileutil"
 	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/progress"
+	"github.com/nassiharel/clim/internal/vuln"
 )
+
+// loadVulnSeveritiesForCompliance reads the vuln cache (passive — no
+// network) and returns a tool→severity map suitable for
+// compliance.Check. Returns nil if no cache exists; the compliance
+// gate then silently skips the vuln check (the operator can populate
+// the cache via `clim security vuln`).
+func loadVulnSeveritiesForCompliance() map[string]string {
+	if rep, ok := vuln.ReadCache(ResolveVulnSourceKey()); ok {
+		return rep.SeverityByTool()
+	}
+	return nil
+}
 
 var complianceCmd = &cobra.Command{
 	Use:   "compliance",
@@ -186,7 +199,7 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 	}
 	sp.Done("Done")
 
-	result := compliance.Check(policy, tools)
+	result := compliance.Check(policy, tools, loadVulnSeveritiesForCompliance())
 
 	if out == OutputJSON {
 		if err := printJSON(result); err != nil {

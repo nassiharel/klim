@@ -58,8 +58,13 @@ exceed `--fail-on`.
 
 Validates the installed toolchain against a policy file. Policies are
 fetched from `compliance.url` in `config.yaml` and cached locally.
-The `max_vuln_severity` policy field cross-references the local
-vulnerability cache populated by `clim security vuln`.
+
+The `max_vuln_severity` policy field reads the local vulnerability
+cache populated by `clim security vuln` and adds a violation for any
+tool whose worst severity meets or exceeds the threshold. The gate
+silently skips when the cache is empty — `clim install` won't fail
+just because the user hasn't run a vuln scan. Run a fresh scan in
+CI to enforce the gate strictly.
 
 ## Output convention
 

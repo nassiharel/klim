@@ -479,11 +479,21 @@ func hasPathPrefix(dir, parent string) bool {
 	return true
 }
 
-// isUserWritableDir reports whether dir exists and is writable by the
-// calling user. POSIX-only meaning: we test the owner-write bit OR
-// world-write bit when stat's owner UID matches the process EUID.
-// On Windows this is best-effort and conservative — we check whether
-// the dir lives under the user profile.
+// isUserWritableDir reports whether dir is in a location an
+// unprivileged user can drop binaries into. This is intentionally a
+// heuristic, not an authoritative permission check:
+//
+//   - World-writable dirs (mode bits include 0o002) always count.
+//   - Dirs under $HOME with the owner-write bit set count, on the
+//     assumption that the calling user owns their own home tree.
+//     We don't syscall to compare the dir's stat UID against EUID
+//     (would require platform-specific syscall.Stat_t and pull in
+//     extra build constraints) — accuracy isn't worth the
+//     complexity for what's already a hardening *suggestion*.
+//   - On Windows, the heuristic is "lives under USERPROFILE".
+//
+// False positives just inflate severity on the PATH-shadowing
+// diagnostic; they don't break installs or fail builds.
 func isUserWritableDir(dir string) bool {
 	dir = strings.TrimSpace(dir)
 	if dir == "" {

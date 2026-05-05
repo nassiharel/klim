@@ -171,3 +171,19 @@ func (r Report) HasFindings() bool {
 	}
 	return false
 }
+
+// SeverityByTool returns a map of tool name → worst severity string
+// (uppercase, e.g. "HIGH"). Tools with no vulnerabilities are
+// omitted. Used by the compliance gate so policy.max_vuln_severity
+// can refuse installs of tools with known CVEs at or above the
+// configured threshold.
+func (r Report) SeverityByTool() map[string]string {
+	out := make(map[string]string, len(r.Matches))
+	for _, m := range r.Matches {
+		if len(m.Vulnerabilities) == 0 {
+			continue
+		}
+		out[m.Tool] = string(m.MaxSeverity())
+	}
+	return out
+}

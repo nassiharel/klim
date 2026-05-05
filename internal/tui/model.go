@@ -709,9 +709,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.policy != nil {
-			result := compliance.Check(msg.policy, m.tools)
+			sev := loadVulnSeveritiesFromConfig(m.cfg)
+			result := compliance.Check(msg.policy, m.tools, sev)
 			m.complianceResult = &result
 			m.complianceIndex = compliance.BuildIndex(msg.policy, m.tools)
+			m.complianceIndex.ApplyVulnSeverities(sev)
 			m.complianceError = ""
 			m.recomputeComplianceDerivedState()
 			// Rebuild the menu so blocked actions get the new badge.
@@ -2047,9 +2049,11 @@ func (m *Model) recomputeComplianceDerivedState() {
 	// is loaded; otherwise leave both nil so the score reflects
 	// "no policy".
 	if policy := m.complianceIndex.Policy(); policy != nil {
-		result := compliance.Check(policy, m.tools)
+		sev := loadVulnSeveritiesFromConfig(m.cfg)
+		result := compliance.Check(policy, m.tools, sev)
 		m.complianceResult = &result
 		m.complianceIndex = compliance.BuildIndex(policy, m.tools)
+		m.complianceIndex.ApplyVulnSeverities(sev)
 	}
 
 	auditW, auditI := audit.CountBySeverity(m.auditFindings)

@@ -86,7 +86,12 @@ func parsePolicy(data []byte) (*Policy, error) {
 }
 
 // Check validates installed tools against a policy and returns violations.
-func Check(policy *Policy, tools []registry.Tool) Result {
+// vulnSeverityByTool, when non-nil, supplies the worst known vuln
+// severity per tool (typically read from the vuln cache); tools whose
+// severity meets policy.MaxVulnSeverity get a "vulnerable" violation.
+// Pass nil to skip the vuln-severity gate (useful from tests or when
+// the cache hasn't been populated).
+func Check(policy *Policy, tools []registry.Tool, vulnSeverityByTool map[string]string) Result {
 	result := Result{
 		PolicyName: policy.Name,
 		Compliant:  true,
@@ -96,6 +101,20 @@ func Check(policy *Policy, tools []registry.Tool) Result {
 	allowedSourceSet := toSet(policy.AllowedSources)
 	allowedLicenseSet := toSet(policy.AllowedLicenses)
 	blockedLicenseSet := toSet(policy.BlockedLicenses)
+
+	threshold := strings.TrimSpace(policy.MaxVulnSeverity)
+	thresholdRank := severityRank(threshold)
+	if threshold != "" && thresholdRank == 0 {
+		// Surface bad threshold values as a load-time issue rather
+		// than silently ignoring them. Add an info violation so the
+		// operator notices the policy isn't doing what they think.
+		result.Violations = append(result.Violations, Violation{
+			Tool:     "_policy_",
+			Rule:     "invalid_max_vuln_severity",
+			Message:  "max_vuln_severity=" + threshold + " is not one of low/medium/high/critical — vuln gate disabled",
+			Severity: "warning",
+		})
+	}
 
 	toolMap := make(map[string]*registry.Tool)
 	for i := range tools {
@@ -137,6 +156,21 @@ func Check(policy *Policy, tools []registry.Tool) Result {
 			if blockedLicenseSet[strings.ToLower(license)] {
 				result.addError(t.Name, "blocked_license",
 					fmt.Sprintf("License %q is blocked by company policy", license))
+			}
+		}
+
+		// Vuln-severity gate. Only runs when the policy has a valid
+		// threshold AND the caller supplied a severity map (typically
+		// read from the local vuln cache). If the cache hasn't been
+		// populated, this gate is silently skipped — that's a feature:
+		// `clim install` shouldn't refuse to run because the user
+		// hasn't run `clim security vuln` yet. Operators who want to
+		// require a fresh scan can run it in CI.
+		if thresholdRank > 0 && len(vulnSeverityByTool) > 0 {
+			if sev, ok := vulnSeverityByTool[t.Name]; ok && severityRank(sev) >= thresholdRank {
+				result.addError(t.Name, "vulnerable",
+					fmt.Sprintf("Has known vulnerabilities at severity %s (policy threshold: %s)",
+						strings.ToUpper(sev), strings.ToUpper(threshold)))
 			}
 		}
 	}

@@ -62,7 +62,7 @@ func runScore(cmd *cobra.Command, args []string) error {
 			_, _ = fmt.Fprintf(os.Stderr, "  ⚠ Compliance policy error: %v\n", loadErr)
 			compErrStr = loadErr.Error()
 		} else {
-			r := compliance.Check(policy, tools)
+			r := compliance.Check(policy, tools, loadVulnSeveritiesForCompliance())
 			compResult = &r
 		}
 	}
