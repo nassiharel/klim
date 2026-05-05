@@ -232,3 +232,43 @@ func TestEncode_RejectsOversizePayload(t *testing.T) {
 		t.Errorf("err = %v; want ErrPayloadTooLarge", err)
 	}
 }
+
+func TestDecode_CanonicalizesProfile(t *testing.T) {
+	// Decode must return a canonical profile so downstream apply
+	// flows can't be tricked by a hand-tweaked token containing
+	// duplicate or whitespace-only tool names.
+	p := &Profile{
+		SchemaVersion: SchemaVersion,
+		Tools: []Tool{
+			{Name: "fzf"},
+			{Name: " fzf "}, // whitespace-padded duplicate
+			{Name: ""},      // empty
+			{Name: "bat"},
+		},
+		Favorites: []string{"jq", "jq", " "},
+		Packs: []Pack{
+			{Name: "p", Tools: []string{"a", "a"}},
+			{Name: " ", Tools: []string{"x"}}, // empty after trim — drops
+		},
+	}
+	tok, err := Encode(p)
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	got, err := Decode(tok)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if len(got.Tools) != 2 {
+		t.Errorf("expected 2 tools after canonicalize, got %d: %+v", len(got.Tools), got.Tools)
+	}
+	if len(got.Favorites) != 1 || got.Favorites[0] != "jq" {
+		t.Errorf("expected favorites=[jq], got %v", got.Favorites)
+	}
+	if len(got.Packs) != 1 {
+		t.Errorf("expected 1 pack after canonicalize, got %d: %+v", len(got.Packs), got.Packs)
+	}
+	if len(got.Packs[0].Tools) != 1 {
+		t.Errorf("expected pack tools deduped to 1, got %v", got.Packs[0].Tools)
+	}
+}

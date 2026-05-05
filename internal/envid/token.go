@@ -120,6 +120,12 @@ func Decode(token string) (*Profile, error) {
 	if p.SchemaVersion != SchemaVersion {
 		return nil, fmt.Errorf("%w: token=%d, supported=%d", ErrSchemaMismatch, p.SchemaVersion, SchemaVersion)
 	}
+	// Canonicalize before returning so downstream consumers
+	// (diff, apply, the hash check) always see a deduped+sorted
+	// shape. Tokens are user-editable, so a malicious or
+	// hand-tweaked input could otherwise smuggle duplicate
+	// tool names through to the install plan.
+	canonicalize(p)
 	return p, nil
 }
 

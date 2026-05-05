@@ -38,6 +38,10 @@ func ReadFile(path string) (*Profile, error) {
 	if p.SchemaVersion != SchemaVersion {
 		return nil, fmt.Errorf("%w: file=%d, supported=%d", ErrSchemaMismatch, p.SchemaVersion, SchemaVersion)
 	}
+	// Canonicalize for the same reason Decode does — the file
+	// form is documented as safe to edit by hand, so dedup+sort
+	// before downstream consumers see it.
+	canonicalize(p)
 	return p, nil
 }
 

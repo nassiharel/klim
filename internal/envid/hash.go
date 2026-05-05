@@ -89,10 +89,7 @@ func deepClone(p *Profile) *Profile {
 func canonicalize(p *Profile) {
 	p.Favorites = dedupSorted(p.Favorites)
 	p.Tools = dedupSortToolsByName(p.Tools)
-	for i := range p.Packs {
-		p.Packs[i].Tools = dedupSorted(p.Packs[i].Tools)
-	}
-	sortPacksByName(p.Packs)
+	p.Packs = dedupSortPacksByName(p.Packs)
 }
 
 func dedupSorted(in []string) []string {
@@ -116,18 +113,28 @@ func dedupSorted(in []string) []string {
 	return out
 }
 
-// dedupSortToolsByName sorts and deduplicates by Name (first
-// occurrence wins). A profile that contains the same tool listed
-// twice (manual edit, malformed token, future merge bug) shouldn't
-// perturb the hash.
+// dedupSortToolsByName trims Name whitespace, drops empty-name
+// entries, sorts by Name, and deduplicates (first occurrence
+// wins). A profile containing duplicates or whitespace-only names
+// (manual edit, malformed token, future merge bug) shouldn't
+// perturb the hash or smuggle ghost installs through the apply
+// flow.
 func dedupSortToolsByName(tools []Tool) []Tool {
 	if len(tools) == 0 {
 		return tools
 	}
-	sort.SliceStable(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
-	out := tools[:0]
+	cleaned := make([]Tool, 0, len(tools))
+	for _, t := range tools {
+		t.Name = strings.TrimSpace(t.Name)
+		if t.Name == "" {
+			continue
+		}
+		cleaned = append(cleaned, t)
+	}
+	sort.SliceStable(cleaned, func(i, j int) bool { return cleaned[i].Name < cleaned[j].Name })
+	out := cleaned[:0]
 	var prev string
-	for i, t := range tools {
+	for i, t := range cleaned {
 		if i > 0 && t.Name == prev {
 			continue
 		}
@@ -137,6 +144,43 @@ func dedupSortToolsByName(tools []Tool) []Tool {
 	return out
 }
 
-func sortPacksByName(packs []Pack) {
-	sort.SliceStable(packs, func(i, j int) bool { return packs[i].Name < packs[j].Name })
+// dedupSortPacksByName trims pack and tool names, drops packs
+// whose name or tool list is empty after trimming, sorts by Name
+// (case-insensitive), and dedupes by name. Mirrors
+// dedupSortToolsByName so canonicalize handles every user-
+// editable list with the same hygiene.
+func dedupSortPacksByName(packs []Pack) []Pack {
+	if len(packs) == 0 {
+		return packs
+	}
+	cleaned := make([]Pack, 0, len(packs))
+	for _, p := range packs {
+		p.Name = strings.TrimSpace(p.Name)
+		p.DisplayName = strings.TrimSpace(p.DisplayName)
+		if p.Name == "" {
+			continue
+		}
+		p.Tools = dedupSorted(p.Tools)
+		if len(p.Tools) == 0 {
+			continue
+		}
+		cleaned = append(cleaned, p)
+	}
+	sort.SliceStable(cleaned, func(i, j int) bool {
+		return strings.ToLower(cleaned[i].Name) < strings.ToLower(cleaned[j].Name)
+	})
+	out := cleaned[:0]
+	var prev string
+	for i, p := range cleaned {
+		key := strings.ToLower(p.Name)
+		if i > 0 && key == prev {
+			continue
+		}
+		prev = key
+		out = append(out, p)
+	}
+	return out
 }
+
+// (sortPacksByName has been folded into dedupSortPacksByName in
+// hash.go; kept history note here in case grep traces back.)

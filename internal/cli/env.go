@@ -246,7 +246,15 @@ func loadProfile(arg string) (*envid.Profile, error) {
 		}
 		return p, err
 	}
-	return envid.ReadFile(arg)
+	// File path: same usage-vs-runtime mapping. ErrSchemaMismatch
+	// and ErrPayloadTooLarge are user-caused (wrong schema, too
+	// big), so they exit 2. Genuine I/O (file not found, permission
+	// denied) propagates as runtime error → exit 1.
+	p, err := envid.ReadFile(arg)
+	if err != nil && isUserCausedDecodeError(err) {
+		return nil, usageErrorf("invalid env file %s: %v", arg, err)
+	}
+	return p, err
 }
 
 // isUserCausedDecodeError returns true when err matches one of the
@@ -474,10 +482,23 @@ func joinOrDash(s []string) string {
 // a separate ctx parameter to avoid the confusion of two contexts
 // on the call site.
 func applyTools(cmd *cobra.Command, p *envid.Profile) (int, error) {
+	// Defense in depth: Decode/ReadFile already canonicalize, but
+	// keep a small hygiene pass here in case a future caller
+	// constructs a Profile directly. Drops empty/whitespace tool
+	// names and dedupes by name (first occurrence wins).
+	seen := make(map[string]struct{}, len(p.Tools))
 	mtools := make([]manifest.Tool, 0, len(p.Tools))
 	for _, t := range p.Tools {
+		name := strings.TrimSpace(t.Name)
+		if name == "" {
+			continue
+		}
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
 		mtools = append(mtools, manifest.Tool{
-			Name:     t.Name,
+			Name:     name,
 			Version:  t.Version,
 			Source:   t.Source,
 			Category: t.Category,
@@ -527,11 +548,24 @@ func applyFavorites(names []string) error {
 	if err != nil {
 		return err
 	}
+	// Normalize the existing list too: the favorites file is
+	// documented as safe to edit by hand, so it can already
+	// contain whitespace-only or near-duplicate (" jq " vs "jq")
+	// entries. Trim+dedupe before seeding so we never write
+	// those back out.
 	existingSet := make(map[string]struct{}, len(existing))
+	merged := make([]string, 0, len(existing))
 	for _, n := range existing {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		if _, ok := existingSet[n]; ok {
+			continue
+		}
 		existingSet[n] = struct{}{}
+		merged = append(merged, n)
 	}
-	merged := append([]string(nil), existing...)
 	added := 0
 	for _, n := range names {
 		n = strings.TrimSpace(n)
@@ -545,7 +579,10 @@ func applyFavorites(names []string) error {
 		merged = append(merged, n)
 		added++
 	}
-	if added == 0 {
+	// If we cleaned up the existing list but added nothing new,
+	// still write so the file is left in a canonical state on
+	// next read. Users with a clean file see a no-op.
+	if added == 0 && len(merged) == len(existing) {
 		fmt.Fprintf(os.Stderr, "  Favorites: 0 added (of %d in env)\n", len(names))
 		return nil
 	}

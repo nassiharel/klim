@@ -123,11 +123,13 @@ func collectCustomPacks() []Pack {
 		out = append(out, Pack{
 			Name:        p.Name,
 			DisplayName: p.DisplayName,
-			Tools:       dedupSorted(p.ToolNames),
+			Tools:       p.ToolNames,
 		})
 	}
-	sortPacksByName(out)
-	return out
+	// Final canonicalize pass via dedupSortPacksByName trims,
+	// dedupes, and sorts in one place — keeps Build's output
+	// shape identical to what Decode/ReadFile produce.
+	return dedupSortPacksByName(out)
 }
 
 func collectSecurity(tools []registry.Tool, cfg *config.Config) Security {
