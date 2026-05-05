@@ -247,6 +247,13 @@ func pathExists(path string) bool {
 // exec.LookPath alone matters on Windows: registry PATH entries
 // that winget/scoop installs add post-launch are visible through
 // the finder helper but not through the inherited process PATH.
+//
+// Loop nesting is `for dir { for name { for candidate } }` to
+// match finder.scanDir's PATH-order semantics: the earliest PATH
+// dir always wins, regardless of which binary alias resolves
+// first. The previous nesting (`for name { for dir }`) could
+// recover a later-PATH `python3` instead of an earlier-PATH
+// `python` for tools with multiple binary names.
 func lookupOnPATH(binaryNames []string) (string, bool) {
 	if len(binaryNames) == 0 {
 		return "", false
@@ -258,8 +265,8 @@ func lookupOnPATH(binaryNames []string) (string, bool) {
 		// environments).
 		return lookupViaExec(binaryNames)
 	}
-	for _, name := range binaryNames {
-		for _, dir := range dirs {
+	for _, dir := range dirs {
+		for _, name := range binaryNames {
 			for _, candidate := range finder.BinaryCandidateNames(name) {
 				full := filepath.Join(dir, candidate)
 				info, err := os.Stat(full)

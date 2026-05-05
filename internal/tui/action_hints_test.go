@@ -73,15 +73,18 @@ func TestHintFromError_RealExecExitError(t *testing.T) {
 	// silently disappear and pure-unit tests using errors.New
 	// wouldn't catch it.
 	//
-	// We can't easily reproduce winget's 0x8A150014 exit code via a
-	// shell (POSIX caps exit codes at 0-255). The assertion is:
-	// hintFromError on the real *exec.ExitError returns the same
-	// hint actionFailureHint returns when fed the unwrapped exit
-	// code directly. That validates the plumbing without depending
-	// on a specific winget code.
+	// Reproducing winget's 0x8A150014 from a shell isn't possible
+	// (POSIX caps exit codes at 0-255), so we temporarily stub
+	// wingetExitNotInstalled to a small code (42), spawn a helper
+	// that exits with that, and assert hintFromError returns the
+	// real NO_APPLICATIONS_FOUND hint string. That asserts both
+	// the unwrap AND the code-to-hint mapping.
 	if runtime.GOOS == "windows" {
-		t.Skip("helper-process pattern needs a POSIX shell; the unwrap logic is platform-neutral so POSIX coverage is sufficient")
+		t.Skip("helper-process pattern needs a POSIX shell; the unwrap logic is platform-neutral")
 	}
+	defer func(orig int) { wingetExitNotInstalled = orig }(wingetExitNotInstalled)
+	wingetExitNotInstalled = 42
+
 	cmd := exec.Command(os.Args[0], "-test.run=TestHintHelperProcess")
 	cmd.Env = append(os.Environ(), "GO_HELPER_PROCESS=1")
 	err := cmd.Run()
@@ -92,10 +95,18 @@ func TestHintFromError_RealExecExitError(t *testing.T) {
 	if !errors.As(err, &exitErr) {
 		t.Fatalf("expected *exec.ExitError, got %T (%v)", err, err)
 	}
-	wantHint := actionFailureHint([]string{"winget"}, exitErr.ExitCode())
-	gotHint := hintFromError([]string{"winget"}, err)
-	if gotHint != wantHint {
-		t.Errorf("hintFromError mismatch:\ngot:  %q\nwant: %q", gotHint, wantHint)
+
+	// With wingetExitNotInstalled stubbed to 42, the unwrap path
+	// should produce the real NO_APPLICATIONS_FOUND hint.
+	got := hintFromError([]string{"winget", "uninstall"}, err)
+	if !strings.Contains(got, "isn't installed") {
+		t.Errorf("expected NO_APPLICATIONS_FOUND hint, got %q", got)
+	}
+
+	// And the same error against a non-winget command must NOT
+	// trigger the hint — proves args[0] gating still applies.
+	if hint := hintFromError([]string{"brew", "uninstall"}, err); hint != "" {
+		t.Errorf("non-winget cmd should produce no hint even with stubbed code, got %q", hint)
 	}
 }
 

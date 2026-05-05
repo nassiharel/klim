@@ -430,23 +430,27 @@ func detectSource(path string) registry.InstallSource {
 		// Windows Store / App Execution Aliases (e.g. python)
 		return registry.SourceWinget
 
-	// AppData\Local\Programs hosts winget per-user installs (VS Code,
-	// Azure Dev CLI, etc.) AND many third-party user-scope installers
-	// (Cursor, GitHub Desktop, etc.). The path alone doesn't say who
-	// owns the binary, so call it Manual to avoid offering a winget
-	// remove plan that fails. Specific WinGet markers above
-	// (8wekyb3d8bbwe, WindowsApps, Microsoft/WinGet/Packages) still
-	// classify unambiguously.
+	// AppData\Local\Programs and Program Files are *predominantly*
+	// winget territory on modern Windows: most managed MSIs (VS
+	// Code, Azure Dev CLI, machine-wide installs, etc.) land there
+	// via winget. Calling them SourceManual previously regressed
+	// the happy path for legitimately winget-managed tools — they
+	// stopped getting upgrade/remove actions and lost winget
+	// latest-version resolution.
+	//
+	// Path alone genuinely is ambiguous (Cursor, GitHub Desktop,
+	// Docker Desktop, manual MSIs, and Chocolatey use these
+	// directories too), so when we're wrong, the user hits a
+	// "winget reports no installed package" error. The friendlier
+	// hint we surface for that exact exit code (see
+	// internal/tui/action_hints.go) is the safety net for the
+	// false-positive case; classifying here as SourceWinget keeps
+	// the much more common winget-actually-owns-it case working
+	// without a manual rescan.
 	case strings.Contains(lower, "appdata/local/programs/"):
-		return registry.SourceManual
-
-	// Program Files is shared by winget MSIs, manual MSI installers,
-	// third-party installers (Docker Desktop, etc.) and previously-
-	// installed Chocolatey packages whose dirs contain "chocolatey/"
-	// (caught earlier). Same reasoning as AppData\Local\Programs:
-	// can't tell who owns a binary from the path alone.
+		return registry.SourceWinget
 	case strings.Contains(lower, "program files"):
-		return registry.SourceManual
+		return registry.SourceWinget
 
 	default:
 		return registry.SourceManual

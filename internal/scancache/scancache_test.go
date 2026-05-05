@@ -284,3 +284,58 @@ func TestApplyRecoveryDedupes(t *testing.T) {
 		t.Fatalf("expected single recovered instance, got %d: %+v", len(got[0].Instances), got[0].Instances)
 	}
 }
+
+func TestApplyRecoveryRespectsPathOrder(t *testing.T) {
+	// Tools with multiple binary names (e.g. python: python3, python)
+	// must recover the binary in the earliest PATH dir, not the
+	// first alias's first match. Mirrors finder.scanDir's
+	// 'for dir { for name }' nesting.
+	withTempCache(t)
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+
+	// dirA holds 'python' (the second alias).
+	pyBin := "python"
+	if runtime.GOOS == "windows" {
+		pyBin += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(dirA, pyBin), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// dirB holds 'python3' (the first alias).
+	py3Bin := "python3"
+	if runtime.GOOS == "windows" {
+		py3Bin += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(dirB, py3Bin), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// PATH order: dirA, dirB. The earlier dir's 'python' should
+	// win even though 'python3' is the first alias the finder
+	// would normally try.
+	t.Setenv("PATH", dirA+string(os.PathListSeparator)+dirB+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	stale := filepath.Join(dirA, "stale-no-such-path")
+	catalog := []registry.Tool{{
+		Name:        "python",
+		BinaryNames: []string{strings.TrimSuffix(py3Bin, ".exe"), strings.TrimSuffix(pyBin, ".exe")},
+	}}
+	entries := map[string]Entry{
+		"python": {Instances: []instanceYAML{{Path: stale, Source: "winget"}}},
+	}
+	got := Apply(catalog, entries)
+	if len(got[0].Instances) != 1 {
+		t.Fatalf("expected 1 instance, got %d", len(got[0].Instances))
+	}
+	wantPath := filepath.Join(dirA, pyBin)
+	resolvedWant, _ := filepath.EvalSymlinks(wantPath)
+	if resolvedWant == "" {
+		resolvedWant = wantPath
+	}
+	if got[0].Instances[0].Path != resolvedWant {
+		t.Errorf("got %q, want %q (earliest PATH dir should win regardless of alias order)",
+			got[0].Instances[0].Path, resolvedWant)
+	}
+}

@@ -12,7 +12,13 @@ import (
 //
 //	0x8A150014 (2316632084) — APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND
 //	0x8A150010 (2316632080) — APPINSTALLER_CLI_ERROR_NO_PACKAGES_AVAILABLE
-const (
+//
+// These are vars rather than consts so tests can swap them to a
+// value the standard helper-process pattern can actually emit
+// (POSIX caps exit codes at 0-255, so the real winget codes can't
+// be reproduced from a child process). Production code never
+// mutates them.
+var (
 	wingetExitNotInstalled       = 2316632084
 	wingetExitNoPackageAvailable = 2316632080
 )

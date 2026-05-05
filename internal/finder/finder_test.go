@@ -115,19 +115,21 @@ func TestDetectSource(t *testing.T) {
 			registry.SourceManual,
 		},
 
-		// Program Files is ambiguous (winget MSIs, manual installers,
-		// third-party installers all land here) — classify as Manual
-		// so the TUI doesn't optimistically offer a winget remove
-		// plan that fails with NO_APPLICATIONS_FOUND.
+		// Program Files is predominantly winget territory on modern
+		// Windows; classify as SourceWinget so the common case (a
+		// winget MSI install) gets upgrade/remove actions. Non-
+		// winget binaries that happen to live here surface a
+		// friendly hint at remove time instead of a generic error
+		// (see internal/tui/action_hints.go).
 		{
 			"program files",
 			`C:\Program Files\Git\cmd\git.exe`,
-			registry.SourceManual,
+			registry.SourceWinget,
 		},
 		{
 			"program files x86",
 			`C:\Program Files (x86)\Something\tool.exe`,
-			registry.SourceManual,
+			registry.SourceWinget,
 		},
 
 		// WinGet — MSIX packages.
@@ -144,14 +146,14 @@ func TestDetectSource(t *testing.T) {
 			registry.SourceWinget,
 		},
 
-		// AppData\Local\Programs is shared by winget per-user MSIs
-		// AND many third-party user-scope installers (Cursor,
-		// GitHub Desktop, etc.). Path alone can't attribute, so
-		// call it Manual.
+		// AppData\Local\Programs: same reasoning as Program Files —
+		// winget per-user MSIs (VS Code, Azure Dev CLI) are the
+		// common case; misattributed third-party installers get
+		// the friendly hint at remove time.
 		{
 			"local programs",
 			`C:\Users\user\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd`,
-			registry.SourceManual,
+			registry.SourceWinget,
 		},
 
 		// ProgramData / DockerDesktop / etc.: not a winget signal —
