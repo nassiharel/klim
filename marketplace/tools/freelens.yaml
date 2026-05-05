@@ -1,0 +1,14 @@
+name: freelens
+display_name: Freelens
+category: Containers
+tags:
+    - kubernetes
+    - gui
+binary_names:
+    - freelens
+packages:
+    winget: Freelensapp.Freelens
+    scoop: freelens
+    brew: freelens
+    snap: freelens
+github: freelensapp/freelens
