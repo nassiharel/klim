@@ -17,6 +17,7 @@ import (
 var initMinVersionFlag bool
 var initNameFlag string
 var initAllFlag bool
+var initForceFlag bool
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -28,11 +29,16 @@ package.json, go.mod, CI workflows, Helm charts, Terraform files, and more.
 Only tools that are both detected AND installed are included (so versions
 can be pinned). Tools detected but not installed are listed as suggestions.
 
+When .clim.yaml already exists clim refuses to clobber it; pass --force
+to overwrite. (No -f shorthand: docs/cli-conventions.md reserves -f for
+--file paths.)
+
 Usage:
   clim init                        # auto-detect from project files
   clim init --all                  # include ALL installed tools (no detection)
   clim init --min-version          # include >=X.Y version constraints
-  clim init --name my-project      # set project name`,
+  clim init --name my-project      # set project name
+  clim init --force                # overwrite an existing .clim.yaml`,
 	RunE: runInit,
 }
 
@@ -40,15 +46,24 @@ func init() {
 	initCmd.Flags().BoolVar(&initMinVersionFlag, "min-version", false, "Include minimum version constraints (>=X.Y)")
 	initCmd.Flags().StringVar(&initNameFlag, "name", "", "Project name for the manifest")
 	initCmd.Flags().BoolVar(&initAllFlag, "all", false, "Include all installed tools (skip project detection)")
+	// No -f shorthand: docs/cli-conventions.md reserves -f for --file.
+	initCmd.Flags().BoolVar(&initForceFlag, "force", false, "Overwrite an existing .clim.yaml")
 	// Registered in root.go with command group.
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
 	outPath := filepath.Join(".", teamfile.FileName)
 
-	// Check if file already exists.
-	if _, err := os.Stat(outPath); err == nil {
-		return fmt.Errorf("%s already exists (delete it first or edit manually)", outPath)
+	// Refuse to clobber an existing manifest unless --force is set.
+	// We use Lstat so a *dangling* .clim.yaml symlink still trips the
+	// safety check — Stat would follow the link, see ENOENT, and
+	// happily let `clim init` (no --force) replace the symlink.
+	manifestExists := false
+	if _, err := os.Lstat(outPath); err == nil {
+		manifestExists = true
+		if !initForceFlag {
+			return fmt.Errorf("%s already exists — pass --force to overwrite, or edit it manually", outPath)
+		}
 	}
 
 	// Scan installed tools. Use full resolution when --min-version needs versions.
@@ -89,6 +104,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "  Scanned %d files in %d directories\n", result.FilesScanned, result.DirsScanned)
 
 		if len(detected) == 0 {
+			if initForceFlag && manifestExists {
+				return fmt.Errorf("--force given but no project files detected — refusing to overwrite %s (try --all to include every installed tool)", outPath)
+			}
 			fmt.Fprintln(os.Stderr, "No project files detected. Use --all to include all installed tools.")
 			return nil
 		}
@@ -157,6 +175,25 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(tf.Tools) == 0 {
+		// With --force on an existing file the user expects a
+		// replacement. Emitting "No tools to include" + exit 0 would
+		// silently leave the previous manifest in place — a script
+		// running `clim init --force` would believe the regenerate
+		// succeeded. Surface this as an error instead, with a hint
+		// tailored to the mode that produced the empty result.
+		if initForceFlag && manifestExists {
+			var detail string
+			if initAllFlag {
+				detail = "no installed tools on this system to include — install something first or remove --force"
+			} else {
+				// We only reach this branch when project detection
+				// matched at least one tool (the empty-detection case
+				// returned earlier) but none of those tools are
+				// installed yet.
+				detail = "all detected tools are not installed yet — install them first, or use --all to include every installed tool regardless of detection"
+			}
+			return fmt.Errorf("--force given but %s — refusing to overwrite %s with an empty manifest", detail, outPath)
+		}
 		fmt.Fprintln(os.Stderr, "No tools to include in manifest.")
 		return nil
 	}
