@@ -1,4 +1,4 @@
-# Env ID — design
+# env — design
 
 > Status: implementation-ready. Authored autonomously per the "Let's implement" framing; user review will happen at PR time.
 
@@ -10,7 +10,7 @@ Result: when one engineer wants to reproduce another's environment ("set me up l
 
 ## Goal
 
-A single artifact ("**Env ID**") that captures enough of an environment to share, diff, and reproduce — with two encodings of the same data:
+A single artifact ("**env**") that captures enough of an environment to share, diff, and reproduce — with two encodings of the same data:
 
 - **Token form**: paste-friendly base64 string (`clim:env:v1:<gz+b64>`) for chat / quick share.
 - **File form**: human-readable YAML for git, code review, and `clim` itself.
@@ -92,11 +92,11 @@ clim:env:v1:<base64url(gzip(yaml(profile)))>
 ## Commands
 
 ```
-clim env-id                              # print token to stdout
-clim env-id --output {text,yaml,json}    # explicit form (default text = token)
-clim env-id show <token-or-file>         # decode + pretty-print
-clim env-id diff <token-or-file>         # diff vs current env
-clim env-id apply <token-or-file>        # install missing tools + set favorites + add packs (--yes to skip prompts)
+clim env                              # print token to stdout
+clim env --output {text,yaml,json}    # explicit form (default text = token)
+clim env show <token-or-file>         # decode + pretty-print
+clim env diff <token-or-file>         # diff vs current env
+clim env apply <token-or-file>        # install missing tools + set favorites + add packs (--yes to skip prompts)
 ```
 
 All commands follow CLI conventions: human text on stderr, machine output (`--output json`) on stdout.
@@ -136,19 +136,19 @@ func WriteFile(path string, p *Profile) error
 
 ## Surfaces
 
-- **CLI**: `clim env-id` umbrella + 3 subcommands (above).
-- **TUI**: Backup tab gets a row "Env ID" with [Generate] and [Apply] keys; existing favorites/packs sections gain a "Share via Env ID" hint.
+- **CLI**: `clim env` umbrella + 3 subcommands (above).
+- **TUI**: Backup tab gets a row "env" with [Generate] and [Apply] keys; existing favorites/packs sections gain a "Share via env" hint.
 - **Web view**: out of scope for v1 — document as CLI/TUI feature; web can render the token via the existing /backup page in a follow-up.
-- **Docs**: `docs/src/content/docs/reference/commands/env-id.md` (full reference).
+- **Docs**: `docs/src/content/docs/reference/commands/env.md` (full reference).
 
 ## Tests
 
 - `envid_test.go`: round-trip preserves all fields; tampered token → typed error; old schema_version → typed error; hash unchanged when only `generated_at` differs.
-- `cli env-id` tests: encode & show stub round-trip; apply uses a fake install plan so we don't shell out to PMs.
+- `cli env` tests: encode & show stub round-trip; apply uses a fake install plan so we don't shell out to PMs.
 
 ## Out of scope (deferred)
 
 - Encryption / signing (the data is non-sensitive by design; signing can land later if a verified-share use case appears).
-- Web view "Generate Env ID" button.
+- Web view "Generate env" button.
 - Diff visualization beyond a flat per-tool list.
 - Cross-machine sync server.

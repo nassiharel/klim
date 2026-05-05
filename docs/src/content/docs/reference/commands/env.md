@@ -1,9 +1,9 @@
 ---
-title: clim env-id
+title: clim env
 description: Generate, share, and apply environment fingerprints between machines.
 ---
 
-`clim env-id` captures the shape of your clim-managed environment
+`clim env` captures the shape of your clim-managed environment
 (installed tools, favorites, custom packs, available package
 managers, clim version, OS, audit/security counts) into a portable
 artifact you can share via chat or commit to git.
@@ -11,11 +11,11 @@ artifact you can share via chat or commit to git.
 ## Synopsis
 
 ```
-clim env-id [flags]                   # print compact token to stdout
-clim env-id --output yaml > file.yaml # rich YAML form
-clim env-id show <token-or-file>      # decode + pretty-print
-clim env-id diff <token-or-file>      # diff vs current environment
-clim env-id apply <token-or-file>     # reproduce locally
+clim env [flags]                   # print compact token to stdout
+clim env --output yaml > file.yaml # rich YAML form
+clim env show <token-or-file>      # decode + pretty-print
+clim env diff <token-or-file>      # diff vs current environment
+clim env apply <token-or-file>     # reproduce locally
 ```
 
 ## Privacy
@@ -43,24 +43,24 @@ A typical 30-tool env produces a token under 1 KB after gzip+base64.
 ## Examples
 
 ```bash
-# Copy the current env-id token to the clipboard (macOS).
-clim env-id | pbcopy
+# Copy the current env token to the clipboard (macOS).
+clim env | pbcopy
 
 # Save the rich YAML for a code review.
-clim env-id --output yaml > my-env.yaml
+clim env --output yaml > my-env.yaml
 
 # Inspect a coworker's token before applying it.
-clim env-id show 'clim:env:v1:H4sIAAAAAAAA...'
+clim env show 'clim:env:v1:H4sIAAAAAAAA...'
 
 # What would change if I applied this?
-clim env-id diff 'clim:env:v1:H4sIAAAAAAAA...'
+clim env diff 'clim:env:v1:H4sIAAAAAAAA...'
 
 # Reproduce locally — installs tools that aren't already there,
 # adds favorites, registers custom packs.
-clim env-id apply 'clim:env:v1:H4sIAAAAAAAA...'
+clim env apply 'clim:env:v1:H4sIAAAAAAAA...'
 
 # Apply from a YAML file with no prompts (CI mode).
-clim env-id apply ./my-env.yaml --yes
+clim env apply ./my-env.yaml --yes
 ```
 
 ## What's in a Profile
@@ -98,7 +98,7 @@ tools:                 # installed tools — name + version + source + category
 favorites: [fzf, jq, ripgrep]
 
 packs:                 # user's custom packs only (marketplace packs
-                       # are supplied by the catalog, not the env-id)
+                       # are supplied by the catalog, not the env)
   - name: my-cli
     tools: [fzf, jq, ripgrep]
 
@@ -114,7 +114,7 @@ security:              # observational; never gates apply
 
 ## Apply semantics
 
-`clim env-id apply` is best-effort:
+`clim env apply` is best-effort:
 
 1. **Tools** — runs the same install plan as `clim import`; tools
    already installed locally are skipped, tools without a

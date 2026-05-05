@@ -28,13 +28,13 @@ const (
 
 // Sentinel errors for token I/O.
 var (
-	ErrInvalidToken    = errors.New("not a valid clim env-id token")
-	ErrTokenTooLarge   = errors.New("env-id token too large")
-	ErrPayloadTooLarge = errors.New("env-id payload too large after decompression")
-	ErrUnknownVersion  = errors.New("unknown env-id schema version")
-	ErrEmptyToken      = errors.New("empty env-id token")
-	ErrCorruptToken    = errors.New("env-id token is corrupt")
-	ErrSchemaMismatch  = errors.New("env-id schema version does not match this clim build")
+	ErrInvalidToken    = errors.New("not a valid clim env token")
+	ErrTokenTooLarge   = errors.New("env token too large")
+	ErrPayloadTooLarge = errors.New("env payload too large after decompression")
+	ErrUnknownVersion  = errors.New("unknown env schema version")
+	ErrEmptyToken      = errors.New("empty env token")
+	ErrCorruptToken    = errors.New("env token is corrupt")
+	ErrSchemaMismatch  = errors.New("env schema version does not match this clim build")
 )
 
 // Encode serializes p into a compact base64 token.

@@ -153,68 +153,68 @@ func equalStringSlices(a, b []string) bool {
 }
 
 func TestComputeHash_DoesNotMutateInput(t *testing.T) {
-// Hashing should be a pure function. canonicalize sorts and
-// rewrites slices on its receiver, so without the deepClone
-// guard ComputeHash would re-order the caller's Tools list.
-p := &Profile{
-SchemaVersion:   SchemaVersion,
-PackageManagers: map[string]bool{"brew": true},
-// Intentionally out-of-order to make any in-place sort visible.
-Tools:     []Tool{{Name: "zoxide"}, {Name: "fzf"}, {Name: "bat"}},
-Favorites: []string{"zoxide", "fzf", "bat", "fzf"}, // duplicate too
-Packs: []Pack{
-{Name: "b-pack", Tools: []string{"y", "x"}},
-{Name: "a-pack", Tools: []string{"y", "x"}},
-},
-}
-beforeTools := append([]Tool(nil), p.Tools...)
-beforeFavs := append([]string(nil), p.Favorites...)
-beforePacks := append([]Pack(nil), p.Packs...)
-beforePackTools := make([][]string, len(p.Packs))
-for i, pk := range p.Packs {
-beforePackTools[i] = append([]string(nil), pk.Tools...)
-}
+	// Hashing should be a pure function. canonicalize sorts and
+	// rewrites slices on its receiver, so without the deepClone
+	// guard ComputeHash would re-order the caller's Tools list.
+	p := &Profile{
+		SchemaVersion:   SchemaVersion,
+		PackageManagers: map[string]bool{"brew": true},
+		// Intentionally out-of-order to make any in-place sort visible.
+		Tools:     []Tool{{Name: "zoxide"}, {Name: "fzf"}, {Name: "bat"}},
+		Favorites: []string{"zoxide", "fzf", "bat", "fzf"}, // duplicate too
+		Packs: []Pack{
+			{Name: "b-pack", Tools: []string{"y", "x"}},
+			{Name: "a-pack", Tools: []string{"y", "x"}},
+		},
+	}
+	beforeTools := append([]Tool(nil), p.Tools...)
+	beforeFavs := append([]string(nil), p.Favorites...)
+	beforePacks := append([]Pack(nil), p.Packs...)
+	beforePackTools := make([][]string, len(p.Packs))
+	for i, pk := range p.Packs {
+		beforePackTools[i] = append([]string(nil), pk.Tools...)
+	}
 
-_ = ComputeHash(p)
+	_ = ComputeHash(p)
 
-if !equalTools(p.Tools, beforeTools) {
-t.Errorf("ComputeHash mutated Tools: got %+v, want %+v", p.Tools, beforeTools)
-}
-if !equalStringSlices(p.Favorites, beforeFavs) {
-t.Errorf("ComputeHash mutated Favorites: got %v, want %v", p.Favorites, beforeFavs)
-}
-for i := range beforePacks {
-if p.Packs[i].Name != beforePacks[i].Name {
-t.Errorf("ComputeHash mutated Packs order: got %q at %d, want %q", p.Packs[i].Name, i, beforePacks[i].Name)
-}
-if !equalStringSlices(p.Packs[i].Tools, beforePackTools[i]) {
-t.Errorf("ComputeHash mutated Pack[%d].Tools: got %v, want %v", i, p.Packs[i].Tools, beforePackTools[i])
-}
-}
+	if !equalTools(p.Tools, beforeTools) {
+		t.Errorf("ComputeHash mutated Tools: got %+v, want %+v", p.Tools, beforeTools)
+	}
+	if !equalStringSlices(p.Favorites, beforeFavs) {
+		t.Errorf("ComputeHash mutated Favorites: got %v, want %v", p.Favorites, beforeFavs)
+	}
+	for i := range beforePacks {
+		if p.Packs[i].Name != beforePacks[i].Name {
+			t.Errorf("ComputeHash mutated Packs order: got %q at %d, want %q", p.Packs[i].Name, i, beforePacks[i].Name)
+		}
+		if !equalStringSlices(p.Packs[i].Tools, beforePackTools[i]) {
+			t.Errorf("ComputeHash mutated Pack[%d].Tools: got %v, want %v", i, p.Packs[i].Tools, beforePackTools[i])
+		}
+	}
 }
 
 func TestComputeHash_DedupesDuplicateTools(t *testing.T) {
-a := &Profile{
-SchemaVersion: SchemaVersion,
-Tools:         []Tool{{Name: "fzf"}},
-}
-b := &Profile{
-SchemaVersion: SchemaVersion,
-Tools:         []Tool{{Name: "fzf"}, {Name: "fzf"}},
-}
-if ComputeHash(a) != ComputeHash(b) {
-t.Errorf("hash should be stable across duplicate Tool entries; %q != %q", ComputeHash(a), ComputeHash(b))
-}
+	a := &Profile{
+		SchemaVersion: SchemaVersion,
+		Tools:         []Tool{{Name: "fzf"}},
+	}
+	b := &Profile{
+		SchemaVersion: SchemaVersion,
+		Tools:         []Tool{{Name: "fzf"}, {Name: "fzf"}},
+	}
+	if ComputeHash(a) != ComputeHash(b) {
+		t.Errorf("hash should be stable across duplicate Tool entries; %q != %q", ComputeHash(a), ComputeHash(b))
+	}
 }
 
 func equalTools(a, b []Tool) bool {
-if len(a) != len(b) {
-return false
-}
-for i := range a {
-if a[i] != b[i] {
-return false
-}
-}
-return true
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

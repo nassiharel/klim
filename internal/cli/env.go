@@ -17,18 +17,18 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 )
 
-// envIDCmd captures and reproduces a clim-managed environment.
+// envCmd captures and reproduces a clim-managed environment.
 //
 // The same payload has two encodings:
-//   - clim env-id (no args)  → compact base64 token for chat
-//   - clim env-id --output yaml → human-readable YAML for git
+//   - clim env (no args)  → compact base64 token for chat
+//   - clim env --output yaml → human-readable YAML for git
 //
-// Receivers can decode with `clim env-id show <token-or-file>` and
-// reproduce with `clim env-id apply <token-or-file>`.
-var envIDCmd = &cobra.Command{
-	Use:   "env-id [flags]",
+// Receivers can decode with `clim env show <token-or-file>` and
+// reproduce with `clim env apply <token-or-file>`.
+var envCmd = &cobra.Command{
+	Use:   "env [flags]",
 	Short: "Generate and apply environment fingerprints",
-	Long: `clim env-id captures the shape of your clim-managed environment
+	Long: `clim env captures the shape of your clim-managed environment
 (installed tools, favorites, custom packs, available package managers,
 clim version, OS, audit/security counts) into a portable artifact you
 can share via chat or commit to git.
@@ -38,32 +38,32 @@ hostname, username, paths, or environment variables are captured.
 
 Examples:
   # Print the token for the current environment (paste into chat).
-  clim env-id
+  clim env
 
   # Write the rich YAML form to a file.
-  clim env-id --output yaml > my-env.yaml
+  clim env --output yaml > my-env.yaml
 
   # Decode someone else's token without applying it.
-  clim env-id show 'clim:env:v1:H4sIAAAAAA...'
+  clim env show 'clim:env:v1:H4sIAAAAAA...'
 
   # Diff a coworker's env against yours.
-  clim env-id diff 'clim:env:v1:H4sIAAAAAA...'
+  clim env diff 'clim:env:v1:H4sIAAAAAA...'
 
   # Reproduce the env locally — installs missing tools, sets favorites,
   # registers custom packs. Cross-OS gaps are reported, never errors.
-  clim env-id apply 'clim:env:v1:H4sIAAAAAA...'`,
+  clim env apply 'clim:env:v1:H4sIAAAAAA...'`,
 	RunE: runEnvIDPrint,
 }
 
 var (
-	envIDOutputFmt func() (OutputFormat, error)
+	envOutputFmt func() (OutputFormat, error)
 )
 
 func init() {
-	envIDOutputFmt = addOutputFlag(envIDCmd, OutputText, OutputJSON, OutputYAML)
-	envIDCmd.AddCommand(envIDShowCmd)
-	envIDCmd.AddCommand(envIDDiffCmd)
-	envIDCmd.AddCommand(envIDApplyCmd)
+	envOutputFmt = addOutputFlag(envCmd, OutputText, OutputJSON, OutputYAML)
+	envCmd.AddCommand(envShowCmd)
+	envCmd.AddCommand(envDiffCmd)
+	envCmd.AddCommand(envApplyCmd)
 }
 
 // runEnvIDPrint generates a Profile from the live system and emits it
@@ -76,7 +76,7 @@ func init() {
 //
 // Human progress lines go to stderr per docs/cli-conventions.md.
 func runEnvIDPrint(cmd *cobra.Command, _ []string) error {
-	out, err := envIDOutputFmt()
+	out, err := envOutputFmt()
 	if err != nil {
 		return err
 	}
@@ -115,10 +115,10 @@ func runEnvIDPrint(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// envIDShowCmd pretty-prints a profile for inspection.
-var envIDShowCmd = &cobra.Command{
+// envShowCmd pretty-prints a profile for inspection.
+var envShowCmd = &cobra.Command{
 	Use:   "show <token-or-file>",
-	Short: "Pretty-print an env-id token or file",
+	Short: "Pretty-print an env token or file",
 	Long: `Decode a clim:env:v1:... token (or read a YAML file) and print
 its contents. No installs, no side effects — handy for previewing a
 coworker's env before applying it.`,
@@ -135,11 +135,11 @@ func runEnvIDShow(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-// envIDDiffCmd compares a remote profile against the local one.
-var envIDDiffCmd = &cobra.Command{
+// envDiffCmd compares a remote profile against the local one.
+var envDiffCmd = &cobra.Command{
 	Use:   "diff <token-or-file>",
-	Short: "Compare another env-id against the current environment",
-	Long: `Decode an env-id and report what would change if you applied
+	Short: "Compare another env against the current environment",
+	Long: `Decode an env and report what would change if you applied
 it: tools they have that you don't, tools you have that they don't,
 version drift, and per-section deltas (favorites, custom packs).`,
 	Args: cobra.ExactArgs(1),
@@ -161,12 +161,12 @@ func runEnvIDDiff(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// envIDApplyCmd reproduces a remote profile locally.
-var envIDApplyCmd = &cobra.Command{
+// envApplyCmd reproduces a remote profile locally.
+var envApplyCmd = &cobra.Command{
 	Use:   "apply <token-or-file>",
-	Short: "Reproduce another env-id locally",
+	Short: "Reproduce another env locally",
 	Long: `Install missing tools, set favorites, and register custom
-packs from a remote env-id. Cross-OS / cross-PM gaps (e.g. apt-only
+packs from a remote env. Cross-OS / cross-PM gaps (e.g. apt-only
 tools on Windows) surface in the report as 'skipped' — they're never
 errors. Use --yes to skip the install confirmation prompt.`,
 	Args: cobra.ExactArgs(1),
@@ -174,7 +174,7 @@ errors. Use --yes to skip the install confirmation prompt.`,
 }
 
 func init() {
-	envIDApplyCmd.Flags().BoolVar(&yesFlag, "yes", false, "Skip confirmation prompts")
+	envApplyCmd.Flags().BoolVar(&yesFlag, "yes", false, "Skip confirmation prompts")
 }
 
 func runEnvIDApply(cmd *cobra.Command, args []string) error {
@@ -183,7 +183,7 @@ func runEnvIDApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "\n──── Applying env-id %s ────\n\n", p.Hash)
+	fmt.Fprintf(os.Stderr, "\n──── Applying env %s ────\n\n", p.Hash)
 	fmt.Fprintf(os.Stderr, "  Source clim:    %s\n", p.Clim.Version)
 	fmt.Fprintf(os.Stderr, "  Source OS:      %s/%s\n", p.OS.GOOS, p.OS.Arch)
 	fmt.Fprintf(os.Stderr, "  Tools:          %d\n", len(p.Tools))
@@ -207,13 +207,13 @@ func runEnvIDApply(cmd *cobra.Command, args []string) error {
 
 	// 3. Custom packs — additive: existing packs with the same name
 	// are preserved (the user must explicitly delete them first to
-	// replace). Documented in env-id.md so this isn't surprising.
+	// replace). Documented in env.md so this isn't surprising.
 	if err := applyPacks(p.Packs); err != nil {
 		fmt.Fprintf(os.Stderr, "  ⚠ packs: %v\n", err)
 	}
 
 	if failed > 0 {
-		return &PartialFailureError{Op: "env-id apply", Succeeded: len(p.Tools) - failed, Failed: failed}
+		return &PartialFailureError{Op: "env apply", Succeeded: len(p.Tools) - failed, Failed: failed}
 	}
 	return nil
 }
@@ -231,7 +231,7 @@ func loadProfile(arg string) (*envid.Profile, error) {
 	if strings.HasPrefix(strings.TrimSpace(arg), "clim:env:") {
 		p, err := envid.Decode(arg)
 		if err != nil && isUserCausedDecodeError(err) {
-			return nil, usageErrorf("invalid env-id token: %v", err)
+			return nil, usageErrorf("invalid env token: %v", err)
 		}
 		return p, err
 	}
@@ -261,7 +261,7 @@ func isUserCausedDecodeError(err error) bool {
 }
 
 func renderProfileText(w *os.File, p *envid.Profile) {
-	_, _ = fmt.Fprintf(w, "\n──── Env ID %s ────\n\n", p.Hash)
+	_, _ = fmt.Fprintf(w, "\n──── env %s ────\n\n", p.Hash)
 	_, _ = fmt.Fprintf(w, "  clim version:    %s\n", p.Clim.Version)
 	if p.Clim.Commit != "" {
 		_, _ = fmt.Fprintf(w, "  clim commit:     %s\n", p.Clim.Commit)
@@ -318,7 +318,7 @@ func renderProfileText(w *os.File, p *envid.Profile) {
 }
 
 func renderProfileDiff(w *os.File, local, remote *envid.Profile) {
-	_, _ = fmt.Fprintf(w, "\n──── env-id diff ────\n")
+	_, _ = fmt.Fprintf(w, "\n──── env diff ────\n")
 	_, _ = fmt.Fprintf(w, "  local:  %s   tools=%d favorites=%d packs=%d\n",
 		local.Hash, len(local.Tools), len(local.Favorites), len(local.Packs))
 	_, _ = fmt.Fprintf(w, "  remote: %s   tools=%d favorites=%d packs=%d\n",
@@ -329,8 +329,8 @@ func renderProfileDiff(w *os.File, local, remote *envid.Profile) {
 		return
 	}
 
-	localTools := envIDToolMap(local.Tools)
-	remoteTools := envIDToolMap(remote.Tools)
+	localTools := envToolMap(local.Tools)
+	remoteTools := envToolMap(remote.Tools)
 	var onlyLocal, onlyRemote, drifted []string
 	for n, lt := range localTools {
 		rt, ok := remoteTools[n]
@@ -378,7 +378,7 @@ func renderProfileDiff(w *os.File, local, remote *envid.Profile) {
 	_, _ = fmt.Fprintln(w)
 }
 
-func envIDToolMap(tools []envid.Tool) map[string]envid.Tool {
+func envToolMap(tools []envid.Tool) map[string]envid.Tool {
 	out := make(map[string]envid.Tool, len(tools))
 	for _, t := range tools {
 		out[t.Name] = t
@@ -433,7 +433,7 @@ func joinOrDash(s []string) string {
 }
 
 // applyTools delegates to the existing import install plan so we
-// don't duplicate the install logic. We convert the env-id Profile's
+// don't duplicate the install logic. We convert the env Profile's
 // tool list into a manifest.Manifest and reuse buildImportPlan.
 //
 // Returns the count of failed installs (so the caller can surface
@@ -479,7 +479,7 @@ func applyTools(cmd *cobra.Command, p *envid.Profile) (int, error) {
 	return failed, nil
 }
 
-// applyFavorites merges the env-id's favorites into the local list.
+// applyFavorites merges the env's favorites into the local list.
 // Names are trimmed of whitespace and empties dropped — applying a
 // hand-edited file/token with " jq " or "" entries shouldn't persist
 // invalid favorite names. The merge is additive: existing favorites
@@ -506,11 +506,11 @@ func applyFavorites(names []string) error {
 		}
 		added++
 	}
-	fmt.Fprintf(os.Stderr, "  Favorites: %d added (of %d in env-id)\n", added, len(names))
+	fmt.Fprintf(os.Stderr, "  Favorites: %d added (of %d in env)\n", added, len(names))
 	return nil
 }
 
-// applyPacks adds env-id custom packs that don't already exist
+// applyPacks adds env custom packs that don't already exist
 // locally. Existing packs with the same name are preserved (the user
 // must explicitly delete them first to replace).
 //
@@ -544,6 +544,6 @@ func applyPacks(packs []envid.Pack) error {
 		existingSet[strings.ToLower(p.Name)] = struct{}{}
 		added++
 	}
-	fmt.Fprintf(os.Stderr, "  Custom packs: %d added (of %d in env-id)\n", added, len(packs))
+	fmt.Fprintf(os.Stderr, "  Custom packs: %d added (of %d in env)\n", added, len(packs))
 	return nil
 }
