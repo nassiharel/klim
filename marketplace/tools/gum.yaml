@@ -1,0 +1,15 @@
+name: gum
+display_name: gum
+category: CLI
+tags:
+    - cli
+    - tui
+    - charm
+binary_names:
+    - gum
+packages:
+    winget: charmbracelet.gum
+    scoop: gum
+    choco: gum
+    brew: gum
+github: charmbracelet/gum

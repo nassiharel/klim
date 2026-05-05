@@ -1,0 +1,15 @@
+name: ngrok
+display_name: ngrok
+category: Network
+tags:
+    - tunneling
+    - cli
+binary_names:
+    - ngrok
+packages:
+    winget: Ngrok.Ngrok
+    scoop: ngrok
+    choco: ngrok
+    brew: ngrok
+    snap: ngrok
+github: inconshreveable/ngrok

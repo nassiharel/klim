@@ -1,0 +1,15 @@
+name: tflint
+display_name: TFLint
+category: IaC
+tags:
+    - terraform
+    - linter
+    - cli
+binary_names:
+    - tflint
+packages:
+    winget: terraform-linters.tflint
+    scoop: tflint
+    choco: tflint
+    brew: tflint
+github: terraform-linters/tflint

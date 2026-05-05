@@ -1,0 +1,14 @@
+name: dive
+display_name: dive
+category: Containers
+tags:
+    - docker
+    - cli
+binary_names:
+    - dive
+packages:
+    winget: wagoodman.dive
+    scoop: dive
+    choco: dive
+    brew: dive
+github: wagoodman/dive

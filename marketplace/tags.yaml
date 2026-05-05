@@ -22,6 +22,7 @@ tags:
   - observability
   - security
   - service-mesh
+  - terraform
   - vcs
 
   # --- Language ---
@@ -52,6 +53,7 @@ tags:
   - debugger
   - dev-workflow
   - disk-usage
+  - docs
   - encryption
   - file-transfer
   - http-client
@@ -69,7 +71,9 @@ tags:
   - search
   - secrets
   - static-analysis
+  - sync
   - task-runner
+  - tunneling
   - version-manager
 
   # --- UX ---
@@ -87,6 +91,7 @@ tags:
   # --- Vendor ---
   - amazon
   - anthropic
+  - charm
   - github
   - google
   - hashicorp
