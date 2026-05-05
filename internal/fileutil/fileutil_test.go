@@ -303,7 +303,7 @@ func TestAtomicWritePropagatesLstatErrors(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX-specific permission semantics")
 	}
-	if os.Geteuid() == 0 {
+	if runningAsRoot() {
 		t.Skip("root bypasses directory permission bits")
 	}
 	dir := t.TempDir()

@@ -27,11 +27,15 @@ import (
 //
 // All temp-file failures propagate to the caller. AtomicWrite never
 // silently falls back to a non-atomic write — every current caller
-// (catalog cache, scan cache, compliance cache, snapshot writer,
-// trail log) relies on the atomicity guarantee for shared state with
-// concurrent readers, and a quiet fallback would expose partially-
-// written payloads exactly in the failure modes where atomicity
-// matters.
+// relies on the atomicity guarantee for shared state with concurrent
+// readers, and a quiet fallback would expose partially-written
+// payloads exactly in the failure modes where atomicity matters.
+// Current callers: catalog cache (internal/catalog), scan cache
+// (internal/scancache, internal/service), compliance cache
+// (internal/compliance), snapshot writer (internal/snapshot), trail
+// log + objects + HEAD (internal/trail), favorites + custom-packs +
+// config YAML files (via fileutil.WriteYAML), and the TUI export /
+// favorites-export / my-packs-export writers (internal/tui).
 //
 // Permission preservation. When the target already exists, AtomicWrite
 // reuses its current mode bits and ignores the supplied perm — matches
