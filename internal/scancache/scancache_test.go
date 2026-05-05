@@ -246,3 +246,41 @@ func TestApplyRecoversViaPATHWhenCachedPathStale(t *testing.T) {
 		t.Errorf("expected path to be re-resolved, still got stale %q", got[0].Instances[0].Path)
 	}
 }
+
+func TestApplyRecoveryDedupes(t *testing.T) {
+	// Two stale cached instances must not both append the same
+	// recovered binary — the recovery should run once per tool and
+	// the recovered path is deduped in the per-tool seen-set.
+	withTempCache(t)
+
+	dir := t.TempDir()
+	binName := "rec-tool"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	realPath := filepath.Join(dir, binName)
+	if err := os.WriteFile(realPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	stale1 := filepath.Join(dir, "old-1")
+	stale2 := filepath.Join(dir, "old-2")
+	catalog := []registry.Tool{{
+		Name:        "rec-tool",
+		BinaryNames: []string{strings.TrimSuffix(binName, ".exe")},
+	}}
+	entries := map[string]Entry{
+		"rec-tool": {
+			Instances: []instanceYAML{
+				{Path: stale1, Version: "1.0", Source: "brew"},
+				{Path: stale2, Version: "1.0", Source: "winget"},
+			},
+		},
+	}
+
+	got := Apply(catalog, entries)
+	if len(got[0].Instances) != 1 {
+		t.Fatalf("expected single recovered instance, got %d: %+v", len(got[0].Instances), got[0].Instances)
+	}
+}

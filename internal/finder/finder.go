@@ -291,6 +291,26 @@ func binaryCandidateNames(name string) []string {
 	return []string{name}
 }
 
+// PathDirectories returns the deduplicated list of directories the
+// finder will scan on this OS. Equivalent to splitting $PATH but
+// also merging Windows registry PATH entries that the current
+// process may not have inherited (e.g. winget portable installs
+// that update PATH after launch). Exported so scancache (and other
+// fast-path callers) can consult the same view of PATH the finder
+// uses.
+func PathDirectories() []string {
+	return pathDirectories()
+}
+
+// DetectSource maps a resolved binary path to the install source
+// clim believes owns it (winget, brew, apt, scoop, choco, npm,
+// manual, …). Exported so callers re-resolving a path outside the
+// main scan loop (notably scancache.Apply when recovering a stale
+// cached entry via PATH lookup) classify the source the same way.
+func DetectSource(path string) registry.InstallSource {
+	return detectSource(path)
+}
+
 func pathDirectories() []string {
 	// Start with the process PATH, then merge any directories from the
 	// Windows registry that the current process hasn't picked up yet

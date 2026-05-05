@@ -69,14 +69,15 @@ func hintFromError(args []string, err error) string {
 	return actionFailureHint(args, exitErr.ExitCode())
 }
 
-// errMsgWithHint is intentionally unused now: prior versions joined
-// err.Error() with the multi-line hint via "\n", but pack/backup
-// renderers treat errMsg as a single-line table cell and the
-// embedded newline broke alignment. Callers now write err.Error()
-// into errMsg and the multi-line hint into a separate item.hint
-// field. The function is kept so external callers (and tests below)
-// that want the joined form still have access; in-tree callers all
-// route through hintFromError directly.
+// errMsgWithHint joins err.Error() and any registered hint with a
+// newline. Currently used only by tests; the in-tree pack/backup
+// flows write err.Error() to errMsg and the hint to a separate
+// item.hint field instead, because errMsg ends up in a fixed-width
+// table cell that can't render multi-line text. Kept around as a
+// small documented unit so tests cover the unwrapping logic in
+// hintFromError; if the table-cell constraint ever loosens (e.g.
+// a multi-line error column), production callers can adopt this
+// helper directly.
 func errMsgWithHint(args []string, err error) string {
 	if err == nil {
 		return ""

@@ -19,11 +19,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/clim/internal/finder"
 	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
 )
@@ -146,11 +148,17 @@ func Load() (map[string]Entry, time.Time, error) {
 // is the correct behaviour for newly-added catalog entries.
 //
 // For each cached instance we verify the recorded path still exists.
-// If it doesn't, we try to recover the instance via exec.LookPath on
+// If it doesn't, we try to recover the instance via a PATH search of
 // the tool's binary names — that handles the common "external
 // upgrade rotated the versioned dir under brew/winget" pattern where
 // the tool is still installed and on PATH but at a different
-// resolved path. Only when both checks fail is the instance dropped.
+// resolved path. Recovery uses finder.PathDirectories() so we see
+// the same merged PATH (process + Windows registry) the finder
+// would see during a full scan, and finder.DetectSource() so a
+// recovered path gets re-classified rather than inheriting a now-
+// stale cached source. Recovered paths are deduped within the
+// per-tool loop so multiple stale instances all pointing at the
+// same live binary collapse into one.
 //
 // Without this guard a tool uninstalled outside clim's own install/
 // upgrade/remove flow would either appear "installed" forever
@@ -168,8 +176,16 @@ func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 			continue
 		}
 		insts := make([]registry.Instance, 0, len(entry.Instances))
+		seenPaths := make(map[string]struct{}, len(entry.Instances))
+		recoveryAttempted := false
+		var recoveredPath string
+		var recoveredOK bool
 		for _, e := range entry.Instances {
 			if pathExists(e.Path) {
+				if _, dup := seenPaths[e.Path]; dup {
+					continue
+				}
+				seenPaths[e.Path] = struct{}{}
 				insts = append(insts, registry.Instance{
 					Path:    e.Path,
 					Version: e.Version,
@@ -177,16 +193,27 @@ func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 				})
 				continue
 			}
-			// Stale cached path — try to recover via PATH lookup
-			// before giving up. Handles brew/winget version-dir
-			// rotation where the tool is still installed.
-			if recovered, ok := lookupOnPATH(tools[i].BinaryNames); ok {
-				insts = append(insts, registry.Instance{
-					Path:    recovered,
-					Version: e.Version, // best-effort; next full scan refreshes
-					Source:  registry.InstallSource(e.Source),
-				})
+			// Stale cached path. Try to recover via PATH lookup —
+			// once per tool — so multiple stale instances don't
+			// each append the same recovered binary. The recovered
+			// instance's source comes from a fresh DetectSource on
+			// the resolved path, not the stale cached source.
+			if !recoveryAttempted {
+				recoveredPath, recoveredOK = lookupOnPATH(tools[i].BinaryNames)
+				recoveryAttempted = true
 			}
+			if !recoveredOK {
+				continue
+			}
+			if _, dup := seenPaths[recoveredPath]; dup {
+				continue
+			}
+			seenPaths[recoveredPath] = struct{}{}
+			insts = append(insts, registry.Instance{
+				Path:    recoveredPath,
+				Version: e.Version, // best-effort; next full scan refreshes
+				Source:  finder.DetectSource(recoveredPath),
+			})
 		}
 		tools[i].Instances = insts
 	}
@@ -206,10 +233,55 @@ func pathExists(path string) bool {
 }
 
 // lookupOnPATH returns the resolved path of the first binary name
-// found on $PATH, or ("", false) when none are present. Used by
-// Apply as a fallback when the cached path is stale (e.g. external
-// brew upgrade rotated the versioned directory).
+// found on the same merged PATH the finder uses, or ("", false)
+// when none are present. Used by Apply as a fallback when the
+// cached path is stale (e.g. external brew upgrade rotated the
+// versioned directory).
+//
+// Walking finder.PathDirectories() rather than relying on
+// exec.LookPath alone matters on Windows: registry PATH entries
+// that winget/scoop installs add post-launch are visible through
+// the finder helper but not through the inherited process PATH.
+// Without this, the cache fast path would drop a still-installed
+// tool whose dir was added to the registry PATH after the launching
+// shell started, even though a fresh scan would find it.
 func lookupOnPATH(binaryNames []string) (string, bool) {
+	if len(binaryNames) == 0 {
+		return "", false
+	}
+	dirs := finder.PathDirectories()
+	if len(dirs) == 0 {
+		// Fall back to exec.LookPath so we still recover when the
+		// finder helper produces an empty list (e.g. minimal test
+		// environments).
+		return lookupViaExec(binaryNames)
+	}
+	exts := []string{""}
+	if runtime.GOOS == "windows" {
+		// PATHEXT extensions used by Windows. Mirrors the finder's
+		// candidate-name expansion for executable suffixes.
+		exts = []string{".exe", ".cmd", ".bat", ""}
+	}
+	for _, name := range binaryNames {
+		for _, dir := range dirs {
+			for _, ext := range exts {
+				candidate := filepath.Join(dir, name+ext)
+				info, err := os.Stat(candidate)
+				if err != nil || info.IsDir() {
+					continue
+				}
+				resolved, err := filepath.EvalSymlinks(candidate)
+				if err != nil || resolved == "" {
+					resolved = candidate
+				}
+				return resolved, true
+			}
+		}
+	}
+	return "", false
+}
+
+func lookupViaExec(binaryNames []string) (string, bool) {
 	for _, name := range binaryNames {
 		path, err := exec.LookPath(name)
 		if err != nil {
