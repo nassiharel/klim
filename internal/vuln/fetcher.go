@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -211,6 +212,16 @@ func fetch(ctx context.Context, looker Looker, tools []registry.Tool, sourceKey 
 			for _, v := range merged {
 				vlist = append(vlist, v)
 			}
+			// Map iteration is nondeterministic — sort by severity
+			// (high first), then by ID, so CLI/TUI/web output is
+			// stable across runs and tests can assert ordering.
+			sort.SliceStable(vlist, func(a, b int) bool {
+				ra, rb := vlist[a].Severity.Rank(), vlist[b].Severity.Rank()
+				if ra != rb {
+					return ra > rb
+				}
+				return vlist[a].ID < vlist[b].ID
+			})
 			primary := p.tool.PrimaryInstance()
 			ver := ""
 			if primary != nil {

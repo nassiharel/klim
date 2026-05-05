@@ -255,10 +255,12 @@ func computeInfoSecurity(t registry.Tool, allTools []registry.Tool) *infoSecurit
 		return nil
 	}
 	findings, _ := audit.Analyze(allTools)
-	// Read whatever vuln cache we have for the default endpoint —
-	// if compliance.url is configured, the user can see fresh data
-	// via `clim security vuln`. We pass empty source key so we hit
-	// the unkeyed default cache path.
+	// Read the vuln cache passively — `clim info` never makes a
+	// network call. The cache key (resolved via ResolveVulnSourceKey)
+	// matches whatever URL `clim security vuln` writes under, so the
+	// CLI, web view, and TUI all see the same data. If the cache is
+	// empty, the verdict still works (just with no vuln signal) and
+	// the caller renders a "run clim security vuln" hint.
 	var match *vuln.Match
 	loaded := false
 	if rep, ok := vuln.ReadCache(ResolveVulnSourceKey()); ok {

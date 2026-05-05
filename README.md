@@ -68,8 +68,8 @@ clim analyzes your installed tools and suggests related ones you might like, ran
 ### ⚙️ Built-in Config Editor
 Tune clim from inside the TUI — log level, refresh interval, concurrency, default tab, sidebar position. Toggle, cycle, type, save. No need to find and edit a YAML file.
 
-### 🩺 Environment Doctor
-Run `clim security health` to diagnose your environment — detects duplicate and broken PATH entries, conflicting tool versions (multiple installations), missing package managers, stale caches, and unresolved versions. JSON output for CI with `--json`. TUI Security tab shows color-coded issues with fix suggestions.
+### 🩺 Environment Health
+Run `clim security health` to diagnose your environment — detects duplicate and broken PATH entries, PATH-shadowing where a user-writable directory shadows a system tool, conflicting tool versions (multiple installations), missing package managers, stale caches, and unresolved versions. JSON output for CI with `--output json`. TUI Security tab shows color-coded issues with fix suggestions.
 
 ### 🐚 Shell Integration
 Native tab completion for bash, zsh, fish, and PowerShell via `clim shell completion`. Shell hooks via `clim shell hook` that auto-check `.clim.yaml` when you `cd` into a project — like nvm/direnv for your entire toolchain.

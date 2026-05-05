@@ -35,7 +35,7 @@ func ResolveVulnSourceKey() string {
 //
 // Layout:
 //
-//	clim security             — runs every check + aggregate summary
+//	clim security             — quick aggregate summary (audit + vuln)
 //	clim security health      — environment health (PATH, multi-installs, …)
 //	clim security audit       — audit installed tools (archived/stale/license)
 //	clim security vuln        — CVE/GHSA lookup against installed tools
@@ -47,9 +47,9 @@ var securityCmd = &cobra.Command{
 	Use:   "security",
 	Short: "Security checks: health, audit, vulnerabilities, compliance",
 	Long: `clim security is the umbrella for every security-related
-check clim performs. Run with no arguments to execute every subcommand
-and emit an aggregate summary, or pick a specific subcommand for
-focused output.
+check clim performs. Run with no arguments to print a quick summary
+across the cheap subset (audit + vuln); for full output of any one
+check, run the matching subcommand directly.
 
 Subcommands:
   health      Environment health (PATH issues, multi-installs, missing PMs)
@@ -57,9 +57,10 @@ Subcommands:
   vuln        Look up known CVEs/GHSAs against installed versions
   compliance  Validate installed tools against a compliance policy
 
-Bare invocation: 'clim security' runs every subcommand and exits with
-the worst severity encountered (0 = clean, 1 = findings, 3 = a
-subcommand failed entirely).`,
+Exit codes (bare 'clim security'):
+  0  No audit warnings, no vulns
+  1  Vuln lookup hard-failed (network, OSV down, etc.)
+  3  Audit warnings or vulnerability findings present`,
 	GroupID: "health",
 	RunE:    runSecurityAggregate,
 }
@@ -91,22 +92,19 @@ var vulnCmd = &cobra.Command{
 	Short: "Scan installed tools for known vulnerabilities (CVEs / GHSAs)",
 	Long: `Query an OSV-compatible endpoint (default: api.osv.dev) for
 vulnerabilities affecting the installed version of every detected
-tool. Results are cached locally — see compliance.url's behaviour for
-the per-source caching pattern.
+tool. Results are cached locally per-source so switching vuln.url to
+a different mirror doesn't reuse another source's data.
 
-Tools are mapped to OSV ecosystems via their package IDs:
-  npm       — Packages.NPM
-  Homebrew  — Packages.Brew
-  GitHub    — registry GitHubSlug (last-resort match)
-
-Tools without any of these mappings are listed under "skipped" so
-coverage gaps are visible.
+Coverage today is npm only — OSV.dev rejects ecosystem="Homebrew" and
+ecosystem="GitHub" with HTTP 400, so brew-only tools and tools known
+only by GitHub slug land in the "skipped" list with a clear reason.
+Adding PyPI/Go/crates is unblocked by future catalog metadata work.
 
 Exit codes:
-  0  No findings, OR --fail-on not set
-  1  Findings exist (only when --fail-on is set and threshold met)
-  2  Usage error
-  3  All tool queries failed`,
+  0  No findings, OR --fail-on not set / threshold not met
+  2  Usage error (bad --fail-on / --output value)
+  3  Findings present at or above --fail-on threshold,
+     OR vuln lookup hard-failed (network, OSV down, etc.)`,
 	RunE: runVuln,
 }
 
@@ -177,9 +175,25 @@ func runVuln(cmd *cobra.Command, args []string) error {
 	}
 
 	if threshold != vuln.SeverityUnknown && reportTriggers(report, threshold) {
-		// Use a sentinel error that exits with code 1 (PartialFailure
-		// would be 3; here we want a "findings present" signal).
-		return fmt.Errorf("vulnerability findings at or above %s", strings.ToUpper(string(threshold)))
+		// Findings at or above threshold → ExitPartialFailure (3):
+		// the scan succeeded as a whole, but some items failed the
+		// gate. This matches the documented exit code contract and
+		// makes CI gating predictable across `clim security vuln`
+		// and `clim security`.
+		risky := 0
+		clean := 0
+		for _, m := range report.Matches {
+			if len(m.Vulnerabilities) > 0 {
+				risky++
+			} else {
+				clean++
+			}
+		}
+		return &PartialFailureError{
+			Op:        "vulnerability scan",
+			Succeeded: clean,
+			Failed:    risky,
+		}
 	}
 	return nil
 }
@@ -314,26 +328,20 @@ func runSecurityAggregate(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintln(os.Stderr, "  health:   run `clim security health` for full output")
 	fmt.Fprintln(os.Stderr, "  compliance: run `clim security compliance` for policy verdict")
 
-	// Aggregate exit code:
-	//   - vuln lookup hard failure: return error so CI fails closed
+	// Aggregate exit code (PartialFailure = 3, the documented contract):
+	//   - vuln lookup hard failure → ExitRuntime (1) so CI fails closed
 	//     (a transient OSV outage shouldn't claim "no vulns").
-	//   - any vulns OR audit warnings: non-nil error so CI gates
-	//     correctly. Audit *infos* alone are not gating — they're
-	//     observational.
-	//
-	// Use a clean error type that prints to stderr without the
-	// usual "Error:" prefix, since we already printed a summary.
+	//   - any vulns OR audit warnings → PartialFailure (3). Audit
+	//     *infos* alone are observational and don't gate.
 	if vulnErr != nil {
-		return cleanError(fmt.Sprintf("vuln lookup failed: %v", vulnErr))
+		return fmt.Errorf("vuln lookup failed: %w", vulnErr)
 	}
 	if risky > 0 || auditWarn > 0 {
-		return cleanError(fmt.Sprintf("%d vuln, %d audit warning(s) — see subcommands for detail", risky, auditWarn))
+		return &PartialFailureError{
+			Op:        "security",
+			Succeeded: 0, // we don't track per-check pass count here
+			Failed:    risky + auditWarn,
+		}
 	}
 	return nil
 }
-
-// cleanError is a sentinel error type the aggregate uses so cobra
-// doesn't double-print "Error: ..." on top of our pretty summary.
-type cleanError string
-
-func (e cleanError) Error() string { return string(e) }

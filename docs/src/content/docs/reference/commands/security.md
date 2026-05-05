@@ -24,10 +24,13 @@ top-level commands. Use the `clim security <sub>` form.
 
 ### `clim security health`
 
-Environment diagnostics. Verifies PATH integrity, shell hook
-installation, network reachability of the marketplace and OSV.dev,
-and detects PATH-shadowing where a user-writable directory shadows a
-system tool.
+Environment diagnostics. Detects duplicate or broken PATH entries,
+PATH-shadowing where a user-writable directory shadows a system tool,
+multiple installations of the same tool across different sources,
+unresolved versions, and stale local caches.
+
+(Network reachability and shell-hook diagnostics are planned but not
+yet implemented; the current check set is local-only.)
 
 Flags: `--output {text,json}` (default text).
 
@@ -41,12 +44,14 @@ publishers.
 
 Queries [OSV.dev](https://osv.dev) for known vulnerabilities affecting
 the installed versions of every tool that maps to a supported
-ecosystem (npm, Homebrew formula, GitHub-by-slug). See the dedicated
+ecosystem. Coverage today is **npm only** — OSV.dev rejects the
+`Homebrew` and `GitHub` ecosystems with HTTP 400, so brew-only and
+GitHub-slug-only tools are listed under `skipped`. See the dedicated
 [`clim security vuln`](/reference/commands/vuln/) reference for full
 flag documentation.
 
-Exit codes: `0` = clean, non-zero when findings meet or exceed
-`--fail-on` (default `high`).
+Exit codes: `0` = clean or `--fail-on` not set, `3` = findings meet
+or exceed `--fail-on` (or vuln lookup hard-failed).
 
 ### `clim security compliance`
 
