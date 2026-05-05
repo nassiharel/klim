@@ -274,53 +274,10 @@ func TestAtomicWriteAppliesPermOnCreate(t *testing.T) {
 	}
 }
 
-// TestAtomicWriteFallbackOnReadOnlyDir verifies the read-only-dir
-// fallback path: when AtomicWrite can't create a temp file in the
-// target's directory (typical of a symlink → shared-template-dir
-// where the directory is read-only but the target file is writable),
-// it falls back to os.WriteFile so users with that workflow keep
-// working. The behaviour matches what os.WriteFile did before this
-// PR.
-func TestAtomicWriteFallbackOnReadOnlyDir(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		// Read-only dir semantics differ on Windows; the fallback
-		// path is exercised on POSIX runners.
-		t.Skip("read-only directory semantics differ on Windows")
-	}
-	if os.Geteuid() == 0 {
-		t.Skip("root bypasses directory permission bits")
-	}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "target.txt")
-	if err := os.WriteFile(path, []byte("v1"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// Make the parent dir read-only AFTER creating the target.
-	if err := os.Chmod(dir, 0o555); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // for t.TempDir cleanup
-
-	if err := AtomicWrite(path, []byte("v2"), 0o644); err != nil {
-		t.Fatalf("AtomicWrite should fall back when temp creation fails: %v", err)
-	}
-
-	got, _ := os.ReadFile(path)
-	if string(got) != "v2" {
-		t.Errorf("contents = %q, want v2", got)
-	}
-}
-
-// TestAtomicWriteDoesNotFallbackOnNonPermissionError verifies the
-// fallback is *narrow* — non-permission CreateTemp failures (e.g.
-// missing parent directory, ENOSPC simulated via a deleted dir
-// after CreateTemp's first call) propagate. Otherwise a transient
-// disk-full / fd-exhaustion error would silently lose the atomic
-// write guarantee in exactly the failure modes callers rely on it.
-//
-// We trigger this by pointing AtomicWrite at a path whose parent
-// dir doesn't exist: CreateTemp fails with ENOENT, NOT EACCES.
-// The narrow fallback must propagate the error.
+// TestAtomicWriteDoesNotFallbackOnNonPermissionError verifies that
+// any temp-file failure (here: missing parent directory → ENOENT)
+// propagates to the caller. AtomicWrite no longer has a read-only-dir
+// fallback at all, so every CreateTemp failure must surface.
 func TestAtomicWriteDoesNotFallbackOnNonPermissionError(t *testing.T) {
 	dir := t.TempDir()
 	// Path under a non-existent subdirectory.
@@ -328,11 +285,54 @@ func TestAtomicWriteDoesNotFallbackOnNonPermissionError(t *testing.T) {
 
 	err := AtomicWrite(path, []byte("v1"), 0o644)
 	if err == nil {
-		t.Fatal("expected error when parent dir doesn't exist; the read-only-dir fallback must NOT swallow ENOENT")
+		t.Fatal("expected error when parent dir doesn't exist")
 	}
 	// And the file mustn't have been created in some unexpected place.
 	if _, statErr := os.Stat(path); statErr == nil {
 		t.Errorf("target unexpectedly exists at %s after ENOENT", path)
+	}
+}
+
+// TestAtomicWritePropagatesLstatErrors guards that a non-ENOENT
+// failure during symlink-chain walking surfaces — we don't want to
+// silently end up writing to a wrongly-resolved target. We exercise
+// this by pointing AtomicWrite at a symlink whose intermediate hop
+// has restrictive permissions on its parent dir, so Lstat returns
+// EACCES rather than ENOENT.
+func TestAtomicWritePropagatesLstatErrors(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX-specific permission semantics")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permission bits")
+	}
+	dir := t.TempDir()
+	// Build a directory we'll later make non-traversable, then a
+	// symlink whose target is inside that dir.
+	gated := filepath.Join(dir, "gated")
+	if err := os.MkdirAll(gated, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(gated, "target.txt")
+	if err := os.WriteFile(target, []byte("v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.txt")
+	mustSymlink(t, target, link)
+
+	// Remove search permission on `gated` so Lstat on the resolved
+	// target returns EACCES.
+	if err := os.Chmod(gated, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(gated, 0o755) })
+
+	err := AtomicWrite(link, []byte("v2"), 0o644)
+	if err == nil {
+		t.Fatal("expected EACCES from Lstat to propagate")
+	}
+	if !errors.Is(err, fs.ErrPermission) {
+		t.Errorf("expected fs.ErrPermission, got: %v", err)
 	}
 }
 

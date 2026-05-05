@@ -74,7 +74,7 @@ optional:
 
 ## Symlinks
 
-If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` writes through the link to the target file rather than replacing the link with a regular file. This works even when the link is dangling — the target file is created on first write **as long as the target's parent directory already exists**. A link like `.clim.yaml → ../shared/missing/manifest.yaml` will fail with `ENOENT` if `../shared/missing/` doesn't exist; clim does not auto-create parent directories under shared mounts. Symlink chains are followed by the OS (Linux up to 40 hops, Windows configurable); cycles are reported as `ELOOP`.
+If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` writes through the link to the target file rather than replacing the link with a regular file. This works even when the link is dangling — the target file is created on first write **as long as the target's parent directory already exists**. A link like `.clim.yaml → ../shared/missing/manifest.yaml` will fail with `ENOENT` if `../shared/missing/` doesn't exist; clim does not auto-create parent directories under shared mounts. Symlink chains are followed by the OS up to its own limit (Linux 40 hops, Windows configurable); cycles surface as the OS-level error your platform produces (e.g. `ELOOP` on Linux, `ERROR_CANT_RESOLVE_FILENAME` on Windows) — clim doesn't translate these.
 
 ## Permissions and metadata
 

@@ -289,6 +289,55 @@ func TestWrite_FollowsSymlinkAndPreservesIt(t *testing.T) {
 	}
 }
 
+// TestWrite_DanglingSymlinkCreatesTarget covers the platform-sensitive
+// path called out in init.md: a .clim.yaml symlink whose target
+// doesn't exist yet but whose parent directory does. os.WriteFile
+// follows the link with O_CREATE and creates the target through it.
+// This is what makes the "shared-template + first write" workflow
+// work, so it deserves an explicit regression test.
+func TestWrite_DanglingSymlinkCreatesTarget(t *testing.T) {
+	dir := t.TempDir()
+	// Target's parent dir exists, target itself does not.
+	parent := filepath.Join(dir, "shared")
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(parent, "template.yaml")
+	link := filepath.Join(dir, FileName)
+	if err := os.Symlink(target, link); err != nil {
+		if isSymlinkPermissionError(err) {
+			t.Skipf("symlink creation requires elevated privileges on this host: %v", err)
+		}
+		t.Fatalf("os.Symlink: %v", err)
+	}
+	// Sanity: target genuinely doesn't exist before Write.
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("target should not exist before Write, got err=%v", err)
+	}
+
+	tf := &TeamFile{Tools: []RequiredTool{{Name: "git"}}}
+	if err := Write(tf, link); err != nil {
+		t.Fatalf("Write through dangling symlink (parent exists): %v", err)
+	}
+
+	// Target must now exist with the written contents.
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("target not created at %s: %v", target, err)
+	}
+	if !bytesContains(got, []byte("name: git")) {
+		t.Errorf("target contents missing expected name: %s", got)
+	}
+	// And the symlink must still be a symlink.
+	info, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Error("Write replaced the dangling symlink with a regular file")
+	}
+}
+
 // isSymlinkPermissionError reports whether err is the Windows
 // "privilege not held" error or a generic POSIX permission error. We
 // only skip the test on these — every other failure is real and must

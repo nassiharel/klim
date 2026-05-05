@@ -13,6 +13,7 @@ import (
 )
 
 // AtomicWrite writes data to path atomically via a temp file + rename.
+// AtomicWrite writes data to path atomically via a temp file + rename.
 //
 // Atomicity. Since Go 1.5, os.Rename uses MoveFileExW(MOVEFILE_REPLACE_EXISTING)
 // on Windows, so a single rename replaces an existing target without the
@@ -23,6 +24,14 @@ import (
 // not "atomic" in this sense (the target obviously starts absent and
 // becomes present at rename time); the guarantee applies only when
 // path was already populated.
+//
+// All temp-file failures propagate to the caller. AtomicWrite never
+// silently falls back to a non-atomic write — every current caller
+// (catalog cache, scan cache, compliance cache, snapshot writer,
+// trail log) relies on the atomicity guarantee for shared state with
+// concurrent readers, and a quiet fallback would expose partially-
+// written payloads exactly in the failure modes where atomicity
+// matters.
 //
 // Permission preservation. When the target already exists, AtomicWrite
 // reuses its current mode bits and ignores the supplied perm — matches
@@ -40,24 +49,10 @@ import (
 // detected, resolveLinkTarget returns an error *before* any temp
 // file is created and AtomicWrite never attempts the rename.
 //
-// Used by the catalog cache (internal/catalog), the scan cache
-// (internal/scancache), the compliance cache, and similar shared
-// state where concurrent readers care about consistency.
 // `clim init` deliberately does NOT use AtomicWrite — see
 // internal/teamfile.Write for the rationale (inode/ACL/xattr
 // preservation outweighs crash-atomicity for a single-writer,
 // interactive command).
-//
-// Read-only-dir fallback. Atomicity requires creating a temp file in
-// the target's directory. When that fails *with a permission-denied
-// error AND the target file is itself writable* (typical of a symlink
-// → read-only shared template dir setup), we fall back to a direct
-// os.WriteFile on the target. The fallback is not atomic — a crash
-// mid-write can leave a half-written file — but it matches the
-// previous os.WriteFile behavior so users with that workflow keep
-// working. **All other CreateTemp failures (out of disk, fd limit,
-// missing parent dir, etc.) propagate unchanged** so callers don't
-// silently lose atomicity in failure modes where they rely on it.
 func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 	target, err := resolveLinkTarget(path)
 	if err != nil {
@@ -72,14 +67,6 @@ func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(target)
 	tmp, err := os.CreateTemp(dir, filepath.Base(target)+".tmp-*")
 	if err != nil {
-		// Narrow fallback: only EACCES on a writable target file
-		// matches the symlink → read-only shared-template workflow.
-		// Any other temp-file failure (ENOSPC, EMFILE, ENOENT on dir,
-		// etc.) is propagated so callers don't silently lose
-		// atomicity in failure modes where they rely on it.
-		if isPermissionDenied(err) && targetWritable(target) {
-			return os.WriteFile(target, data, perm) //nolint:gosec // G306: perm preserved from existing file or supplied by caller
-		}
 		return err
 	}
 	tmpPath := tmp.Name()
@@ -119,29 +106,6 @@ func existingFilePerm(path string) (os.FileMode, bool) {
 	return info.Mode().Perm(), true
 }
 
-// isPermissionDenied reports whether err is the OS-level
-// permission-denied error (EACCES on POSIX, ERROR_ACCESS_DENIED on
-// Windows). Used by AtomicWrite to scope the read-only-dir fallback
-// narrowly so other temp-file failures (ENOSPC, EMFILE, ENOENT on
-// the dir itself, etc.) propagate to the caller.
-func isPermissionDenied(err error) bool {
-	return errors.Is(err, fs.ErrPermission)
-}
-
-// targetWritable reports whether path exists and the calling process
-// can open it for writing. Used by AtomicWrite to confirm the
-// fallback write would actually succeed before attempting it — when
-// we can't even open the target for write, we want the original
-// CreateTemp error to propagate, not a follow-up open failure.
-func targetWritable(path string) bool {
-	f, err := os.OpenFile(path, os.O_WRONLY, 0)
-	if err != nil {
-		return false
-	}
-	_ = f.Close()
-	return true
-}
-
 // maxSymlinkDepth caps the number of links resolveLinkTarget will
 // follow before giving up. POSIX SYMLOOP_MAX is typically 8, Linux
 // follows up to 40; we sit comfortably between.
@@ -152,17 +116,28 @@ const maxSymlinkDepth = 32
 // (dangling link). Used by AtomicWrite so writing through a symlink
 // updates the eventual target file rather than replacing the link.
 //
-// Returns path itself when path is not a symlink (or doesn't exist).
-// Errors only on excessive link depth; missing intermediate targets
-// are treated as the final destination.
+// Only "does not exist" errors from Lstat are treated as the final
+// destination (the dangling-link case + the fresh-write case);
+// every other Lstat error — permission denied, ENAMETOOLONG, EIO,
+// path malformed — is propagated so the caller fails fast on the
+// real cause instead of writing to a wrongly-resolved target.
+//
+// Errors on excessive link depth (cycle detected).
 func resolveLinkTarget(path string) (string, error) {
 	current := path
 	for i := 0; i < maxSymlinkDepth; i++ {
 		info, err := os.Lstat(current)
 		if err != nil {
-			// Link target doesn't exist (the dangling case) or path
-			// itself is a fresh write — current is the final target.
-			return current, nil
+			if errors.Is(err, fs.ErrNotExist) {
+				// Dangling link → current is the final target the
+				// caller should write to. The fresh-write case
+				// (path doesn't exist yet) lands here too.
+				return current, nil
+			}
+			// Real Lstat failure. Surface it so callers don't
+			// silently end up writing to whatever the partial walk
+			// left in `current`.
+			return "", fmt.Errorf("lstat %s while resolving symlink chain from %s: %w", current, path, err)
 		}
 		if info.Mode()&os.ModeSymlink == 0 {
 			// Real file or directory — done walking.
