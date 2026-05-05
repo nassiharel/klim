@@ -74,11 +74,11 @@ optional:
 
 ## Symlinks
 
-If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` writes through the link to the target file rather than replacing the link with a regular file. This works even when the link is dangling — the target file is created on first write and the link is left intact. Symlink chains are followed up to 32 levels; cycles are reported as errors. When the link's target sits in a read-only directory (a common shared-template setup) the write falls back to a non-atomic update of the existing file rather than failing.
+If you keep `.clim.yaml` as a symbolic link (e.g. to a shared template), `clim init --force` writes through the link to the target file rather than replacing the link with a regular file. This works even when the link is dangling — the target file is created on first write and the link is left intact. Symlink chains are followed by the OS (Linux up to 40 hops, Windows configurable); cycles are reported as `ELOOP`.
 
-## Permissions
+## Permissions and metadata
 
-When a `.clim.yaml` already exists, `clim init --force` preserves its current mode bits. A manually-restricted manifest (e.g. `chmod 600 .clim.yaml` because the policy contains sensitive data) keeps those bits across re-inits. The default mode for a freshly-created manifest is `0644`.
+When a `.clim.yaml` already exists, `clim init --force` preserves its current mode bits, ownership, ACLs (POSIX and Windows), extended attributes, and inode — the file is rewritten in place rather than replaced. A manually-restricted manifest (e.g. `chmod 600 .clim.yaml` because the manifest contains sensitive tool/version data) keeps those bits across re-inits. Hardlinks pointing at the manifest stay live. The default mode for a freshly-created manifest is `0644`.
 
 ## See Also
 

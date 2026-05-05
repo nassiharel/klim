@@ -3,6 +3,7 @@ package teamfile
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/nassiharel/clim/internal/registry"
@@ -199,4 +200,117 @@ func TestGenerate(t *testing.T) {
 	if tfV.Tools[0].Version != ">=2.43.0" {
 		t.Errorf("version = %q, want >=2.43.0", tfV.Tools[0].Version)
 	}
+}
+
+// TestWrite_PreservesInodeAndMode guards the contract that
+// teamfile.Write rewrites in place: the inode of an existing
+// .clim.yaml stays stable across a Write call (so hardlinks and
+// rich metadata like ACLs / xattrs survive — atomic temp+rename
+// would replace the inode and drop them) and a manually-set mode
+// is preserved by os.WriteFile's overwrite semantics.
+func TestWrite_PreservesInodeAndMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows file modes don't map to POSIX bits; inode IDs
+		// returned by Stat are zeroed in many configurations. The
+		// inode-preservation guarantee still holds (truncate-in-place
+		// keeps the same handle) but it can't be asserted portably
+		// here.
+		t.Skip("POSIX-only metadata preservation assertions")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, FileName)
+
+	// Seed an existing manifest with a tightened mode.
+	if err := os.WriteFile(path, []byte("tools:\n  - name: git\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	infoBefore, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Rewrite via teamfile.Write.
+	tf := &TeamFile{Tools: []RequiredTool{{Name: "kubectl"}}}
+	if err := Write(tf, path); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	infoAfter, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(infoBefore, infoAfter) {
+		t.Errorf("Write replaced the inode; hardlinks / ACLs / xattrs would be lost")
+	}
+	if got := infoAfter.Mode().Perm(); got != 0o600 {
+		t.Errorf("mode after Write = %o, want 0600 (existing perms must be preserved on overwrite)", got)
+	}
+}
+
+// TestWrite_FollowsSymlinkAndPreservesIt guards that a .clim.yaml
+// symlink points to a shared template stays a symlink after Write,
+// and the new contents land at the target.
+func TestWrite_FollowsSymlinkAndPreservesIt(t *testing.T) {
+	if !canCreateSymlinkOnThisHost(t) {
+		t.Skip("symlink creation requires elevated privileges on this host")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "template.yaml")
+	if err := os.WriteFile(target, []byte("tools:\n  - name: stale\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, FileName)
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	tf := &TeamFile{Tools: []RequiredTool{{Name: "git"}}}
+	if err := Write(tf, link); err != nil {
+		t.Fatalf("Write through symlink: %v", err)
+	}
+
+	info, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Error("Write replaced the symlink with a regular file")
+	}
+	got, _ := os.ReadFile(target)
+	if !bytesContains(got, []byte("name: git")) {
+		t.Errorf("target not updated through symlink: %s", got)
+	}
+}
+
+// canCreateSymlinkOnThisHost probes whether the current process can
+// create symlinks. On Windows this needs admin or developer-mode; on
+// CI runners with developer mode the test runs, otherwise it skips.
+func canCreateSymlinkOnThisHost(t *testing.T) bool {
+	t.Helper()
+	d := t.TempDir()
+	src := filepath.Join(d, "src")
+	dst := filepath.Join(d, "dst")
+	if err := os.WriteFile(src, []byte{}, 0o600); err != nil {
+		return false
+	}
+	return os.Symlink(src, dst) == nil
+}
+
+func bytesContains(haystack, needle []byte) bool {
+	if len(needle) == 0 {
+		return true
+	}
+	for i := 0; i+len(needle) <= len(haystack); i++ {
+		ok := true
+		for j := range needle {
+			if haystack[i+j] != needle[j] {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
 }
