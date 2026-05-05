@@ -221,6 +221,96 @@ func TestAtomicWriteSymlinkCycleDetected(t *testing.T) {
 	}
 }
 
+// TestAtomicWritePreservesExistingMode guards against permission
+// regression on overwrite. A user who manually `chmod 600`s a sensitive
+// .clim.yaml must not have it broadened to 0644 by a subsequent
+// `clim init --force`.
+func TestAtomicWritePreservesExistingMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows file mode bits don't map to POSIX perms in a way
+		// that makes 0o600 vs 0o644 meaningful here.
+		t.Skip("POSIX file modes don't apply on Windows")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "private.txt")
+	if err := os.WriteFile(path, []byte("v1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Caller passes 0o644 (the typical "create" perm) — but the
+	// existing 0o600 must win.
+	if err := AtomicWrite(path, []byte("v2"), 0o644); err != nil {
+		t.Fatalf("AtomicWrite: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("perm = %o, want 0600 (overwrite must preserve existing mode)", got)
+	}
+}
+
+// TestAtomicWriteAppliesPermOnCreate complements the above: when the
+// target doesn't exist yet, the supplied perm is the source of truth.
+func TestAtomicWriteAppliesPermOnCreate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX file modes don't apply on Windows")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fresh.txt")
+
+	if err := AtomicWrite(path, []byte("hello"), 0o600); err != nil {
+		t.Fatalf("AtomicWrite: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("perm = %o, want 0600 on first-time write", got)
+	}
+}
+
+// TestAtomicWriteFallbackOnReadOnlyDir verifies the read-only-dir
+// fallback path: when AtomicWrite can't create a temp file in the
+// target's directory (typical of a symlink → shared-template-dir
+// where the directory is read-only but the target file is writable),
+// it falls back to os.WriteFile so users with that workflow keep
+// working. The behaviour matches what os.WriteFile did before this
+// PR.
+func TestAtomicWriteFallbackOnReadOnlyDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Read-only dir semantics differ on Windows; the fallback
+		// path is exercised on POSIX runners.
+		t.Skip("read-only directory semantics differ on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permission bits")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "target.txt")
+	if err := os.WriteFile(path, []byte("v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Make the parent dir read-only AFTER creating the target.
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) // for t.TempDir cleanup
+
+	if err := AtomicWrite(path, []byte("v2"), 0o644); err != nil {
+		t.Fatalf("AtomicWrite should fall back when temp creation fails: %v", err)
+	}
+
+	got, _ := os.ReadFile(path)
+	if string(got) != "v2" {
+		t.Errorf("contents = %q, want v2", got)
+	}
+}
+
 func TestEnsureDir(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a", "b", "file.txt")

@@ -22,6 +22,12 @@ import (
 // becomes present at rename time); the guarantee applies only when
 // path was already populated.
 //
+// Permission preservation. When the target already exists, AtomicWrite
+// reuses its current mode bits and ignores the supplied perm — matches
+// os.WriteFile's overwrite behavior and prevents a re-init from
+// silently broadening a manually-restricted .clim.yaml. The perm
+// argument is used only when the target is being created.
+//
 // Symlink preservation. When path is a symlink (including a *dangling*
 // symlink whose target doesn't exist yet), the temp file is created
 // next to the resolved target and the rename writes to that target.
@@ -30,16 +36,33 @@ import (
 // Symlink chains are followed up to maxSymlinkDepth hops; if a cycle
 // is detected, resolveLinkTarget returns an error *before* any temp
 // file is created and AtomicWrite never attempts the rename.
+//
+// Read-only-dir fallback. Atomicity requires creating a temp file in
+// the target's directory. When that fails (typically EACCES on a
+// read-only shared template dir reachable through a symlink), we fall
+// back to a direct os.WriteFile on the target. The fallback is not
+// atomic — a crash mid-write can leave a half-written file — but it
+// matches the previous os.WriteFile behavior so users with that
+// workflow keep working.
 func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 	target, err := resolveLinkTarget(path)
 	if err != nil {
 		return err
 	}
 
+	// Preserve the existing file's mode on overwrite.
+	if existingPerm, exists := existingFilePerm(target); exists {
+		perm = existingPerm
+	}
+
 	dir := filepath.Dir(target)
 	tmp, err := os.CreateTemp(dir, filepath.Base(target)+".tmp-*")
 	if err != nil {
-		return err
+		// Read-only target dir (e.g. symlink to a shared template
+		// dir we lack create-perm on). Fall back to direct write so
+		// users with that workflow keep working — this loses
+		// atomicity but matches the prior os.WriteFile behavior.
+		return os.WriteFile(target, data, perm) //nolint:gosec // G306: perm preserved from existing file or supplied by caller
 	}
 	tmpPath := tmp.Name()
 
@@ -63,6 +86,19 @@ func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("atomic rename %s → %s: %w", tmpPath, target, err)
 	}
 	return nil
+}
+
+// existingFilePerm returns the mode bits of an existing file at path,
+// or (0, false) when the path doesn't exist or can't be stat'd.
+// Used by AtomicWrite to preserve manually-restricted permissions on
+// overwrite. Lstat is intentionally not used — by the time we call
+// this, path has already been resolved through any symlinks.
+func existingFilePerm(path string) (os.FileMode, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, false
+	}
+	return info.Mode().Perm(), true
 }
 
 // maxSymlinkDepth caps the number of links resolveLinkTarget will
