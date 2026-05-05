@@ -15,6 +15,7 @@ import (
 	"github.com/nassiharel/clim/internal/registry"
 	"github.com/nassiharel/clim/internal/service"
 	"github.com/nassiharel/clim/internal/trail"
+	"github.com/nassiharel/clim/internal/vuln"
 )
 
 // pageData is the universal context every layout-using template
@@ -117,6 +118,7 @@ func (s *Server) pageTool(w http.ResponseWriter, r *http.Request) {
 		BinaryNames: tool.BinaryNames,
 		Related:     buildRelatedTools(tool, tools, favs),
 		GitHub:      formatGitHub(tool),
+		Security:    buildToolSecurity(tool, tools, s),
 	}
 	s.renderPage(w, r, "tool.html", pageData{
 		Title:     tool.Name,
@@ -378,6 +380,20 @@ type toolView struct {
 	BinaryNames []string
 	Related     []relatedTool
 	GitHub      githubView
+	Security    *toolSecurityView
+}
+
+// toolSecurityView is the per-tool security panel rendered on the
+// /tools/{name} page. Status mirrors security.Verdict.Status as a
+// lowercase string ("clean"/"watch"/"risk"/"unknown"). Vulns is the
+// already-cached list (no live OSV.dev call from a page render);
+// VulnsCacheLoaded is false if `clim security vuln` has never been
+// run, in which case we tell the user how to populate it.
+type toolSecurityView struct {
+	Status           string
+	Reasons          []string
+	Vulns            []vuln.Vulnerability
+	VulnsCacheLoaded bool
 }
 
 // pmRow is one row in the per-tool Package Managers table. We list

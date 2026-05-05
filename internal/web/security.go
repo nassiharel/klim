@@ -3,8 +3,11 @@ package web
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/nassiharel/clim/internal/audit"
+	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/clim/internal/security"
 	"github.com/nassiharel/clim/internal/vuln"
 )
 
@@ -49,11 +52,7 @@ func (s *Server) pageSecurity(w http.ResponseWriter, r *http.Request) {
 
 	// Cached vuln data — passive read keyed by the configured OSV URL
 	// so we hit the same cache file the CLI populates.
-	cfg := s.snapshotConfig()
-	vulnURL := cfg.Vuln.URL
-	if vulnURL == "" {
-		vulnURL = vuln.DefaultOSVURL
-	}
+	vulnURL := s.resolveVulnSourceKey()
 	view.VulnSource = vulnURL
 	if rep, ok := vuln.ReadCache(vulnURL); ok {
 		view.VulnCacheLoaded = true
@@ -71,4 +70,52 @@ func (s *Server) pageSecurity(w http.ResponseWriter, r *http.Request) {
 		ActiveTab: "security",
 		Data:      view,
 	})
+}
+
+// resolveVulnSourceKey returns the cache key the CLI's `clim security
+// vuln` writes under, given the server's loaded config. Surfaces that
+// read passively (tool detail, /security) must match this key or
+// they'll look at the wrong cache file.
+func (s *Server) resolveVulnSourceKey() string {
+	cfg := s.snapshotConfig()
+	if u := strings.TrimSpace(cfg.Vuln.URL); u != "" {
+		return u
+	}
+	return vuln.DefaultOSVURL
+}
+
+// buildToolSecurity computes the per-tool security panel for the
+// /tools/{name} page. Audit findings are computed from the in-memory
+// tool list (no I/O); vuln data is read from cache only — page
+// renders never block on a live OSV.dev call. Returns nil when the
+// tool isn't installed (a verdict only makes sense for installed
+// tools).
+func buildToolSecurity(tool registry.Tool, allTools []registry.Tool, s *Server) *toolSecurityView {
+	if !tool.IsInstalled() {
+		return nil
+	}
+	findings, _ := audit.Analyze(allTools)
+
+	var match *vuln.Match
+	cacheLoaded := false
+	if rep, ok := vuln.ReadCache(s.resolveVulnSourceKey()); ok {
+		cacheLoaded = true
+		for i := range rep.Matches {
+			if rep.Matches[i].Tool == tool.Name {
+				match = &rep.Matches[i]
+				break
+			}
+		}
+	}
+
+	verdict := security.Score(tool, findings, match)
+	out := &toolSecurityView{
+		Status:           strings.ToLower(verdict.Status.String()),
+		Reasons:          verdict.Reasons,
+		VulnsCacheLoaded: cacheLoaded,
+	}
+	if match != nil {
+		out.Vulns = match.Vulnerabilities
+	}
+	return out
 }

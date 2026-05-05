@@ -75,6 +75,12 @@ func (m Model) renderDetailBody(tool registry.Tool) string {
 		b.WriteString(pms)
 	}
 
+	sec := m.renderSecuritySection(tool)
+	if sec != "" {
+		b.WriteString(divider("Security"))
+		b.WriteString(sec)
+	}
+
 	about := m.renderAboutSection(tool)
 	if about != "" {
 		b.WriteString(divider("About"))
