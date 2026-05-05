@@ -3,6 +3,8 @@ package scancache
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/nassiharel/clim/internal/registry"
@@ -207,5 +209,40 @@ func TestIncompatibleVersionRejected(t *testing.T) {
 	}
 	if _, _, err := Load(); err == nil {
 		t.Fatalf("expected error for incompatible schema version")
+	}
+}
+
+func TestApplyRecoversViaPATHWhenCachedPathStale(t *testing.T) {
+	// Cached path is gone, but the binary is still on PATH (e.g.
+	// brew rotated its versioned dir). Apply should keep the tool
+	// installed by re-resolving via exec.LookPath.
+	withTempCache(t)
+
+	dir := t.TempDir()
+	binName := "fake-tool-on-path"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	realPath := filepath.Join(dir, binName)
+	if err := os.WriteFile(realPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	stalePath := filepath.Join(dir, "no-longer-here")
+	catalog := []registry.Tool{{Name: "fake-tool-on-path", BinaryNames: []string{strings.TrimSuffix(binName, ".exe")}}}
+	entries := map[string]Entry{
+		"fake-tool-on-path": {
+			Instances: []instanceYAML{{Path: stalePath, Version: "1.0", Source: "brew"}},
+		},
+	}
+
+	got := Apply(catalog, entries)
+	if len(got[0].Instances) != 1 {
+		t.Fatalf("expected recovery via PATH, got %d instances", len(got[0].Instances))
+	}
+	// Path should be re-resolved, not the stale one.
+	if got[0].Instances[0].Path == stalePath {
+		t.Errorf("expected path to be re-resolved, still got stale %q", got[0].Instances[0].Path)
 	}
 }

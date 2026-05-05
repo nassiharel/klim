@@ -820,7 +820,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.backupItems[msg.idx].status == backupRunning {
 				if msg.err != nil {
 					m.backupItems[msg.idx].status = backupFailed
-					m.backupItems[msg.idx].errMsg = errMsgWithHint(m.backupItems[msg.idx].cmdArgs, msg.err)
+					// errMsg stays single-line so the progress
+					// table cell renders correctly; multi-line
+					// guidance lives in .hint and is rendered
+					// separately by the view.
+					m.backupItems[msg.idx].errMsg = msg.err.Error()
+					m.backupItems[msg.idx].hint = hintFromError(m.backupItems[msg.idx].cmdArgs, msg.err)
 				} else {
 					m.backupItems[msg.idx].status = backupDone
 				}
@@ -906,7 +911,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.packItems[msg.idx].status == packItemRunning {
 				if msg.err != nil {
 					m.packItems[msg.idx].status = packItemFailed
-					m.packItems[msg.idx].errMsg = errMsgWithHint(m.packItems[msg.idx].cmdArgs, msg.err)
+					// Same single-line invariant as backupItem.
+					m.packItems[msg.idx].errMsg = msg.err.Error()
+					m.packItems[msg.idx].hint = hintFromError(m.packItems[msg.idx].cmdArgs, msg.err)
 				} else {
 					m.packItems[msg.idx].status = packItemDone
 				}

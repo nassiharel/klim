@@ -10,8 +10,8 @@ import (
 // https://github.com/microsoft/winget-cli/blob/master/src/AppInstallerSharedLib/Public/AppInstallerSharedLib/AppInstallerErrors.h)
 // that produce the unsigned form most users see when winget fails.
 //
-//   0x8A150014 (2316632084) — APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND
-//   0x8A150010 (2316632080) — APPINSTALLER_CLI_ERROR_NO_PACKAGES_AVAILABLE
+//	0x8A150014 (2316632084) — APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND
+//	0x8A150010 (2316632080) — APPINSTALLER_CLI_ERROR_NO_PACKAGES_AVAILABLE
 const (
 	wingetExitNotInstalled       = 2316632084
 	wingetExitNoPackageAvailable = 2316632080
@@ -69,10 +69,14 @@ func hintFromError(args []string, err error) string {
 	return actionFailureHint(args, exitErr.ExitCode())
 }
 
-// errMsgWithHint joins err.Error() and any registered hint with a
-// blank line so the TUI item renderer can show both. Pack/backup
-// flows write the result to item.errMsg; the renderer prints it as-
-// is. Returns "" when err is nil.
+// errMsgWithHint is intentionally unused now: prior versions joined
+// err.Error() with the multi-line hint via "\n", but pack/backup
+// renderers treat errMsg as a single-line table cell and the
+// embedded newline broke alignment. Callers now write err.Error()
+// into errMsg and the multi-line hint into a separate item.hint
+// field. The function is kept so external callers (and tests below)
+// that want the joined form still have access; in-tree callers all
+// route through hintFromError directly.
 func errMsgWithHint(args []string, err error) string {
 	if err == nil {
 		return ""

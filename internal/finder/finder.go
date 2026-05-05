@@ -400,21 +400,22 @@ func detectSource(path string) registry.InstallSource {
 	case strings.Contains(lower, "microsoft/windowsapps/"):
 		// Windows Store / App Execution Aliases (e.g. python)
 		return registry.SourceWinget
-	case strings.Contains(lower, "appdata/local/programs/"):
-		// Per-user installs (VS Code, Azure Dev CLI, etc.) — winget's
-		// per-user scope lands here.
-		return registry.SourceWinget
 
-	// Windows: Program Files is shared by winget MSIs, manual MSI
-	// installers, third-party installers (Docker Desktop, etc.) and
-	// previously-installed Chocolatey packages whose dirs contain
-	// "chocolatey/" (caught earlier). We can't tell who owns a given
-	// binary from the path alone, so call it Manual rather than
-	// optimistically attributing to winget — that produced bad
-	// remove plans for non-winget tools (winget rejecting with
-	// NO_APPLICATIONS_FOUND). The user can still install via winget
-	// from the catalog menu; we just won't pretend we already know
-	// who owns an existing Program Files binary.
+	// AppData\Local\Programs hosts winget per-user installs (VS Code,
+	// Azure Dev CLI, etc.) AND many third-party user-scope installers
+	// (Cursor, GitHub Desktop, etc.). The path alone doesn't say who
+	// owns the binary, so call it Manual to avoid offering a winget
+	// remove plan that fails. Specific WinGet markers above
+	// (8wekyb3d8bbwe, WindowsApps, Microsoft/WinGet/Packages) still
+	// classify unambiguously.
+	case strings.Contains(lower, "appdata/local/programs/"):
+		return registry.SourceManual
+
+	// Program Files is shared by winget MSIs, manual MSI installers,
+	// third-party installers (Docker Desktop, etc.) and previously-
+	// installed Chocolatey packages whose dirs contain "chocolatey/"
+	// (caught earlier). Same reasoning as AppData\Local\Programs:
+	// can't tell who owns a binary from the path alone.
 	case strings.Contains(lower, "program files"):
 		return registry.SourceManual
 

@@ -242,6 +242,15 @@ func (m Model) renderPackDetailView(pack registry.Pack) string {
 				}
 			}
 			fmt.Fprintf(&b, "    %s  %s  %s\n", icon, fixedWidth(itemLabel(item.name, item.display), colPackName), fixedWidthANSI(status, colPackStat))
+			// Multi-line hint (e.g. winget NO_APPLICATIONS_FOUND
+			// guidance) is stored separately from errMsg so the
+			// table cell stays single-line; render it as indented
+			// follow-up rows instead of stuffing it into the cell.
+			if item.status == packItemFailed && item.hint != "" {
+				for _, hl := range strings.Split(item.hint, "\n") {
+					fmt.Fprintf(&b, "        %s\n", dim(hl))
+				}
+			}
 		}
 
 		pending := 0

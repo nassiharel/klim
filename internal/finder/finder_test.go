@@ -144,11 +144,14 @@ func TestDetectSource(t *testing.T) {
 			registry.SourceWinget,
 		},
 
-		// WinGet — per-user programs.
+		// AppData\Local\Programs is shared by winget per-user MSIs
+		// AND many third-party user-scope installers (Cursor,
+		// GitHub Desktop, etc.). Path alone can't attribute, so
+		// call it Manual.
 		{
 			"local programs",
 			`C:\Users\user\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd`,
-			registry.SourceWinget,
+			registry.SourceManual,
 		},
 
 		// ProgramData / DockerDesktop / etc.: not a winget signal —

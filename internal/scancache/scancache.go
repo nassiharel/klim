@@ -17,6 +17,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -143,12 +145,16 @@ func Load() (map[string]Entry, time.Time, error) {
 // in the cache are left untouched (they will look "not installed"), which
 // is the correct behaviour for newly-added catalog entries.
 //
-// Cached instances whose recorded path no longer exists on disk are
-// dropped. Without this guard a tool uninstalled outside clim's own
-// install/upgrade/remove flow would still appear "installed" until
-// the user explicitly refreshed the scan, which surfaced as a
-// confusing "winget reports no installed package" error when the
-// user then tried to remove it via the TUI.
+// For each cached instance we verify the recorded path still exists.
+// If it doesn't, we try to recover the instance via exec.LookPath on
+// the tool's binary names — that handles the common "external
+// upgrade rotated the versioned dir under brew/winget" pattern where
+// the tool is still installed and on PATH but at a different
+// resolved path. Only when both checks fail is the instance dropped.
+//
+// Without this guard a tool uninstalled outside clim's own install/
+// upgrade/remove flow would either appear "installed" forever
+// (false positive) or vanish on a benign upgrade (false negative).
 func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 	for i := range tools {
 		entry, ok := entries[tools[i].Name]
@@ -163,14 +169,24 @@ func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 		}
 		insts := make([]registry.Instance, 0, len(entry.Instances))
 		for _, e := range entry.Instances {
-			if !pathExists(e.Path) {
+			if pathExists(e.Path) {
+				insts = append(insts, registry.Instance{
+					Path:    e.Path,
+					Version: e.Version,
+					Source:  registry.InstallSource(e.Source),
+				})
 				continue
 			}
-			insts = append(insts, registry.Instance{
-				Path:    e.Path,
-				Version: e.Version,
-				Source:  registry.InstallSource(e.Source),
-			})
+			// Stale cached path — try to recover via PATH lookup
+			// before giving up. Handles brew/winget version-dir
+			// rotation where the tool is still installed.
+			if recovered, ok := lookupOnPATH(tools[i].BinaryNames); ok {
+				insts = append(insts, registry.Instance{
+					Path:    recovered,
+					Version: e.Version, // best-effort; next full scan refreshes
+					Source:  registry.InstallSource(e.Source),
+				})
+			}
 		}
 		tools[i].Instances = insts
 	}
@@ -187,6 +203,25 @@ func pathExists(path string) bool {
 	}
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+// lookupOnPATH returns the resolved path of the first binary name
+// found on $PATH, or ("", false) when none are present. Used by
+// Apply as a fallback when the cached path is stale (e.g. external
+// brew upgrade rotated the versioned directory).
+func lookupOnPATH(binaryNames []string) (string, bool) {
+	for _, name := range binaryNames {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil || resolved == "" {
+			resolved = path
+		}
+		return resolved, true
+	}
+	return "", false
 }
 
 // Delete removes the cache file. A missing file is not an error.
