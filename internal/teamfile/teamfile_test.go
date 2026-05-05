@@ -1,9 +1,12 @@
 package teamfile
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/nassiharel/clim/internal/registry"
@@ -251,9 +254,6 @@ func TestWrite_PreservesInodeAndMode(t *testing.T) {
 // symlink points to a shared template stays a symlink after Write,
 // and the new contents land at the target.
 func TestWrite_FollowsSymlinkAndPreservesIt(t *testing.T) {
-	if !canCreateSymlinkOnThisHost(t) {
-		t.Skip("symlink creation requires elevated privileges on this host")
-	}
 	dir := t.TempDir()
 	target := filepath.Join(dir, "template.yaml")
 	if err := os.WriteFile(target, []byte("tools:\n  - name: stale\n"), 0o644); err != nil {
@@ -261,7 +261,14 @@ func TestWrite_FollowsSymlinkAndPreservesIt(t *testing.T) {
 	}
 	link := filepath.Join(dir, FileName)
 	if err := os.Symlink(target, link); err != nil {
-		t.Fatal(err)
+		// Permission errors (Windows without admin/dev-mode) are the
+		// expected skip case. Anything else — path-handling
+		// regressions, fs-specific bugs — must fail so a Windows
+		// regression in this contract surfaces in CI.
+		if isSymlinkPermissionError(err) {
+			t.Skipf("symlink creation requires elevated privileges on this host: %v", err)
+		}
+		t.Fatalf("os.Symlink(%q, %q): %v", target, link, err)
 	}
 
 	tf := &TeamFile{Tools: []RequiredTool{{Name: "git"}}}
@@ -282,18 +289,23 @@ func TestWrite_FollowsSymlinkAndPreservesIt(t *testing.T) {
 	}
 }
 
-// canCreateSymlinkOnThisHost probes whether the current process can
-// create symlinks. On Windows this needs admin or developer-mode; on
-// CI runners with developer mode the test runs, otherwise it skips.
-func canCreateSymlinkOnThisHost(t *testing.T) bool {
-	t.Helper()
-	d := t.TempDir()
-	src := filepath.Join(d, "src")
-	dst := filepath.Join(d, "dst")
-	if err := os.WriteFile(src, []byte{}, 0o600); err != nil {
+// isSymlinkPermissionError reports whether err is the Windows
+// "privilege not held" error or a generic POSIX permission error. We
+// only skip the test on these — every other failure is real and must
+// fail loudly. Otherwise a regression in symlink handling could
+// silently turn into a skip and hide the bug.
+func isSymlinkPermissionError(err error) bool {
+	if err == nil {
 		return false
 	}
-	return os.Symlink(src, dst) == nil
+	if errors.Is(err, fs.ErrPermission) {
+		return true
+	}
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "privilege") || strings.Contains(msg, "not held")
 }
 
 func bytesContains(haystack, needle []byte) bool {
