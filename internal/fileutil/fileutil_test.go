@@ -311,6 +311,31 @@ func TestAtomicWriteFallbackOnReadOnlyDir(t *testing.T) {
 	}
 }
 
+// TestAtomicWriteDoesNotFallbackOnNonPermissionError verifies the
+// fallback is *narrow* — non-permission CreateTemp failures (e.g.
+// missing parent directory, ENOSPC simulated via a deleted dir
+// after CreateTemp's first call) propagate. Otherwise a transient
+// disk-full / fd-exhaustion error would silently lose the atomic
+// write guarantee in exactly the failure modes callers rely on it.
+//
+// We trigger this by pointing AtomicWrite at a path whose parent
+// dir doesn't exist: CreateTemp fails with ENOENT, NOT EACCES.
+// The narrow fallback must propagate the error.
+func TestAtomicWriteDoesNotFallbackOnNonPermissionError(t *testing.T) {
+	dir := t.TempDir()
+	// Path under a non-existent subdirectory.
+	path := filepath.Join(dir, "ghost-dir", "target.txt")
+
+	err := AtomicWrite(path, []byte("v1"), 0o644)
+	if err == nil {
+		t.Fatal("expected error when parent dir doesn't exist; the read-only-dir fallback must NOT swallow ENOENT")
+	}
+	// And the file mustn't have been created in some unexpected place.
+	if _, statErr := os.Stat(path); statErr == nil {
+		t.Errorf("target unexpectedly exists at %s after ENOENT", path)
+	}
+}
+
 func TestEnsureDir(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a", "b", "file.txt")

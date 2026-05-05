@@ -3,7 +3,9 @@
 package fileutil
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -38,12 +40,15 @@ import (
 // file is created and AtomicWrite never attempts the rename.
 //
 // Read-only-dir fallback. Atomicity requires creating a temp file in
-// the target's directory. When that fails (typically EACCES on a
-// read-only shared template dir reachable through a symlink), we fall
-// back to a direct os.WriteFile on the target. The fallback is not
-// atomic — a crash mid-write can leave a half-written file — but it
-// matches the previous os.WriteFile behavior so users with that
-// workflow keep working.
+// the target's directory. When that fails *with a permission-denied
+// error AND the target file is itself writable* (typical of a symlink
+// → read-only shared template dir setup), we fall back to a direct
+// os.WriteFile on the target. The fallback is not atomic — a crash
+// mid-write can leave a half-written file — but it matches the
+// previous os.WriteFile behavior so users with that workflow keep
+// working. **All other CreateTemp failures (out of disk, fd limit,
+// missing parent dir, etc.) propagate unchanged** so callers don't
+// silently lose atomicity in failure modes where they rely on it.
 func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 	target, err := resolveLinkTarget(path)
 	if err != nil {
@@ -58,11 +63,15 @@ func AtomicWrite(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(target)
 	tmp, err := os.CreateTemp(dir, filepath.Base(target)+".tmp-*")
 	if err != nil {
-		// Read-only target dir (e.g. symlink to a shared template
-		// dir we lack create-perm on). Fall back to direct write so
-		// users with that workflow keep working — this loses
-		// atomicity but matches the prior os.WriteFile behavior.
-		return os.WriteFile(target, data, perm) //nolint:gosec // G306: perm preserved from existing file or supplied by caller
+		// Narrow fallback: only EACCES on a writable target file
+		// matches the symlink → read-only shared-template workflow.
+		// Any other temp-file failure (ENOSPC, EMFILE, ENOENT on dir,
+		// etc.) is propagated so callers don't silently lose
+		// atomicity in failure modes where they rely on it.
+		if isPermissionDenied(err) && targetWritable(target) {
+			return os.WriteFile(target, data, perm) //nolint:gosec // G306: perm preserved from existing file or supplied by caller
+		}
+		return err
 	}
 	tmpPath := tmp.Name()
 
@@ -99,6 +108,29 @@ func existingFilePerm(path string) (os.FileMode, bool) {
 		return 0, false
 	}
 	return info.Mode().Perm(), true
+}
+
+// isPermissionDenied reports whether err is the OS-level
+// permission-denied error (EACCES on POSIX, ERROR_ACCESS_DENIED on
+// Windows). Used by AtomicWrite to scope the read-only-dir fallback
+// narrowly so other temp-file failures (ENOSPC, EMFILE, ENOENT on
+// the dir itself, etc.) propagate to the caller.
+func isPermissionDenied(err error) bool {
+	return errors.Is(err, fs.ErrPermission)
+}
+
+// targetWritable reports whether path exists and the calling process
+// can open it for writing. Used by AtomicWrite to confirm the
+// fallback write would actually succeed before attempting it — when
+// we can't even open the target for write, we want the original
+// CreateTemp error to propagate, not a follow-up open failure.
+func targetWritable(path string) bool {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return false
+	}
+	_ = f.Close()
+	return true
 }
 
 // maxSymlinkDepth caps the number of links resolveLinkTarget will
