@@ -42,7 +42,10 @@ func ReadFile(path string) (*Profile, error) {
 }
 
 // WriteFile serializes p to disk via fileutil.AtomicWrite so concurrent
-// readers never see a half-written file.
+// readers never see a half-written file. The marshalled payload is
+// capped at maxDecompressedLen (same limit ReadFile and token Decode
+// enforce) so anything we write is guaranteed to round-trip back —
+// no silently-creating-a-too-large-to-read artifact.
 func WriteFile(path string, p *Profile) error {
 	if p == nil {
 		return errors.New("envid.WriteFile: nil profile")
@@ -50,6 +53,9 @@ func WriteFile(path string, p *Profile) error {
 	data, err := yaml.Marshal(p)
 	if err != nil {
 		return fmt.Errorf("envid.WriteFile: marshal: %w", err)
+	}
+	if len(data) > maxDecompressedLen {
+		return fmt.Errorf("%w: marshalled %d bytes (max %d)", ErrPayloadTooLarge, len(data), maxDecompressedLen)
 	}
 	return fileutil.AtomicWrite(path, data, 0o644)
 }

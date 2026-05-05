@@ -578,15 +578,33 @@ func applyPacks(packs []envid.Pack) error {
 	merged := append([]registry.Pack(nil), existing...)
 	added := 0
 	for _, p := range packs {
-		key := strings.ToLower(p.Name)
+		// Hygiene: hand-edited or malicious profiles may contain
+		// empty/whitespace pack names or empty tool lists.
+		// Mirror applyFavorites — trim, skip empties, and drop
+		// invalid tool entries — so we never persist garbage.
+		name := strings.TrimSpace(p.Name)
+		if name == "" {
+			continue
+		}
+		toolNames := make([]string, 0, len(p.Tools))
+		for _, tn := range p.Tools {
+			tn = strings.TrimSpace(tn)
+			if tn != "" {
+				toolNames = append(toolNames, tn)
+			}
+		}
+		if len(toolNames) == 0 {
+			continue
+		}
+		key := strings.ToLower(name)
 		if _, ok := existingSet[key]; ok {
 			continue
 		}
 		existingSet[key] = struct{}{}
 		merged = append(merged, registry.Pack{
-			Name:        p.Name,
-			DisplayName: p.DisplayName,
-			ToolNames:   p.Tools,
+			Name:        name,
+			DisplayName: strings.TrimSpace(p.DisplayName),
+			ToolNames:   toolNames,
 		})
 		added++
 	}

@@ -114,7 +114,7 @@ Cross-OS / cross-PM gaps surface in the report as "skipped: no winget package on
 | File | Responsibility |
 |------|---------------|
 | `types.go` | `Profile`, `Tool`, `Pack`, `Security` types with yaml/json tags |
-| `build.go` | `Build(ctx, svc, cfg) (*Profile, error)` — assembles a profile from the live system; canonicalizes favorites and pack tool lists at collection time |
+| `build.go` | `Build(ctx, svc, cfg, opts) (*Profile, error)` — assembles a profile from the live system; canonicalizes favorites and pack tool lists at collection time. `opts` (`BuildOptions`) lets tests inject a fixed `Now` time; production callers pass the zero value |
 | `token.go` | `Encode(p) (string, error)` / `Decode(s) (*Profile, error)` — gzip+b64 token I/O with versioned `clim:env:v1:` prefix |
 | `file.go` | `ReadFile` / `WriteFile` for the YAML form |
 | `hash.go` | `ComputeHash` + `canonicalize` helpers — sorts/dedups slices and zeros `GeneratedAt`/`Hash` so two captures of the same env share an identifier |
@@ -127,7 +127,7 @@ Public API surface:
 ```go
 package envid
 
-func Build(ctx context.Context, svc *service.ToolService, cfg *config.Config) (*Profile, error)
+func Build(ctx context.Context, svc *service.ToolService, cfg *config.Config, opts BuildOptions) (*Profile, error)
 func Encode(p *Profile) (string, error)
 func Decode(token string) (*Profile, error)
 func ReadFile(path string) (*Profile, error)

@@ -6,10 +6,20 @@
 //   - Compact base64 token (`clim:env:v1:<gz+b64>`) for chat / quick
 //     share.
 //
-// Privacy: tokens contain only what `clim list` already shows
-// (catalog tool names, installed versions, install sources, GOOS/
-// GOARCH, available PM binaries). No hostname, username, paths, or
-// environment variables are captured.
+// Privacy is achieved by content omission. A profile is an explicit
+// allowlist:
+//
+//   - installed tools (catalog name, version, install source, category)
+//   - favorites
+//   - user-defined custom packs (name + tool list)
+//   - which package managers are available on PATH
+//   - clim version and commit
+//   - GOOS, GOARCH, and best-effort distro hint
+//   - observational audit/security counts (warnings/infos and the
+//     4-bucket verdict tally — clean/watch/risk/unknown)
+//
+// Deliberately NOT captured: hostname, username, absolute paths,
+// environment variables, file contents, host-identifying metadata.
 package envid
 
 import "time"

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -44,6 +45,20 @@ func TestReadFile_RejectsOversize(t *testing.T) {
 	}
 	if _, err := ReadFile(path); err == nil {
 		t.Error("ReadFile should refuse oversize input")
+	} else if !errors.Is(err, ErrPayloadTooLarge) {
+		t.Errorf("err = %v; want ErrPayloadTooLarge", err)
+	}
+}
+
+func TestWriteFile_RejectsOversize(t *testing.T) {
+	// Symmetric with Encode/Decode/ReadFile size caps: never write
+	// a file we couldn't read back.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.yaml")
+	huge := strings.Repeat("x", maxDecompressedLen)
+	p := &Profile{SchemaVersion: SchemaVersion, Tools: []Tool{{Name: huge}}}
+	if err := WriteFile(path, p); err == nil {
+		t.Error("WriteFile should refuse oversize payload")
 	} else if !errors.Is(err, ErrPayloadTooLarge) {
 		t.Errorf("err = %v; want ErrPayloadTooLarge", err)
 	}
