@@ -165,7 +165,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	// is skipping catalog-wide version resolution.
 	resolved := svc.RefreshTool(cmd.Context(), *t)
 	*t = resolved
-	sp.Done("Done")
+	sp.Stop()
 
 	report := buildInfoReport(cmd, t, tools)
 
