@@ -5,7 +5,7 @@
 <h1 align="center">klim</h1>
 
 <p align="center">
-  <strong>Make every developer environment reproducible.</strong>
+  <strong>Dev tools, organized for productivity.</strong>
 </p>
 
 <p align="center">
