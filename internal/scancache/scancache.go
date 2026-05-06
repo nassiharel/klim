@@ -147,21 +147,25 @@ func Load() (map[string]Entry, time.Time, error) {
 // is the correct behaviour for newly-added catalog entries.
 //
 // For each cached instance we verify the recorded path still exists.
-// If it doesn't, we try to recover the instance via a PATH search of
-// the tool's binary names — that handles the common "external
-// upgrade rotated the versioned dir under brew/winget" pattern where
-// the tool is still installed and on PATH but at a different
-// resolved path. Recovery uses finder.PathDirectories() so we see
-// the same merged PATH (process + Windows registry) the finder
-// would see during a full scan, and finder.DetectSource() so a
-// recovered path gets re-classified rather than inheriting a now-
-// stale cached source. Recovered paths are deduped within the
-// per-tool loop so multiple stale instances all pointing at the
-// same live binary collapse into one.
+// If it doesn't, we recover the tool by walking the same merged PATH
+// the finder would use during a full scan and collecting every
+// matching binary (mirrors finder.scanDir which emits every match
+// per tool, not just the first). That handles:
+//   - external upgrade rotates a versioned dir under brew/winget
+//     (the binary is still on PATH at a different resolved path)
+//   - tool has multiple installed copies and several moved at once
 //
-// Without this guard a tool uninstalled outside clim's own install/
-// upgrade/remove flow would either appear "installed" forever
-// (false positive) or vanish on a benign upgrade (false negative).
+// Recovered paths are deduped within the per-tool loop so multiple
+// stale entries collapsing to the same live binary appear once.
+// Recovered instances get a fresh source classification via
+// finder.DetectSource (the cached source could now be wrong if the
+// binary was reinstalled via a different manager).
+//
+// When no original path stat-checks AND no recovery match anywhere
+// on PATH, the tool's Latest/LatestFrom are also cleared — leaving
+// stale 'latest version' metadata on a now-uninstalled tool would
+// have the UI confidently render upgrade hints for something the
+// user can't even run.
 func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 	for i := range tools {
 		entry, ok := entries[tools[i].Name]
@@ -172,49 +176,66 @@ func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 		tools[i].LatestFrom = entry.LatestFrom
 		if len(entry.Instances) == 0 {
 			tools[i].Instances = nil
+			tools[i].Latest = ""
+			tools[i].LatestFrom = ""
 			continue
 		}
 		insts := make([]registry.Instance, 0, len(entry.Instances))
 		seenPaths := make(map[string]struct{}, len(entry.Instances))
-		recoveryAttempted := false
-		var recoveredPath string
-		var recoveredOK bool
+
+		// First pass: keep instances whose cached path still
+		// exists. Tracking which entries were stale lets us know
+		// whether to bother walking PATH for recovery.
+		anyStale := false
 		for _, e := range entry.Instances {
-			if pathExists(e.Path) {
-				if _, dup := seenPaths[e.Path]; dup {
-					continue
-				}
-				seenPaths[e.Path] = struct{}{}
-				insts = append(insts, registry.Instance{
-					Path:    e.Path,
-					Version: e.Version,
-					Source:  registry.InstallSource(e.Source),
-				})
+			if !pathExists(e.Path) {
+				anyStale = true
 				continue
 			}
-			// Stale cached path. Try to recover via PATH lookup —
-			// once per tool — so multiple stale instances don't
-			// each append the same recovered binary. The recovered
-			// instance's source comes from a fresh DetectSource on
-			// the resolved path, not the stale cached source.
-			if !recoveryAttempted {
-				recoveredPath, recoveredOK = lookupOnPATH(tools[i].BinaryNames)
-				recoveryAttempted = true
-			}
-			if !recoveredOK {
+			if _, dup := seenPaths[e.Path]; dup {
 				continue
 			}
-			if _, dup := seenPaths[recoveredPath]; dup {
-				continue
-			}
-			seenPaths[recoveredPath] = struct{}{}
+			seenPaths[e.Path] = struct{}{}
 			insts = append(insts, registry.Instance{
-				Path:    recoveredPath,
-				Version: e.Version, // best-effort; next full scan refreshes
-				Source:  finder.DetectSource(recoveredPath),
+				Path:    e.Path,
+				Version: e.Version,
+				Source:  registry.InstallSource(e.Source),
 			})
 		}
+
+		// Second pass: if any cached path was stale, walk PATH and
+		// append every matching binary that we haven't already
+		// recorded. Doing it once (rather than per-stale-instance)
+		// keeps the scan cheap, and collecting all matches lets a
+		// tool with multiple cached installs recover several at
+		// once — the previous "first match wins" approach silently
+		// dropped distinct later-PATH installations.
+		if anyStale {
+			for _, recovered := range lookupAllOnPATH(tools[i].BinaryNames) {
+				if _, dup := seenPaths[recovered]; dup {
+					continue
+				}
+				seenPaths[recovered] = struct{}{}
+				insts = append(insts, registry.Instance{
+					Path:   recovered,
+					Source: finder.DetectSource(recovered),
+					// Version is intentionally empty: a fresh scan
+					// runs the per-PM resolver to populate it.
+					// Carrying a stale cached version here would
+					// be misleading for a binary at a new path.
+				})
+			}
+		}
+
 		tools[i].Instances = insts
+		if len(insts) == 0 {
+			// Every cached instance vanished and no recovery
+			// found a replacement — the tool's gone. Clear stale
+			// metadata so the UI doesn't show upgrade hints for
+			// something uninstalled.
+			tools[i].Latest = ""
+			tools[i].LatestFrom = ""
+		}
 	}
 	return tools
 }
@@ -233,38 +254,40 @@ func pathExists(path string) bool {
 
 // lookupOnPATH returns the resolved path of the first binary name
 // found on the same merged PATH the finder uses, or ("", false)
-// when none are present. Used by Apply as a fallback when the
-// cached path is stale (e.g. external brew upgrade rotated the
-// versioned directory).
-//
-// We delegate the candidate-name expansion to finder.BinaryCandidateNames
-// so PATHEXT-driven Windows extensions (.exe / .cmd / .bat / .com /
-// …) are handled identically to the main scan. Hardcoding a smaller
-// list would silently drop tools whose command resolves via a less
-// common PATHEXT entry, defeating the recovery's purpose.
-//
-// Walking finder.PathDirectories() rather than relying on
-// exec.LookPath alone matters on Windows: registry PATH entries
-// that winget/scoop installs add post-launch are visible through
-// the finder helper but not through the inherited process PATH.
-//
-// Loop nesting is `for dir { for name { for candidate } }` to
-// match finder.scanDir's PATH-order semantics: the earliest PATH
-// dir always wins, regardless of which binary alias resolves
-// first. The previous nesting (`for name { for dir }`) could
-// recover a later-PATH `python3` instead of an earlier-PATH
-// `python` for tools with multiple binary names.
+// when none are present. Kept for callers that explicitly want a
+// single-match result; Apply uses lookupAllOnPATH for full
+// PATH-walk recovery.
 func lookupOnPATH(binaryNames []string) (string, bool) {
-	if len(binaryNames) == 0 {
+	all := lookupAllOnPATH(binaryNames)
+	if len(all) == 0 {
 		return "", false
+	}
+	return all[0], true
+}
+
+// lookupAllOnPATH walks every directory in finder.PathDirectories()
+// and returns every binary that matches one of binaryNames (with
+// PATHEXT expansion on Windows), in PATH order. Resolved through
+// EvalSymlinks. Each path is returned at most once. Mirrors
+// finder.scanDir which emits every match per tool, so the scancache
+// fast-path can recover multiple cached installations that all
+// moved to new resolved paths in one pass.
+func lookupAllOnPATH(binaryNames []string) []string {
+	if len(binaryNames) == 0 {
+		return nil
 	}
 	dirs := finder.PathDirectories()
 	if len(dirs) == 0 {
-		// Fall back to exec.LookPath so we still recover when the
-		// finder helper produces an empty list (e.g. minimal test
-		// environments).
-		return lookupViaExec(binaryNames)
+		// Test/edge environments: fall back to exec.LookPath so we
+		// still produce something useful. Returns at most one
+		// match — exec.LookPath doesn't expose siblings.
+		if path, ok := lookupViaExec(binaryNames); ok {
+			return []string{path}
+		}
+		return nil
 	}
+	seen := make(map[string]struct{})
+	out := make([]string, 0, 2)
 	for _, dir := range dirs {
 		for _, name := range binaryNames {
 			for _, candidate := range finder.BinaryCandidateNames(name) {
@@ -277,11 +300,15 @@ func lookupOnPATH(binaryNames []string) (string, bool) {
 				if err != nil || resolved == "" {
 					resolved = full
 				}
-				return resolved, true
+				if _, dup := seen[resolved]; dup {
+					continue
+				}
+				seen[resolved] = struct{}{}
+				out = append(out, resolved)
 			}
 		}
 	}
-	return "", false
+	return out
 }
 
 func lookupViaExec(binaryNames []string) (string, bool) {

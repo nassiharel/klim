@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -73,15 +72,15 @@ func TestHintFromError_RealExecExitError(t *testing.T) {
 	// silently disappear and pure-unit tests using errors.New
 	// wouldn't catch it.
 	//
-	// Reproducing winget's 0x8A150014 from a shell isn't possible
-	// (POSIX caps exit codes at 0-255), so we temporarily stub
-	// wingetExitNotInstalled to a small code (42), spawn a helper
-	// that exits with that, and assert hintFromError returns the
-	// real NO_APPLICATIONS_FOUND hint string. That asserts both
+	// Reproducing winget's 0x8A150014 from a child process isn't
+	// portable (POSIX caps exit codes at 0-255 even though Windows
+	// exposes the full 32-bit value), so we temporarily stub
+	// wingetExitNotInstalled to a small code (42), re-exec the
+	// test binary so it exits 42, and assert hintFromError returns
+	// the real NO_APPLICATIONS_FOUND hint. The helper-process
+	// pattern uses os.Args[0] / os.Exit() — no shell — so the test
+	// runs identically on Windows, macOS, and Linux. Asserts both
 	// the unwrap AND the code-to-hint mapping.
-	if runtime.GOOS == "windows" {
-		t.Skip("helper-process pattern needs a POSIX shell; the unwrap logic is platform-neutral")
-	}
 	defer func(orig int) { wingetExitNotInstalled = orig }(wingetExitNotInstalled)
 	wingetExitNotInstalled = 42
 

@@ -326,8 +326,14 @@ func TestApplyRecoveryRespectsPathOrder(t *testing.T) {
 		"python": {Instances: []instanceYAML{{Path: stale, Source: "winget"}}},
 	}
 	got := Apply(catalog, entries)
-	if len(got[0].Instances) != 1 {
-		t.Fatalf("expected 1 instance, got %d", len(got[0].Instances))
+	// Apply now collects every PATH match (mirrors finder.scanDir),
+	// so we expect at least 2 instances (dirA's python, dirB's
+	// python3) plus possibly real-system pythons. The order
+	// invariant is what we're testing: dirA's match must come
+	// first because it's earlier in PATH, regardless of which
+	// alias hits first.
+	if len(got[0].Instances) < 1 {
+		t.Fatalf("expected at least 1 instance, got %d", len(got[0].Instances))
 	}
 	wantPath := filepath.Join(dirA, pyBin)
 	resolvedWant, _ := filepath.EvalSymlinks(wantPath)
@@ -335,7 +341,35 @@ func TestApplyRecoveryRespectsPathOrder(t *testing.T) {
 		resolvedWant = wantPath
 	}
 	if got[0].Instances[0].Path != resolvedWant {
-		t.Errorf("got %q, want %q (earliest PATH dir should win regardless of alias order)",
+		t.Errorf("first instance = %q, want %q (earliest PATH dir should win regardless of alias order)",
 			got[0].Instances[0].Path, resolvedWant)
+	}
+}
+
+func TestApplyClearsLatestWhenAllInstancesGone(t *testing.T) {
+	// When every cached instance is stale and recovery finds
+	// nothing on PATH, the tool's Latest/LatestFrom must be
+	// cleared too — leaving 'latest version' metadata on a now-
+	// uninstalled tool would have the UI confidently render
+	// upgrade hints for something the user can't run.
+	withTempCache(t)
+	dir := t.TempDir()
+	t.Setenv("PATH", dir) // empty dir; nothing to recover
+
+	missing := filepath.Join(dir, "ghost")
+	catalog := []registry.Tool{{Name: "ghost", BinaryNames: []string{"ghost"}}}
+	entries := map[string]Entry{
+		"ghost": {
+			Instances:  []instanceYAML{{Path: missing, Source: "winget"}},
+			Latest:     "9.9.9",
+			LatestFrom: "winget",
+		},
+	}
+	got := Apply(catalog, entries)
+	if len(got[0].Instances) != 0 {
+		t.Errorf("expected 0 instances after eviction, got %d", len(got[0].Instances))
+	}
+	if got[0].Latest != "" || got[0].LatestFrom != "" {
+		t.Errorf("expected Latest/LatestFrom cleared, got Latest=%q LatestFrom=%q", got[0].Latest, got[0].LatestFrom)
 	}
 }
