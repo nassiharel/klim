@@ -121,12 +121,29 @@ func runEnvIDPrint(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 	}
+	hash, warn := trustedHash(p)
 	fmt.Fprintf(os.Stderr, "\n  hash: %s   tools: %d   favorites: %d   packs: %d\n",
-		p.Hash, len(p.Tools), len(p.Favorites), len(p.Packs))
+		hash, len(p.Tools), len(p.Favorites), len(p.Packs))
+	if warn != "" {
+		fmt.Fprintf(os.Stderr, "  %s\n", warn)
+	}
 	return nil
 }
 
-// envShowCmd pretty-prints a profile for inspection.
+// trustedHash returns the recomputed-from-content hash for p plus a
+// non-empty warning when the user-supplied p.Hash differs (the
+// token/file may have been edited or forged). Build's freshly-
+// constructed profile always agrees, so this collapses to a no-op
+// for `clim env` (no args) and only matters for show/diff/apply
+// against external input.
+func trustedHash(p *envid.Profile) (hash, warning string) {
+	got := envid.ComputeHash(p)
+	if p.Hash != "" && p.Hash != got {
+		return got, fmt.Sprintf("⚠ token claimed hash %s; recomputed %s (token may have been edited)", p.Hash, got)
+	}
+	return got, ""
+}
+
 var envShowCmd = &cobra.Command{
 	Use:   "show <token-or-file>",
 	Short: "Pretty-print an env token or file",
@@ -194,7 +211,11 @@ func runEnvIDApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "\n──── Applying env %s ────\n\n", p.Hash)
+	hash, warn := trustedHash(p)
+	fmt.Fprintf(os.Stderr, "\n──── Applying env %s ────\n\n", hash)
+	if warn != "" {
+		fmt.Fprintf(os.Stderr, "  %s\n\n", warn)
+	}
 	fmt.Fprintf(os.Stderr, "  Source clim:    %s\n", p.Clim.Version)
 	fmt.Fprintf(os.Stderr, "  Source OS:      %s/%s\n", p.OS.GOOS, p.OS.Arch)
 	fmt.Fprintf(os.Stderr, "  Tools:          %d\n", len(p.Tools))
@@ -280,7 +301,11 @@ func isUserCausedDecodeError(err error) bool {
 }
 
 func renderProfileText(w io.Writer, p *envid.Profile) {
-	_, _ = fmt.Fprintf(w, "\n──── env %s ────\n\n", p.Hash)
+	hash, warn := trustedHash(p)
+	_, _ = fmt.Fprintf(w, "\n──── env %s ────\n\n", hash)
+	if warn != "" {
+		_, _ = fmt.Fprintf(w, "  %s\n\n", warn)
+	}
 	_, _ = fmt.Fprintf(w, "  clim version:    %s\n", p.Clim.Version)
 	if p.Clim.Commit != "" {
 		_, _ = fmt.Fprintf(w, "  clim commit:     %s\n", p.Clim.Commit)
@@ -346,20 +371,19 @@ func renderProfileDiffTo(w io.Writer, local, remote *envid.Profile) {
 func renderProfileDiff(w io.Writer, local, remote *envid.Profile) {
 	// Recompute both hashes from the decoded content so user-
 	// editable inputs (a hand-tweaked YAML, a forged token) can't
-	// claim "match" by lying in the hash field. The local profile
-	// was just built by Build (already trusted), but recomputing
-	// is cheap and keeps the comparison symmetric.
-	localHash := envid.ComputeHash(local)
-	remoteHash := envid.ComputeHash(remote)
+	// claim "match" by lying in the hash field. trustedHash also
+	// surfaces a warning when the stored hash disagrees — same
+	// pattern show/apply use, kept consistent through the helper.
+	localHash, _ := trustedHash(local)
+	remoteHash, remoteWarn := trustedHash(remote)
 
 	_, _ = fmt.Fprintf(w, "\n──── env diff ────\n")
 	_, _ = fmt.Fprintf(w, "  local:  %s   tools=%d favorites=%d packs=%d\n",
 		localHash, len(local.Tools), len(local.Favorites), len(local.Packs))
 	_, _ = fmt.Fprintf(w, "  remote: %s   tools=%d favorites=%d packs=%d\n",
 		remoteHash, len(remote.Tools), len(remote.Favorites), len(remote.Packs))
-	if remote.Hash != "" && remote.Hash != remoteHash {
-		_, _ = fmt.Fprintf(w, "  ⚠ remote claimed hash %s; recomputed %s (token may have been edited)\n",
-			remote.Hash, remoteHash)
+	if remoteWarn != "" {
+		_, _ = fmt.Fprintf(w, "  %s\n", remoteWarn)
 	}
 
 	if localHash == remoteHash {

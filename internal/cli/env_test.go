@@ -127,3 +127,25 @@ func TestRenderProfileDiff_RecomputesHash(t *testing.T) {
 		t.Errorf("expected forged-hash warning, got:\n%s", out)
 	}
 }
+
+func TestRenderProfileText_RecomputesAndWarns(t *testing.T) {
+	// show / apply / the bare-print summary all read p.Hash, but
+	// that field is user-controlled. trustedHash recomputes from
+	// content and warns when the stored value disagrees. This
+	// test asserts the warning surfaces — without it, a forged
+	// token could mislead users about which env they're inspecting.
+	good := &envid.Profile{SchemaVersion: envid.SchemaVersion, Tools: []envid.Tool{{Name: "fzf"}}}
+	good.Hash = envid.ComputeHash(good)
+	if h, w := trustedHash(good); w != "" || h == "" {
+		t.Errorf("matching profile produced warning %q (hash=%q); want empty", w, h)
+	}
+
+	forged := &envid.Profile{
+		SchemaVersion: envid.SchemaVersion,
+		Tools:         []envid.Tool{{Name: "evil"}},
+		Hash:          good.Hash, // claim a hash from a different profile
+	}
+	if _, w := trustedHash(forged); !strings.Contains(w, "may have been edited") {
+		t.Errorf("forged profile should produce 'may have been edited' warning, got %q", w)
+	}
+}
