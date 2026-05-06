@@ -91,5 +91,5 @@ Result: 1 match, 1 differ, 1 local only, 1 remote only
 
 ## See Also
 
-- [klim export](/reference/commands/export) — Export your tools to a manifest
-- [klim share](/reference/commands/share) — Generate a share token
+- [klim export](./export.md) — Export your tools to a manifest
+- [klim share](./share.md) — Generate a share token

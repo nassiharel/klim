@@ -46,4 +46,4 @@ klim try ripgrep --keep -- -i "TODO" .
 
 ## See Also
 
-- [klim proxy](/reference/commands/proxy) — Auto-install shims for permanent lazy-loading
+- [klim proxy](./proxy.md) — Auto-install shims for permanent lazy-loading

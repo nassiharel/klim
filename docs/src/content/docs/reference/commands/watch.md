@@ -56,4 +56,4 @@ Run 'klim' to upgrade interactively.
 
 ## See Also
 
-- [Batch Updates guide](/guides/batch-updates) — Upgrade tools in the TUI
+- [Batch Updates guide](../../guides/batch-updates.md) — Upgrade tools in the TUI

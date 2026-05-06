@@ -62,4 +62,4 @@ klim check --json
 
 ## See Also
 
-- [Team Manifests guide](/guides/team-manifests) — How to set up .klim.yaml
+- [Team Manifests guide](../../guides/team-manifests.mdx) — How to set up .klim.yaml

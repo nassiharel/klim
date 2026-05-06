@@ -142,6 +142,6 @@ show <label>`.
 
 ## See Also
 
-- [`klim export`](/reference/commands/export) — One-shot YAML manifest of installed tools.
-- [`klim diff`](/reference/commands/diff) — Compare your env to an external manifest or share token.
-- [`klim security`](/reference/commands/security/) — Security / compliance / SBOM audit.
+- [`klim export`](./export.md) — One-shot YAML manifest of installed tools.
+- [`klim diff`](./diff.md) — Compare your env to an external manifest or share token.
+- [`klim security`](./security.md) — Security / compliance / SBOM audit.

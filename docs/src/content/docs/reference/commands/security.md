@@ -47,7 +47,7 @@ the installed versions of every tool that maps to a supported
 ecosystem. Coverage today is **npm only** — OSV.dev rejects the
 `Homebrew` and `GitHub` ecosystems with HTTP 400, so brew-only and
 GitHub-slug-only tools are listed under `skipped`. See the dedicated
-[`klim security vuln`](/reference/commands/vuln/) reference for full
+[`klim security vuln`](./vuln.md) reference for full
 flag documentation.
 
 Exit codes: `0` = clean or `--fail-on` not set, `1` = vuln lookup
@@ -70,10 +70,10 @@ CI to enforce the gate strictly.
 
 All `klim security` commands print human-readable progress to stderr
 and machine-readable payloads (`--output json`) to stdout. See
-[CLI conventions](/reference/cli-conventions/).
+[configuration reference](../configuration.md).
 
 ## Related
 
-- [`klim security vuln`](/reference/commands/vuln/) — vulnerability scan reference
-- [`klim score`](/reference/commands/score/) — composite security score per tool
-- [`klim trail`](/reference/commands/trail/) — change history (every install/upgrade)
+- [`klim security vuln`](./vuln.md) — vulnerability scan reference
+- [`klim score`](./score.md) — composite security score per tool
+- [`klim trail`](./trail.md) — change history (every install/upgrade)
