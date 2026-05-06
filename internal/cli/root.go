@@ -123,6 +123,8 @@ func init() {
 	rootCmd.AddCommand(importCmd)
 	shareCmd.GroupID = "data"
 	rootCmd.AddCommand(shareCmd)
+	envCmd.GroupID = "data"
+	rootCmd.AddCommand(envCmd)
 	trailCmd.GroupID = "data"
 	rootCmd.AddCommand(trailCmd)
 
