@@ -2,9 +2,11 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -251,11 +253,11 @@ func (m Model) renderEnvIdleView() string {
 		b.WriteString("  " + detailLabelStyle.Render(fixedWidth("OS", 14)) +
 			dimVersion.Render(fmt.Sprintf("%s/%s", m.envProfile.OS.GOOS, m.envProfile.OS.Arch)) + "\n")
 		b.WriteString("  " + detailLabelStyle.Render(fixedWidth("Tools", 14)) +
-			dimVersion.Render(fmt.Sprintf("%d", len(m.envProfile.Tools))) + "\n")
+			dimVersion.Render(strconv.Itoa(len(m.envProfile.Tools))) + "\n")
 		b.WriteString("  " + detailLabelStyle.Render(fixedWidth("Favorites", 14)) +
-			dimVersion.Render(fmt.Sprintf("%d", len(m.envProfile.Favorites))) + "\n")
+			dimVersion.Render(strconv.Itoa(len(m.envProfile.Favorites))) + "\n")
 		b.WriteString("  " + detailLabelStyle.Render(fixedWidth("Custom packs", 14)) +
-			dimVersion.Render(fmt.Sprintf("%d", len(m.envProfile.Packs))) + "\n\n")
+			dimVersion.Render(strconv.Itoa(len(m.envProfile.Packs))) + "\n\n")
 
 		if m.envToken != "" {
 			b.WriteString("  " + detailLabelStyle.Render("Token") + "\n")
@@ -391,7 +393,7 @@ func decodeEnvCmd(input, verb string) tea.Cmd {
 	return func() tea.Msg {
 		trimmed := strings.TrimSpace(input)
 		if trimmed == "" {
-			return envDecodedMsg{verb: verb, err: fmt.Errorf("empty input")}
+			return envDecodedMsg{verb: verb, err: errors.New("empty input")}
 		}
 		if strings.HasPrefix(trimmed, "klim:env:") {
 			p, err := envid.Decode(trimmed)
@@ -491,9 +493,7 @@ func mergeCustomPacks(packs []envid.Pack) (int, error) {
 	}
 	added := 0
 	merged := make([]registry.Pack, 0, len(existing))
-	for _, p := range existing {
-		merged = append(merged, p)
-	}
+	merged = append(merged, existing...)
 	for _, p := range packs {
 		name := strings.TrimSpace(p.Name)
 		if name == "" {

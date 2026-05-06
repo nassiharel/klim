@@ -265,9 +265,11 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 			line += "\n    " + dimVersion.Render("→ "+strings.Join(item.cmdArgs, " "))
 		}
 		if item.hint != "" {
+			var lineSb268 strings.Builder
 			for _, hl := range strings.Split(item.hint, "\n") {
-				line += "\n    " + dimVersion.Render(hl)
+				lineSb268.WriteString("\n    " + dimVersion.Render(hl))
 			}
+			line += lineSb268.String()
 		}
 	}
 

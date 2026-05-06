@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -54,7 +55,7 @@ func (s *Server) serveError(w http.ResponseWriter, _ *http.Request, err error, s
 	s.opts.Logger.Error("web error", "err", err.Error(), "status", status)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><title>klim — error</title>`+
+	_, _ = fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><title>klim — error</title>`+
 		`<body style="font-family:system-ui;padding:2rem"><h1>Error</h1><p>%s</p>`+
 		`<p><a href="/">Back to home</a></p></body>`, template.HTMLEscapeString(err.Error()))
 }
@@ -276,7 +277,7 @@ func (s *Server) pageFavorites(w http.ResponseWriter, r *http.Request) {
 func (s *Server) pageFavoritesToggle(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
-		s.serveError(w, r, fmt.Errorf("missing tool name"), http.StatusBadRequest)
+		s.serveError(w, r, errors.New("missing tool name"), http.StatusBadRequest)
 		return
 	}
 	if _, err := s.loader.ToggleFavorite(name); err != nil {
@@ -308,7 +309,7 @@ func (s *Server) pageTrail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) pageTrailShow(w http.ResponseWriter, r *http.Request) {
 	ref := r.PathValue("ref")
 	if ref == "" {
-		s.serveError(w, r, fmt.Errorf("missing ref"), http.StatusBadRequest)
+		s.serveError(w, r, errors.New("missing ref"), http.StatusBadRequest)
 		return
 	}
 	snap, entry, err := trail.Show(ref)
@@ -464,6 +465,8 @@ func newServiceLoader(svc *service.ToolService) loader {
 	return &serviceLoader{svc: svc}
 }
 
+// LoadInstalled scans PATH (cached) and returns the installed-tool view
+// plus a catalog summary used by the dashboard.
 func (l *serviceLoader) LoadInstalled(ctx context.Context) ([]registry.Tool, catalogSummary, error) {
 	tools, info, scan, err := l.svc.LoadAndResolveCached(ctx, false)
 	if err != nil {
@@ -481,6 +484,7 @@ func (l *serviceLoader) LoadInstalled(ctx context.Context) ([]registry.Tool, cat
 	return tools, catalogSummary{Source: src, Count: count}, nil
 }
 
+// LoadTool returns the named tool refreshed against the live catalog.
 func (l *serviceLoader) LoadTool(ctx context.Context, name string) (registry.Tool, error) {
 	tools, _, err := l.svc.ScanOnly(ctx)
 	if err != nil {
@@ -495,14 +499,17 @@ func (l *serviceLoader) LoadTool(ctx context.Context, name string) (registry.Too
 	return registry.Tool{}, notFoundError{Name: name}
 }
 
+// Favorites returns the in-memory favorites set used by the web UI.
 func (l *serviceLoader) Favorites() (map[string]bool, error) {
 	return favorites.Set()
 }
 
+// ToggleFavorite flips the favorite state for the named tool.
 func (l *serviceLoader) ToggleFavorite(name string) (bool, error) {
 	return favorites.Toggle(name)
 }
 
+// LoadPacks returns the catalog packs available for the current OS.
 func (l *serviceLoader) LoadPacks(ctx context.Context) ([]registry.Pack, error) {
 	return l.svc.LoadPacks(ctx)
 }
@@ -727,14 +734,14 @@ func templateFuncs() template.FuncMap {
 			return s
 		},
 		"join": strings.Join,
-		// barPct turns a count + max into a percentage capped at 100.
+		// barPct turns a count + total into a percentage capped at 100.
 		// Used by /dashboard's bar-chart rows. Pure helper so it can
 		// live in the package without any HTML logic.
-		"barPct": func(count, max int) int {
-			if max <= 0 {
+		"barPct": func(count, total int) int {
+			if total <= 0 {
 				return 0
 			}
-			pct := count * 100 / max
+			pct := count * 100 / total
 			if pct > 100 {
 				return 100
 			}

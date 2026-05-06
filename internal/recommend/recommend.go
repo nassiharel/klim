@@ -54,7 +54,7 @@ const Max = 25
 // render the same list without duplicating the algorithm.
 //
 // Returns nil when focus has no tags or no candidate shares any.
-func Related(focus registry.Tool, tools []registry.Tool, max int) []Recommendation {
+func Related(focus registry.Tool, tools []registry.Tool, maxResults int) []Recommendation {
 	if len(focus.Tags) == 0 {
 		return nil
 	}
@@ -101,8 +101,8 @@ func Related(focus registry.Tool, tools []registry.Tool, max int) []Recommendati
 		}
 		return tools[recs[i].ToolIdx].Name < tools[recs[j].ToolIdx].Name
 	})
-	if max > 0 && len(recs) > max {
-		recs = recs[:max]
+	if maxResults > 0 && len(recs) > maxResults {
+		recs = recs[:maxResults]
 	}
 	if maxScore > 0 {
 		for i := range recs {

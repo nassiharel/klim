@@ -69,7 +69,7 @@ func resolveAction(action JobAction, tool registry.Tool) (source string, args []
 // schedules a Job on the manager.
 func (s *Server) startActionJob(ctx context.Context, action JobAction, name string) (*Job, error) {
 	if name == "" {
-		return nil, fmt.Errorf("missing tool name")
+		return nil, errors.New("missing tool name")
 	}
 	switch action {
 	case ActionInstall, ActionUpgrade, ActionRemove:

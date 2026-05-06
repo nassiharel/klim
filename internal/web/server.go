@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -111,7 +112,7 @@ func New(opts Options) (*Server, error) {
 		return nil, fmt.Errorf("web: loading templates: %w", err)
 	}
 
-	addr := net.JoinHostPort(opts.Bind, fmt.Sprintf("%d", opts.Port))
+	addr := net.JoinHostPort(opts.Bind, strconv.Itoa(opts.Port))
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("web: listening on %s: %w", addr, err)
@@ -127,8 +128,11 @@ func New(opts Options) (*Server, error) {
 	}
 	// Default job context until Serve takes over. Serve replaces this
 	// with a child of its own ctx so shutting down the server cancels
-	// any package-manager subprocesses still running.
-	s.jobCtx, s.jobCancel = context.WithCancel(context.Background())
+	// any package-manager subprocesses still running. The cancel
+	// returned here is intentionally retained on the Server struct
+	// rather than deferred — Serve disposes of it when it installs its
+	// own context, and Shutdown calls it explicitly otherwise.
+	s.jobCtx, s.jobCancel = context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is owned by Server and called from Serve/Shutdown.
 	s.routes()
 	s.httpsrv = &http.Server{
 		Handler:           withRecover(opts.Logger, withAccessLog(opts.Logger, authMiddleware(s, s.mux))),
@@ -211,7 +215,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	if s.jobCancel != nil {
 		s.jobCancel()
 	}
-	s.jobCtx, s.jobCancel = context.WithCancel(ctx)
+	s.jobCtx, s.jobCancel = context.WithCancel(ctx) //nolint:gosec // G118: cancel is the deferred call below.
 	defer s.jobCancel()
 
 	errCh := make(chan error, 1)
@@ -358,6 +362,9 @@ type statusRecorder struct {
 	status int
 }
 
+// WriteHeader records the response status code and forwards to the
+// embedded ResponseWriter. Required so the access-log middleware can
+// log the final status without a second http.Hijacker round-trip.
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
