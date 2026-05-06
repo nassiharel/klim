@@ -1,0 +1,15 @@
+name: jq
+display_name: jq
+category: CLI
+tags:
+    - data-processing
+    - cli
+binary_names:
+    - jq
+packages:
+    winget: jqlang.jq
+    scoop: jq
+    choco: jq
+    brew: jq
+    apt: jq
+github: jqlang/jq

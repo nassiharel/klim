@@ -1,0 +1,14 @@
+name: onefetch
+display_name: onefetch
+category: VCS
+tags:
+    - git
+    - cli
+    - code-statistics
+binary_names:
+    - onefetch
+packages:
+    winget: o2sh.onefetch
+    scoop: onefetch
+    brew: onefetch
+github: o2sh/onefetch

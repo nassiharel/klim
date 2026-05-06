@@ -1,0 +1,60 @@
+---
+const pillars = [
+  {
+    icon: 'MAP',
+    title: 'Map your environment',
+    description: 'Discover installed tools, versions, sources, binary paths, GitHub metadata, project references, and pack provenance in one local inventory.',
+  },
+  {
+    icon: 'SPEC',
+    title: 'Standardize project requirements',
+    description: 'Use .klim.yaml, packs, generated CI workflows, Dockerfiles, and devcontainers to turn setup instructions into versioned environment contracts.',
+  },
+  {
+    icon: 'RUN',
+    title: 'Automate through native package managers',
+    description: 'Install, upgrade, remove, proxy, watch, and script tool changes while delegating execution to brew, winget, apt, scoop, choco, snap, and npm.',
+  },
+  {
+    icon: 'MOVE',
+    title: 'Compare, restore, and share toolchains',
+    description: 'Export manifests, create share tokens, capture trail snapshots, diff machines, and reproduce known-good environments across operating systems.',
+  },
+  {
+    icon: 'SAFE',
+    title: 'Audit security and compliance',
+    description: 'Find unmanaged installs, PATH risks, archived upstreams, stale projects, license exposure, vulnerabilities, and SBOM data for compliance pipelines.',
+  },
+  {
+    icon: 'AI',
+    title: 'Give agents deterministic primitives',
+    description: 'Let AI agents and CI call stable Klim commands with predictable exit codes and JSON output instead of improvising shell commands from scratch.',
+  },
+];
+---
+
+<section id="platform" class="py-20 md:py-32">
+  <div class="mx-auto max-w-6xl px-6">
+    <div class="text-center">
+      <h2 class="text-3xl font-bold text-white sm:text-4xl">
+        The control plane for developer toolchains
+      </h2>
+      <p class="mx-auto mt-4 max-w-3xl text-lg text-slate-400">
+        Klim connects inventory, environment contracts, native package managers,
+        security posture, and automation into one deterministic workflow.
+      </p>
+    </div>
+
+    <div class="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+      {pillars.map((pillar) => (
+        <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-6 transition-colors hover:border-emerald-500/40">
+          <div class="mb-4 flex h-11 min-w-11 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 text-xs font-bold uppercase tracking-wide text-emerald-300" aria-hidden="true">
+            {pillar.icon}
+          </div>
+          <h3 class="mb-2 text-lg font-semibold text-white">{pillar.title}</h3>
+          <p class="text-sm leading-relaxed text-slate-400">{pillar.description}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

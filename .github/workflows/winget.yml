@@ -1,0 +1,16 @@
+name: Winget
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Publish to Winget
+    runs-on: windows-latest
+    if: "!github.event.release.prerelease"
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: nassiharel.klim
+          token: ${{ secrets.WINGET_TOKEN }}

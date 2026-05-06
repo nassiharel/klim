@@ -1,0 +1,12 @@
+name: ouch
+display_name: ouch
+category: CLI
+tags:
+    - cli
+    - cross-platform
+binary_names:
+    - ouch
+packages:
+    scoop: ouch
+    brew: ouch
+github: ouch-org/ouch

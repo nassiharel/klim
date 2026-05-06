@@ -1,0 +1,12 @@
+name: hey
+display_name: hey
+category: Testing
+tags:
+    - load-testing
+    - http-client
+    - cli
+binary_names:
+    - hey
+packages:
+    brew: hey
+github: rakyll/hey

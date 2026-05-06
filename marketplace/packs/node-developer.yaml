@@ -1,0 +1,8 @@
+name: node-developer
+display_name: Node.js Developer
+description: Tools for Node.js and JavaScript development.
+tools:
+    - node
+    - deno
+    - bun
+    - npm

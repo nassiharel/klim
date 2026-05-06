@@ -1,0 +1,14 @@
+name: deno
+display_name: Deno
+category: Language
+tags:
+    - javascript
+    - typescript
+binary_names:
+    - deno
+packages:
+    winget: DenoLand.Deno
+    scoop: deno
+    choco: deno
+    brew: deno
+github: denoland/deno

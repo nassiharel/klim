@@ -1,0 +1,13 @@
+name: trufflehog
+display_name: TruffleHog
+category: Security
+tags:
+    - secrets
+    - cli
+binary_names:
+    - trufflehog
+packages:
+    winget: TruffleSecurity.TruffleHog
+    scoop: trufflehog
+    brew: trufflehog
+github: trufflesecurity/trufflehog

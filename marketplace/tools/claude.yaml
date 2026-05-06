@@ -1,0 +1,11 @@
+name: claude
+display_name: Claude Code
+category: AI
+tags:
+    - coding-assistant
+    - anthropic
+binary_names:
+    - claude
+packages:
+    npm: '@anthropic-ai/claude-code'
+github: anthropics/claude-code

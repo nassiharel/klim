@@ -1,0 +1,13 @@
+name: eksctl
+display_name: eksctl
+category: Cloud
+tags:
+    - kubernetes
+    - amazon
+    - cloud
+binary_names:
+    - eksctl
+packages:
+    choco: eksctl
+    brew: eksctl
+github: eksctl-io/eksctl

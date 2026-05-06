@@ -1,0 +1,14 @@
+name: k8s-advanced
+display_name: Kubernetes Advanced
+description: Full Kubernetes toolkit including local clusters and GitOps.
+tools:
+    - kubectl
+    - helm
+    - k9s
+    - kubectx
+    - kubens
+    - stern
+    - kind
+    - kustomize
+    - argocd
+    - flux

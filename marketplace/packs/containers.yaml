@@ -1,0 +1,7 @@
+name: containers
+display_name: Container Toolkit
+description: Docker and container runtime essentials.
+tools:
+    - docker
+    - docker-compose
+    - lazydocker

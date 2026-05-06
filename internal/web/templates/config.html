@@ -1,0 +1,71 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>Config</h1>
+  <p class="muted">Edit klim's settings. Saved to <code>~/.config/klim/config.yaml</code>; most fields need a restart to take full effect.</p>
+</section>
+
+{{if $d.Saved}}
+<section class="card flash flash-ok">
+  <p>✓ Saved. Restart <code>klim browser</code> for changes that affect logging, marketplace URL, or scan concurrency to take effect.</p>
+</section>
+{{end}}
+
+{{if $d.Error}}
+<section class="card flash flash-err">
+  <h2>Couldn't save</h2>
+  <pre>{{$d.Error}}</pre>
+</section>
+{{end}}
+
+{{if $d.Settings}}
+<form method="POST" action="/config" class="config-form">
+  {{range $row := $d.Settings}}
+    {{$s := $row.Setting}}
+    {{$value := $row.Raw}}
+    {{if $d.Form}}{{$value = index $d.Form $s.Key | first}}{{end}}
+    {{if $s.Section}}<h2 class="config-section">{{$s.Section}}</h2>{{end}}
+    <div class="config-row">
+      <label class="config-label" for="cfg-{{$s.Key}}">
+        {{$s.Label}}
+        {{if $s.Help}}<small class="muted">{{$s.Help}}</small>{{end}}
+      </label>
+      <div class="config-input">
+        {{if eq $s.Type 0}}{{/* Bool */}}
+          {{/* Unchecked checkboxes submit nothing; SetFromString
+             treats the empty value as false. We do NOT add a hidden
+             "false" shadow input because Go's r.FormValue returns the
+             FIRST submitted value for a key, and a hidden field
+             placed before the checkbox would always win — making it
+             impossible to turn a boolean ON. */}}
+          <input id="cfg-{{$s.Key}}" type="checkbox" name="{{$s.Key}}" value="true" {{if eq $value "true"}}checked{{end}}>
+        {{else if eq $s.Type 1}}{{/* String */}}
+          <input id="cfg-{{$s.Key}}" type="text" name="{{$s.Key}}" value="{{$value}}" placeholder="(default)">
+        {{else if eq $s.Type 2}}{{/* Int */}}
+          <input id="cfg-{{$s.Key}}" type="number" name="{{$s.Key}}" min="0" value="{{$value}}" placeholder="auto">
+        {{else if eq $s.Type 3}}{{/* Duration */}}
+          <input id="cfg-{{$s.Key}}" type="text" name="{{$s.Key}}" value="{{$value}}" pattern="[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*" placeholder="e.g. 30s, 24h">
+        {{else if eq $s.Type 4}}{{/* Choice */}}
+          <select id="cfg-{{$s.Key}}" name="{{$s.Key}}">
+            {{range $s.Choices}}
+              <option value="{{.}}" {{if eq . $value}}selected{{end}}>{{.}}</option>
+            {{end}}
+          </select>
+        {{end}}
+      </div>
+    </div>
+  {{end}}
+
+  <div class="actions">
+    <button type="submit" class="btn-primary">Save</button>
+    <a class="btn-link" href="/config">Cancel</a>
+  </div>
+</form>
+
+<section class="card">
+  <h2>YAML preview</h2>
+  <p class="muted small">Read-only view of the saved config; useful for copying into another machine's <code>~/.config/klim/config.yaml</code>.</p>
+  <pre class="log">{{$d.YAML}}</pre>
+</section>
+{{end}}
+{{end}}

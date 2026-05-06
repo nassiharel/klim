@@ -1,0 +1,15 @@
+name: direnv
+display_name: direnv
+category: Shell
+tags:
+    - automation
+    - dev-workflow
+    - cross-shell
+binary_names:
+    - direnv
+packages:
+    winget: direnv.direnv
+    scoop: direnv
+    brew: direnv
+    apt: direnv
+github: direnv/direnv

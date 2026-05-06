@@ -1,0 +1,16 @@
+name: magick
+display_name: ImageMagick
+category: Media
+tags:
+    - image-processing
+    - cli
+binary_names:
+    - magick
+    - convert
+packages:
+    winget: ImageMagick.ImageMagick
+    scoop: magick
+    choco: imagemagick
+    brew: imagemagick
+    apt: imagemagick
+github: ImageMagick/ImageMagick

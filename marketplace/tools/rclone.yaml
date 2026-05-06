@@ -1,0 +1,17 @@
+name: rclone
+display_name: rclone
+category: Network
+tags:
+    - cloud
+    - cli
+    - sync
+binary_names:
+    - rclone
+packages:
+    winget: Rclone.Rclone
+    scoop: rclone
+    choco: rclone
+    brew: rclone
+    apt: rclone
+    snap: rclone
+github: rclone/rclone

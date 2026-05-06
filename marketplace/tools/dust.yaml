@@ -1,0 +1,15 @@
+name: dust
+display_name: dust
+category: CLI
+tags:
+    - disk-usage
+    - cli
+binary_names:
+    - dust
+packages:
+    winget: bootandy.dust
+    scoop: dust
+    choco: dust
+    brew: dust
+    apt: du-dust
+github: bootandy/dust

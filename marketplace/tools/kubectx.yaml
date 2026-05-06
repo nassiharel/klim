@@ -1,0 +1,15 @@
+name: kubectx
+display_name: kubectx
+category: Containers
+tags:
+    - kubernetes
+    - cli
+binary_names:
+    - kubectx
+packages:
+    winget: ahmetb.kubectx
+    scoop: kubectx
+    choco: kubectx
+    brew: kubectx
+    apt: kubectx
+github: ahmetb/kubectx

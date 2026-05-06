@@ -1,0 +1,17 @@
+name: nvim
+display_name: Neovim
+category: Editor
+tags:
+    - ide
+    - tui
+    - lua
+binary_names:
+    - nvim
+packages:
+    winget: Neovim.Neovim
+    scoop: nvim
+    choco: neovim
+    brew: neovim
+    apt: neovim
+    snap: nvim
+github: neovim/neovim

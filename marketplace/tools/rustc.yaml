@@ -1,0 +1,11 @@
+name: rustc
+display_name: Rust
+category: Language
+tags:
+    - rust
+binary_names:
+    - rustc
+packages:
+    brew: rust
+    apt: rustc
+github: rust-lang/rust

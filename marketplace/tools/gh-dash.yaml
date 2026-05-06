@@ -1,0 +1,12 @@
+name: gh-dash
+display_name: gh-dash
+category: VCS
+tags:
+    - github
+    - tui
+    - vcs
+binary_names:
+    - gh-dash
+packages:
+    brew: gh-dash
+github: dlvhdr/gh-dash

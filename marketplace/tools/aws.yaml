@@ -1,0 +1,16 @@
+name: aws
+display_name: AWS CLI
+category: Cloud
+tags:
+    - amazon
+    - cloud
+binary_names:
+    - aws
+packages:
+    winget: Amazon.AWSCLI
+    scoop: aws
+    choco: awscli
+    brew: awscli
+    apt: awscli
+    snap: aws-cli
+github: aws/aws-cli

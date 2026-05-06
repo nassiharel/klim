@@ -1,0 +1,14 @@
+name: minikube
+display_name: Minikube
+category: Containers
+tags:
+    - kubernetes
+    - local-cluster
+binary_names:
+    - minikube
+packages:
+    winget: Kubernetes.minikube
+    scoop: minikube
+    choco: minikube
+    brew: minikube
+github: kubernetes/minikube

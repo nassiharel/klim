@@ -1,0 +1,13 @@
+name: flux
+display_name: Flux CLI
+category: Containers
+tags:
+    - kubernetes
+    - gitops
+    - continuous-delivery
+binary_names:
+    - flux
+packages:
+    choco: flux
+    brew: fluxcd/tap/flux
+github: fluxcd/flux2

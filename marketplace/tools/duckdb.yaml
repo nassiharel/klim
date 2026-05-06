@@ -1,0 +1,15 @@
+name: duckdb
+display_name: DuckDB
+category: Database
+tags:
+    - database
+    - data-processing
+    - cli
+binary_names:
+    - duckdb
+packages:
+    winget: DuckDB.cli
+    scoop: duckdb
+    choco: duckdb
+    brew: duckdb
+github: duckdb/duckdb

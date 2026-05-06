@@ -1,0 +1,12 @@
+name: vegeta
+display_name: Vegeta
+category: Testing
+tags:
+    - load-testing
+    - http-client
+    - benchmarking
+binary_names:
+    - vegeta
+packages:
+    brew: vegeta
+github: tsenart/vegeta

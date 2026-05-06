@@ -1,0 +1,116 @@
+---
+title: Adding Tools to the Marketplace
+description: How to contribute a new tool to the klim catalog
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+The klim marketplace is open source — anyone can add a tool by submitting a PR.
+
+## Tool Definition Format
+
+Each tool is defined in its own YAML file at `marketplace/tools/<name>.yaml`:
+
+```yaml
+name: mytool
+display_name: My Tool
+description: A brief description of what the tool does
+category: CLI
+tags: [automation, devops]
+binary_names: [mytool]
+packages:
+  brew: "mytool"
+  winget: "Publisher.MyTool"
+  scoop: "mytool"
+  apt: "mytool"
+  snap: "mytool"
+  choco: "mytool"
+  npm: "mytool"
+# Optional: enables GitHub metadata enrichment (stars, license, etc.)
+github: owner/repo
+```
+
+### Required Fields
+
+| Field | Description |
+|-------|-------------|
+| `name` | Unique identifier (lowercase, no spaces) |
+| `display_name` | Human-readable name |
+| `category` | One of the predefined categories |
+| `binary_names` | List of executable names to detect on PATH |
+
+### Optional Fields
+
+| Field | Description |
+|-------|-------------|
+| `description` | Short description |
+| `tags` | List of tags for filtering |
+| `packages` | Package IDs per package manager |
+| `github` | GitHub `owner/repo` for metadata enrichment |
+
+### Package Manager IDs
+
+Only include package IDs for managers where the tool is actually available:
+
+| Manager | Format | Example |
+|---------|--------|---------|
+| `brew` | Formula or cask name | `"kubectl"` |
+| `winget` | Publisher.Package | `"Microsoft.AzureCLI"` |
+| `scoop` | Bucket/package or just package | `"kubectl"` |
+| `apt` | Package name | `"kubectl"` |
+| `snap` | Snap name | `"kubectl"` |
+| `choco` | Package name | `"kubernetes-cli"` |
+| `npm` | npm package name | `"typescript"` |
+
+## Adding a Tool
+
+<Steps>
+1. **Create the YAML file:**
+   ```bash
+   # In the repository root
+   touch marketplace/tools/mytool.yaml
+   ```
+
+2. **Fill in the tool definition** using the format above.
+
+3. **Validate your changes:**
+   ```bash
+   make marketplace-validate
+   ```
+
+4. **Submit a PR** to the klim repository.
+</Steps>
+
+## Categories
+
+Available categories include:
+- **CLI** — General command-line tools
+- **Cloud** — Cloud provider CLIs (AWS, Azure, GCP)
+- **Containers** — Docker, Podman, container tools
+- **Database** — Database clients and tools
+- **IaC** — Infrastructure as Code (Terraform, Pulumi)
+- **Kubernetes** — K8s ecosystem tools
+- **Languages** — Programming language runtimes
+- **Monitoring** — Observability and monitoring
+- **Networking** — Network tools
+- **Security** — Security scanners and tools
+- **Version Control** — Git and related tools
+
+## Validation
+
+CI automatically validates every PR that touches `marketplace/`:
+- Schema validation — all required fields present and correct types
+- Uniqueness — no duplicate tool names or binary names
+- Cross-references — pack references point to existing tools
+
+## GitHub Enrichment
+
+When you set the `github` field, the CI assembly workflow automatically fetches:
+- Star count
+- Repository description
+- Homepage URL
+- License
+- Topics
+- Last push date
+
+This metadata is included in the published `marketplace.yaml`. Never set `github_info` manually — it's generated at build time.

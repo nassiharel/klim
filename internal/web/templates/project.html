@@ -1,0 +1,51 @@
+{{define "content"}}
+{{$d := .Data}}
+{{$e := $d.Entry}}
+<section class="page-header">
+  <a href="/projects" class="back">← Projects</a>
+  <h1>{{$e.Name}}</h1>
+  <p class="muted"><code>{{$e.Path}}</code></p>
+</section>
+
+{{if not $d.HasFile}}
+  <p class="empty">No <code>.klim.yaml</code> found in this project. Run <code>klim init</code> there to create one.</p>
+{{else if $d.ParseErr}}
+  <section class="card">
+    <h2>Parse error</h2>
+    <pre class="log">{{$d.ParseErr}}</pre>
+  </section>
+{{else if $d.TeamFile}}
+  <section class="card">
+    <h2>Summary</h2>
+    <p>
+      <span class="badge ok">{{$d.OK}} ok</span>
+      {{if $d.Missing}}<span class="badge update">{{$d.Missing}} missing</span>{{end}}
+      {{if $d.Outdated}}<span class="badge update">{{$d.Outdated}} outdated</span>{{end}}
+      {{if $d.Unknown}}<span class="badge muted">{{$d.Unknown}} unknown</span>{{end}}
+    </p>
+    {{if $d.Satisfied}}<p class="muted">All required tools are satisfied. ✓</p>{{end}}
+  </section>
+
+  <section class="card">
+    <h2>Required tools</h2>
+    <table class="grid">
+      <thead>
+        <tr><th>Tool</th><th>Required</th><th>Installed</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {{range $d.Results}}
+          <tr>
+            <td>
+              <a href="/tools/{{.Tool.Name}}" class="tool-link">{{.Tool.Name}}</a>
+              {{if .Optional}}<span class="muted small">optional</span>{{end}}
+            </td>
+            <td><code>{{if .Tool.Version}}{{.Tool.Version}}{{else}}any{{end}}</code></td>
+            <td><code>{{if .Version}}{{.Version}}{{else}}—{{end}}</code></td>
+            <td>{{.Message}}</td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </section>
+{{end}}
+{{end}}

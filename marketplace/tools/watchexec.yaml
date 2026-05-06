@@ -1,0 +1,15 @@
+name: watchexec
+display_name: watchexec
+category: CLI
+tags:
+    - automation
+    - dev-workflow
+    - cli
+    - cross-platform
+binary_names:
+    - watchexec
+packages:
+    scoop: watchexec
+    choco: watchexec
+    brew: watchexec
+github: watchexec/watchexec

@@ -1,0 +1,14 @@
+name: k9s
+display_name: K9s
+category: Containers
+tags:
+    - kubernetes
+    - tui
+binary_names:
+    - k9s
+packages:
+    winget: Derailed.k9s
+    scoop: k9s
+    choco: k9s
+    brew: derailed/k9s/k9s
+github: derailed/k9s

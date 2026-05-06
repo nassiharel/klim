@@ -1,0 +1,16 @@
+name: nmap
+display_name: Nmap
+category: Security
+tags:
+    - scanner
+    - security
+    - networking
+binary_names:
+    - nmap
+packages:
+    winget: Insecure.Nmap
+    scoop: nmap
+    choco: nmap
+    brew: nmap
+    apt: nmap
+github: nmap/nmap

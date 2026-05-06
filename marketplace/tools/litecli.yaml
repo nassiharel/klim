@@ -1,0 +1,12 @@
+name: litecli
+display_name: litecli
+category: Database
+tags:
+    - database
+    - cli
+    - python
+binary_names:
+    - litecli
+packages:
+    brew: litecli
+github: dbcli/litecli

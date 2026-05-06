@@ -1,0 +1,16 @@
+name: go
+display_name: Go
+category: Language
+tags:
+    - golang
+    - google
+binary_names:
+    - go
+packages:
+    winget: GoLang.Go
+    scoop: go
+    choco: golang
+    brew: go
+    apt: golang-go
+    snap: go
+github: golang/go

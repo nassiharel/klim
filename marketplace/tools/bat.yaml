@@ -1,0 +1,16 @@
+name: bat
+display_name: bat
+category: CLI
+tags:
+    - syntax-highlighting
+    - pager
+    - cli
+binary_names:
+    - bat
+packages:
+    winget: sharkdp.bat
+    scoop: bat
+    choco: bat
+    brew: bat
+    apt: bat
+github: sharkdp/bat

@@ -1,0 +1,64 @@
+{{define "content"}}
+{{$d := .Data}}
+{{$p := $d.Pack}}
+<section class="page-header">
+  <a href="/packs" class="back">← Packs</a>
+  <h1>{{if $p.DisplayName}}{{$p.DisplayName}}{{else}}{{$p.Name}}{{end}}</h1>
+  {{if $d.IsCustom}}<p class="muted small">Custom pack from <code>~/.config/klim/marketplace/custom-packs.yaml</code>.</p>{{end}}
+  {{if $p.Description}}<p class="muted">{{$p.Description}}</p>{{end}}
+</section>
+
+<section class="card">
+  <h2>Tools</h2>
+  <p class="muted">{{len $p.ToolNames}} total · {{$d.MissingCount}} missing{{if $d.UnknownCount}} · {{$d.UnknownCount}} unknown{{end}}</p>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range $d.Tools}}
+        <tr>
+          <td>
+            {{if .Tool}}
+              <a href="/tools/{{.Name}}" class="tool-link">{{.Name}}</a>
+              {{if .Tool.DisplayName}}<span class="muted">{{.Tool.DisplayName}}</span>{{end}}
+            {{else}}
+              {{.Name}} <span class="muted small">(not in catalog)</span>
+            {{end}}
+          </td>
+          <td>
+            {{if .Installed}}
+              <span class="badge ok">✓ installed</span>
+            {{else if .Tool}}
+              <span class="badge update">missing</span>
+            {{else}}
+              <span class="badge muted">unknown</span>
+            {{end}}
+          </td>
+          <td>
+            {{if and .Tool (not .Installed)}}
+              <form method="POST" action="/tools/{{.Name}}/install" class="inline">
+                <button class="btn-primary" type="submit">Install</button>
+              </form>
+            {{end}}
+          </td>
+        </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+{{if $d.IsCustom}}
+<section class="card">
+  <h2>Custom pack actions</h2>
+  <p class="muted">This pack is stored in your <code>~/.config/klim/marketplace/custom-packs.yaml</code>.</p>
+  <form method="POST" action="/backup/packs/{{$p.Name}}/delete" class="inline" onsubmit="return confirm('Delete pack {{$p.Name}}? Tools stay installed.')">
+    <button type="submit" class="btn-danger">Delete pack</button>
+  </form>
+</section>
+{{end}}
+{{end}}

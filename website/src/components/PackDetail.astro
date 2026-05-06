@@ -1,0 +1,104 @@
+---
+const { pack, resolvedTools } = Astro.props;
+
+function fmtStars(n: number): string {
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return String(n);
+}
+
+const totalStars = resolvedTools.reduce((sum: number, t: any) =>
+  sum + (t.github_info?.stars || 0), 0);
+
+const categories = [...new Set(resolvedTools.map((t: any) => t.category))];
+
+const categoryIcons: Record<string, string> = {
+  CLI: '⌨️', Cloud: '☁️', Containers: '🐳', Database: '🗄️', IaC: '🏗️',
+  Language: '💻', Security: '🔒', Shell: '🐚', VCS: '📝', AI: '🤖',
+  PkgMgr: '📦', Observability: '📊', Testing: '🧪', Network: '🌐',
+  Editor: '✏️', Media: '🎬', Other: '🔧',
+};
+---
+
+<nav class="mb-8 text-sm text-gray-500">
+  <a href="/marketplace" class="hover:text-green-400 transition-colors">&#8592; Marketplace</a>
+</nav>
+
+<!-- Header Card -->
+<div class="rounded-2xl border border-gray-800 bg-gray-900/50 p-8 mb-8">
+  <div class="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+    <div class="flex-1">
+      <div class="flex items-center gap-4 mb-4">
+        <span class="text-5xl">{pack.icon}</span>
+        <div>
+          <h1 class="text-3xl font-bold text-white">{pack.display_name}</h1>
+          <span class="text-sm text-gray-500 font-mono">{pack.name}</span>
+        </div>
+      </div>
+      <p class="text-lg text-gray-300 leading-relaxed">{pack.description}</p>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        {categories.map((cat: string) => (
+          <span class="rounded-full bg-gray-800 px-3 py-1 text-xs font-medium text-gray-300">
+            {categoryIcons[cat] || '🔧'} {cat}
+          </span>
+        ))}
+      </div>
+    </div>
+    <div class="flex flex-row flex-wrap gap-4 md:flex-col md:items-end md:gap-3 md:min-w-[160px]">
+      <div class="flex items-center gap-2 rounded-lg bg-gray-800/80 px-3 py-2">
+        <span class="text-sm font-semibold text-white">{pack.tools.length}</span>
+        <span class="text-xs text-gray-500">tools</span>
+      </div>
+      {totalStars > 0 && (
+        <div class="flex items-center gap-2 rounded-lg bg-gray-800/80 px-3 py-2">
+          <span class="text-yellow-400">&#11088;</span>
+          <span class="text-sm font-semibold text-white">{fmtStars(totalStars)}</span>
+          <span class="text-xs text-gray-500">total stars</span>
+        </div>
+      )}
+    </div>
+  </div>
+  <div class="mt-6 overflow-hidden rounded-xl border border-green-500/30 bg-green-500/5 p-5">
+    <p class="text-sm text-gray-400 mb-2">Apply this environment pack:</p>
+    <pre class="font-mono text-sm text-green-400">klim install --pack {pack.name}</pre>
+  </div>
+</div>
+
+<!-- Tools in this Pack -->
+<div class="rounded-2xl border border-gray-800 bg-gray-900/50 p-8">
+  <h2 class="text-xl font-bold text-white mb-6">
+    Tools in this pack
+    <span class="text-sm font-normal text-gray-500">({resolvedTools.length})</span>
+  </h2>
+  <div class="space-y-4">
+    {resolvedTools.map((tool: any) => {
+      const info = tool.github_info;
+      const pmCount = Object.keys(tool.packages).length;
+      return (
+        <a
+          href={`/marketplace/tools/${tool.name}`}
+          class="group flex items-start gap-4 rounded-xl border border-gray-800 bg-gray-950/50 p-5 transition-all hover:border-green-500/40 hover:bg-gray-900 block"
+        >
+          <span class="mt-0.5 text-2xl">{categoryIcons[tool.category] || '🔧'}</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <h3 class="font-semibold text-white group-hover:text-green-400 transition-colors">
+                {tool.display_name}
+              </h3>
+              <span class="text-xs text-gray-600 font-mono">{tool.name}</span>
+            </div>
+            {info?.description && (
+              <p class="mt-1 text-sm text-gray-400 line-clamp-1">{info.description}</p>
+            )}
+            <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+              <span class="rounded bg-gray-800 px-2 py-0.5">{tool.category}</span>
+              {pmCount > 0 && <span>{pmCount} package managers</span>}
+              {info?.stars > 0 && <span>&#11088; {fmtStars(info.stars)}</span>}
+              {info?.license && <span>{info.license}</span>}
+            </div>
+          </div>
+          <span class="text-gray-600 group-hover:text-green-400 transition-colors mt-2">&#8594;</span>
+        </a>
+      );
+    })}
+  </div>
+</div>

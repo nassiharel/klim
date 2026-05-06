@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Klim">
+  <defs>
+    <linearGradient id="g" x1="10" y1="8" x2="54" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34d399"/>
+      <stop offset="0.55" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#020617"/>
+  <path d="M20 46V18" stroke="url(#g)" stroke-width="8" stroke-linecap="round"/>
+  <path d="M20 32 44 18" stroke="url(#g)" stroke-width="8" stroke-linecap="round"/>
+  <path d="M20 32 46 46" stroke="url(#g)" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="20" cy="18" r="4" fill="#ecfdf5"/>
+  <circle cx="44" cy="18" r="4" fill="#ecfdf5"/>
+  <circle cx="20" cy="32" r="4" fill="#ecfdf5"/>
+  <circle cx="46" cy="46" r="4" fill="#ecfdf5"/>
+</svg>

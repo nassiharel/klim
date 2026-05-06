@@ -1,0 +1,12 @@
+name: velero
+display_name: Velero
+category: Containers
+tags:
+    - kubernetes
+    - automation
+binary_names:
+    - velero
+packages:
+    choco: velero
+    brew: velero
+github: vmware-tanzu/velero

@@ -1,0 +1,374 @@
+// Package web serves klim's local browser UI. The package is a thin
+// frontend over internal/service: every page and JSON endpoint resolves
+// data through the same composition root the TUI and other CLI commands
+// use, so business logic never duplicates into HTTP handlers.
+//
+// The server binds to loopback by default and refuses any other
+// interface unless InsecureBind is set. All HTML is rendered through
+// html/template (XSS-safe) and assets embed into the binary via
+// embed.FS so the feature stays single-binary and offline-capable.
+package web
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"html/template"
+	"io/fs"
+	"log/slog"
+	"net"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/service"
+)
+
+// Options configure a klim browser server.
+type Options struct {
+	// Bind is the listen address. Defaults to "127.0.0.1" (loopback).
+	Bind string
+	// Port is the listen port. 0 lets the kernel pick a free one.
+	Port int
+	// InsecureBind allows binding non-loopback addresses. Without it,
+	// any non-loopback Bind value is refused so users don't accidentally
+	// expose an unauthenticated server on a LAN.
+	InsecureBind bool
+	// AuthToken, when non-empty, enables bearer-token authentication
+	// for every request except /healthz. Required for non-loopback
+	// binds; the CLI auto-generates one if InsecureBind is set without
+	// an explicit token. Loopback binds leave this empty by default
+	// because the threat model matches the TUI's.
+	AuthToken string
+	// AutoShutdownOnIdle enables shutting down when no browser tabs
+	// are connected to /api/lifecycle. Caller must also call
+	// EnableAutoShutdown(cancel) before Serve so we know how to
+	// cancel the parent context. Defaults off (Serve runs until
+	// Ctrl-C).
+	AutoShutdownOnIdle bool
+	// AutoShutdownGrace is the delay after the last tab disconnects
+	// before the server actually shuts down. Covers the brief gap
+	// during in-page navigation. Defaults to 10 seconds.
+	AutoShutdownGrace time.Duration
+	// Service is the resolved tool service this server reads from.
+	// Required.
+	Service *service.ToolService
+	// Config, if non-nil, is rendered on the read-only Config tab.
+	Config *config.Config
+	// Logger receives structured server-side events. Optional; defaults
+	// to slog.Default().
+	Logger *slog.Logger
+}
+
+// Server is a klim browser HTTP server.
+type Server struct {
+	opts      Options
+	mux       *http.ServeMux
+	tpls      map[string]*template.Template
+	loader    loader
+	jobs      *jobManager
+	lifecycle *lifecycle
+	httpsrv   *http.Server
+	listener  net.Listener
+	// jobCtx scopes long-running package-manager subprocesses to the
+	// server's lifetime. Serve replaces it with a child of its
+	// caller-supplied context so jobs are cancelled on Ctrl-C / auto-
+	// shutdown rather than orphaned. Until Serve runs, jobs use a
+	// plain Background context (e.g. tests that drive the manager
+	// directly).
+	jobCtx    context.Context
+	jobCancel context.CancelFunc
+	// cfgMu guards reads/writes of *opts.Config. The web server
+	// handles requests concurrently, and the /config editor mutates
+	// the live pointer in place; without synchronisation a render-
+	// in-progress GET /config could observe a half-updated struct
+	// (or trip the race detector). Reads use RLock so multiple
+	// renders run in parallel.
+	cfgMu sync.RWMutex
+}
+
+// New constructs a Server. The TCP listener is bound here so the caller
+// can read URL() before serving, which is what the CLI prints to stderr
+// and passes to the browser-open helper.
+func New(opts Options) (*Server, error) {
+	if opts.Service == nil {
+		return nil, errors.New("web: Options.Service is required")
+	}
+	if opts.Bind == "" {
+		opts.Bind = "127.0.0.1"
+	}
+	if !opts.InsecureBind && !isLoopback(opts.Bind) {
+		return nil, fmt.Errorf("web: bind %q is not a loopback address — pass --insecure-bind to allow it", opts.Bind)
+	}
+	if opts.Logger == nil {
+		opts.Logger = slog.Default()
+	}
+
+	tpls, err := loadTemplates()
+	if err != nil {
+		return nil, fmt.Errorf("web: loading templates: %w", err)
+	}
+
+	addr := net.JoinHostPort(opts.Bind, fmt.Sprintf("%d", opts.Port))
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("web: listening on %s: %w", addr, err)
+	}
+
+	s := &Server{
+		opts:     opts,
+		mux:      http.NewServeMux(),
+		tpls:     tpls,
+		loader:   newServiceLoader(opts.Service),
+		jobs:     newJobManager(newExecExecutor()),
+		listener: ln,
+	}
+	// Default job context until Serve takes over. Serve replaces this
+	// with a child of its own ctx so shutting down the server cancels
+	// any package-manager subprocesses still running.
+	s.jobCtx, s.jobCancel = context.WithCancel(context.Background())
+	s.routes()
+	s.httpsrv = &http.Server{
+		Handler:           withRecover(opts.Logger, withAccessLog(opts.Logger, authMiddleware(s, s.mux))),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	return s, nil
+}
+
+// AuthToken returns the server's auth token (empty if auth is disabled).
+// Exposed so the CLI can print the token alongside the URL.
+func (s *Server) AuthToken() string { return s.opts.AuthToken }
+
+// AuthedURL returns the URL with the token query parameter appended
+// (or the plain URL if no token is required).
+func (s *Server) AuthedURL() string { return authedURL(s.URL(), s.opts.AuthToken) }
+
+// snapshotConfig returns a value-copy of the running config under
+// cfgMu's read lock. Callers can render or mutate the copy without
+// holding the lock for the full request lifetime.
+func (s *Server) snapshotConfig() config.Config {
+	s.cfgMu.RLock()
+	defer s.cfgMu.RUnlock()
+	if s.opts.Config == nil {
+		return config.Config{}
+	}
+	return *s.opts.Config
+}
+
+// writeConfig replaces the running config under cfgMu's write lock.
+// All readers via snapshotConfig either see the old or the new
+// value, never a half-updated struct.
+func (s *Server) writeConfig(cfg config.Config) {
+	s.cfgMu.Lock()
+	defer s.cfgMu.Unlock()
+	if s.opts.Config != nil {
+		*s.opts.Config = cfg
+	}
+}
+
+// URL returns the http://host:port URL the server is listening on.
+// Safe to call before Serve.
+func (s *Server) URL() string {
+	addr := s.listener.Addr().(*net.TCPAddr)
+	host := s.opts.Bind
+	if host == "0.0.0.0" || host == "" {
+		host = "127.0.0.1"
+	}
+	return fmt.Sprintf("http://%s:%d", host, addr.Port)
+}
+
+// EnableAutoShutdown wires a cancel func into the lifecycle tracker
+// so the server stops itself when no browser tabs are connected for
+// AutoShutdownGrace. Must be called before Serve. Typically the
+// caller passes its signal.NotifyContext stop function so Ctrl-C and
+// "close last tab" both run the same shutdown path.
+func (s *Server) EnableAutoShutdown(cancel context.CancelFunc) {
+	if !s.opts.AutoShutdownOnIdle {
+		return
+	}
+	grace := s.opts.AutoShutdownGrace
+	if grace <= 0 {
+		grace = 10 * time.Second
+	}
+	s.lifecycle = newLifecycle(grace, cancel)
+}
+
+// Serve runs the HTTP server until ctx is cancelled. It performs a
+// graceful shutdown on cancellation; in-flight requests are given a
+// short grace period to finish.
+//
+// All running package-manager jobs are also cancelled on shutdown by
+// way of the jobCtx that Serve installs as a child of ctx — this
+// stops orphaning long install/upgrade subprocesses past klim's own
+// exit.
+func (s *Server) Serve(ctx context.Context) error {
+	// Tear down the placeholder Background context set up in New and
+	// replace it with one that's a child of the caller's ctx. Jobs
+	// started after Serve runs will be cancelled when the server
+	// shuts down (Ctrl-C, SIGTERM, or auto-shutdown).
+	if s.jobCancel != nil {
+		s.jobCancel()
+	}
+	s.jobCtx, s.jobCancel = context.WithCancel(ctx)
+	defer s.jobCancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		err := s.httpsrv.Serve(s.listener)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = s.httpsrv.Shutdown(shutdownCtx)
+		return nil
+	case err := <-errCh:
+		return err
+	}
+}
+
+// Close releases the listener. Useful in tests where Serve is not used.
+func (s *Server) Close() error {
+	if s.httpsrv != nil {
+		return s.httpsrv.Close()
+	}
+	return s.listener.Close()
+}
+
+func (s *Server) routes() {
+	// Static assets.
+	staticFS, _ := fs.Sub(staticFiles, "static")
+	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+
+	// Health probe.
+	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("ok\n"))
+	})
+
+	// HTML pages.
+	s.mux.HandleFunc("GET /{$}", s.pageInstalled)
+	s.mux.HandleFunc("GET /tools/{name}", s.pageTool)
+	s.mux.HandleFunc("GET /updates", s.pageUpdates)
+	s.mux.HandleFunc("GET /discover", s.pageDiscover)
+	s.mux.HandleFunc("GET /favorites", s.pageFavorites)
+	s.mux.HandleFunc("GET /packs", s.pagePacks)
+	s.mux.HandleFunc("GET /packs/{name}", s.pagePack)
+	s.mux.HandleFunc("GET /foryou", s.pageForYou)
+	s.mux.HandleFunc("GET /projects", s.pageProjects)
+	s.mux.HandleFunc("GET /projects/{path...}", s.pageProject)
+	s.mux.HandleFunc("GET /dashboard", s.pageDashboard)
+	s.mux.HandleFunc("GET /trail", s.pageTrail)
+	s.mux.HandleFunc("GET /trail/{ref...}", s.pageTrailShow)
+	s.mux.HandleFunc("GET /backup", s.pageBackup)
+	s.mux.HandleFunc("GET /backup/export.yaml", s.downloadExport)
+	s.mux.HandleFunc("GET /backup/saved/{name}", s.downloadSavedBackup)
+	s.mux.HandleFunc("GET /security", s.pageSecurity)
+	s.mux.Handle("POST /backup/save", csrfProtect(s, http.HandlerFunc(s.pageBackupSave)))
+	s.mux.Handle("POST /backup/saved/{name}/delete", csrfProtect(s, http.HandlerFunc(s.pageBackupSavedDelete)))
+	s.mux.Handle("POST /backup/preview", csrfProtect(s, http.HandlerFunc(s.pageBackupPreview)))
+	s.mux.Handle("POST /backup/packs/new", csrfProtect(s, http.HandlerFunc(s.pageBackupPackCreate)))
+	s.mux.Handle("POST /backup/packs/{name}/delete", csrfProtect(s, http.HandlerFunc(s.pageBackupPackDelete)))
+	s.mux.HandleFunc("GET /config", s.pageConfig)
+	s.mux.Handle("POST /config", csrfProtect(s, http.HandlerFunc(s.pageConfigSave)))
+
+	// JSON API.
+	s.mux.HandleFunc("GET /api/tools", s.apiTools)
+	s.mux.HandleFunc("GET /api/tools/{name}", s.apiTool)
+	s.mux.HandleFunc("GET /api/dashboard", s.apiDashboard)
+	s.mux.HandleFunc("GET /api/trail", s.apiTrail)
+	s.mux.HandleFunc("GET /api/trail/{ref...}", s.apiTrailShow)
+	s.mux.HandleFunc("GET /api/lifecycle", s.apiLifecycleStream)
+	s.mux.HandleFunc("GET /api/favorites", s.apiFavoritesList)
+	// Mutating endpoints. The form-submitting HTML page POSTs here and
+	// reloads; the JSON variant is also reachable for scripts.
+	s.mux.Handle("POST /api/favorites/{name}/toggle", csrfProtect(s, http.HandlerFunc(s.apiFavoritesToggle)))
+	s.mux.Handle("POST /favorites/{name}/toggle", csrfProtect(s, http.HandlerFunc(s.pageFavoritesToggle)))
+
+	// Action jobs (install / upgrade / remove). The HTML form variant
+	// POSTs to /tools/{name}/{action} and 303s to /jobs/{id}; the JSON
+	// API equivalent posts to /api/jobs and returns the job snapshot.
+	s.mux.Handle("POST /api/jobs", csrfProtect(s, http.HandlerFunc(s.apiJobsCreate)))
+	s.mux.Handle("POST /tools/{name}/{action}", csrfProtect(s, http.HandlerFunc(s.pageStartJob)))
+	s.mux.HandleFunc("GET /jobs/{id}", s.pageJob)
+	s.mux.HandleFunc("GET /api/jobs/{id}", s.apiJobsGet)
+	s.mux.HandleFunc("GET /api/jobs/{id}/stream", s.apiJobsStream)
+}
+
+func isLoopback(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" || host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
+// withAccessLog logs basic request info at slog.LevelDebug. Errors and
+// non-2xx responses are logged at LevelInfo so they show up under
+// default verbosity.
+func withAccessLog(log *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		start := time.Now()
+		next.ServeHTTP(rec, r)
+		level := slog.LevelDebug
+		if rec.status >= 400 {
+			level = slog.LevelInfo
+		}
+		log.LogAttrs(r.Context(), level, "web request",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.Int("status", rec.status),
+			slog.Duration("dur", time.Since(start)),
+		)
+	})
+}
+
+// withRecover converts handler panics into 500s rather than tearing
+// down the server. klim is meant to keep running across stray bugs.
+func withRecover(log *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.ErrorContext(r.Context(), "web panic recovered",
+					slog.Any("panic", rec),
+					slog.String("path", r.URL.Path),
+				)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+// Flush forwards to the underlying ResponseWriter when it supports
+// flushing. Required so SSE streams (which need to push partial
+// responses past the buffer) keep working through the access-log
+// middleware wrapper.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}

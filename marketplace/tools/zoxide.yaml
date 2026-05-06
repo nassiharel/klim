@@ -1,0 +1,15 @@
+name: zoxide
+display_name: zoxide
+category: CLI
+tags:
+    - cli
+    - cross-shell
+binary_names:
+    - zoxide
+packages:
+    winget: ajeetdsouza.zoxide
+    scoop: zoxide
+    choco: zoxide
+    brew: zoxide
+    apt: zoxide
+github: ajeetdsouza/zoxide

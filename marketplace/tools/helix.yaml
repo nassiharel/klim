@@ -1,0 +1,13 @@
+name: helix
+display_name: Helix
+category: Editor
+tags:
+    - tui
+binary_names:
+    - hx
+packages:
+    winget: Helix.Helix
+    scoop: helix
+    brew: helix
+    snap: helix
+github: helix-editor/helix

@@ -1,0 +1,15 @@
+name: stern
+display_name: Stern
+category: Observability
+tags:
+    - kubernetes
+    - log-viewer
+    - observability
+binary_names:
+    - stern
+packages:
+    winget: stern.stern
+    scoop: stern
+    choco: stern
+    brew: stern
+github: stern/stern

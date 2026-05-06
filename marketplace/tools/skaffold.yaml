@@ -1,0 +1,15 @@
+name: skaffold
+display_name: Skaffold
+category: Containers
+tags:
+    - kubernetes
+    - dev-workflow
+    - google
+binary_names:
+    - skaffold
+packages:
+    winget: Google.ContainerTools.Skaffold
+    scoop: skaffold
+    choco: skaffold
+    brew: skaffold
+github: GoogleContainerTools/skaffold

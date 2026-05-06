@@ -1,0 +1,14 @@
+name: procs
+display_name: procs
+category: CLI
+tags:
+    - process-monitoring
+    - cli
+binary_names:
+    - procs
+packages:
+    winget: dalance.procs
+    scoop: procs
+    choco: procs
+    brew: procs
+github: dalance/procs

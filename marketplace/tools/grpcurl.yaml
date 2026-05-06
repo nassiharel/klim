@@ -1,0 +1,12 @@
+name: grpcurl
+display_name: grpcurl
+category: CLI
+tags:
+    - http-client
+    - api
+    - debugger
+binary_names:
+    - grpcurl
+packages:
+    brew: grpcurl
+github: fullstorydev/grpcurl

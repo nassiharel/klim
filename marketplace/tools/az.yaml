@@ -1,0 +1,15 @@
+name: az
+display_name: Azure CLI
+category: Cloud
+tags:
+    - microsoft
+    - cloud
+binary_names:
+    - az
+packages:
+    winget: Microsoft.AzureCLI
+    scoop: az
+    choco: azure-cli
+    brew: azure-cli
+    apt: azure-cli
+github: Azure/azure-cli

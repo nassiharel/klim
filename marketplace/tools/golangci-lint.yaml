@@ -1,0 +1,16 @@
+name: golangci-lint
+display_name: golangci-lint
+category: Language
+tags:
+    - golang
+    - linter
+    - static-analysis
+    - code-quality
+binary_names:
+    - golangci-lint
+packages:
+    winget: GolangCI.golangci-lint
+    scoop: golangci-lint
+    brew: golangci-lint
+    snap: golangci-lint
+github: golangci/golangci-lint

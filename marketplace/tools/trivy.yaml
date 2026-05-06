@@ -1,0 +1,17 @@
+name: trivy
+display_name: Trivy
+category: Security
+tags:
+    - scanner
+    - security
+    - container
+    - kubernetes
+binary_names:
+    - trivy
+packages:
+    winget: AquaSecurity.Trivy
+    scoop: trivy
+    choco: trivy
+    brew: trivy
+    apt: trivy
+github: aquasecurity/trivy

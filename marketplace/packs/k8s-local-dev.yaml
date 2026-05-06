@@ -1,0 +1,9 @@
+name: k8s-local-dev
+display_name: Kubernetes Local Dev
+description: Local Kubernetes cluster tools for development.
+tools:
+    - kind
+    - k3d
+    - minikube
+    - skaffold
+    - docker

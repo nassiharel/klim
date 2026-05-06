@@ -1,0 +1,15 @@
+name: kubectl
+display_name: kubectl
+category: Containers
+tags:
+    - kubernetes
+    - cli
+binary_names:
+    - kubectl
+packages:
+    winget: Kubernetes.kubectl
+    scoop: kubectl
+    choco: kubernetes-cli
+    brew: kubernetes-cli
+    snap: kubectl
+github: kubernetes/kubectl

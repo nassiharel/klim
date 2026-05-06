@@ -1,0 +1,15 @@
+name: opentofu
+display_name: OpenTofu
+category: IaC
+tags:
+    - provisioning
+    - cloud
+    - automation
+binary_names:
+    - tofu
+packages:
+    winget: OpenTofu.Tofu
+    scoop: opentofu
+    brew: opentofu
+    snap: opentofu
+github: opentofu/opentofu

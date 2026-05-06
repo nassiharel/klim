@@ -1,0 +1,5 @@
+name: dotnet-developer
+display_name: .NET Developer
+description: Tools for .NET development.
+tools:
+    - dotnet

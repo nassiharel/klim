@@ -1,0 +1,98 @@
+# Allowed tool tags in alphabetical order.
+# The validator rejects tools with tags not listed here.
+# Add new tags here before using them in a tool definition.
+#
+# Tags are grouped by facet for maintainability:
+#   Domain    — what ecosystem/problem space
+#   Language  — programming language ecosystem
+#   Function  — what the tool does
+#   UX        — how users interact with it
+#   Vendor    — company/org behind it
+tags:
+  # --- Domain ---
+  - api
+  - cloud
+  - container
+  - database
+  - docker
+  - git
+  - gitops
+  - kubernetes
+  - networking
+  - observability
+  - security
+  - service-mesh
+  - terraform
+  - vcs
+
+  # --- Language ---
+  - csharp
+  - fsharp
+  - golang
+  - java
+  - javascript
+  - jvm
+  - lua
+  - python
+  - ruby
+  - rust
+  - typescript
+  - wasm
+
+  # --- Function ---
+  - auth
+  - automation
+  - benchmarking
+  - build-system
+  - code-quality
+  - code-statistics
+  - coding-assistant
+  - configuration-management
+  - continuous-delivery
+  - data-processing
+  - debugger
+  - dev-workflow
+  - disk-usage
+  - docs
+  - encryption
+  - file-transfer
+  - http-client
+  - image-builder
+  - image-processing
+  - linter
+  - load-testing
+  - local-cluster
+  - log-viewer
+  - media
+  - package-manager
+  - process-monitoring
+  - provisioning
+  - scanner
+  - search
+  - secrets
+  - static-analysis
+  - sync
+  - task-runner
+  - tunneling
+  - version-manager
+
+  # --- UX ---
+  - cli
+  - cross-platform
+  - cross-shell
+  - fuzzy-finder
+  - gui
+  - ide
+  - pager
+  - prompt
+  - syntax-highlighting
+  - tui
+
+  # --- Vendor ---
+  - amazon
+  - anthropic
+  - charm
+  - github
+  - google
+  - hashicorp
+  - microsoft

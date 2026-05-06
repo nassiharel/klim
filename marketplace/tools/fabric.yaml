@@ -1,0 +1,12 @@
+name: fabric
+display_name: fabric
+category: AI
+tags:
+    - coding-assistant
+    - cli
+    - automation
+binary_names:
+    - fabric
+packages:
+    brew: fabric-ai
+github: danielmiessler/fabric

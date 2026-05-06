@@ -1,0 +1,13 @@
+name: tldr
+display_name: tldr
+category: CLI
+tags:
+    - cli
+binary_names:
+    - tldr
+packages:
+    choco: tldr
+    brew: tldr
+    apt: tldr
+    npm: tldr
+github: tldr-pages/tldr

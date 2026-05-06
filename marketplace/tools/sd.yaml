@@ -1,0 +1,14 @@
+name: sd
+display_name: sd
+category: CLI
+tags:
+    - cli
+    - search
+    - cross-platform
+binary_names:
+    - sd
+packages:
+    winget: chmln.sd
+    scoop: sd
+    brew: sd
+github: chmln/sd

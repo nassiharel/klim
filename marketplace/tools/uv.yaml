@@ -1,0 +1,14 @@
+name: uv
+display_name: uv
+category: PkgMgr
+tags:
+    - python
+    - package-manager
+binary_names:
+    - uv
+packages:
+    winget: astral-sh.uv
+    scoop: uv
+    choco: uv
+    brew: uv
+github: astral-sh/uv

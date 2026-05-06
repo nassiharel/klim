@@ -1,0 +1,8 @@
+name: ai-toolkit
+display_name: AI Toolkit
+description: AI coding assistants and LLM tools.
+tools:
+    - claude
+    - copilot
+    - aider
+    - ollama

@@ -1,0 +1,14 @@
+name: bun
+display_name: Bun
+category: Language
+tags:
+    - javascript
+    - typescript
+binary_names:
+    - bun
+packages:
+    winget: Oven-sh.Bun
+    scoop: bun
+    choco: bun
+    brew: oven-sh/bun/bun
+github: oven-sh/bun

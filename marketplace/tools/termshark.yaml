@@ -1,0 +1,11 @@
+name: termshark
+display_name: termshark
+category: Network
+tags:
+    - networking
+    - tui
+binary_names:
+    - termshark
+packages:
+    brew: termshark
+github: gcla/termshark

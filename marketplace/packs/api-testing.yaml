@@ -1,0 +1,10 @@
+name: api-testing
+display_name: API Testing
+description: HTTP and API debugging toolkit.
+tools:
+    - httpie
+    - grpcurl
+    - jq
+    - yq
+    - curlie
+    - xh

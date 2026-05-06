@@ -1,0 +1,15 @@
+name: yq
+display_name: yq
+category: CLI
+tags:
+    - data-processing
+    - cli
+binary_names:
+    - yq
+packages:
+    winget: MikeFarah.yq
+    scoop: yq
+    choco: yq
+    brew: yq
+    snap: yq
+github: mikefarah/yq

@@ -1,0 +1,5 @@
+name: java-developer
+display_name: Java Developer
+description: Tools for Java development.
+tools:
+    - java

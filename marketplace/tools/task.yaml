@@ -1,0 +1,16 @@
+name: task
+display_name: Task
+category: CLI
+tags:
+    - task-runner
+    - build-system
+    - automation
+binary_names:
+    - task
+packages:
+    winget: Task.Task
+    scoop: task
+    choco: go-task
+    brew: go-task
+    snap: task
+github: go-task/task

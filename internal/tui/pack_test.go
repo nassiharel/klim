@@ -1,0 +1,413 @@
+package tui
+
+import (
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/nassiharel/klim/internal/registry"
+)
+
+func TestBuildPackInstallItems(t *testing.T) {
+	tools := []registry.Tool{
+		{
+			Name:        "git",
+			DisplayName: "Git",
+			Instances:   []registry.Instance{{Path: "/usr/bin/git", Version: "2.43.0"}},
+			Packages:    registry.PackageIDs{Winget: "Git.Git", Brew: "git", Apt: "git"},
+		},
+		{
+			Name:        "gh",
+			DisplayName: "GitHub CLI",
+			// Not installed — no instances.
+			Packages: registry.PackageIDs{Winget: "GitHub.cli", Brew: "gh", Apt: "gh"},
+		},
+		{
+			Name:        "fzf",
+			DisplayName: "fzf",
+			// Not installed.
+			Packages: registry.PackageIDs{Winget: "junegunn.fzf", Brew: "fzf"},
+		},
+	}
+
+	// Stub all PMs as available so BestInstallSource works deterministically.
+	registry.SetPMAvailableFunc(func(_ registry.InstallSource) bool { return true })
+	t.Cleanup(func() { registry.SetPMAvailableFunc(nil) })
+
+	pack := registry.Pack{
+		Name:        "test-pack",
+		DisplayName: "Test Pack",
+		ToolNames:   []string{"git", "gh", "fzf", "unknown-tool"},
+	}
+
+	items := buildPackInstallItems(tools, pack)
+
+	if len(items) != 4 {
+		t.Fatalf("expected 4 items, got %d", len(items))
+	}
+
+	// git — already installed → skipped.
+	if items[0].status != packItemSkipped {
+		t.Errorf("git: status = %d, want skipped", items[0].status)
+	}
+	if items[0].errMsg != "already installed" {
+		t.Errorf("git: errMsg = %q, want 'already installed'", items[0].errMsg)
+	}
+
+	// gh — not installed, has packages → pending.
+	if items[1].status != packItemPending {
+		t.Errorf("gh: status = %d, want pending", items[1].status)
+	}
+	if len(items[1].cmdArgs) == 0 {
+		t.Error("gh: expected non-empty cmdArgs")
+	}
+
+	// fzf — not installed, has packages → pending.
+	if items[2].status != packItemPending {
+		t.Errorf("fzf: status = %d, want pending", items[2].status)
+	}
+
+	// unknown-tool — not in catalog → skipped.
+	if items[3].status != packItemSkipped {
+		t.Errorf("unknown-tool: status = %d, want skipped", items[3].status)
+	}
+	if items[3].errMsg != "not in catalog" {
+		t.Errorf("unknown-tool: errMsg = %q, want 'not in catalog'", items[3].errMsg)
+	}
+}
+
+func TestBuildPackRemoveItems(t *testing.T) {
+	tools := []registry.Tool{
+		{
+			Name:        "git",
+			DisplayName: "Git",
+			Instances:   []registry.Instance{{Path: "/usr/bin/git", Source: registry.SourceBrew}},
+			Packages:    registry.PackageIDs{Brew: "git"},
+		},
+		{
+			Name:        "gh",
+			DisplayName: "GitHub CLI",
+			// Not installed.
+			Packages: registry.PackageIDs{Brew: "gh"},
+		},
+	}
+
+	pack := registry.Pack{
+		Name:      "test-pack",
+		ToolNames: []string{"git", "gh", "missing"},
+	}
+
+	items := buildPackRemoveItems(tools, pack)
+
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(items))
+	}
+
+	// git — installed, has remove args → pending.
+	if items[0].status != packItemPending {
+		t.Errorf("git: status = %d, want pending", items[0].status)
+	}
+	if len(items[0].cmdArgs) == 0 {
+		t.Error("git: expected non-empty cmdArgs for removal")
+	}
+
+	// gh — not installed → skipped.
+	if items[1].status != packItemSkipped {
+		t.Errorf("gh: status = %d, want skipped", items[1].status)
+	}
+
+	// missing — not in catalog → skipped.
+	if items[2].status != packItemSkipped {
+		t.Errorf("missing: status = %d, want skipped", items[2].status)
+	}
+}
+
+func TestCountPackSkipped(t *testing.T) {
+	items := []packItem{
+		{status: packItemSkipped},
+		{status: packItemPending},
+		{status: packItemSkipped},
+		{status: packItemDone},
+		{status: packItemSkipped},
+	}
+
+	got := countPackSkipped(items)
+	if got != 3 {
+		t.Errorf("countPackSkipped() = %d, want 3", got)
+	}
+}
+
+func TestCountPackSkipped_Empty(t *testing.T) {
+	got := countPackSkipped(nil)
+	if got != 0 {
+		t.Errorf("countPackSkipped(nil) = %d, want 0", got)
+	}
+}
+
+func TestPackSummary_Success(t *testing.T) {
+	m := Model{
+		packItems: []packItem{
+			{status: packItemDone},
+			{status: packItemDone},
+			{status: packItemSkipped, errMsg: "already installed"},
+		},
+	}
+	s := m.packSummary()
+	if s != "✓ 2 succeeded, 1 skipped" {
+		t.Errorf("unexpected summary: %q", s)
+	}
+}
+
+func TestPackSummary_Cancelled(t *testing.T) {
+	m := Model{
+		packCancelled: true,
+		packItems: []packItem{
+			{status: packItemDone},
+			{status: packItemSkipped, errMsg: "cancelled"},
+		},
+	}
+	s := m.packSummary()
+	if s != "⚠ Cancelled — 1 succeeded, 1 skipped" {
+		t.Errorf("unexpected summary: %q", s)
+	}
+}
+
+func TestPackSkipDoesNotDoubleCount(t *testing.T) {
+	// Build a model with pack items simulating an in-progress operation.
+	m := NewModel()
+	m.packItems = []packItem{
+		{name: "a", status: packItemRunning, cmdArgs: []string{"echo", "a"}},
+		{name: "b", status: packItemPending, cmdArgs: []string{"echo", "b"}},
+		{name: "c", status: packItemPending, cmdArgs: []string{"echo", "c"}},
+	}
+	m.packInstalling = true
+	m.packDone = 0
+
+	// Simulate user pressing "s" via handleKeyPackDetail.
+	m.showPackDetail = true
+	m.packDetailIdx = 0
+	m.packs = []registry.Pack{{Name: "test", ToolNames: []string{"a", "b", "c"}}}
+	sKey := tea.KeyPressMsg(tea.Key{Code: 's', Text: "s"})
+	result, _ := m.handleKeyPackDetail(sKey)
+	m = result.(Model)
+
+	// Item b should be skipped, done should be 1.
+	if m.packItems[1].status != packItemSkipped {
+		t.Errorf("expected item b to be skipped, got %d", m.packItems[1].status)
+	}
+	if m.packDone != 1 {
+		t.Errorf("after skip: expected done=1, got %d", m.packDone)
+	}
+
+	// Simulate packItemDoneMsg for running item a via Update().
+	result, _ = m.Update(packItemDoneMsg{idx: 0, err: nil})
+	m = result.(Model)
+
+	// Item a should be done, done should be 2.
+	if m.packItems[0].status != packItemDone {
+		t.Errorf("expected item a to be done, got %d", m.packItems[0].status)
+	}
+	if m.packDone != 2 {
+		t.Errorf("after complete: expected done=2, got %d", m.packDone)
+	}
+
+	// Item b stays skipped (no double-count).
+	if m.packItems[1].status != packItemSkipped {
+		t.Errorf("skipped item should stay skipped, got %d", m.packItems[1].status)
+	}
+}
+
+func TestBuildPackInstallItems_AllInstalled(t *testing.T) {
+	tools := []registry.Tool{
+		{
+			Name:      "git",
+			Instances: []registry.Instance{{Path: "/usr/bin/git"}},
+		},
+		{
+			Name:      "gh",
+			Instances: []registry.Instance{{Path: "/usr/bin/gh"}},
+		},
+	}
+
+	pack := registry.Pack{
+		Name:      "all-installed",
+		ToolNames: []string{"git", "gh"},
+	}
+
+	items := buildPackInstallItems(tools, pack)
+
+	for _, item := range items {
+		if item.status != packItemSkipped {
+			t.Errorf("%s: status = %d, want skipped (all installed)", item.name, item.status)
+		}
+	}
+}
+
+func TestBuildPackRemoveItems_NoneInstalled(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "git"}, // no instances
+		{Name: "gh"},  // no instances
+	}
+
+	pack := registry.Pack{
+		Name:      "none-installed",
+		ToolNames: []string{"git", "gh"},
+	}
+
+	items := buildPackRemoveItems(tools, pack)
+
+	for _, item := range items {
+		if item.status != packItemSkipped {
+			t.Errorf("%s: status = %d, want skipped (none installed)", item.name, item.status)
+		}
+	}
+}
+
+func TestBuildPackInstallItems_AllToolsNotInCatalog(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "git", Packages: registry.PackageIDs{Winget: "Git.Git"}},
+	}
+
+	pack := registry.Pack{
+		Name:      "phantom-pack",
+		ToolNames: []string{"nonexistent-a", "nonexistent-b", "nonexistent-c"},
+	}
+
+	items := buildPackInstallItems(tools, pack)
+
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(items))
+	}
+	for _, item := range items {
+		if item.status != packItemSkipped {
+			t.Errorf("%s: status = %d, want skipped", item.name, item.status)
+		}
+		if item.errMsg != "not in catalog" {
+			t.Errorf("%s: errMsg = %q, want 'not in catalog'", item.name, item.errMsg)
+		}
+	}
+}
+
+func TestBuildPackRemoveItems_AllToolsNotInCatalog(t *testing.T) {
+	tools := []registry.Tool{
+		{Name: "git", Instances: []registry.Instance{{Path: "/usr/bin/git"}}},
+	}
+
+	pack := registry.Pack{
+		Name:      "phantom-pack",
+		ToolNames: []string{"nonexistent-a", "nonexistent-b"},
+	}
+
+	items := buildPackRemoveItems(tools, pack)
+
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+	for _, item := range items {
+		if item.status != packItemSkipped {
+			t.Errorf("%s: status = %d, want skipped", item.name, item.status)
+		}
+		if item.errMsg != "not in catalog" {
+			t.Errorf("%s: errMsg = %q, want 'not in catalog'", item.name, item.errMsg)
+		}
+	}
+}
+
+func TestBuildPackInstallItems_MixedCatalogAndMissing(t *testing.T) {
+	registry.SetPMAvailableFunc(func(_ registry.InstallSource) bool { return true })
+	t.Cleanup(func() { registry.SetPMAvailableFunc(nil) })
+
+	tools := []registry.Tool{
+		{Name: "git", Packages: registry.PackageIDs{Winget: "Git.Git", Brew: "git"}},
+	}
+
+	pack := registry.Pack{
+		Name:      "mixed-pack",
+		ToolNames: []string{"git", "phantom-tool"},
+	}
+
+	items := buildPackInstallItems(tools, pack)
+
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+	// git — not installed, in catalog → pending.
+	if items[0].status != packItemPending {
+		t.Errorf("git: status = %d, want pending", items[0].status)
+	}
+	// phantom-tool — not in catalog → skipped.
+	if items[1].status != packItemSkipped {
+		t.Errorf("phantom-tool: status = %d, want skipped", items[1].status)
+	}
+	if items[1].errMsg != "not in catalog" {
+		t.Errorf("phantom-tool: errMsg = %q, want 'not in catalog'", items[1].errMsg)
+	}
+}
+
+func TestPackDisplayIndex_NameSortMatchesRender(t *testing.T) {
+	// Regression for PR #45: when packSortMode == 1 (name sort), packDisplayIndex
+	// must return the index that maps the sorted display position back to the
+	// real m.packs slot. Otherwise pressing Enter opens the wrong pack.
+	//
+	// m.packs is loaded sorted by Name (slug) — here that's "alpha", "bravo",
+	// "charlie". DisplayName sort should reorder to "Apple", "Banana", "Cherry"
+	// = 0,1,2 in this case, but the slug order is "alpha","bravo","charlie"
+	// which displays as "Apple","Banana","Cherry"... we deliberately make
+	// DisplayName order differ from Name order.
+	m := Model{
+		packSortMode: 1, // name sort (case-insensitive by DisplayName)
+		packs: []registry.Pack{
+			{Name: "a-slug", DisplayName: "Zebra"},
+			{Name: "b-slug", DisplayName: "Apple"},
+			{Name: "c-slug", DisplayName: "Mango"},
+		},
+	}
+	// Sorted by DisplayName (case-insensitive): Apple(1), Mango(2), Zebra(0).
+	cases := []struct {
+		displayIdx int
+		wantReal   int
+		wantName   string
+	}{
+		{0, 1, "b-slug"},
+		{1, 2, "c-slug"},
+		{2, 0, "a-slug"},
+	}
+	for _, c := range cases {
+		got := m.packDisplayIndex(c.displayIdx)
+		if got != c.wantReal {
+			t.Errorf("packDisplayIndex(%d) = %d (%s), want %d (%s)",
+				c.displayIdx, got, m.packs[got].Name, c.wantReal, c.wantName)
+		}
+	}
+}
+
+func TestPackDisplayIndex_StatusSortMatchesRender(t *testing.T) {
+	// Status sort: complete > partial > not-installed, ties broken by display name.
+	// We construct three packs where the status order differs from natural order.
+	m := Model{
+		packSortMode: 0, // status sort
+		packs: []registry.Pack{
+			{Name: "a", DisplayName: "A", ToolNames: []string{"git"}},         // complete (1/1)
+			{Name: "b", DisplayName: "B", ToolNames: []string{"missing"}},     // not installed
+			{Name: "c", DisplayName: "C", ToolNames: []string{"git", "miss"}}, // partial (1/2)
+		},
+		tools: []registry.Tool{
+			{Name: "git", Instances: []registry.Instance{{Path: "/usr/bin/git", Version: "1"}}},
+		},
+	}
+	// Expected display order: complete(0), partial(2), not-installed(1).
+	cases := []struct {
+		displayIdx int
+		wantReal   int
+	}{
+		{0, 0}, // A — complete
+		{1, 2}, // C — partial
+		{2, 1}, // B — not installed
+	}
+	for _, c := range cases {
+		got := m.packDisplayIndex(c.displayIdx)
+		if got != c.wantReal {
+			t.Errorf("packDisplayIndex(%d) = %d, want %d", c.displayIdx, got, c.wantReal)
+		}
+	}
+}

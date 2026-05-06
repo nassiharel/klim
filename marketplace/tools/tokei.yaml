@@ -1,0 +1,14 @@
+name: tokei
+display_name: tokei
+category: CLI
+tags:
+    - code-statistics
+    - cli
+binary_names:
+    - tokei
+packages:
+    winget: XAMPPRocky.Tokei
+    scoop: tokei
+    choco: tokei
+    brew: tokei
+github: XAMPPRocky/tokei

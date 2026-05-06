@@ -1,0 +1,15 @@
+name: delta
+display_name: delta
+category: CLI
+tags:
+    - git
+    - syntax-highlighting
+    - pager
+binary_names:
+    - delta
+packages:
+    winget: dandavison.delta
+    scoop: delta
+    choco: delta
+    brew: git-delta
+github: dandavison/delta
