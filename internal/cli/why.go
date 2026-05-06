@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/nassiharel/klim/internal/registry"
+	"github.com/spf13/cobra"
 )
 
 var whyOutputFmt func() (OutputFormat, error)
