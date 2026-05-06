@@ -7,8 +7,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/nassiharel/clim/internal/recommend"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/recommend"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 const (
@@ -371,7 +371,7 @@ func visualRows(s string, width int) int {
 // --- Title & Tabs ---
 
 func (m Model) renderTitleBar() string {
-	title := brandStyle.Render("clim")
+	title := brandStyle.Render("klim")
 
 	if m.phase == phaseLoading {
 		return "  " + title + "  " + loadingStyle.Render(m.spinner.View()+" Loading tools...")

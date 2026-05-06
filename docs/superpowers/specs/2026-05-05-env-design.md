@@ -4,16 +4,16 @@
 
 ## Problem
 
-`clim share` produces a compact chat token, but only carries tool **names**. `clim export` produces a YAML file with tools + OS + arch, but is awkward for chat ("paste this 200-line YAML"). Neither captures the wider environment shape — favorites, custom packs, available package managers, the user's clim version, observational health/audit signals.
+`klim share` produces a compact chat token, but only carries tool **names**. `klim export` produces a YAML file with tools + OS + arch, but is awkward for chat ("paste this 200-line YAML"). Neither captures the wider environment shape — favorites, custom packs, available package managers, the user's klim version, observational health/audit signals.
 
-Result: when one engineer wants to reproduce another's environment ("set me up like your laptop"), they manually combine `clim share`, `clim export`, hand-written notes about favorites, etc.
+Result: when one engineer wants to reproduce another's environment ("set me up like your laptop"), they manually combine `klim share`, `klim export`, hand-written notes about favorites, etc.
 
 ## Goal
 
 A single artifact ("**env**") that captures enough of an environment to share, diff, and reproduce — with two encodings of the same data:
 
-- **Token form**: paste-friendly base64 string (`clim:env:v1:<gz+b64>`) for chat / quick share.
-- **File form**: human-readable YAML for git, code review, and `clim` itself.
+- **Token form**: paste-friendly base64 string (`klim:env:v1:<gz+b64>`) for chat / quick share.
+- **File form**: human-readable YAML for git, code review, and `klim` itself.
 
 ## Non-goals
 
@@ -25,7 +25,7 @@ A single artifact ("**env**") that captures enough of an environment to share, d
 
 ```yaml
 schema_version: 1
-clim:
+klim:
   version: v1.2.3
   commit: 97b8857
 generated_at: "2026-05-05T17:30:00Z"
@@ -76,12 +76,12 @@ security:                   # observational; not enforced on apply
 - No hostname, username, or absolute paths.
 - No environment variables.
 - No detected scripts / dotfile contents.
-- The token is deterministic from the env state alone (modulo `generated_at`), so passing it to a coworker leaks **only what `clim list` already shows**.
+- The token is deterministic from the env state alone (modulo `generated_at`), so passing it to a coworker leaks **only what `klim list` already shows**.
 
 ## Token encoding
 
 ```
-clim:env:v1:<base64url(gzip(yaml(profile)))>
+klim:env:v1:<base64url(gzip(yaml(profile)))>
 ```
 
 - Versioned prefix lets future schemas decode older tokens via fallback.
@@ -92,20 +92,20 @@ clim:env:v1:<base64url(gzip(yaml(profile)))>
 ## Commands
 
 ```
-clim env                              # print token to stdout
-clim env --output {text,yaml,json}    # explicit form (default text = token)
-clim env show <token-or-file>         # decode + pretty-print
-clim env diff <token-or-file>         # diff vs current env
-clim env apply <token-or-file>        # install missing tools + set favorites + add packs (--yes to skip prompts)
+klim env                              # print token to stdout
+klim env --output {text,yaml,json}    # explicit form (default text = token)
+klim env show <token-or-file>         # decode + pretty-print
+klim env diff <token-or-file>         # diff vs current env
+klim env apply <token-or-file>        # install missing tools + set favorites + add packs (--yes to skip prompts)
 ```
 
 All commands follow CLI conventions: human text on stderr, machine output (`--output json`) on stdout.
 
 `apply` is a thin wrapper that:
 1. Resolves the manifest from the token.
-2. Calls into the existing install-plan machinery (`internal/cli/installplan.go`) for tool install — same code path as `clim import` so we don't duplicate logic.
+2. Calls into the existing install-plan machinery (`internal/cli/installplan.go`) for tool install — same code path as `klim import` so we don't duplicate logic.
 3. Adds favorites via the existing `favorites.Add`/`Set`.
-4. Registers custom packs via `custompacks.Add` (existing packs with the same name are preserved; users delete from `~/.config/clim/marketplace/custom-packs.yaml` or via the TUI to replace).
+4. Registers custom packs via `custompacks.Add` (existing packs with the same name are preserved; users delete from `~/.config/klim/marketplace/custom-packs.yaml` or via the TUI to replace).
 
 Cross-OS / cross-PM gaps surface in the report as "skipped: no winget package on linux" etc., never as errors.
 
@@ -115,7 +115,7 @@ Cross-OS / cross-PM gaps surface in the report as "skipped: no winget package on
 |------|---------------|
 | `types.go` | `Profile`, `Tool`, `Pack`, `Security` types with yaml/json tags |
 | `build.go` | `Build(ctx, svc, cfg, opts) (*Profile, error)` — assembles a profile from the live system; canonicalizes favorites and pack tool lists at collection time. `opts` (`BuildOptions`) lets tests inject a fixed `Now` time; production callers pass the zero value |
-| `token.go` | `Encode(p) (string, error)` / `Decode(s) (*Profile, error)` — gzip+b64 token I/O with versioned `clim:env:v1:` prefix |
+| `token.go` | `Encode(p) (string, error)` / `Decode(s) (*Profile, error)` — gzip+b64 token I/O with versioned `klim:env:v1:` prefix |
 | `file.go` | `ReadFile` / `WriteFile` for the YAML form |
 | `hash.go` | `ComputeHash` + `canonicalize` helpers — sorts/dedups slices and zeros `GeneratedAt`/`Hash` so two captures of the same env share an identifier |
 | `distro.go` | best-effort Linux distro hint via `/etc/os-release`; macOS / Windows return canonical names |
@@ -136,7 +136,7 @@ func WriteFile(path string, p *Profile) error
 
 ## Surfaces
 
-- **CLI**: `clim env` umbrella + 3 subcommands (above).
+- **CLI**: `klim env` umbrella + 3 subcommands (above).
 - **TUI**: Backup tab gets a row "env" with [Generate] and [Apply] keys; existing favorites/packs sections gain a "Share via env" hint.
 - **Web view**: out of scope for v1 — document as CLI/TUI feature; web can render the token via the existing /backup page in a follow-up.
 - **Docs**: `docs/src/content/docs/reference/commands/env.md` (full reference).

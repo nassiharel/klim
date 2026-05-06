@@ -1,5 +1,5 @@
 ---
-title: "clim export"
+title: "klim export"
 description: Export tools to stdout, snapshots, or named profiles
 ---
 
@@ -8,12 +8,12 @@ Export detected tools to YAML. Without a subcommand, prints to stdout. Includes 
 ## Usage
 
 ```bash
-clim export [flags]           # print manifest to stdout
-clim export save [label]      # save as timestamped snapshot
-clim export list              # list saved snapshots
-clim export show <name>       # show a snapshot
-clim export delete <name>     # delete a snapshot
-clim export profile <command> # manage named profiles
+klim export [flags]           # print manifest to stdout
+klim export save [label]      # save as timestamped snapshot
+klim export list              # list saved snapshots
+klim export show <name>       # show a snapshot
+klim export delete <name>     # delete a snapshot
+klim export profile <command> # manage named profiles
 ```
 
 ## Flags
@@ -28,19 +28,19 @@ clim export profile <command> # manage named profiles
 
 | Command | Description |
 |---------|-------------|
-| `clim export save [label]` | Save current tool state as a timestamped snapshot |
-| `clim export list` | List saved snapshots |
-| `clim export show <name>` | Show tools in a snapshot |
-| `clim export delete <name>` | Delete a snapshot |
+| `klim export save [label]` | Save current tool state as a timestamped snapshot |
+| `klim export list` | List saved snapshots |
+| `klim export show <name>` | Show tools in a snapshot |
+| `klim export delete <name>` | Delete a snapshot |
 
 ### Profiles (Named Snapshots)
 
 | Command | Description |
 |---------|-------------|
-| `clim export profile save <name>` | Save current state as a named profile |
-| `clim export profile list` | List saved profiles |
-| `clim export profile show <name>` | Show a profile's tools |
-| `clim export profile delete <name>` | Delete a profile |
+| `klim export profile save <name>` | Save current state as a named profile |
+| `klim export profile list` | List saved profiles |
+| `klim export profile show <name>` | Show a profile's tools |
+| `klim export profile delete <name>` | Delete a profile |
 
 ## Snapshots vs Profiles
 
@@ -51,31 +51,31 @@ clim export profile <command> # manage named profiles
 
 ```bash
 # Export to stdout
-clim export
+klim export
 
 # Save to file
-clim export > my-tools.yaml
+klim export > my-tools.yaml
 
 # Force fresh scan before export
-clim export --refresh > my-tools.yaml
+klim export --refresh > my-tools.yaml
 
 # Save before a big upgrade
-clim export save "before-k8s-upgrade"
+klim export save "before-k8s-upgrade"
 
 # List all snapshots
-clim export list
+klim export list
 
 # View what was in a snapshot
-clim export show before-k8s-upgrade
+klim export show before-k8s-upgrade
 
 # Save a named profile
-clim export profile save work
+klim export profile save work
 
 # List profiles
-clim export profile list
+klim export profile list
 
 # Import on another machine
-clim import my-tools.yaml
+klim import my-tools.yaml
 ```
 
 ## Output Format
@@ -102,26 +102,26 @@ tools:
 
 ## Cross-Platform Portability
 
-The manifest is **cross-platform** — it contains package IDs for all supported package managers. When imported on a different OS, clim automatically picks the best available package manager.
+The manifest is **cross-platform** — it contains package IDs for all supported package managers. When imported on a different OS, klim automatically picks the best available package manager.
 
 ## Storage
 
-- Snapshots: `~/.config/clim/snapshots/<timestamp>-<label>.yaml`
-- Profiles: `~/.config/clim/profiles/<name>.yaml`
+- Snapshots: `~/.config/klim/snapshots/<timestamp>-<label>.yaml`
+- Profiles: `~/.config/klim/profiles/<name>.yaml`
 
-Both use the same YAML manifest format, so snapshots can also be used with `clim diff` and `clim import`.
+Both use the same YAML manifest format, so snapshots can also be used with `klim diff` and `klim import`.
 
 ## Name Matching
 
 The `show` and `delete` commands support fuzzy matching — you can use a label, prefix, suffix, or substring:
 
 ```bash
-clim export show before-k8s    # matches "2026-04-30T...-before-k8s-upgrade"
-clim export show upgrade       # also matches
+klim export show before-k8s    # matches "2026-04-30T...-before-k8s-upgrade"
+klim export show upgrade       # also matches
 ```
 
 ## See Also
 
-- [`clim import`](/reference/commands/import) — Install tools from a manifest
-- [`clim share`](/reference/commands/share) — Generate a compact share token
-- [`clim diff`](/reference/commands/diff) — Compare against a snapshot or manifest
+- [`klim import`](/reference/commands/import) — Install tools from a manifest
+- [`klim share`](/reference/commands/share) — Generate a compact share token
+- [`klim diff`](/reference/commands/diff) — Compare against a snapshot or manifest

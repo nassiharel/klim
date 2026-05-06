@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/teamfile"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/teamfile"
 )
 
 func startServerWithFixtures(t *testing.T, packs []registry.Pack) *httptest.Server {
@@ -232,7 +232,7 @@ func TestPageForYou_EmptyWhenNothingInstalled(t *testing.T) {
 }
 
 func TestPageProjects_EmptyState(t *testing.T) {
-	// LoadProjects reads ~/.config/clim/projects.yaml. On a fresh test
+	// LoadProjects reads ~/.config/klim/projects.yaml. On a fresh test
 	// host that file shouldn't exist, but be tolerant: the page must
 	// render without erroring whether the registry is empty or has
 	// real entries.

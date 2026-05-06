@@ -10,15 +10,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/audit"
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/vuln"
+	"github.com/nassiharel/klim/internal/audit"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/vuln"
 )
 
 // ResolveVulnSourceKey returns the OSV endpoint string used as the
 // cache key for vulnerability scan results. Surfaces that read the
-// cache passively (`clim info`, web `/security`) must use the same
-// key as `clim security vuln`, otherwise they look at a different
+// cache passively (`klim info`, web `/security`) must use the same
+// key as `klim security vuln`, otherwise they look at a different
 // file. Falls back to vuln.DefaultOSVURL when config is unreadable
 // or the URL is unset.
 func ResolveVulnSourceKey() string {
@@ -35,19 +35,19 @@ func ResolveVulnSourceKey() string {
 //
 // Layout:
 //
-//	clim security             — quick aggregate summary (audit + vuln)
-//	clim security health      — environment health (PATH, multi-installs, …)
-//	clim security audit       — audit installed tools (archived/stale/license)
-//	clim security vuln        — CVE/GHSA lookup against installed tools
-//	clim security compliance  — validate against policy
+//	klim security             — quick aggregate summary (audit + vuln)
+//	klim security health      — environment health (PATH, multi-installs, …)
+//	klim security audit       — audit installed tools (archived/stale/license)
+//	klim security vuln        — CVE/GHSA lookup against installed tools
+//	klim security compliance  — validate against policy
 //
-// Top-level `clim audit`, `clim doctor`, `clim compliance` no longer
-// exist — clim is a fresh tool and avoids back-compat clutter.
+// Top-level `klim audit`, `klim doctor`, `klim compliance` no longer
+// exist — klim is a fresh tool and avoids back-compat clutter.
 var securityCmd = &cobra.Command{
 	Use:   "security",
 	Short: "Security checks: health, audit, vulnerabilities, compliance",
-	Long: `clim security is the umbrella for every security-related
-check clim performs. Run with no arguments to print a quick summary
+	Long: `klim security is the umbrella for every security-related
+check klim performs. Run with no arguments to print a quick summary
 across the cheap subset (audit + vuln); for full output of any one
 check, run the matching subcommand directly.
 
@@ -57,7 +57,7 @@ Subcommands:
   vuln        Look up known CVEs/GHSAs against installed versions
   compliance  Validate installed tools against a compliance policy
 
-Exit codes (bare 'clim security'):
+Exit codes (bare 'klim security'):
   0  No audit warnings, no vulns
   1  Vuln lookup hard-failed (network, OSV down, etc.)
   3  Audit warnings or vulnerability findings present`,
@@ -68,8 +68,8 @@ Exit codes (bare 'clim security'):
 func init() {
 	// Re-parent the existing subcommand definitions instead of
 	// duplicating their flag wiring. Each child still defines its
-	// own Use/Short/Long/RunE — `clim security audit` and
-	// `clim audit` would behave identically (but only the umbrella
+	// own Use/Short/Long/RunE — `klim security audit` and
+	// `klim audit` would behave identically (but only the umbrella
 	// path is registered now).
 	securityCmd.AddCommand(doctorCmd) // Use: "health"
 	securityCmd.AddCommand(auditCmd)
@@ -178,8 +178,8 @@ func runVuln(cmd *cobra.Command, args []string) error {
 		// Findings at or above threshold → ExitPartialFailure (3):
 		// the scan succeeded as a whole, but some items failed the
 		// gate. This matches the documented exit code contract and
-		// makes CI gating predictable across `clim security vuln`
-		// and `clim security`.
+		// makes CI gating predictable across `klim security vuln`
+		// and `klim security`.
 		risky := 0
 		clean := 0
 		for _, m := range report.Matches {
@@ -273,17 +273,17 @@ func reportTriggers(rep *vuln.Report, threshold vuln.Severity) bool {
 	return false
 }
 
-// --- bare `clim security` aggregator ---
+// --- bare `klim security` aggregator ---
 
 // runSecurityAggregate runs the cheap subset of security checks
 // (audit + vuln) and prints a one-paragraph summary. Returns a
 // non-nil error when there's something the user should act on:
 // audit warnings, vulnerabilities at any severity, or a hard
 // failure of the vuln lookup. The umbrella exit code lets CI gate
-// on `clim security` directly.
+// on `klim security` directly.
 func runSecurityAggregate(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
-	fmt.Fprintln(os.Stderr, "──── clim security ────")
+	fmt.Fprintln(os.Stderr, "──── klim security ────")
 
 	cfg := cfgFrom(cmd)
 	svc := svcFrom(cmd)
@@ -324,9 +324,9 @@ func runSecurityAggregate(cmd *cobra.Command, _ []string) error {
 
 	// Health and compliance left as a one-line "→ run subcommand"
 	// hint to keep the aggregator quick. Users can drill in with
-	// `clim security health` / `clim security compliance`.
-	fmt.Fprintln(os.Stderr, "  health:   run `clim security health` for full output")
-	fmt.Fprintln(os.Stderr, "  compliance: run `clim security compliance` for policy verdict")
+	// `klim security health` / `klim security compliance`.
+	fmt.Fprintln(os.Stderr, "  health:   run `klim security health` for full output")
+	fmt.Fprintln(os.Stderr, "  compliance: run `klim security compliance` for policy verdict")
 
 	// Aggregate exit code (PartialFailure = 3, the documented contract):
 	//   - vuln lookup hard failure → ExitRuntime (1) so CI fails closed

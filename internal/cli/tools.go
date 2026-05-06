@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/catalog"
+	"github.com/nassiharel/klim/internal/catalog"
 )
 
 var toolsCmd = &cobra.Command{
@@ -26,10 +26,10 @@ var toolsPathCmd = &cobra.Command{
 
 Useful for piping into other tools or for inspection:
 
-  clim tools path
-  cat "$(clim tools path)"
-  clim tools path --output json    # {"cache_path": "..."}`,
-	Args: requireArgs(0, "clim tools path"),
+  klim tools path
+  cat "$(klim tools path)"
+  klim tools path --output json    # {"cache_path": "..."}`,
+	Args: requireArgs(0, "klim tools path"),
 	RunE: runToolsPath,
 }
 

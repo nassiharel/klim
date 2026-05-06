@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/envid"
+	"github.com/nassiharel/klim/internal/envid"
 )
 
 // TestLoadProfile_TokenMalformedIsUsageError exercises the
@@ -13,7 +13,7 @@ import (
 // loadProfile recognises. This is the contract the env-id docs
 // promise: malformed tokens are usage errors, not runtime errors.
 //
-// Inputs that don't start with `clim:env:` are interpreted as file
+// Inputs that don't start with `klim:env:` are interpreted as file
 // paths (handled separately by envid.ReadFile and mapped to
 // ExitRuntime when the file doesn't exist), so they're excluded
 // from this matrix — their failure mode is genuine I/O, not a
@@ -23,9 +23,9 @@ func TestLoadProfile_TokenMalformedIsUsageError(t *testing.T) {
 		name  string
 		token string
 	}{
-		{"unknown version", "clim:env:v99:abc"},
-		{"empty body", "clim:env:v1:"},
-		{"corrupt base64", "clim:env:v1:!!!notbase64!!!"},
+		{"unknown version", "klim:env:v99:abc"},
+		{"empty body", "klim:env:v1:"},
+		{"corrupt base64", "klim:env:v1:!!!notbase64!!!"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -90,7 +90,7 @@ func TestIsUserCausedDecodeError(t *testing.T) {
 }
 
 // TestEnvCmd_NoArgsValidator catches the regression where bare
-// 'clim env' silently swallowed positional arguments instead of
+// 'klim env' silently swallowed positional arguments instead of
 // rejecting them. cobra.NoArgs is set in env.go; this test makes
 // sure nobody removes it.
 func TestEnvCmd_NoArgsValidator(t *testing.T) {

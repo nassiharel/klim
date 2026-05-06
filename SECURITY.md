@@ -2,18 +2,18 @@
 
 ## Scope
 
-This policy covers the `clim` binary and its build/release pipeline. It does **not** cover:
+This policy covers the `klim` binary and its build/release pipeline. It does **not** cover:
 
-- Third-party CLI tools that clim detects or upgrades
-- The native package managers clim invokes (brew, winget, apt, etc.)
+- Third-party CLI tools that klim detects or upgrades
+- The native package managers klim invokes (brew, winget, apt, etc.)
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in clim, please report it responsibly.
+If you discover a security vulnerability in klim, please report it responsibly.
 
 **Please do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, use [GitHub's private vulnerability reporting](https://github.com/nassiharel/clim/security/advisories/new) to submit your report.
+Instead, use [GitHub's private vulnerability reporting](https://github.com/nassiharel/klim/security/advisories/new) to submit your report.
 
 You should receive an acknowledgment within 48 hours. We will work with you to understand the issue and coordinate a fix before any public disclosure.
 

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/nassiharel/clim/internal/compliance"
-	"github.com/nassiharel/clim/internal/doctor"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/compliance"
+	"github.com/nassiharel/klim/internal/doctor"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Category represents one scoring dimension.
@@ -82,7 +82,7 @@ func BadgeURL(r Result) string {
 	case pct < 95:
 		color = "yellowgreen"
 	}
-	label := url.PathEscape("clim score")
+	label := url.PathEscape("klim score")
 	value := url.PathEscape(fmt.Sprintf("%d/%d %s", r.Total, r.MaxTotal, r.Grade))
 	return fmt.Sprintf("https://img.shields.io/badge/%s-%s-%s", label, value, color)
 }

@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nassiharel/clim/internal/detector"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/detector"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 const defaultCmdTimeout = 30 * time.Second

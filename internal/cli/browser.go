@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/web"
+	"github.com/nassiharel/klim/internal/web"
 )
 
 var (
@@ -25,11 +25,11 @@ var (
 var browserCmd = &cobra.Command{
 	Use:   "browser",
 	Short: "Launch the local web UI",
-	Long: `clim browser starts a local HTTP server and opens it in your default browser.
+	Long: `klim browser starts a local HTTP server and opens it in your default browser.
 
 The server binds to 127.0.0.1 by default and refuses non-loopback bind
 addresses unless --insecure-bind is set. When --insecure-bind exposes
-the server on the network, clim auto-generates a 32-byte bearer token
+the server on the network, klim auto-generates a 32-byte bearer token
 and prints a ?token=<token> URL — the token is required (cookie or
 Authorization: Bearer header) for every request other than /healthz.
 
@@ -42,11 +42,11 @@ By default the server shuts itself down 10 seconds after the last
 browser tab closes; pass --keep-alive to keep it running.
 
 Examples:
-  clim browser                                  # auto-pick a free port, open browser
-  clim browser --port 7777                      # bind a specific port
-  clim browser --no-open                        # don't auto-launch the browser
-  clim browser --keep-alive                     # don't auto-shutdown when tabs close
-  clim browser --bind 0.0.0.0 --insecure-bind   # expose to LAN (token-authenticated)`,
+  klim browser                                  # auto-pick a free port, open browser
+  klim browser --port 7777                      # bind a specific port
+  klim browser --no-open                        # don't auto-launch the browser
+  klim browser --keep-alive                     # don't auto-shutdown when tabs close
+  klim browser --bind 0.0.0.0 --insecure-bind   # expose to LAN (token-authenticated)`,
 	RunE: runBrowser,
 }
 
@@ -63,7 +63,7 @@ func runBrowser(cmd *cobra.Command, _ []string) error {
 	// Auto-generate a bearer token for non-loopback binds. Without
 	// auth, any device on the LAN that can reach the listener can
 	// install / upgrade / remove tools. Loopback stays unauthenticated
-	// so the default `clim browser` invocation behaves the same as the
+	// so the default `klim browser` invocation behaves the same as the
 	// TUI.
 	if browserInsecureBind && !isLoopbackAddr(browserBind) {
 		var err error
@@ -88,7 +88,7 @@ func runBrowser(cmd *cobra.Command, _ []string) error {
 	}
 	url := srv.URL()
 	authed := srv.AuthedURL()
-	fmt.Fprintf(os.Stderr, "clim browser listening on %s\n", url)
+	fmt.Fprintf(os.Stderr, "klim browser listening on %s\n", url)
 	if authToken != "" {
 		fmt.Fprintf(os.Stderr, "  ⚠ bound to a non-loopback address; auth token required\n")
 		fmt.Fprintf(os.Stderr, "  open: %s\n", authed)

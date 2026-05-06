@@ -11,10 +11,10 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/share"
+	"github.com/nassiharel/klim/internal/manifest"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/share"
 )
 
 var diffRefreshFlag bool
@@ -25,16 +25,16 @@ var diffCmd = &cobra.Command{
 	Short: "Compare your installed tools against a manifest or share token",
 	Long: `Compare your local tool environment against a reference:
 
-  clim diff my-tools.yaml            # compare against a manifest file
-  clim diff clim:v1:abc123...        # compare against a share token
-  clim diff my-tools.yaml --output json
+  klim diff my-tools.yaml            # compare against a manifest file
+  klim diff klim:v1:abc123...        # compare against a share token
+  klim diff my-tools.yaml --output json
 
 Shows which tools match, differ in version, or are missing on either side.
 
 Exit codes:
   0  Environments match
   1  Differences found`,
-	Args: requireArgs(1, "clim diff <manifest.yaml | share-token>"),
+	Args: requireArgs(1, "klim diff <manifest.yaml | share-token>"),
 	RunE: runDiff,
 }
 
@@ -259,7 +259,7 @@ func printDiffJSON(target, label string, entries []diffEntry, matches, differs, 
 // Returns a display name, the list of remote tools, and any error.
 func loadDiffTarget(target string) (string, []manifest.Tool, error) {
 	// Check if it's a share token.
-	if strings.HasPrefix(target, "clim:") {
+	if strings.HasPrefix(target, "klim:") {
 		names, err := share.Decode(target)
 		if err != nil {
 			return "", nil, fmt.Errorf("decoding share token: %w", err)

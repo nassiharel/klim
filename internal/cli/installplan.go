@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/manifest"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // installPlan represents a single tool to install with its resolved command.

@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Action discriminates the three sibling action commands.
@@ -214,11 +214,11 @@ func buildActionPlan(action Action, targets []string, regMap map[string]*registr
 	ps := actionSummary{Action: action}
 
 	for _, name := range targets {
-		// Self-protection (Remove only): refuse to uninstall clim
+		// Self-protection (Remove only): refuse to uninstall klim
 		// itself before the catalog lookup. Triggers regardless of
-		// whether clim is in the marketplace, so the guard remains in
-		// place if the catalog gains a clim entry later.
-		if action == ActionRemove && name == "clim" {
+		// whether klim is in the marketplace, so the guard remains in
+		// place if the catalog gains a klim entry later.
+		if action == ActionRemove && name == "klim" {
 			ps.selfProtected = append(ps.selfProtected, name)
 			continue
 		}
@@ -346,7 +346,7 @@ func printActionSummary(ps actionSummary) {
 		emitEntries("· Not installed (skipped)", ps.notInstalled)
 	case ActionRemove:
 		emitEntries("· Not installed (skipped)", ps.notInstalled)
-		emitStrings("⚠ Refused (clim self-removal blocked)", ps.selfProtected)
+		emitStrings("⚠ Refused (klim self-removal blocked)", ps.selfProtected)
 	}
 	emitStrings("⚠ Not in catalog", ps.unknown)
 	emitStrings(fmt.Sprintf("⚠ No package for %s", runtime.GOOS), ps.noPackage)

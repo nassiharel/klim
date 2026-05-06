@@ -6,9 +6,9 @@ package security
 import (
 	"strings"
 
-	"github.com/nassiharel/clim/internal/audit"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/vuln"
+	"github.com/nassiharel/klim/internal/audit"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/vuln"
 )
 
 // Status is the per-tool security verdict.

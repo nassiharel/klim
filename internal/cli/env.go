@@ -11,25 +11,25 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/custompacks"
-	"github.com/nassiharel/clim/internal/envid"
-	"github.com/nassiharel/clim/internal/favorites"
-	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/custompacks"
+	"github.com/nassiharel/klim/internal/envid"
+	"github.com/nassiharel/klim/internal/favorites"
+	"github.com/nassiharel/klim/internal/manifest"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
-// envCmd captures and reproduces a clim-managed environment.
+// envCmd captures and reproduces a klim-managed environment.
 //
 // The same payload has two encodings:
-//   - clim env (no args)  → compact base64 token for chat
-//   - clim env --output yaml → human-readable YAML for git
+//   - klim env (no args)  → compact base64 token for chat
+//   - klim env --output yaml → human-readable YAML for git
 //
-// Receivers can decode with `clim env show <token-or-file>` and
-// reproduce with `clim env apply <token-or-file>`.
+// Receivers can decode with `klim env show <token-or-file>` and
+// reproduce with `klim env apply <token-or-file>`.
 var envCmd = &cobra.Command{
 	Use:   "env [flags]",
 	Short: "Generate and apply environment fingerprints",
-	Long: `clim env captures the shape of your clim-managed environment
+	Long: `klim env captures the shape of your klim-managed environment
 into a portable artifact you can share via chat or commit to git.
 
 A profile contains:
@@ -37,7 +37,7 @@ A profile contains:
   - favorites
   - custom packs you've defined
   - which package managers are available on this host
-  - clim version + commit
+  - klim version + commit
   - OS, architecture, and (best-effort) distro
   - observational audit/security counts
 
@@ -48,21 +48,21 @@ contents.
 
 Examples:
   # Print the token for the current environment (paste into chat).
-  clim env
+  klim env
 
   # Write the rich YAML form to a file.
-  clim env --output yaml > my-env.yaml
+  klim env --output yaml > my-env.yaml
 
   # Decode someone else's token without applying it.
-  clim env show 'clim:env:v1:H4sIAAAAAA...'
+  klim env show 'klim:env:v1:H4sIAAAAAA...'
 
   # Diff a coworker's env against yours.
-  clim env diff 'clim:env:v1:H4sIAAAAAA...'
+  klim env diff 'klim:env:v1:H4sIAAAAAA...'
 
   # Reproduce the env locally — installs missing tools, sets favorites,
   # registers custom packs. Cross-OS gaps are reported, never errors.
-  clim env apply 'clim:env:v1:H4sIAAAAAA...'`,
-	Args: cobra.NoArgs, // subcommands take args; bare 'clim env' must not silently swallow extras.
+  klim env apply 'klim:env:v1:H4sIAAAAAA...'`,
+	Args: cobra.NoArgs, // subcommands take args; bare 'klim env' must not silently swallow extras.
 	RunE: runEnvIDPrint,
 }
 
@@ -80,7 +80,7 @@ func init() {
 // runEnvIDPrint generates a Profile from the live system and emits it
 // in the requested format.
 //
-//   - text  → compact `clim:env:v1:...` token to stdout (so users can
+//   - text  → compact `klim:env:v1:...` token to stdout (so users can
 //     pipe into pbcopy / xclip / wl-copy without ceremony).
 //   - json  → JSON document to stdout.
 //   - yaml  → YAML document to stdout.
@@ -134,7 +134,7 @@ func runEnvIDPrint(cmd *cobra.Command, _ []string) error {
 // non-empty warning when the user-supplied p.Hash differs (the
 // token/file may have been edited or forged). Build's freshly-
 // constructed profile always agrees, so this collapses to a no-op
-// for `clim env` (no args) and only matters for show/diff/apply
+// for `klim env` (no args) and only matters for show/diff/apply
 // against external input.
 func trustedHash(p *envid.Profile) (hash, warning string) {
 	got := envid.ComputeHash(p)
@@ -147,7 +147,7 @@ func trustedHash(p *envid.Profile) (hash, warning string) {
 var envShowCmd = &cobra.Command{
 	Use:   "show <token-or-file>",
 	Short: "Pretty-print an env token or file",
-	Long: `Decode a clim:env:v1:... token (or read a YAML file) and print
+	Long: `Decode a klim:env:v1:... token (or read a YAML file) and print
 its contents. No installs, no side effects — handy for previewing a
 coworker's env before applying it.`,
 	Args: cobra.ExactArgs(1),
@@ -216,7 +216,7 @@ func runEnvIDApply(cmd *cobra.Command, args []string) error {
 	if warn != "" {
 		fmt.Fprintf(os.Stderr, "  %s\n\n", warn)
 	}
-	fmt.Fprintf(os.Stderr, "  Source clim:    %s\n", p.Clim.Version)
+	fmt.Fprintf(os.Stderr, "  Source klim:    %s\n", p.Clim.Version)
 	fmt.Fprintf(os.Stderr, "  Source OS:      %s/%s\n", p.OS.GOOS, p.OS.Arch)
 	fmt.Fprintf(os.Stderr, "  Tools:          %d\n", len(p.Tools))
 	fmt.Fprintf(os.Stderr, "  Favorites:      %d\n", len(p.Favorites))
@@ -250,7 +250,7 @@ func runEnvIDApply(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// loadProfile reads either a token (clim:env:v1:...) or a file path.
+// loadProfile reads either a token (klim:env:v1:...) or a file path.
 // Distinguishing is unambiguous because tokens always start with the
 // fixed prefix.
 //
@@ -260,7 +260,7 @@ func runEnvIDApply(cmd *cobra.Command, args []string) error {
 // (file I/O, unmarshal of a corrupted YAML on disk) propagate as
 // runtime errors (ExitRuntime 1).
 func loadProfile(arg string) (*envid.Profile, error) {
-	if strings.HasPrefix(strings.TrimSpace(arg), "clim:env:") {
+	if strings.HasPrefix(strings.TrimSpace(arg), "klim:env:") {
 		p, err := envid.Decode(arg)
 		if err != nil && isUserCausedDecodeError(err) {
 			return nil, usageErrorf("invalid env token: %v", err)
@@ -306,9 +306,9 @@ func renderProfileText(w io.Writer, p *envid.Profile) {
 	if warn != "" {
 		_, _ = fmt.Fprintf(w, "  %s\n\n", warn)
 	}
-	_, _ = fmt.Fprintf(w, "  clim version:    %s\n", p.Clim.Version)
+	_, _ = fmt.Fprintf(w, "  klim version:    %s\n", p.Clim.Version)
 	if p.Clim.Commit != "" {
-		_, _ = fmt.Fprintf(w, "  clim commit:     %s\n", p.Clim.Commit)
+		_, _ = fmt.Fprintf(w, "  klim commit:     %s\n", p.Clim.Commit)
 	}
 	_, _ = fmt.Fprintf(w, "  generated:       %s\n", p.GeneratedAt.Format("2006-01-02 15:04 MST"))
 	_, _ = fmt.Fprintf(w, "  OS:              %s/%s", p.OS.GOOS, p.OS.Arch)

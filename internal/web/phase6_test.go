@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
 )
 
 func TestLifecycle_ShutsDownWhenLastTabClosesAfterGrace(t *testing.T) {
@@ -144,7 +144,7 @@ func TestServer_JobContextCancelsOnShutdown(t *testing.T) {
 	// Regression for the PR #48 review: jobs used to run under
 	// context.Background() and would not be cancelled when the
 	// server shut down, orphaning long-running install subprocesses
-	// past clim's own exit. Fixed by deriving a server-lifetime
+	// past klim's own exit. Fixed by deriving a server-lifetime
 	// jobCtx from Serve's parent ctx; this test confirms that
 	// cancelling Serve's ctx propagates to jobCtx.
 	srv, err := New(Options{

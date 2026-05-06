@@ -3,7 +3,7 @@ package detector
 import (
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 func TestDetectGoBuildInfo_NonExistent(t *testing.T) {

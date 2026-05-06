@@ -32,7 +32,7 @@ func ReplaceBinary(execPath string, newBinary []byte) error {
 	// 1. Write new binary to a temp file in the same directory (same
 	//    filesystem ⇒ rename is atomic). os.CreateTemp avoids predictable
 	//    names and TOCTOU races.
-	tmp, err := os.CreateTemp(dir, ".clim-update-*")
+	tmp, err := os.CreateTemp(dir, ".klim-update-*")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}

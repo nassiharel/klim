@@ -1,12 +1,12 @@
 // Package custompacks manages user-created pack definitions stored
-// in ~/.config/clim/marketplace/custom-packs.yaml. Custom packs use the same
+// in ~/.config/klim/marketplace/custom-packs.yaml. Custom packs use the same
 // registry.Pack schema as marketplace packs but are persisted locally.
 package custompacks
 
 import (
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // packFile is the on-disk YAML structure.
@@ -22,7 +22,7 @@ type packDef struct {
 	Tools       []string `yaml:"tools"`
 }
 
-const yamlHeader = "# clim — Custom Packs\n# User-created packs. Managed by clim; safe to edit manually.\n\n"
+const yamlHeader = "# klim — Custom Packs\n# User-created packs. Managed by klim; safe to edit manually.\n\n"
 
 // StoragePath returns the path to the custom packs file.
 func StoragePath() (string, error) {

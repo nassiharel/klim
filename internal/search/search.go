@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Result represents a single search match.

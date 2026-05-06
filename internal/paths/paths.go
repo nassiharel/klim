@@ -1,6 +1,6 @@
-// Package paths provides a single source of truth for all clim
+// Package paths provides a single source of truth for all klim
 // configuration and data file paths. Every package that needs to
-// locate a file under ~/.config/clim should call a function here
+// locate a file under ~/.config/klim should call a function here
 // instead of computing the path itself.
 package paths
 
@@ -11,13 +11,13 @@ import (
 	"path/filepath"
 )
 
-// BaseDir returns the clim root directory (~/.config/clim or OS equivalent).
+// BaseDir returns the klim root directory (~/.config/klim or OS equivalent).
 func BaseDir() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "clim"), nil
+	return filepath.Join(dir, "klim"), nil
 }
 
 // Join returns BaseDir()/segments... as a single path.
@@ -62,7 +62,7 @@ func BackupsDir() (string, error) {
 
 // LogFile returns the path to the log file.
 func LogFile() (string, error) {
-	return Join("logs", "clim.log")
+	return Join("logs", "klim.log")
 }
 
 // ShimsDir returns the path to the proxy shims directory.

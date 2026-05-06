@@ -15,7 +15,7 @@ $fallback = Get-MarketplaceFallback
 
 # --- Assemble to temp (outside repo — survives git clean) ---
 Write-Step "Assembling to temp"
-$tmp = Join-Path ([System.IO.Path]::GetTempPath()) "clim-mp-$(Get-Random).yaml"
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) "klim-mp-$(Get-Random).yaml"
 $goArgs = @("run", "./internal/marketplace/assemble", "-fallback", $fallback, "-o", $tmp)
 if ($FetchGitHub) { $goArgs += "-fetch-github" }
 & go @goArgs

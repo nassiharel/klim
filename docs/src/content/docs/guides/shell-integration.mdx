@@ -3,11 +3,11 @@ title: Shell Integration
 description: Set up tab completion and auto-checking for your shell
 ---
 
-clim provides two shell integration features: **completions** for tab completion and **hooks** for automatic `.clim.yaml` checking.
+klim provides two shell integration features: **completions** for tab completion and **hooks** for automatic `.klim.yaml` checking.
 
 ## Tab Completion
 
-Generate native tab completions for all clim commands, flags, and arguments.
+Generate native tab completions for all klim commands, flags, and arguments.
 
 ### Setup
 
@@ -17,50 +17,50 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 <TabItem label="bash">
 ```bash
 # Current session
-source <(clim shell completion bash)
+source <(klim shell completion bash)
 
 # Persistent — add to ~/.bashrc
-echo 'source <(clim shell completion bash)' >> ~/.bashrc
+echo 'source <(klim shell completion bash)' >> ~/.bashrc
 ```
 </TabItem>
 <TabItem label="zsh">
 ```bash
 # Current session
-source <(clim shell completion zsh)
+source <(klim shell completion zsh)
 
 # Persistent — add to ~/.zshrc
-echo 'source <(clim shell completion zsh)' >> ~/.zshrc
+echo 'source <(klim shell completion zsh)' >> ~/.zshrc
 ```
 </TabItem>
 <TabItem label="fish">
 ```bash
 # Current session
-clim shell completion fish | source
+klim shell completion fish | source
 
 # Persistent
-clim shell completion fish > ~/.config/fish/completions/clim.fish
+klim shell completion fish > ~/.config/fish/completions/klim.fish
 ```
 </TabItem>
 <TabItem label="PowerShell">
 ```powershell
 # Current session
-clim shell completion powershell | Out-String | Invoke-Expression
+klim shell completion powershell | Out-String | Invoke-Expression
 
 # Persistent — add to $PROFILE
-Add-Content $PROFILE 'clim shell completion powershell | Out-String | Invoke-Expression'
+Add-Content $PROFILE 'klim shell completion powershell | Out-String | Invoke-Expression'
 ```
 </TabItem>
 </Tabs>
 
 ## Shell Hook
 
-The shell hook automatically checks `.clim.yaml` requirements when you `cd` into a project directory — like nvm or direnv for your toolchain.
+The shell hook automatically checks `.klim.yaml` requirements when you `cd` into a project directory — like nvm or direnv for your toolchain.
 
 ### How It Works
 
 1. You `cd` into a directory
-2. The hook walks up the directory tree looking for `.clim.yaml`
-3. If found, it runs `clim check` silently
+2. The hook walks up the directory tree looking for `.klim.yaml`
+3. If found, it runs `klim check` silently
 4. Only prints output when tools are missing or outdated
 
 ### Setup
@@ -68,34 +68,34 @@ The shell hook automatically checks `.clim.yaml` requirements when you `cd` into
 <Tabs>
 <TabItem label="bash">
 ```bash
-eval "$(clim shell hook bash)"
+eval "$(klim shell hook bash)"
 
 # Persistent — add to ~/.bashrc
-echo 'eval "$(clim shell hook bash)"' >> ~/.bashrc
+echo 'eval "$(klim shell hook bash)"' >> ~/.bashrc
 ```
 </TabItem>
 <TabItem label="zsh">
 ```bash
-eval "$(clim shell hook zsh)"
+eval "$(klim shell hook zsh)"
 
 # Persistent — add to ~/.zshrc
-echo 'eval "$(clim shell hook zsh)"' >> ~/.zshrc
+echo 'eval "$(klim shell hook zsh)"' >> ~/.zshrc
 ```
 </TabItem>
 <TabItem label="fish">
 ```bash
-clim shell hook fish | source
+klim shell hook fish | source
 
 # Persistent
-clim shell hook fish > ~/.config/fish/conf.d/clim-hook.fish
+klim shell hook fish > ~/.config/fish/conf.d/klim-hook.fish
 ```
 </TabItem>
 <TabItem label="PowerShell">
 ```powershell
-clim shell hook powershell | Out-String | Invoke-Expression
+klim shell hook powershell | Out-String | Invoke-Expression
 
 # Persistent — add to $PROFILE
-Add-Content $PROFILE 'clim shell hook powershell | Out-String | Invoke-Expression'
+Add-Content $PROFILE 'klim shell hook powershell | Out-String | Invoke-Expression'
 ```
 </TabItem>
 </Tabs>
@@ -108,7 +108,7 @@ When you `cd` into a project with missing or outdated tools:
 $ cd my-k8s-project
     ✗ kubectl              —            (>=1.28)
     ⚠ terraform            1.5.0        (>=1.7)
-  Run 'clim check' for details or 'clim import' to install missing tools.
+  Run 'klim check' for details or 'klim import' to install missing tools.
 ```
 
 ## Both Together
@@ -117,6 +117,6 @@ For the best experience, set up both completion and hook:
 
 ```bash
 # bash
-echo 'source <(clim shell completion bash)' >> ~/.bashrc
-echo 'eval "$(clim shell hook bash)"' >> ~/.bashrc
+echo 'source <(klim shell completion bash)' >> ~/.bashrc
+echo 'eval "$(klim shell hook bash)"' >> ~/.bashrc
 ```

@@ -29,7 +29,7 @@ var (
 // useful next step instead of just a hex error code.
 //
 // Today the only handled cases are winget's "package not installed"
-// (which clim repeatedly hit when its source-detection heuristic
+// (which klim repeatedly hit when its source-detection heuristic
 // optimistically called Program Files binaries winget-managed even
 // when winget had no record of them) and "no package available"
 // (catalog id mismatch). 'where.exe' is used (rather than 'where')

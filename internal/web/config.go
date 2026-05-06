@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/klim/internal/config"
 )
 
 // pageConfig renders the Config tab. Each Setting from

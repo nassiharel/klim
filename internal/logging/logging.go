@@ -1,5 +1,5 @@
-// Package logging sets up structured logging for clim using log/slog.
-// Logs are written to a file (~/.config/clim/clim.log) by default.
+// Package logging sets up structured logging for klim using log/slog.
+// Logs are written to a file (~/.config/klim/klim.log) by default.
 // When verbose mode is enabled, logs are also written to stderr.
 package logging
 
@@ -13,7 +13,7 @@ import (
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"github.com/nassiharel/clim/internal/paths"
+	"github.com/nassiharel/klim/internal/paths"
 )
 
 var (

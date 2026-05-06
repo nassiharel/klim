@@ -1,18 +1,18 @@
 ---
-title: "clim version"
-description: Print clim version information
+title: "klim version"
+description: Print klim version information
 ---
 
-Print the clim version, commit hash, and build date.
+Print the klim version, commit hash, and build date.
 
 ## Usage
 
 ```bash
-clim version
+klim version
 ```
 
 ## Output
 
 ```
-clim version 1.2.0 (commit: abc1234, built: 2025-01-15T10:30:00Z)
+klim version 1.2.0 (commit: abc1234, built: 2025-01-15T10:30:00Z)
 ```

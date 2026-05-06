@@ -1,14 +1,14 @@
 ---
-title: "clim import"
+title: "klim import"
 description: Install tools from an exported manifest
 ---
 
-Install tools listed in a YAML manifest created by `clim export`.
+Install tools listed in a YAML manifest created by `klim export`.
 
 ## Usage
 
 ```bash
-clim import <file> [flags]
+klim import <file> [flags]
 ```
 
 ## Arguments
@@ -27,10 +27,10 @@ clim import <file> [flags]
 
 ```bash
 # Interactive — confirm before installing each tool
-clim import my-tools.yaml
+klim import my-tools.yaml
 
 # Non-interactive — install everything
-clim import my-tools.yaml --yes
+klim import my-tools.yaml --yes
 ```
 
 ## How It Works
@@ -42,5 +42,5 @@ clim import my-tools.yaml --yes
 
 ## See Also
 
-- [`clim export`](/reference/commands/export) — Export tools to a manifest
-- [`clim open`](/reference/commands/open) — Install from a share token
+- [`klim export`](/reference/commands/export) — Export tools to a manifest
+- [`klim open`](/reference/commands/open) — Install from a share token

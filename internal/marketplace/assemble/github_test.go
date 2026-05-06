@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 func TestValidGitHubSlug(t *testing.T) {

@@ -1,5 +1,5 @@
 // Package audit provides shared security audit logic used by both the
-// CLI (clim audit) and TUI (Doctor→Audit sub-tab).
+// CLI (klim audit) and TUI (Doctor→Audit sub-tab).
 package audit
 
 import (
@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Finding represents a single audit issue.

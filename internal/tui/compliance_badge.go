@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/compliance"
+	"github.com/nassiharel/klim/internal/compliance"
 )
 
 // complianceBadge returns a short colored badge for the tool's compliance status.

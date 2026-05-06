@@ -11,10 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/catalog"
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/klim/internal/catalog"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
 )
 
 var (
@@ -38,13 +38,13 @@ Flags:
   --output text|json   Output format (default: text)
 
 Examples:
-  clim list                          # all installed tools
-  clim list --category Cloud         # only Cloud tools
-  clim list --source brew            # only Homebrew-installed tools
-  clim list --category IaC --source brew  # combine filters
-  clim list --categories             # list available categories
-  clim list --refresh                # bypass cache and rescan
-  clim list --output json            # machine-readable output`,
+  klim list                          # all installed tools
+  klim list --category Cloud         # only Cloud tools
+  klim list --source brew            # only Homebrew-installed tools
+  klim list --category IaC --source brew  # combine filters
+  klim list --categories             # list available categories
+  klim list --refresh                # bypass cache and rescan
+  klim list --output json            # machine-readable output`,
 	RunE: runList,
 }
 
@@ -205,7 +205,7 @@ func printCategories(tools []registry.Tool) {
 
 // or() and the local helper have been replaced by stdlib cmp.Or.
 
-// listJSONTool is the JSON shape for `clim list --output json`.
+// listJSONTool is the JSON shape for `klim list --output json`.
 type listJSONTool struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name,omitempty"`

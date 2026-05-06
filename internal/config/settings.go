@@ -194,7 +194,7 @@ func AllSettings() []Setting {
 		},
 		{
 			Label: "Log to File", Key: "log_file", Type: SettingBool,
-			Help:    "Write structured logs to ~/.config/clim/logs/clim.log.",
+			Help:    "Write structured logs to ~/.config/klim/logs/klim.log.",
 			GetBool: func(c *Config) bool { return c.Logging.File },
 			SetBool: func(c *Config, v bool) { c.Logging.File = v },
 		},
@@ -232,7 +232,7 @@ func AllSettings() []Setting {
 		},
 		{
 			Label: "Command Timeout", Key: "performance_command_timeout", Type: SettingDuration,
-			Help:        "How long any single package-manager subprocess can run before clim gives up.",
+			Help:        "How long any single package-manager subprocess can run before klim gives up.",
 			GetDuration: func(c *Config) time.Duration { return c.Performance.CommandTimeout.Duration },
 			SetDuration: func(c *Config, v time.Duration) { c.Performance.CommandTimeout = Duration{Duration: v} },
 		},
@@ -256,10 +256,10 @@ func AllSettings() []Setting {
 			GetBool: func(c *Config) bool { return c.UI.SidebarRight },
 			SetBool: func(c *Config, v bool) { c.UI.SidebarRight = v },
 		},
-		// --- Defaults (consumed by clim install / upgrade / remove) ---
+		// --- Defaults (consumed by klim install / upgrade / remove) ---
 		{
 			Section: "Defaults", Label: "Preferred Source", Key: "defaults_preferred_source", Type: SettingChoice,
-			Help:      "Package manager that clim install / upgrade / remove prefers when available. Empty = OS-priority fallback.",
+			Help:      "Package manager that klim install / upgrade / remove prefers when available. Empty = OS-priority fallback.",
 			Choices:   []string{"", "winget", "choco", "scoop", "brew", "apt", "snap", "npm"},
 			GetString: func(c *Config) string { return c.Defaults.PreferredSource },
 			SetString: func(c *Config, v string) { c.Defaults.PreferredSource = v },
@@ -267,7 +267,7 @@ func AllSettings() []Setting {
 		// --- Compliance ---
 		{
 			Section: "Compliance", Label: "Policy Path", Key: "compliance_policy", Type: SettingString,
-			Help:      "Local path to .clim-policy.yaml. Empty = auto-discover or use compliance.url.",
+			Help:      "Local path to .klim-policy.yaml. Empty = auto-discover or use compliance.url.",
 			GetString: func(c *Config) string { return c.Compliance.Policy },
 			SetString: func(c *Config, v string) { c.Compliance.Policy = v },
 		},
@@ -295,7 +295,7 @@ func AllSettings() []Setting {
 			GetBool: func(c *Config) bool { return c.Compliance.BlockInstalls },
 			SetBool: func(c *Config, v bool) { c.Compliance.BlockInstalls = v },
 		},
-		// --- Vuln (clim security vuln) ---
+		// --- Vuln (klim security vuln) ---
 		{
 			Section: "Vulnerability scan", Label: "Endpoint URL", Key: "vuln_url", Type: SettingString,
 			Help:      "OSV-compatible HTTP endpoint. Empty = https://api.osv.dev (the public default).",
@@ -316,7 +316,7 @@ func AllSettings() []Setting {
 		},
 		{
 			Label: "Fail on Severity", Key: "vuln_fail_on_severity", Type: SettingChoice,
-			Help:      "When set, clim security vuln exits non-zero if any finding meets this severity. Empty = never fail.",
+			Help:      "When set, klim security vuln exits non-zero if any finding meets this severity. Empty = never fail.",
 			Choices:   []string{"", "low", "medium", "high", "critical"},
 			GetString: func(c *Config) string { return c.Vuln.FailOnSeverity },
 			SetString: func(c *Config, v string) { c.Vuln.FailOnSeverity = v },

@@ -9,10 +9,10 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/snapshot"
+	"github.com/nassiharel/klim/internal/manifest"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/snapshot"
 )
 
 var exportRefreshFlag bool
@@ -22,24 +22,24 @@ var exportCmd = &cobra.Command{
 	Short: "Export installed tools — to stdout, snapshots, or profiles",
 	Long: `Export detected tools to YAML. Without a subcommand, prints to stdout.
 
-  clim export                       # print manifest to stdout
-  clim export > my-tools.yaml       # redirect to file
-  clim export --refresh             # force fresh scan
+  klim export                       # print manifest to stdout
+  klim export > my-tools.yaml       # redirect to file
+  klim export --refresh             # force fresh scan
 
 Snapshots (saved exports):
-  clim export save [label]          # save timestamped snapshot
-  clim export list                  # list saved snapshots
-  clim export show <name>           # show a snapshot
-  clim export delete <name>         # delete a snapshot
+  klim export save [label]          # save timestamped snapshot
+  klim export list                  # list saved snapshots
+  klim export show <name>           # show a snapshot
+  klim export delete <name>         # delete a snapshot
 
 Profiles (named snapshots):
-  clim export profile save <name>   # save as named profile
-  clim export profile list          # list profiles
-  clim export profile show <name>   # show a profile
-  clim export profile delete <name> # delete a profile
+  klim export profile save <name>   # save as named profile
+  klim export profile list          # list profiles
+  klim export profile show <name>   # show a profile
+  klim export profile delete <name> # delete a profile
 
 Import on another machine:
-  clim import my-tools.yaml`,
+  klim import my-tools.yaml`,
 	RunE: runExport,
 }
 
@@ -60,14 +60,14 @@ var exportListCmd = &cobra.Command{
 var exportShowCmd = &cobra.Command{
 	Use:   "show <name>",
 	Short: "Show tools in a saved snapshot",
-	Args:  requireArgs(1, "clim export show <name>"),
+	Args:  requireArgs(1, "klim export show <name>"),
 	RunE:  runExportShow,
 }
 
 var exportDeleteCmd = &cobra.Command{
 	Use:   "delete <name>",
 	Short: "Delete a saved snapshot",
-	Args:  requireArgs(1, "clim export delete <name>"),
+	Args:  requireArgs(1, "klim export delete <name>"),
 	RunE:  runExportDelete,
 }
 
@@ -80,7 +80,7 @@ var exportProfileCmd = &cobra.Command{
 var exportProfileSaveCmd = &cobra.Command{
 	Use:   "save <name>",
 	Short: "Save current tool state as a named profile",
-	Args:  requireArgs(1, "clim export profile save <name>"),
+	Args:  requireArgs(1, "klim export profile save <name>"),
 	RunE:  runExportProfileSave,
 }
 
@@ -93,14 +93,14 @@ var exportProfileListCmd = &cobra.Command{
 var exportProfileShowCmd = &cobra.Command{
 	Use:   "show <name>",
 	Short: "Show a profile's tools",
-	Args:  requireArgs(1, "clim export profile show <name>"),
+	Args:  requireArgs(1, "klim export profile show <name>"),
 	RunE:  runExportProfileShow,
 }
 
 var exportProfileDeleteCmd = &cobra.Command{
 	Use:   "delete <name>",
 	Short: "Delete a profile",
-	Args:  requireArgs(1, "clim export profile delete <name>"),
+	Args:  requireArgs(1, "klim export profile delete <name>"),
 	RunE:  runExportProfileDelete,
 }
 
@@ -143,7 +143,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 	}
 
 	m := manifest.Manifest{
-		GeneratedBy: "clim export",
+		GeneratedBy: "klim export",
 		OS:          runtime.GOOS,
 		Arch:        runtime.GOARCH,
 		Tools:       exported,
@@ -154,7 +154,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("marshalling export: %w", err)
 	}
 
-	header := "# clim — Installed Tools Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   clim import my-tools.yaml\n#\n\n"
+	header := "# klim — Installed Tools Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   klim import my-tools.yaml\n#\n\n"
 	fmt.Print(header + string(data))
 
 	fmt.Fprintf(os.Stderr, "\n%d tools exported.\n", len(exported))
@@ -198,7 +198,7 @@ func runExportList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if len(entries) == 0 {
-		fmt.Fprintln(os.Stderr, "No snapshots saved. Create one with: clim export save")
+		fmt.Fprintln(os.Stderr, "No snapshots saved. Create one with: klim export save")
 		return nil
 	}
 	fmt.Fprintf(os.Stderr, "%d snapshot(s):\n\n", len(entries))
@@ -271,7 +271,7 @@ func runExportProfileList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if len(entries) == 0 {
-		fmt.Fprintln(os.Stderr, "No profiles saved. Create one with: clim export profile save <name>")
+		fmt.Fprintln(os.Stderr, "No profiles saved. Create one with: klim export profile save <name>")
 		return nil
 	}
 	fmt.Fprintf(os.Stderr, "%d profile(s):\n\n", len(entries))

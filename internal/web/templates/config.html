@@ -2,12 +2,12 @@
 {{$d := .Data}}
 <section class="page-header">
   <h1>Config</h1>
-  <p class="muted">Edit clim's settings. Saved to <code>~/.config/clim/config.yaml</code>; most fields need a restart to take full effect.</p>
+  <p class="muted">Edit klim's settings. Saved to <code>~/.config/klim/config.yaml</code>; most fields need a restart to take full effect.</p>
 </section>
 
 {{if $d.Saved}}
 <section class="card flash flash-ok">
-  <p>✓ Saved. Restart <code>clim browser</code> for changes that affect logging, marketplace URL, or scan concurrency to take effect.</p>
+  <p>✓ Saved. Restart <code>klim browser</code> for changes that affect logging, marketplace URL, or scan concurrency to take effect.</p>
 </section>
 {{end}}
 
@@ -64,7 +64,7 @@
 
 <section class="card">
   <h2>YAML preview</h2>
-  <p class="muted small">Read-only view of the saved config; useful for copying into another machine's <code>~/.config/clim/config.yaml</code>.</p>
+  <p class="muted small">Read-only view of the saved config; useful for copying into another machine's <code>~/.config/klim/config.yaml</code>.</p>
   <pre class="log">{{$d.YAML}}</pre>
 </section>
 {{end}}

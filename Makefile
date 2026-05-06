@@ -2,7 +2,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE    ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-MODULE  := github.com/nassiharel/clim
+MODULE  := github.com/nassiharel/klim
 LDFLAGS := -s -w \
   -X $(MODULE)/internal/build.Version=$(VERSION) \
   -X $(MODULE)/internal/build.Commit=$(COMMIT) \
@@ -13,11 +13,11 @@ LDFLAGS := -s -w \
 
 all: lint test build ## Run lint, test, and build
 
-build: ## Build the clim binary
-	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/clim ./cmd/clim
+build: ## Build the klim binary
+	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/klim ./cmd/klim
 
-run: ## Run clim from source
-	go run -ldflags "$(LDFLAGS)" ./cmd/clim
+run: ## Run klim from source
+	go run -ldflags "$(LDFLAGS)" ./cmd/klim
 
 test: ## Run all tests
 	go test -race -count=1 ./...

@@ -15,15 +15,15 @@ import (
 // from a malicious or corrupted archive.
 const maxBinarySize = 200 << 20 // 200 MB
 
-// binaryName returns "clim" or "clim.exe" depending on OS.
+// binaryName returns "klim" or "klim.exe" depending on OS.
 func binaryName(goos string) string {
 	if goos == "windows" {
-		return "clim.exe"
+		return "klim.exe"
 	}
-	return "clim"
+	return "klim"
 }
 
-// ExtractBinary reads an archive from r and returns the raw bytes of the clim
+// ExtractBinary reads an archive from r and returns the raw bytes of the klim
 // binary inside it. The archive format is determined by archiveName's suffix.
 func ExtractBinary(r io.Reader, archiveName string, goos string) ([]byte, error) {
 	switch {

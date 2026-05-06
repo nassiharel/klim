@@ -14,7 +14,7 @@ var installCmd = &cobra.Command{
 	Short: "Install one or more tools or packs via the system package manager",
 	Long: `Install tools listed positionally and/or via --pack expansions.
 
-clim picks the package manager for each tool using this precedence:
+klim picks the package manager for each tool using this precedence:
 
   1. --source flag        (per invocation)
   2. defaults.preferred_source in config.yaml (global default)
@@ -26,11 +26,11 @@ without a package on the current OS are reported but do not stop the
 run.
 
 Examples:
-  clim install jq fzf
-  clim install --pack go-dev
-  clim install jq --source brew --yes
-  clim install --pack rust-dev --pack web-dev --dry-run
-  clim install jq --output json`,
+  klim install jq fzf
+  klim install --pack go-dev
+  klim install jq --source brew --yes
+  klim install --pack rust-dev --pack web-dev --dry-run
+  klim install jq --output json`,
 	GroupID: "tools",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAction(cmd, args, ActionInstall, installFlags, installOutputFmt)

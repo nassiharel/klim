@@ -159,7 +159,7 @@ func buildTestTarGz(t *testing.T, binaryName string, binaryContent []byte) []byt
 	_, _ = tw.Write(binaryContent)
 
 	// Add a README (should be ignored).
-	readmeContent := []byte("# clim")
+	readmeContent := []byte("# klim")
 	_ = tw.WriteHeader(&tar.Header{
 		Name:     "clim_1.0.0_linux_amd64/README.md",
 		Size:     int64(len(readmeContent)),
@@ -198,7 +198,7 @@ func buildTestZip(t *testing.T, binaryName string, binaryContent []byte) []byte 
 
 func TestExtractBinary_TarGz(t *testing.T) {
 	want := []byte("#!/bin/sh\necho hello\n")
-	archive := buildTestTarGz(t, "clim", want)
+	archive := buildTestTarGz(t, "klim", want)
 
 	got, err := ExtractBinary(bytes.NewReader(archive), "clim_1.0.0_linux_amd64.tar.gz", "linux")
 	if err != nil {
@@ -211,7 +211,7 @@ func TestExtractBinary_TarGz(t *testing.T) {
 
 func TestExtractBinary_Zip(t *testing.T) {
 	want := []byte("MZ fake exe content")
-	archive := buildTestZip(t, "clim.exe", want)
+	archive := buildTestZip(t, "klim.exe", want)
 
 	got, err := ExtractBinary(bytes.NewReader(archive), "clim_1.0.0_windows_amd64.zip", "windows")
 	if err != nil {
@@ -248,7 +248,7 @@ func TestExtractBinary_UnsupportedFormat(t *testing.T) {
 
 func TestReplaceBinary(t *testing.T) {
 	dir := t.TempDir()
-	binPath := filepath.Join(dir, "clim")
+	binPath := filepath.Join(dir, "klim")
 
 	// Write "old" binary.
 	if err := os.WriteFile(binPath, []byte("old-binary"), 0o755); err != nil {
@@ -282,8 +282,8 @@ func TestReplaceBinary_Symlink(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	realPath := filepath.Join(dir, "clim-real")
-	linkPath := filepath.Join(dir, "clim")
+	realPath := filepath.Join(dir, "klim-real")
+	linkPath := filepath.Join(dir, "klim")
 
 	if err := os.WriteFile(realPath, []byte("old"), 0o755); err != nil {
 		t.Fatal(err)
@@ -358,7 +358,7 @@ func TestUpdate_CurrentNewerThanLatest(t *testing.T) {
 
 func TestUpdate_EndToEnd(t *testing.T) {
 	newBinary := []byte("#!/bin/sh\necho v2.0.0\n")
-	archive := buildTestTarGz(t, "clim", newBinary)
+	archive := buildTestTarGz(t, "klim", newBinary)
 
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -383,7 +383,7 @@ func TestUpdate_EndToEnd(t *testing.T) {
 
 	// Create a fake "current" binary on disk.
 	dir := t.TempDir()
-	execPath := filepath.Join(dir, "clim")
+	execPath := filepath.Join(dir, "klim")
 	if err := os.WriteFile(execPath, []byte("old"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -461,7 +461,7 @@ func TestResult_UpdateAvailable(t *testing.T) {
 
 func TestReplaceBinary_CleansUpStaleFiles(t *testing.T) {
 	dir := t.TempDir()
-	binPath := filepath.Join(dir, "clim")
+	binPath := filepath.Join(dir, "klim")
 
 	// Write "current" binary.
 	if err := os.WriteFile(binPath, []byte("current"), 0o755); err != nil {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 func TestDiagnose_healthy(t *testing.T) {

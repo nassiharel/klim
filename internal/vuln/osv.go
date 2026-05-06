@@ -85,7 +85,7 @@ func (c *OSVClient) Query(ctx context.Context, coord Coord) ([]Vulnerability, er
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "clim/vuln")
+	req.Header.Set("User-Agent", "klim/vuln")
 
 	client := c.HTTPClient
 	if client == nil {

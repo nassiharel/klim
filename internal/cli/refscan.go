@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/custompacks"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/teamfile"
+	"github.com/nassiharel/klim/internal/custompacks"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/teamfile"
 )
 
 // samePath reports whether a and b refer to the same filesystem path.
@@ -31,9 +31,9 @@ func samePath(a, b string) bool {
 }
 
 // Reference describes a place where a tool is mentioned: the local
-// .clim.yaml, a registered project's .clim.yaml, a marketplace pack, or
-// a custom pack. It's the shared shape used by both `clim why` and
-// `clim info` so the two commands cannot drift out of sync.
+// .klim.yaml, a registered project's .klim.yaml, a marketplace pack, or
+// a custom pack. It's the shared shape used by both `klim why` and
+// `klim info` so the two commands cannot drift out of sync.
 type Reference struct {
 	Kind        string `yaml:"kind"                            json:"kind"`
 	Name        string `yaml:"name,omitempty"                  json:"name,omitempty"`
@@ -44,7 +44,7 @@ type Reference struct {
 }
 
 // FormatReference renders a Reference as a single human-readable line
-// for the text output of `clim info` and `clim why`. Both surfaces
+// for the text output of `klim info` and `klim why`. Both surfaces
 // consume this directly so the surrounding wording — and any new
 // Reference.Kind that gets added — stays in lockstep across the two
 // commands. Required + optional refs both preserve their version
@@ -56,7 +56,7 @@ func FormatReference(ref Reference) string {
 		if ref.Required {
 			role = "required"
 		}
-		return fmt.Sprintf(".clim.yaml (%s) — %s", roleWithConstraint(role, ref.Constraint), ref.Path)
+		return fmt.Sprintf(".klim.yaml (%s) — %s", roleWithConstraint(role, ref.Constraint), ref.Path)
 	case "project":
 		role := "optional"
 		if ref.Required {
@@ -90,7 +90,7 @@ func roleWithConstraint(role, constraint string) string {
 }
 
 // PackageEntry is one populated package-manager ID for a tool. Shared
-// between `clim why` (AvailableVia) and `clim info` (Packages) so the
+// between `klim why` (AvailableVia) and `klim info` (Packages) so the
 // list of supported sources cannot drift between the two commands the
 // next time a package manager is added or renamed.
 type PackageEntry struct {
@@ -99,8 +99,8 @@ type PackageEntry struct {
 }
 
 // CollectPackageEntries returns the populated PackageEntries for pkgs in
-// canonical display order. Empty IDs are skipped. Both `clim why` and
-// `clim info` consume this so they list the same sources every time.
+// canonical display order. Empty IDs are skipped. Both `klim why` and
+// `klim info` consume this so they list the same sources every time.
 func CollectPackageEntries(pkgs registry.PackageIDs) []PackageEntry {
 	all := []PackageEntry{
 		{Source: "winget", ID: pkgs.Winget},
@@ -121,7 +121,7 @@ func CollectPackageEntries(pkgs registry.PackageIDs) []PackageEntry {
 }
 
 // CollectReferences scans the four sources where a tool name can appear
-// (CWD-or-ancestor .clim.yaml, registered projects, marketplace packs,
+// (CWD-or-ancestor .klim.yaml, registered projects, marketplace packs,
 // custom packs) and returns matched references plus any non-fatal
 // warnings encountered along the way.
 //
@@ -136,13 +136,13 @@ func CollectReferences(cmd *cobra.Command, toolName string) ([]Reference, []stri
 	var refs []Reference
 	var warnings []string
 
-	// 1) Local .clim.yaml in or above CWD. If we can't resolve the
+	// 1) Local .klim.yaml in or above CWD. If we can't resolve the
 	// CWD (deleted/inaccessible directory, weird FS state) we skip
 	// the local-teamfile branch but record a warning so callers
 	// don't silently report fewer references than actually exist.
 	cwd, cwdErr := os.Getwd()
 	if cwdErr != nil {
-		warnings = append(warnings, fmt.Sprintf("could not determine working directory: %v (skipping local .clim.yaml lookup)", cwdErr))
+		warnings = append(warnings, fmt.Sprintf("could not determine working directory: %v (skipping local .klim.yaml lookup)", cwdErr))
 	}
 	var seenTeamPath string
 	if cwd != "" {
@@ -183,7 +183,7 @@ func CollectReferences(cmd *cobra.Command, toolName string) ([]Reference, []stri
 		warnings = append(warnings, fmt.Sprintf("could not load project registry: %v", projErr))
 	}
 	for _, proj := range projects {
-		climPath := filepath.Join(proj.Path, ".clim.yaml")
+		climPath := filepath.Join(proj.Path, ".klim.yaml")
 		if seenTeamPath != "" && samePath(climPath, seenTeamPath) {
 			continue
 		}
@@ -192,7 +192,7 @@ func CollectReferences(cmd *cobra.Command, toolName string) ([]Reference, []stri
 			// Silently skip stale registry entries whose project
 			// directory has been deleted (common after temp-dir test
 			// runs). The user can clean these up with
-			// `clim projects prune` if they care.
+			// `klim projects prune` if they care.
 			if errors.Is(err, fs.ErrNotExist) {
 				continue
 			}

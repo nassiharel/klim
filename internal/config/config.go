@@ -1,4 +1,4 @@
-// Package config manages the clim configuration file (config.yaml).
+// Package config manages the klim configuration file (config.yaml).
 // All values have sensible defaults — the config file is optional.
 package config
 
@@ -12,16 +12,16 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/paths"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/paths"
 )
 
 // DefaultMarketplaceURL is the canonical marketplace.yaml location on GitHub.
 // The marketplace branch is auto-published by CI from individual files in
 // marketplace/tools/ and marketplace/packs/ on the main branch.
-const DefaultMarketplaceURL = "https://raw.githubusercontent.com/nassiharel/clim/marketplace/marketplace.yaml"
+const DefaultMarketplaceURL = "https://raw.githubusercontent.com/nassiharel/klim/marketplace/marketplace.yaml"
 
-// Config holds all clim configuration.
+// Config holds all klim configuration.
 type Config struct {
 	Logging     LoggingConfig     `yaml:"logging"`
 	Marketplace MarketplaceConfig `yaml:"marketplace"`
@@ -35,7 +35,7 @@ type Config struct {
 // LoggingConfig controls log output.
 type LoggingConfig struct {
 	Level   string `yaml:"level"`   // debug, info, warn, error; default: debug
-	File    bool   `yaml:"file"`    // write to ~/.config/clim/clim.log; default: true
+	File    bool   `yaml:"file"`    // write to ~/.config/klim/klim.log; default: true
 	Verbose bool   `yaml:"verbose"` // also log to stderr; default: false
 }
 
@@ -70,17 +70,17 @@ type ComplianceConfig struct {
 }
 
 // DefaultsConfig holds user-preferred defaults consumed by action commands
-// (clim install / upgrade / remove). The values here are overridden by the
+// (klim install / upgrade / remove). The values here are overridden by the
 // per-invocation `--source` flag.
 type DefaultsConfig struct {
-	// PreferredSource is the package manager clim should prefer when a tool
+	// PreferredSource is the package manager klim should prefer when a tool
 	// is available from multiple sources on the current OS. Empty string
 	// means "use the OS-priority fallback" (registry.BestInstallSource).
 	// Examples: "brew", "winget", "scoop", "apt", "snap", "npm".
 	PreferredSource string `yaml:"preferred_source,omitempty"`
 }
 
-// VulnConfig controls vulnerability scanning (clim security vuln).
+// VulnConfig controls vulnerability scanning (klim security vuln).
 type VulnConfig struct {
 	URL             string   `yaml:"url,omitempty"`              // OSV-compatible endpoint; empty → https://api.osv.dev
 	AutoRefresh     bool     `yaml:"auto_refresh,omitempty"`     // refetch when cache older than RefreshInterval
@@ -315,7 +315,7 @@ func (c *Config) Validate() []string {
 	return w
 }
 
-const configHeader = "# clim — Configuration\n# All values are optional. Defaults are shown below.\n# Restart clim after editing for changes to take effect.\n\n"
+const configHeader = "# klim — Configuration\n# All values are optional. Defaults are shown below.\n# Restart klim after editing for changes to take effect.\n\n"
 
 // knownSources lists the package-manager source names accepted by
 // Defaults.PreferredSource. Mirrors registry.SourceXxx constants;

@@ -156,7 +156,7 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 			return nil
 		}
 		// Anything under objects/ that doesn't look like one of our
-		// content-addressed files is garbage — clim owns this dir
+		// content-addressed files is garbage — klim owns this dir
 		// (see writeObject) and the only valid layout is
 		// <aa>/<bb...>.yaml where the full filename is a 64-char
 		// hex Object ID.
@@ -183,7 +183,7 @@ func gcObjects(r fsRoots, keep []Entry) (int, int, error) {
 			keptCount++
 			return nil
 		}
-		if err := os.Remove(path); err != nil { //nolint:gosec // G122: trail.objects is owned by clim, no symlinks expected
+		if err := os.Remove(path); err != nil { //nolint:gosec // G122: trail.objects is owned by klim, no symlinks expected
 			return fmt.Errorf("removing orphan object %s: %w", id.Short(), err)
 		}
 		removedCount++

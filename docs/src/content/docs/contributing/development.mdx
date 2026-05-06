@@ -1,6 +1,6 @@
 ---
 title: Development
-description: How to build, test, and lint clim
+description: How to build, test, and lint klim
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
@@ -14,19 +14,19 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 ## Clone & Build
 
 ```bash
-git clone https://github.com/nassiharel/clim.git
-cd clim
+git clone https://github.com/nassiharel/klim.git
+cd klim
 make build
 ```
 
-The binary is output to `bin/clim` with version/commit/date injected via ldflags.
+The binary is output to `bin/klim` with version/commit/date injected via ldflags.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `make all` | Lint + test + build (default target) |
-| `make build` | Build `bin/clim` with version ldflags |
+| `make build` | Build `bin/klim` with version ldflags |
 | `make test` | Run tests with race detector (`go test -race -count=1 ./...`) |
 | `make lint` | Run golangci-lint |
 | `make cover` | Generate HTML coverage report |

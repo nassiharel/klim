@@ -17,7 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // cmdTimeout bounds a single package-manager subprocess call. Most are
@@ -101,7 +101,7 @@ func matches(got string, list []string) bool {
 	return false
 }
 
-// managers enumerates every package manager clim integrates with, along
+// managers enumerates every package manager klim integrates with, along
 // with the exact command used to prove an ID resolves.
 var managers = []packageManager{
 	{

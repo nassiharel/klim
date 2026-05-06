@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/service"
 )
 
 // startServerWithOpts is the most flexible test helper — callers fully
@@ -256,7 +256,7 @@ func TestPageBackup_RendersExportLinkAndShareToken(t *testing.T) {
 	if !strings.Contains(body, "/backup/export.yaml") {
 		t.Fatalf("missing export link: %s", body)
 	}
-	if !strings.Contains(body, "clim:v1:") {
+	if !strings.Contains(body, "klim:v1:") {
 		t.Fatalf("missing share token: %s", body)
 	}
 }
@@ -270,7 +270,7 @@ func TestDownloadExport_ReturnsYAMLAttachment(t *testing.T) {
 	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/yaml") {
 		t.Fatalf("content-type: %q", ct)
 	}
-	if !strings.Contains(resp.Header.Get("Content-Disposition"), "clim-export.yaml") {
+	if !strings.Contains(resp.Header.Get("Content-Disposition"), "klim-export.yaml") {
 		t.Fatalf("missing attachment header: %q", resp.Header.Get("Content-Disposition"))
 	}
 	if !strings.Contains(body, "tools:") {

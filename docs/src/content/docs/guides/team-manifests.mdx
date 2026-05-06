@@ -1,18 +1,18 @@
 ---
 title: Team Manifests
-description: Use .clim.yaml to standardize developer tools across your team
+description: Use .klim.yaml to standardize developer tools across your team
 ---
 
 import { Steps } from '@astrojs/starlight/components';
 
-A `.clim.yaml` file defines the tools your project requires, with optional version constraints. Drop it in your repository root and every developer can verify their setup with a single command.
+A `.klim.yaml` file defines the tools your project requires, with optional version constraints. Drop it in your repository root and every developer can verify their setup with a single command.
 
-## Creating a .clim.yaml
+## Creating a .klim.yaml
 
 <Steps>
 1. Export your current toolchain:
    ```bash
-   clim export > .clim.yaml
+   klim export > .klim.yaml
    ```
 
 2. Edit the file to keep only the tools your project needs and add version constraints:
@@ -27,7 +27,7 @@ A `.clim.yaml` file defines the tools your project requires, with optional versi
        version: ">=1.5.0"
    ```
 
-3. Commit `.clim.yaml` to your repository.
+3. Commit `.klim.yaml` to your repository.
 </Steps>
 
 ## Checking Requirements
@@ -35,10 +35,10 @@ A `.clim.yaml` file defines the tools your project requires, with optional versi
 Team members run:
 
 ```bash
-clim check
+klim check
 ```
 
-clim auto-detects `.clim.yaml` in the current directory or parent directories and validates that all required tools are installed and meet version constraints.
+klim auto-detects `.klim.yaml` in the current directory or parent directories and validates that all required tools are installed and meet version constraints.
 
 ### Output
 
@@ -55,7 +55,7 @@ clim auto-detects `.clim.yaml` in the current directory or parent directories an
 
 | Flag | Description |
 |------|-------------|
-| `--file, -f` | Path to .clim.yaml (default: auto-detect) |
+| `--file, -f` | Path to .klim.yaml (default: auto-detect) |
 | `--json` | Machine-readable JSON output |
 | `--refresh` | Force fresh scan (ignore cache) |
 
@@ -68,21 +68,21 @@ clim auto-detects `.clim.yaml` in the current directory or parent directories an
 
 ## CI Integration
 
-Use `clim check` in your CI pipeline to fail fast if tools are missing:
+Use `klim check` in your CI pipeline to fail fast if tools are missing:
 
 ```yaml
 # GitHub Actions example
 - name: Verify dev tools
   run: |
-    curl -fsSL https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash
-    clim check --json
+    curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
+    klim check --json
 ```
 
 The `--json` flag outputs machine-readable results for CI systems.
 
 ## TUI Project Tab
 
-The **Project** tab (press `6`) provides a TUI interface for managing multiple projects with `.clim.yaml` files:
+The **Project** tab (press `6`) provides a TUI interface for managing multiple projects with `.klim.yaml` files:
 
 | Key | Action |
 |-----|--------|

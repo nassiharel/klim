@@ -3,8 +3,8 @@ package web
 import (
 	"net/http"
 
-	"github.com/nassiharel/clim/internal/recommend"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/recommend"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // pageForYou renders the For You recommendations using the shared

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/nassiharel/clim/internal/cli"
+	"github.com/nassiharel/klim/internal/cli"
 )
 
 func main() {

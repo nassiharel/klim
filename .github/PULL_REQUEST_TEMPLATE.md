@@ -1,5 +1,5 @@
 <!--
-  Thanks for contributing to clim! Please fill out the sections below.
+  Thanks for contributing to klim! Please fill out the sections below.
   If this PR closes an issue, add "Closes #<number>" to the description.
 -->
 

@@ -8,14 +8,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/generate"
-	"github.com/nassiharel/clim/internal/teamfile"
+	"github.com/nassiharel/klim/internal/generate"
+	"github.com/nassiharel/klim/internal/teamfile"
 )
 
 var generateCmd = &cobra.Command{
 	Use:   "generate <github-action|dockerfile|devcontainer>",
-	Short: "Generate CI/container configs from .clim.yaml",
-	Long: `Auto-generate CI and container configuration files from your .clim.yaml
+	Short: "Generate CI/container configs from .klim.yaml",
+	Long: `Auto-generate CI and container configuration files from your .klim.yaml
 tool requirements.
 
 Generators:
@@ -23,9 +23,9 @@ Generators:
   dockerfile      Dockerfile with tool installations
   devcontainer    devcontainer.json for VS Code / GitHub Codespaces
 
-The generated files use the package IDs from the clim marketplace
+The generated files use the package IDs from the klim marketplace
 to produce install commands for each tool.`,
-	Args:      requireArgs(1, "clim generate <github-action|dockerfile|devcontainer>"),
+	Args:      requireArgs(1, "klim generate <github-action|dockerfile|devcontainer>"),
 	ValidArgs: []string{"github-action", "dockerfile", "devcontainer"},
 	RunE:      runGenerate,
 }
@@ -36,7 +36,7 @@ var generateBaseFlag string
 var generateOSFlag string
 
 func init() {
-	generateCmd.Flags().StringVarP(&generateFileFlag, "file", "f", "", "Path to .clim.yaml (default: auto-detect)")
+	generateCmd.Flags().StringVarP(&generateFileFlag, "file", "f", "", "Path to .klim.yaml (default: auto-detect)")
 	generateCmd.Flags().StringVarP(&generateOutputFlag, "output", "o", "", "Write to file instead of stdout")
 	generateCmd.Flags().StringVar(&generateBaseFlag, "base", "", "Base image for Dockerfile (default: ubuntu:24.04)")
 	generateCmd.Flags().StringVar(&generateOSFlag, "os", "ubuntu", "Target OS: ubuntu, debian, alpine, fedora, macos, windows")
@@ -46,7 +46,7 @@ func init() {
 func runGenerate(cmd *cobra.Command, args []string) error {
 	format := args[0]
 
-	// Find and parse .clim.yaml.
+	// Find and parse .klim.yaml.
 	path := generateFileFlag
 	if path == "" {
 		cwd, err := os.Getwd()
@@ -55,7 +55,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		}
 		path = teamfile.Find(cwd)
 		if path == "" {
-			return fmt.Errorf("no .clim.yaml found (searched from %s to root)\n\nCreate one with: clim init", cwd)
+			return fmt.Errorf("no .klim.yaml found (searched from %s to root)\n\nCreate one with: klim init", cwd)
 		}
 	}
 
@@ -65,7 +65,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(tf.Tools) == 0 && len(tf.Optional) == 0 {
-		return errors.New(".clim.yaml has no tools defined")
+		return errors.New(".klim.yaml has no tools defined")
 	}
 
 	// Load catalog for package IDs.

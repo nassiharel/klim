@@ -3,7 +3,7 @@ package onboard
 import (
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 func TestFindRole(t *testing.T) {

@@ -8,13 +8,13 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/nassiharel/clim/internal/audit"
-	"github.com/nassiharel/clim/internal/compliance"
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/doctor"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/vuln"
+	"github.com/nassiharel/klim/internal/audit"
+	"github.com/nassiharel/klim/internal/compliance"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/doctor"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/vuln"
 )
 
 // Doctor sub-tab indices.
@@ -193,11 +193,11 @@ func (m Model) renderAuditView() string {
 }
 
 // renderReferencesSection renders the "References" section in tool detail view,
-// showing where a tool is referenced (projects, packs) — the TUI equivalent of `clim why`.
+// showing where a tool is referenced (projects, packs) — the TUI equivalent of `klim why`.
 func (m Model) renderReferencesSection(tool registry.Tool) string {
 	var refs []string
 
-	// Check .clim.yaml projects.
+	// Check .klim.yaml projects.
 	if m.teamFile != nil {
 		for _, req := range m.teamFile.Tools {
 			if req.Name == tool.Name {
@@ -268,8 +268,8 @@ func (m Model) renderComplianceView() string {
 			return b.String()
 		}
 		b.WriteString("  " + dashDim.Render("No compliance policy configured.") + "\n\n")
-		b.WriteString("  " + dashDim.Render("Create one with: clim compliance init") + "\n")
-		policyHint := "Policy is stored in the clim config directory"
+		b.WriteString("  " + dashDim.Render("Create one with: klim compliance init") + "\n")
+		policyHint := "Policy is stored in the klim config directory"
 		if p, pathErr := paths.CompliancePolicy(); pathErr == nil {
 			policyHint = "Policy location: " + p
 		}
@@ -352,7 +352,7 @@ func runComplianceForTUI(tools []registry.Tool, cfg *config.Config, policyPath s
 }
 
 // loadVulnSeveritiesFromConfig reads the vuln cache that
-// `clim security vuln` wrote, keyed by the configured OSV URL.
+// `klim security vuln` wrote, keyed by the configured OSV URL.
 // Returns nil when no cache exists; compliance silently skips the
 // vuln gate in that case.
 func loadVulnSeveritiesFromConfig(cfg *config.Config) map[string]string {

@@ -1,6 +1,6 @@
-# clim CLI conventions
+# klim CLI conventions
 
-This document codifies how clim's CLI surface behaves so that scripts and
+This document codifies how klim's CLI surface behaves so that scripts and
 humans can rely on consistent output, exit codes, and flag names.
 
 ## Streams
@@ -8,11 +8,11 @@ humans can rely on consistent output, exit codes, and flag names.
 * **stdout** — primary, machine-relevant data. Manifests, JSON/YAML output,
   resolved paths, share tokens, etc. Designed to be pipeable.
 * **stderr** — prose for humans. Progress spinners, summaries, warnings,
-  hints (“X tools exported”), and errors. Never machine-parsed by clim
+  hints (“X tools exported”), and errors. Never machine-parsed by klim
   itself.
 * **errors** are always written to stderr with an `Error:` prefix.
 
-This split is deliberate: `clim export > my-tools.yaml` works as a Unix user
+This split is deliberate: `klim export > my-tools.yaml` works as a Unix user
 expects, while the human-readable summary still prints to the terminal.
 
 ## Output format
@@ -46,7 +46,7 @@ marketplace list`. (`export` already emits YAML by design.)
 | 0 | Success |
 | 1 | Runtime error (network failure, file IO, etc.) |
 | 2 | Usage error — bad flags, missing/extra arguments, unknown command, unsupported `--output` value. Cobra's own flag-parse errors are wrapped via `SetFlagErrorFunc` and "unknown command/flag" errors that escape that hook are detected by message prefix in `cli.Run`. |
-| 3 | Partial failure (multi-item operation where some items failed, e.g. `clim import` with one or more install failures) |
+| 3 | Partial failure (multi-item operation where some items failed, e.g. `klim import` with one or more install failures) |
 
 Commands like `audit`, `compliance check`, `check`, and `diff` may also exit
 non-zero (1) to signal "findings present" — see each command's `--help`.

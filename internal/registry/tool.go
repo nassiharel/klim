@@ -38,7 +38,7 @@ const (
 	StatusChanged   MarketplaceStatus = "changed"
 )
 
-// Tool represents a curated developer tool that clim tracks.
+// Tool represents a curated developer tool that klim tracks.
 type Tool struct {
 	Name              string
 	DisplayName       string

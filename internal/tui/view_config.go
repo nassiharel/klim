@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nassiharel/clim/internal/build"
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/logging"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/scancache"
+	"github.com/nassiharel/klim/internal/build"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/logging"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/scancache"
 )
 
 func (m Model) renderConfigView() string {

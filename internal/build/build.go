@@ -8,9 +8,9 @@ import (
 
 // Version, Commit, and Date are populated at build time via ldflags:
 //
-//	-X github.com/nassiharel/clim/internal/build.Version=v1.0.0
-//	-X github.com/nassiharel/clim/internal/build.Commit=abc1234
-//	-X github.com/nassiharel/clim/internal/build.Date=2024-01-01T00:00:00Z
+//	-X github.com/nassiharel/klim/internal/build.Version=v1.0.0
+//	-X github.com/nassiharel/klim/internal/build.Commit=abc1234
+//	-X github.com/nassiharel/klim/internal/build.Date=2024-01-01T00:00:00Z
 var (
 	Version = "dev"
 	Commit  = "none"
@@ -29,7 +29,7 @@ func init() {
 
 // Info returns a formatted version string.
 func Info() string {
-	return fmt.Sprintf("clim %s (commit: %s, built: %s)", Version, Commit, Date)
+	return fmt.Sprintf("klim %s (commit: %s, built: %s)", Version, Commit, Date)
 }
 
 // VersionOnly returns just the version string (e.g. "2.1.87"),

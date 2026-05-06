@@ -1,14 +1,14 @@
 ---
-title: "clim config"
-description: Manage clim configuration
+title: "klim config"
+description: Manage klim configuration
 ---
 
-View and edit the clim configuration file.
+View and edit the klim configuration file.
 
 ## Usage
 
 ```bash
-clim config <subcommand>
+klim config <subcommand>
 ```
 
 ## Subcommands
@@ -18,8 +18,8 @@ clim config <subcommand>
 Print the path to `config.yaml`:
 
 ```bash
-clim config path
-# Output: /home/user/.config/clim/config/config.yaml
+klim config path
+# Output: /home/user/.config/klim/config/config.yaml
 ```
 
 ### config edit
@@ -27,7 +27,7 @@ clim config path
 Open `config.yaml` in your default editor (`$EDITOR` / `%EDITOR%`):
 
 ```bash
-clim config edit
+klim config edit
 ```
 
 ## TUI Alternative

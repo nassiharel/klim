@@ -9,19 +9,19 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/compliance"
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/vuln"
+	"github.com/nassiharel/klim/internal/compliance"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/vuln"
 )
 
 // loadVulnSeveritiesForCompliance reads the vuln cache (passive — no
 // network) and returns a tool→severity map suitable for
 // compliance.Check. Returns nil if no cache exists; the compliance
 // gate then silently skips the vuln check (the operator can populate
-// the cache via `clim security vuln`).
+// the cache via `klim security vuln`).
 func loadVulnSeveritiesForCompliance() map[string]string {
 	if rep, ok := vuln.ReadCache(ResolveVulnSourceKey()); ok {
 		return rep.SeverityByTool()
@@ -42,15 +42,15 @@ Policy resolution order (highest to lowest):
   2. --url flag              (remote URL, per-invocation; check & refresh)
   3. compliance.url          (remote URL in config.yaml, with cache + auto-refresh)
   4. compliance.policy       (local file in config.yaml)
-  5. default global location (~/.config/clim/compliance/policy.yaml)
+  5. default global location (~/.config/klim/compliance/policy.yaml)
 
 Subcommands:
   check    Validate installed tools against the policy.
   show     Show the resolved policy.
-  init     Generate a sample .clim-policy.yaml.
+  init     Generate a sample .klim-policy.yaml.
   refresh  Force-refetch the policy from compliance.url (or --url) and update the cache.
 
-Generate a default policy with: clim security compliance init`,
+Generate a default policy with: klim security compliance init`,
 }
 
 var compliancePolicyFlag string
@@ -92,7 +92,7 @@ func init() {
 	complianceCheckCmd.Flags().BoolVar(&complianceRefreshFlag, "refresh", false, "Force fresh tool scan")
 	complianceCheckCmd.Flags().BoolVar(&complianceForceRefreshFlag, "force-refresh-policy", false, "Force re-fetch policy from URL")
 	complianceShowCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Path to policy file (overrides config)")
-	complianceInitCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Output path (default: clim config directory)")
+	complianceInitCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Output path (default: klim config directory)")
 	// `refresh` reads complianceURLFlag too — register --url here so a
 	// user can pass an ad-hoc remote without editing config.yaml first.
 	complianceRefreshCmd.Flags().StringVar(&complianceURLFlag, "url", "", "Remote policy URL (overrides config)")
@@ -137,7 +137,7 @@ func loadPolicyForCmd(cmd *cobra.Command, forceRefresh bool) (*compliance.Policy
 	// Fall back to local file.
 	path := findPolicyPath(cfg)
 	if path == "" {
-		return nil, "", errors.New("no policy file or URL configured\n\nGenerate one:\n  clim security compliance init\n\nOr configure a URL in config.yaml:\n  compliance:\n    url: https://example.com/policy.yaml")
+		return nil, "", errors.New("no policy file or URL configured\n\nGenerate one:\n  klim security compliance init\n\nOr configure a URL in config.yaml:\n  compliance:\n    url: https://example.com/policy.yaml")
 	}
 	p, err := compliance.LoadPolicy(path)
 	return p, path, err
@@ -305,7 +305,7 @@ func runComplianceInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%s already exists", path)
 	}
 
-	sample := `# clim Compliance Policy
+	sample := `# klim Compliance Policy
 # Override location in config.yaml:
 #   compliance:
 #     policy: /custom/path/to/policy.yaml
@@ -353,7 +353,7 @@ required_tools:
 	}
 	fmt.Fprintf(os.Stderr, "✓ Policy file created: %s\n", path)
 	fmt.Fprintln(os.Stderr, "  Edit it to match your company's requirements, then run:")
-	fmt.Fprintln(os.Stderr, "  clim security compliance check")
+	fmt.Fprintln(os.Stderr, "  klim security compliance check")
 	return nil
 }
 

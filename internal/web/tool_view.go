@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/recommend"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/recommend"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // buildPMRows lists every package manager the tool has a package id

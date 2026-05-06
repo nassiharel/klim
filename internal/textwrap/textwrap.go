@@ -1,5 +1,5 @@
 // Package textwrap provides shared word-wrapping that respects terminal
-// display width. Both `clim info` (CLI) and the TUI detail view consume
+// display width. Both `klim info` (CLI) and the TUI detail view consume
 // it so the two surfaces wrap GitHub descriptions, summaries, and
 // other free-form prose identically — and so neither has to
 // re-implement rune-vs-byte handling.

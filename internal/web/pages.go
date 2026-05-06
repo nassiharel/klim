@@ -9,13 +9,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/favorites"
-	"github.com/nassiharel/clim/internal/githubfmt"
-	"github.com/nassiharel/clim/internal/recommend"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/trail"
-	"github.com/nassiharel/clim/internal/vuln"
+	"github.com/nassiharel/klim/internal/favorites"
+	"github.com/nassiharel/klim/internal/githubfmt"
+	"github.com/nassiharel/klim/internal/recommend"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/trail"
+	"github.com/nassiharel/klim/internal/vuln"
 )
 
 // pageData is the universal context every layout-using template
@@ -54,7 +54,7 @@ func (s *Server) serveError(w http.ResponseWriter, _ *http.Request, err error, s
 	s.opts.Logger.Error("web error", "err", err.Error(), "status", status)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><title>clim — error</title>`+
+	fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><title>klim — error</title>`+
 		`<body style="font-family:system-ui;padding:2rem"><h1>Error</h1><p>%s</p>`+
 		`<p><a href="/">Back to home</a></p></body>`, template.HTMLEscapeString(err.Error()))
 }
@@ -387,7 +387,7 @@ type toolView struct {
 // /tools/{name} page. Status mirrors security.Verdict.Status as a
 // lowercase string ("clean"/"watch"/"risk"/"unknown"). Vulns is the
 // already-cached list (no live OSV.dev call from a page render);
-// VulnsCacheLoaded is false if `clim security vuln` has never been
+// VulnsCacheLoaded is false if `klim security vuln` has never been
 // run, in which case we tell the user how to populate it.
 type toolSecurityView struct {
 	Status           string
@@ -397,7 +397,7 @@ type toolSecurityView struct {
 }
 
 // pmRow is one row in the per-tool Package Managers table. We list
-// every source clim has a package id for, plus a flag for whether the
+// every source klim has a package id for, plus a flag for whether the
 // PM binary is on PATH so the user can tell which "Install" button
 // would actually work.
 type pmRow struct {

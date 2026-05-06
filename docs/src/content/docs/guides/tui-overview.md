@@ -1,9 +1,9 @@
 ---
 title: TUI Overview
-description: Complete guide to the clim interactive terminal UI
+description: Complete guide to the klim interactive terminal UI
 ---
 
-The clim TUI (Terminal User Interface) provides a rich interactive experience for managing your developer tools. Launch it by running `clim` with no arguments.
+The klim TUI (Terminal User Interface) provides a rich interactive experience for managing your developer tools. Launch it by running `klim` with no arguments.
 
 ## Tabs
 
@@ -16,7 +16,7 @@ The TUI has 9 tabs, accessible via arrow keys or number keys:
 | **Updates** | 3 | Tools with available upgrades |
 | **Discover** | 4 | Browse the marketplace (Tools, Packs, For You) |
 | **Backup** | 5 | Export, import, share, custom packs, saved backups |
-| **Project** | 6 | Multi-project `.clim.yaml` management |
+| **Project** | 6 | Multi-project `.klim.yaml` management |
 | **Dashboard** | 7 | Stats, gauges, category breakdowns |
 | **Config** | 8 | View and edit settings |
 | **Doctor** | 9 | Environment diagnostics and security audit (sub-tabs: Doctor / Audit) |
@@ -80,4 +80,4 @@ Press `Esc` to return to the list.
 
 Version resolution runs concurrently with a configurable semaphore (default: 4 concurrent queries). Package manager timeouts default to 30 seconds and can be adjusted in `config.yaml`.
 
-On subsequent launches, clim uses a scan cache to skip PATH scanning and version resolution, making startup near-instant. Press `r` to force a fresh scan.
+On subsequent launches, klim uses a scan cache to skip PATH scanning and version resolution, making startup near-instant. Press `r` to force a fresh scan.

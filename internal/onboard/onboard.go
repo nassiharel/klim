@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Role defines a development role with categories and tags used

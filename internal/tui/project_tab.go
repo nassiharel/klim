@@ -12,9 +12,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/nassiharel/clim/internal/generate"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/teamfile"
+	"github.com/nassiharel/klim/internal/generate"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/teamfile"
 )
 
 // Project tab view states.
@@ -60,7 +60,7 @@ type projectInitDoneMsg struct {
 }
 
 type projectEditorDoneMsg struct {
-	path string // .clim.yaml path to re-check
+	path string // .klim.yaml path to re-check
 	err  error
 }
 
@@ -213,9 +213,9 @@ func generateOutputPath(format, tfPath string) string {
 	dir := filepath.Dir(tfPath)
 	switch format {
 	case "github-action":
-		return filepath.Join(dir, ".github", "workflows", "clim-tools.yml")
+		return filepath.Join(dir, ".github", "workflows", "klim-tools.yml")
 	case "dockerfile":
-		return filepath.Join(dir, "Dockerfile.clim")
+		return filepath.Join(dir, "Dockerfile.klim")
 	case "devcontainer":
 		return filepath.Join(dir, ".devcontainer", "devcontainer.json")
 	}
@@ -226,7 +226,7 @@ func projectGenerateCmd(format string, tf *teamfile.TeamFile, tfPath string, too
 	return func() tea.Msg {
 		installs := generate.ResolveInstalls(tf, tools)
 		if len(installs) == 0 {
-			return projectGenerateMsg{format: format, err: errors.New("no tools resolved from .clim.yaml")}
+			return projectGenerateMsg{format: format, err: errors.New("no tools resolved from .klim.yaml")}
 		}
 		projectName := tf.Name
 		if projectName == "" {
@@ -487,7 +487,7 @@ func (m Model) handleKeyProjectConfirmReinit(msg tea.KeyMsg) (tea.Model, tea.Cmd
 		if dir == "" {
 			dir, _ = os.Getwd()
 		}
-		m.statusMsg = "Generating .clim.yaml..."
+		m.statusMsg = "Generating .klim.yaml..."
 		return m, projectInitWriteCmd(dir, m.tools, m.projectInitResult.Tools, false)
 	case "esc", "n", "N":
 		m.projectConfirmReinit = false
@@ -882,10 +882,10 @@ func (m Model) renderProjectDetail() string {
 		{"Install missing", "Install tools that are missing or outdated"},
 		{"Add required tool", "Add a tool to required list"},
 		{"Add optional tool", "Add a tool to optional list"},
-		{"Edit .clim.yaml", "Open in $EDITOR"},
+		{"Edit .klim.yaml", "Open in $EDITOR"},
 		{"Re-init", "Scan project files and regenerate"},
-		{"Generate GitHub Action", "CI workflow from .clim.yaml"},
-		{"Generate Dockerfile", "Container image from .clim.yaml"},
+		{"Generate GitHub Action", "CI workflow from .klim.yaml"},
+		{"Generate Dockerfile", "Container image from .klim.yaml"},
 		{"Generate devcontainer", "VS Code / Codespaces config"},
 		{"Delete project", "Remove from project list"},
 	}

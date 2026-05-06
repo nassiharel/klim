@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/custompacks"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/custompacks"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // packsView powers the /packs landing page. We split marketplace and

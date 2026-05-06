@@ -19,7 +19,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const marketplaceURL = "https://raw.githubusercontent.com/nassiharel/clim/marketplace/marketplace.yaml"
+const marketplaceURL = "https://raw.githubusercontent.com/nassiharel/klim/marketplace/marketplace.yaml"
 
 type githubInfo struct {
 	Stars       int    `yaml:"stars"`
@@ -131,7 +131,7 @@ func main() {
 
 	b.WriteString(fmt.Sprintf(`---
 title: Tool Catalog
-description: Browse all %d developer tools available in the clim marketplace
+description: Browse all %d developer tools available in the klim marketplace
 ---
 
 {/* Auto-generated — do not edit manually */}

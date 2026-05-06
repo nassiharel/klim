@@ -3,7 +3,7 @@ package vuln
 import (
 	"strings"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Map returns the OSV coordinates we can query for a given installed

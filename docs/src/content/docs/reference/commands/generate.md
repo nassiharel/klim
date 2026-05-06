@@ -1,14 +1,14 @@
 ---
-title: "clim generate"
-description: Generate CI/container configs from .clim.yaml
+title: "klim generate"
+description: Generate CI/container configs from .klim.yaml
 ---
 
-Auto-generate CI and container configuration files from your `.clim.yaml` tool requirements. The generated files use package IDs from the clim marketplace to produce install commands for each tool.
+Auto-generate CI and container configuration files from your `.klim.yaml` tool requirements. The generated files use package IDs from the klim marketplace to produce install commands for each tool.
 
 ## Usage
 
 ```bash
-clim generate <github-action|dockerfile|devcontainer> [flags]
+klim generate <github-action|dockerfile|devcontainer> [flags]
 ```
 
 ## Generators
@@ -23,7 +23,7 @@ clim generate <github-action|dockerfile|devcontainer> [flags]
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--file` | `-f` | Path to .clim.yaml (default: auto-detect) |
+| `--file` | `-f` | Path to .klim.yaml (default: auto-detect) |
 | `--output` | `-o` | Write to file instead of stdout |
 | `--base` | | Base image for Dockerfile (default: ubuntu:24.04) |
 
@@ -31,16 +31,16 @@ clim generate <github-action|dockerfile|devcontainer> [flags]
 
 ```bash
 # Generate GitHub Actions workflow
-clim generate github-action
+klim generate github-action
 
 # Generate and save to file
-clim generate github-action -o .github/workflows/setup-tools.yml
+klim generate github-action -o .github/workflows/setup-tools.yml
 
 # Generate Dockerfile with custom base image
-clim generate dockerfile --base ubuntu:22.04 -o Dockerfile.tools
+klim generate dockerfile --base ubuntu:22.04 -o Dockerfile.tools
 
 # Generate devcontainer.json
-clim generate devcontainer -o .devcontainer/devcontainer.json
+klim generate devcontainer -o .devcontainer/devcontainer.json
 ```
 
 ## Dev Container Features
@@ -62,6 +62,6 @@ Tools without a known feature are installed via `postCreateCommand`.
 
 ## See Also
 
-- [clim init](/reference/commands/init) — Generate .clim.yaml from project files
-- [clim check](/reference/commands/check) — Validate tool requirements
+- [klim init](/reference/commands/init) — Generate .klim.yaml from project files
+- [klim check](/reference/commands/check) — Validate tool requirements
 - [Team Manifests guide](/guides/team-manifests)

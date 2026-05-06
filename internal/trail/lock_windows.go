@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/fileutil"
 )
 
 // LockFileEx flags (Windows).

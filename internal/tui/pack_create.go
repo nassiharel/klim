@@ -8,8 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/nassiharel/clim/internal/custompacks"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/custompacks"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Pack creation phases.

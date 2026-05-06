@@ -1,5 +1,5 @@
 ---
-title: "clim search"
+title: "klim search"
 description: Search the tool marketplace
 ---
 
@@ -8,7 +8,7 @@ Search the tool marketplace by name, description, category, tags, or GitHub topi
 ## Usage
 
 ```bash
-clim search <query> [flags]
+klim search <query> [flags]
 ```
 
 ## Flags
@@ -24,12 +24,12 @@ The search engine scores each tool against your query by matching:
 
 | Field | Weight | Example |
 |-------|--------|---------|
-| Exact name match | Highest | `clim search jq` → exact hit |
-| Partial name match | High | `clim search kube` → kubectl, kubectx |
-| Category | Medium | `clim search cloud` → Cloud tools |
-| Tags | Medium | `clim search encryption` → age, sops |
-| GitHub topics | Medium | `clim search ci` → act, gh |
-| Description | Low | `clim search "json processor"` → jq, yq |
+| Exact name match | Highest | `klim search jq` → exact hit |
+| Partial name match | High | `klim search kube` → kubectl, kubectx |
+| Category | Medium | `klim search cloud` → Cloud tools |
+| Tags | Medium | `klim search encryption` → age, sops |
+| GitHub topics | Medium | `klim search ci` → act, gh |
+| Description | Low | `klim search "json processor"` → jq, yq |
 
 Results are then boosted by GitHub star count for popular tools.
 
@@ -37,16 +37,16 @@ Results are then boosted by GitHub star count for popular tools.
 
 ```bash
 # Find JSON tools
-clim search json
+klim search json
 
 # Multi-word search
-clim search "kubernetes dashboard"
+klim search "kubernetes dashboard"
 
 # Filter by category
-clim search cli --category Security
+klim search cli --category Security
 
 # Limit results
-clim search cloud -n 5
+klim search cloud -n 5
 ```
 
 ## TUI
@@ -55,5 +55,5 @@ The TUI search (press `/` on any tab) uses the same search engine. It matches ag
 
 ## See Also
 
-- [clim onboard](/reference/commands/onboard) — Role-based tool recommendations
+- [klim onboard](/reference/commands/onboard) — Role-based tool recommendations
 - [Tool Catalog](/marketplace/catalog) — Browse all tools

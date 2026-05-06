@@ -1,9 +1,9 @@
 ---
-title: "clim browser"
-description: Local web UI for clim — Installed, Tool detail, Dashboard, and Trail in your browser
+title: "klim browser"
+description: Local web UI for klim — Installed, Tool detail, Dashboard, and Trail in your browser
 ---
 
-`clim browser` launches a small local HTTP server and opens the clim UI
+`klim browser` launches a small local HTTP server and opens the klim UI
 in your default browser. The web view is a thin frontend over the same
 service layer the TUI and other CLI commands use; every page renders
 from a real PATH scan and version resolution, no separate data store.
@@ -11,7 +11,7 @@ from a real PATH scan and version resolution, no separate data store.
 ## Usage
 
 ```bash
-clim browser [flags]
+klim browser [flags]
 ```
 
 By default the server picks a free port, binds to `127.0.0.1`, and
@@ -19,8 +19,8 @@ opens the resulting URL in your default browser. The URL is also
 printed to stderr so you can copy-paste it manually if auto-open fails.
 
 ```
-$ clim browser
-clim browser listening on http://127.0.0.1:54321
+$ klim browser
+klim browser listening on http://127.0.0.1:54321
   press Ctrl-C to stop
 ```
 
@@ -70,7 +70,7 @@ SSE.
 
 The action chooses a package manager automatically:
 - **Install** uses the best available source for your OS (the same
-  rule `clim list` uses for its install commands).
+  rule `klim list` uses for its install commands).
 - **Upgrade** and **Remove** prefer the source the tool is already
   installed from.
 
@@ -103,7 +103,7 @@ explicitly.
 
 ```bash
 # Run on a fixed port without opening the browser (CI / headless).
-clim browser --port 7777 --no-open
+klim browser --port 7777 --no-open
 
 # Probe the API while the server is running.
 curl -s http://127.0.0.1:7777/api/dashboard | jq .updates_available
@@ -114,7 +114,7 @@ curl -s http://127.0.0.1:7777/api/dashboard | jq .updates_available
 - Loopback-only by default. `--insecure-bind` is required for any
   other interface.
 - **`--insecure-bind` automatically enables bearer-token
-  authentication.** clim generates a 32-byte token at startup and
+  authentication.** klim generates a 32-byte token at startup and
   prints a `?token=<token>` URL to stderr. Visiting that URL once sets
   a session cookie; the token is also accepted via
   `Authorization: Bearer <token>` for scripts. `/healthz` stays open
@@ -131,12 +131,12 @@ curl -s http://127.0.0.1:7777/api/dashboard | jq .updates_available
   when the server is reachable over loopback. Browsers send the
   header automatically for in-page navigation.
 - Action jobs (install / upgrade / remove) shell out to the user's
-  package managers using the same templates `clim list` uses. clim
+  package managers using the same templates `klim list` uses. klim
   itself does not run anything as root; sudo prompts behave the same
   way they do from the terminal.
 
 ## See Also
 
-- [`clim list`](/reference/commands/list) — Same data on the terminal.
-- [`clim info`](/reference/commands/info) — Single-tool detail in the terminal.
-- [`clim trail`](/reference/commands/trail) — Toolchain history.
+- [`klim list`](/reference/commands/list) — Same data on the terminal.
+- [`klim info`](/reference/commands/info) — Single-tool detail in the terminal.
+- [`klim trail`](/reference/commands/trail) — Toolchain history.

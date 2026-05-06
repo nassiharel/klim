@@ -1,7 +1,7 @@
 {{define "content"}}
 <section class="security">
   <h1>Security</h1>
-  <p class="meta">Aggregated view of audit findings and known vulnerabilities. Run <code>clim security compliance</code> for policy verdicts.</p>
+  <p class="meta">Aggregated view of audit findings and known vulnerabilities. Run <code>klim security compliance</code> for policy verdicts.</p>
 
   <div class="card-grid">
     <div class="card">
@@ -11,7 +11,7 @@
     <div class="card">
       <h2>{{.Data.VulnRiskCount}} <small>at risk</small></h2>
       <p>Tools with known CVEs/GHSAs in the local cache.
-      {{if not .Data.VulnCacheLoaded}}<br><em>Run <code>clim security vuln</code> to populate.</em>{{end}}</p>
+      {{if not .Data.VulnCacheLoaded}}<br><em>Run <code>klim security vuln</code> to populate.</em>{{end}}</p>
     </div>
   </div>
 

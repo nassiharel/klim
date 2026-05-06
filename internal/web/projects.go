@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/nassiharel/clim/internal/teamfile"
+	"github.com/nassiharel/klim/internal/teamfile"
 )
 
-// projectsView powers /projects. Each row pre-loads the .clim.yaml
+// projectsView powers /projects. Each row pre-loads the .klim.yaml
 // summary so the user can see the health of every project at a glance.
 type projectsView struct {
 	Projects []projectRow

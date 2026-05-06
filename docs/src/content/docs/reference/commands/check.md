@@ -1,21 +1,21 @@
 ---
-title: "clim check"
-description: Validate installed tools against .clim.yaml requirements
+title: "klim check"
+description: Validate installed tools against .klim.yaml requirements
 ---
 
-Check that all tools required by the project's `.clim.yaml` are installed and meet version constraints.
+Check that all tools required by the project's `.klim.yaml` are installed and meet version constraints.
 
 ## Usage
 
 ```bash
-clim check [flags]
+klim check [flags]
 ```
 
 ## Flags
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--file` | `-f` | Path to .clim.yaml (default: auto-detect) |
+| `--file` | `-f` | Path to .klim.yaml (default: auto-detect) |
 | `--json` | | Machine-readable JSON output |
 | `--refresh` | | Force fresh scan, ignoring cache |
 
@@ -29,14 +29,14 @@ clim check [flags]
 ## Examples
 
 ```bash
-# Auto-find .clim.yaml in current/parent directories
-clim check
+# Auto-find .klim.yaml in current/parent directories
+klim check
 
 # Specify explicit path
-clim check --file path/to/.clim.yaml
+klim check --file path/to/.klim.yaml
 
 # Machine-readable output for CI
-clim check --json
+klim check --json
 ```
 
 ## Output
@@ -56,10 +56,10 @@ clim check --json
 # GitHub Actions
 - name: Verify developer tools
   run: |
-    curl -fsSL https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash
-    clim check --json
+    curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
+    klim check --json
 ```
 
 ## See Also
 
-- [Team Manifests guide](/guides/team-manifests) — How to set up .clim.yaml
+- [Team Manifests guide](/guides/team-manifests) — How to set up .klim.yaml

@@ -3,7 +3,7 @@ package vuln
 import (
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 func TestMap_NotInstalled(t *testing.T) {

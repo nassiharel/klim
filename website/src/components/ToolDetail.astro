@@ -75,10 +75,10 @@ function fmtStars(n: number): string {
 <!-- Install -->
 {installEntries.length > 0 && (
   <div class="rounded-2xl border border-gray-800 bg-gray-900/50 p-8 mb-8">
-    <h2 class="text-xl font-bold text-white mb-6">Install with clim</h2>
+    <h2 class="text-xl font-bold text-white mb-6">Install with klim</h2>
     <div class="mb-6 overflow-hidden rounded-xl border border-green-500/30 bg-green-500/5 p-5">
-      <p class="text-sm text-gray-400 mb-2">The fastest way — let clim pick the best package manager:</p>
-      <pre class="font-mono text-sm text-green-400">clim install {tool.name}</pre>
+      <p class="text-sm text-gray-400 mb-2">The fastest way — let klim pick the best package manager:</p>
+      <pre class="font-mono text-sm text-green-400">klim install {tool.name}</pre>
       <p class="mt-3 text-xs text-gray-500">Want a specific manager? Pass <code class="text-gray-300">--source brew</code> (or any of winget / choco / scoop / apt / snap / npm), or set <code class="text-gray-300">defaults.preferred_source</code> in <code class="text-gray-300">config.yaml</code>.</p>
     </div>
     <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">Or install directly via</h3>
@@ -97,7 +97,7 @@ function fmtStars(n: number): string {
 {tool.binary_names.length > 0 && (
   <div class="rounded-2xl border border-gray-800 bg-gray-900/50 p-8 mb-8">
     <h2 class="text-xl font-bold text-white mb-4">Detected Binaries</h2>
-    <p class="text-sm text-gray-400 mb-4">clim detects this tool by finding these executables on your <code class="rounded bg-gray-800 px-1.5 py-0.5 text-green-400">PATH</code>:</p>
+    <p class="text-sm text-gray-400 mb-4">klim detects this tool by finding these executables on your <code class="rounded bg-gray-800 px-1.5 py-0.5 text-green-400">PATH</code>:</p>
     <div class="flex flex-wrap gap-2">
       {tool.binary_names.map((bin: string) => (
         <code class="rounded-lg bg-gray-950 border border-gray-800 px-3 py-1.5 text-sm font-mono text-green-400">{bin}</code>

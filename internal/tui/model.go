@@ -16,18 +16,18 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nassiharel/clim/internal/audit"
-	"github.com/nassiharel/clim/internal/catalog"
-	"github.com/nassiharel/clim/internal/compliance"
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/custompacks"
-	"github.com/nassiharel/clim/internal/doctor"
-	"github.com/nassiharel/clim/internal/favorites"
-	"github.com/nassiharel/clim/internal/onboard"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/score"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/teamfile"
+	"github.com/nassiharel/klim/internal/audit"
+	"github.com/nassiharel/klim/internal/catalog"
+	"github.com/nassiharel/klim/internal/compliance"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/custompacks"
+	"github.com/nassiharel/klim/internal/doctor"
+	"github.com/nassiharel/klim/internal/favorites"
+	"github.com/nassiharel/klim/internal/onboard"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/score"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/teamfile"
 )
 
 const (
@@ -267,8 +267,8 @@ type Model struct {
 	onboardRole  int              // selected role index (0 = first role)
 	onboardTools []recommendation // role-scored tools for current role
 
-	// Team file (.clim.yaml) state.
-	teamFilePath    string                 // path to detected .clim.yaml ("" = not found)
+	// Team file (.klim.yaml) state.
+	teamFilePath    string                 // path to detected .klim.yaml ("" = not found)
 	teamFile        *teamfile.TeamFile     // parsed team file (nil = not found)
 	teamCheckResult []teamfile.CheckResult // check results (nil = not checked yet)
 
@@ -646,7 +646,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.scanOK {
 				_ = m.svc.SaveScanCache(m.tools)
 			}
-			// Check .clim.yaml now that versions are resolved.
+			// Check .klim.yaml now that versions are resolved.
 			m.detectTeamFile()
 			cmplCmd := m.runDoctor()
 			return m, cmplCmd
@@ -1062,7 +1062,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("✗ Init failed: %s", msg.err)
 			return m, nil
 		}
-		m.statusMsg = fmt.Sprintf("✓ Generated .clim.yaml (%d tools)", msg.tools)
+		m.statusMsg = fmt.Sprintf("✓ Generated .klim.yaml (%d tools)", msg.tools)
 		// Check the newly written file directly (not CWD-based detection).
 		m.projectView = projectViewDetail
 		m.projectCursor = 0
@@ -1960,7 +1960,7 @@ func (m Model) stats() (installed, updates, notInstalled int) {
 	return
 }
 
-// detectTeamFile looks for .clim.yaml in CWD/parents and runs checks
+// detectTeamFile looks for .klim.yaml in CWD/parents and runs checks
 // against the current tool list. Called after version resolution completes.
 func (m *Model) detectTeamFile() {
 	m.teamFilePath = ""
@@ -1977,8 +1977,8 @@ func (m *Model) detectTeamFile() {
 	}
 	tf, err := teamfile.Parse(path)
 	if err != nil {
-		slog.Warn("failed to parse .clim.yaml", "path", path, "error", err)
-		m.statusMsg = fmt.Sprintf("⚠ .clim.yaml parse error: %s", err)
+		slog.Warn("failed to parse .klim.yaml", "path", path, "error", err)
+		m.statusMsg = fmt.Sprintf("⚠ .klim.yaml parse error: %s", err)
 		// Don't set teamFilePath — leave state clean.
 		return
 	}

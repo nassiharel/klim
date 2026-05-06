@@ -4,8 +4,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/textwrap"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/textwrap"
 )
 
 // combineTagsAndTopics merges catalog tags and GitHub topics, de-duplicating

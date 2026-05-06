@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nassiharel/clim/internal/trail"
+	"github.com/nassiharel/klim/internal/trail"
 )
 
 // TestLabelInUseError_ImplementsError sanity-checks that the trail

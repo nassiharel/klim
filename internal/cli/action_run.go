@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
-// actionFlags holds the shared flag state for clim install/upgrade/remove.
+// actionFlags holds the shared flag state for klim install/upgrade/remove.
 type actionFlags struct {
 	source  string
 	packs   []string
@@ -64,7 +64,7 @@ func addActionFlags(cmd *cobra.Command) *actionFlags {
 	return f
 }
 
-// runAction is the shared body for clim install/upgrade/remove. It
+// runAction is the shared body for klim install/upgrade/remove. It
 // resolves the catalog + scan, expands targets, builds the plan, and —
 // unless --dry-run — executes plans with confirmation. Output is text
 // on stderr by default; --output=json emits a machine-readable result
@@ -75,7 +75,7 @@ func runAction(cmd *cobra.Command, args []string, action Action, flags *actionFl
 	}
 	if len(args) == 0 && len(flags.packs) == 0 {
 		return usageErrorf(
-			"requires at least one tool name or --pack <name>\n\nExamples:\n  clim %s jq fzf\n  clim %s --pack go-dev",
+			"requires at least one tool name or --pack <name>\n\nExamples:\n  klim %s jq fzf\n  klim %s --pack go-dev",
 			action, action,
 		)
 	}

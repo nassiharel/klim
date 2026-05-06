@@ -94,11 +94,11 @@ func authMiddleware(s *Server, next http.Handler) http.Handler {
 		// would be silly; instead, just instruct the user.
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`<!doctype html><meta charset="utf-8"><title>clim — auth required</title>` +
+		_, _ = w.Write([]byte(`<!doctype html><meta charset="utf-8"><title>klim — auth required</title>` +
 			`<body style="font-family:system-ui;padding:2rem;max-width:42rem;margin:0 auto">` +
 			`<h1>Authentication required</h1>` +
 			`<p>Append <code>?token=&lt;your-token&gt;</code> to the URL once. ` +
-			`The token was printed to your terminal when <code>clim browser</code> started ` +
+			`The token was printed to your terminal when <code>klim browser</code> started ` +
 			`with <code>--insecure-bind</code>.</p>` +
 			`<p>Once authenticated, the token is stored in a cookie for this session.</p>` +
 			`</body>`))

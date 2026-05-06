@@ -1,9 +1,9 @@
 // Package envid produces a portable, paste-friendly fingerprint of a
-// clim-managed environment ("Env ID"). The same payload has two
+// klim-managed environment ("Env ID"). The same payload has two
 // encodings:
 //
-//   - YAML / JSON file form for git, code review, and `clim` itself.
-//   - Compact base64 token (`clim:env:v1:<gz+b64>`) for chat / quick
+//   - YAML / JSON file form for git, code review, and `klim` itself.
+//   - Compact base64 token (`klim:env:v1:<gz+b64>`) for chat / quick
 //     share.
 //
 // Privacy is achieved by content omission. A profile is an explicit
@@ -13,7 +13,7 @@
 //   - favorites
 //   - user-defined custom packs (name + tool list)
 //   - which package managers are available on PATH
-//   - clim version and commit
+//   - klim version and commit
 //   - GOOS, GOARCH, and best-effort distro hint
 //   - observational audit/security counts (warnings/infos and the
 //     4-bucket verdict tally — clean/watch/risk/unknown)
@@ -32,7 +32,7 @@ const SchemaVersion = 1
 // Profile is the canonical representation of an Env ID.
 type Profile struct {
 	SchemaVersion   int             `yaml:"schema_version"     json:"schema_version"`
-	Clim            ClimInfo        `yaml:"clim"               json:"clim"`
+	Clim            ClimInfo        `yaml:"klim"               json:"klim"`
 	GeneratedAt     time.Time       `yaml:"generated_at"       json:"generated_at"`
 	Hash            string          `yaml:"hash"               json:"hash"`
 	OS              OSInfo          `yaml:"os"                 json:"os"`
@@ -43,7 +43,7 @@ type Profile struct {
 	Security        Security        `yaml:"security"           json:"security"`
 }
 
-// ClimInfo identifies the clim build that produced the profile.
+// ClimInfo identifies the klim build that produced the profile.
 type ClimInfo struct {
 	Version string `yaml:"version"          json:"version"`
 	Commit  string `yaml:"commit,omitempty" json:"commit,omitempty"`

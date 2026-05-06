@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // configSetting and the SettingType constants are aliases for the

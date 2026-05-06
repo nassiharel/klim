@@ -55,7 +55,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Build
-        run: go build ./cmd/clim
+        run: go build ./cmd/klim
       - name: Test
         run: go test -race -count=1 -timeout=5m '-coverprofile=coverage.out' ./...
       - name: Upload coverage

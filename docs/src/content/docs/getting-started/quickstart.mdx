@@ -1,21 +1,21 @@
 ---
 title: Quick Start
-description: Get up and running with clim in minutes
+description: Get up and running with klim in minutes
 ---
 
 import { Steps } from '@astrojs/starlight/components';
 
-This guide walks you through using clim for the first time.
+This guide walks you through using klim for the first time.
 
 ## Launch the TUI
 
-Simply run `clim` with no arguments to launch the interactive terminal UI:
+Simply run `klim` with no arguments to launch the interactive terminal UI:
 
 ```bash
-clim
+klim
 ```
 
-clim will scan your `$PATH` to discover installed developer tools, then display them in an interactive interface with version information and update status.
+klim will scan your `$PATH` to discover installed developer tools, then display them in an interactive interface with version information and update status.
 
 ## What You'll See
 
@@ -49,7 +49,7 @@ Use **←/→** arrow keys, **Tab/Shift+Tab**, or number keys **1–8** to switc
 | Updates | 3 | Tools with available upgrades |
 | Discover | 4 | Browse 110+ tools from the marketplace |
 | Backup | 5 | Export, import, and share your toolchain |
-| Project | 6 | Multi-project `.clim.yaml` management |
+| Project | 6 | Multi-project `.klim.yaml` management |
 | Dashboard | 7 | Stats and breakdowns |
 | Config | 8 | Edit settings |
 
@@ -60,32 +60,32 @@ For non-interactive usage (scripts, CI), use subcommands directly:
 <Steps>
 1. **List installed tools:**
    ```bash
-   clim list
+   klim list
    ```
 
 2. **Inspect a single tool:**
    ```bash
-   clim info kubectl
+   klim info kubectl
    ```
 
 3. **Export your toolchain:**
    ```bash
-   clim export > my-tools.yaml
+   klim export > my-tools.yaml
    ```
 
 4. **Import on another machine:**
    ```bash
-   clim import my-tools.yaml
+   klim import my-tools.yaml
    ```
 
 5. **Capture your environment for later comparison:**
    ```bash
-   clim trail capture --label before-upgrade
+   klim trail capture --label before-upgrade
    ```
 
-6. **Check for clim updates:**
+6. **Check for klim updates:**
    ```bash
-   clim update --check
+   klim update --check
    ```
 </Steps>
 
@@ -96,7 +96,7 @@ For non-interactive usage (scripts, CI), use subcommands directly:
 1. In the TUI, press **\*** on any tool to favorite it
 2. Switch to the **★ Favorites** tab (press **2**)
 3. Press **s** to generate a share token
-4. Send the token to a colleague — they run `clim open <token>` to install the same tools
+4. Send the token to a colleague — they run `klim open <token>` to install the same tools
 
 ### Batch Upgrade
 
@@ -106,26 +106,26 @@ For non-interactive usage (scripts, CI), use subcommands directly:
 
 ### Team Standardization
 
-1. Export your toolchain: `clim export > .clim.yaml`
-2. Commit `.clim.yaml` to your repository
-3. Team members run: `clim check` to verify they have all required tools
+1. Export your toolchain: `klim export > .klim.yaml`
+2. Commit `.klim.yaml` to your repository
+3. Team members run: `klim check` to verify they have all required tools
 
 ### Track Toolchain Changes Over Time
 
-`clim trail` is git-style history for your environment. Capture, diff, and roll forward across upgrades:
+`klim trail` is git-style history for your environment. Capture, diff, and roll forward across upgrades:
 
-1. Capture before risky changes: `clim trail capture --label before-kubectl-upgrade`
+1. Capture before risky changes: `klim trail capture --label before-kubectl-upgrade`
 2. Make your changes (`brew upgrade kubectl`, etc.)
-3. Capture again: `clim trail capture`
-4. See exactly what changed: `clim trail diff before-kubectl-upgrade`
+3. Capture again: `klim trail capture`
+4. See exactly what changed: `klim trail diff before-kubectl-upgrade`
 
 ### Inspect a Single Tool
 
-`clim info <tool>` is the CLI counterpart of the TUI's tool detail page — every install location, every available package source, GitHub stats, project / pack references, and related installed tools:
+`klim info <tool>` is the CLI counterpart of the TUI's tool detail page — every install location, every available package source, GitHub stats, project / pack references, and related installed tools:
 
 ```bash
-clim info terraform
-clim info terraform --output json   # for scripts
+klim info terraform
+klim info terraform --output json   # for scripts
 ```
 
 ## Next Steps

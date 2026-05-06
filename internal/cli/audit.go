@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/audit"
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/klim/internal/audit"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
 )
 
 var auditRefreshFlag bool
@@ -213,7 +213,7 @@ func generateSBOM(tools []registry.Tool) error {
 			Tools: cdxTool{
 				Components: []cdxToolComponent{{
 					Type: "application",
-					Name: "clim",
+					Name: "klim",
 				}},
 			},
 		},
@@ -253,10 +253,10 @@ func generateSBOM(tools []registry.Tool) error {
 		}
 
 		comp.Properties = []cdxProperty{
-			{Name: "clim:source", Value: string(primary.Source)},
-			{Name: "clim:path", Value: primary.Path},
-			{Name: "clim:os", Value: runtime.GOOS},
-			{Name: "clim:arch", Value: runtime.GOARCH},
+			{Name: "klim:source", Value: string(primary.Source)},
+			{Name: "klim:path", Value: primary.Path},
+			{Name: "klim:os", Value: runtime.GOOS},
+			{Name: "klim:arch", Value: runtime.GOARCH},
 		}
 
 		bom.Components = append(bom.Components, comp)

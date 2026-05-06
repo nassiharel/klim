@@ -1,4 +1,4 @@
-// Package fileutil provides shared file I/O primitives for clim:
+// Package fileutil provides shared file I/O primitives for klim:
 // atomic writes, YAML serialization, and directory helpers.
 package fileutil
 
@@ -53,7 +53,7 @@ import (
 // detected, resolveLinkTarget returns an error *before* any temp
 // file is created and AtomicWrite never attempts the rename.
 //
-// `clim init` deliberately does NOT use AtomicWrite — see
+// `klim init` deliberately does NOT use AtomicWrite — see
 // internal/teamfile.Write for the rationale (inode/ACL/xattr
 // preservation outweighs crash-atomicity for a single-writer,
 // interactive command).

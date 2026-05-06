@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 func TestDetectSource(t *testing.T) {

@@ -1,5 +1,5 @@
 ---
-title: "clim watch"
+title: "klim watch"
 description: Check for available tool updates
 ---
 
@@ -8,7 +8,7 @@ Check all installed tools for available updates. Designed to run periodically vi
 ## Usage
 
 ```bash
-clim watch [flags]
+klim watch [flags]
 ```
 
 ## Flags
@@ -21,20 +21,20 @@ clim watch [flags]
 
 ```bash
 # Human-readable output
-clim watch
+klim watch
 
 # JSON for scripting
-clim watch --json
+klim watch --json
 ```
 
 ## Scheduling
 
 ```bash
 # Cron (daily at 9am)
-0 9 * * * clim watch --json >> ~/.config/clim/watch.log
+0 9 * * * klim watch --json >> ~/.config/klim/watch.log
 
 # Windows Task Scheduler
-schtasks /create /tn "clim-watch" /tr "clim watch" /sc daily /st 09:00
+schtasks /create /tn "klim-watch" /tr "klim watch" /sc daily /st 09:00
 ```
 
 ## Output
@@ -47,12 +47,12 @@ schtasks /create /tn "clim-watch" /tr "clim watch" /sc daily /st 09:00
   ⬆ node                 24.14.1 → 24.15.0  (winget)
   ⬆ terraform            1.6.5 → 1.7.0  (scoop)
 
-Run 'clim' to upgrade interactively.
+Run 'klim' to upgrade interactively.
 ```
 
 ## Note
 
-`clim watch` always performs a fresh scan (equivalent to `--refresh`) to ensure results are authoritative.
+`klim watch` always performs a fresh scan (equivalent to `--refresh`) to ensure results are authoritative.
 
 ## See Also
 

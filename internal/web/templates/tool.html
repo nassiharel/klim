@@ -59,7 +59,7 @@
 {{if $d.PMRows}}
 <section class="card">
   <h2>Package managers</h2>
-  <p class="muted small">Every package manager clim has a configured ID for. Bold names are available on this machine.</p>
+  <p class="muted small">Every package manager klim has a configured ID for. Bold names are available on this machine.</p>
   <table class="grid">
     <thead><tr><th>Source</th><th>Package ID</th><th>Install command</th><th>Status</th></tr></thead>
     <tbody>
@@ -105,7 +105,7 @@
     </tbody>
   </table>
   {{else if not .VulnsCacheLoaded}}
-  <p class="muted">No vulnerability cache yet — run <code>clim security vuln</code> to populate.</p>
+  <p class="muted">No vulnerability cache yet — run <code>klim security vuln</code> to populate.</p>
   {{end}}
 </section>
 {{end}}

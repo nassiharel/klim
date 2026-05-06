@@ -1,6 +1,6 @@
 version: 2
 
-project_name: clim
+project_name: klim
 
 before:
   hooks:
@@ -9,9 +9,9 @@ before:
     - go mod tidy
 
 builds:
-  - id: clim
-    main: ./cmd/clim
-    binary: clim
+  - id: klim
+    main: ./cmd/klim
+    binary: klim
     env:
       - CGO_ENABLED=0
       - SOURCE_DATE_EPOCH={{ .CommitTimestamp }}
@@ -19,9 +19,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/nassiharel/clim/internal/build.Version={{.Version}}
-      - -X github.com/nassiharel/clim/internal/build.Commit={{.ShortCommit}}
-      - -X github.com/nassiharel/clim/internal/build.Date={{.CommitDate}}
+      - -X github.com/nassiharel/klim/internal/build.Version={{.Version}}
+      - -X github.com/nassiharel/klim/internal/build.Commit={{.ShortCommit}}
+      - -X github.com/nassiharel/klim/internal/build.Date={{.CommitDate}}
     mod_timestamp: "{{ .CommitTimestamp }}"
     goos:
       - darwin
@@ -46,9 +46,9 @@ archives:
 
 nfpms:
   - id: packages
-    package_name: clim
+    package_name: klim
     vendor: nassiharel
-    homepage: https://github.com/nassiharel/clim
+    homepage: https://github.com/nassiharel/klim
     maintainer: nassiharel
     description: >-
       One command to discover, inspect, and upgrade every CLI on your system.
@@ -64,14 +64,14 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
-    homepage: https://github.com/nassiharel/clim
+    homepage: https://github.com/nassiharel/klim
     description: >-
       One command to discover, inspect, and upgrade every CLI on your system.
     license: MIT
     install: |
-      bin.install "clim"
+      bin.install "klim"
     test: |
-      system bin/"clim", "version"
+      system bin/"klim", "version"
 
 sboms:
   - artifacts: archive
@@ -107,7 +107,7 @@ changelog:
 release:
   github:
     owner: nassiharel
-    name: clim
+    name: klim
   prerelease: auto
   name_template: "v{{ .Version }}"
   footer: |
@@ -115,16 +115,16 @@ release:
 
     **Quick install (macOS/Linux):**
     ```
-    curl -fsSL https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
     ```
 
     **Quick install (Windows PowerShell):**
     ```
-    irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+    irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
     ```
 
-    **Homebrew**: `brew install nassiharel/tap/clim`
-    **Go**: `go install github.com/nassiharel/clim/cmd/clim@v{{ .Version }}`
+    **Homebrew**: `brew install nassiharel/tap/klim`
+    **Go**: `go install github.com/nassiharel/klim/cmd/klim@v{{ .Version }}`
     **Debian/Ubuntu**: `sudo dpkg -i clim_{{ .Version }}_linux_amd64.deb`
     **RPM**: `sudo rpm -i clim_{{ .Version }}_linux_amd64.rpm`
     **Binary**: Download from the assets below

@@ -17,14 +17,14 @@ var removeCmd = &cobra.Command{
 For each target:
   · installed   → remove
   · not installed → skipped (listed under "Not installed")
-  · "clim" itself → refused (use the OS uninstaller for clim)
+  · "klim" itself → refused (use the OS uninstaller for klim)
 
-Source precedence is the same as 'clim install'.
+Source precedence is the same as 'klim install'.
 
 Examples:
-  clim remove jq
-  clim remove --pack go-dev --yes
-  clim remove jq fzf --source brew --dry-run`,
+  klim remove jq
+  klim remove --pack go-dev --yes
+  klim remove jq fzf --source brew --dry-run`,
 	GroupID: "tools",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAction(cmd, args, ActionRemove, removeFlags, removeOutputFmt)

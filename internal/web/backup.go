@@ -13,17 +13,17 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/share"
+	"github.com/nassiharel/klim/internal/manifest"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/share"
 )
 
 // backupView powers the read-only Backup tab. It bundles together
 // every piece of state the TUI's Backup tab exposes today: a manifest
 // preview of the current toolchain, a share token, the file path the
 // manifest would be written to on disk, and the list of saved
-// backups under ~/.config/clim/backups/.
+// backups under ~/.config/klim/backups/.
 type backupView struct {
 	Tools      []manifest.Tool
 	Count      int
@@ -39,7 +39,7 @@ type backupView struct {
 	FlashMsg   string
 }
 
-// savedBackup describes one *.yaml file under ~/.config/clim/backups/.
+// savedBackup describes one *.yaml file under ~/.config/klim/backups/.
 // The web UI lets the user download any of them as a fresh manifest.
 type savedBackup struct {
 	Name        string // file name without path
@@ -75,7 +75,7 @@ func (s *Server) pageBackup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// loadSavedBackups lists *.yaml files under ~/.config/clim/backups/.
+// loadSavedBackups lists *.yaml files under ~/.config/klim/backups/.
 // Missing dir is fine — that's the empty case. We sort newest-first so
 // the most recent backup is at the top.
 func loadSavedBackups() ([]savedBackup, error) {
@@ -113,7 +113,7 @@ func loadSavedBackups() ([]savedBackup, error) {
 	return out, nil
 }
 
-// downloadSavedBackup serves the raw file under ~/.config/clim/backups/
+// downloadSavedBackup serves the raw file under ~/.config/klim/backups/
 // as a YAML attachment. Path-escapes are validated to prevent
 // directory traversal — only filenames matching the listing logic are
 // allowed through.
@@ -156,7 +156,7 @@ func (s *Server) downloadSavedBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 // downloadExport returns the manifest as a YAML attachment so the user
-// can `clim import` it elsewhere. It mirrors `clim export` output —
+// can `klim import` it elsewhere. It mirrors `klim export` output —
 // the same struct shape, the same field set, and a trailing newline.
 func (s *Server) downloadExport(w http.ResponseWriter, r *http.Request) {
 	tools, _, err := s.loader.LoadInstalled(r.Context())
@@ -171,13 +171,13 @@ func (s *Server) downloadExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
-	w.Header().Set("Content-Disposition", `attachment; filename="clim-export.yaml"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="klim-export.yaml"`)
 	_, _ = w.Write(body)
 }
 
 // buildManifestTools maps a registry slice through manifest's
 // FromRegistryTool, dropping non-installed entries. Same rule
-// `clim export` uses — backups are about the user's actual current
+// `klim export` uses — backups are about the user's actual current
 // toolchain, not the catalog.
 func buildManifestTools(tools []registry.Tool) []manifest.Tool {
 	out := make([]manifest.Tool, 0, len(tools))

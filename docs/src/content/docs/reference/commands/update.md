@@ -1,14 +1,14 @@
 ---
-title: "clim update"
-description: Update clim to the latest version
+title: "klim update"
+description: Update klim to the latest version
 ---
 
-Check GitHub Releases for a newer version of clim and download/install it in-place.
+Check GitHub Releases for a newer version of klim and download/install it in-place.
 
 ## Usage
 
 ```bash
-clim update [flags]
+klim update [flags]
 ```
 
 ## Flags
@@ -21,10 +21,10 @@ clim update [flags]
 
 ```bash
 # Download and install the latest version
-clim update
+klim update
 
 # Check only — don't install
-clim update --check
+klim update --check
 ```
 
 ## How It Works
@@ -36,12 +36,12 @@ clim update --check
 
 ### Windows Note
 
-On Windows, the running executable cannot be deleted. clim renames the current binary to `.old` and places the new binary at the original path. The `.old` file is cleaned up on the next launch.
+On Windows, the running executable cannot be deleted. klim renames the current binary to `.old` and places the new binary at the original path. The `.old` file is cleaned up on the next launch.
 
 ## Alternative
 
-If you installed clim via Homebrew:
+If you installed klim via Homebrew:
 
 ```bash
-brew upgrade clim
+brew upgrade klim
 ```

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/search"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/search"
 )
 
 // applyFilter recomputes m.filteredIndex based on the active tab, sidebar

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 func TestFormatStars(t *testing.T) {

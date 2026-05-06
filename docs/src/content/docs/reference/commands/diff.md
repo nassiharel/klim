@@ -1,5 +1,5 @@
 ---
-title: "clim diff"
+title: "klim diff"
 description: Compare your installed tools against a manifest or share token
 ---
 
@@ -8,7 +8,7 @@ Compare your local tool environment against a reference to find differences in t
 ## Usage
 
 ```bash
-clim diff <manifest.yaml | share-token> [flags]
+klim diff <manifest.yaml | share-token> [flags]
 ```
 
 ## Flags
@@ -38,13 +38,13 @@ clim diff <manifest.yaml | share-token> [flags]
 
 ```bash
 # Compare against a manifest file
-clim diff colleague-tools.yaml
+klim diff colleague-tools.yaml
 
 # Compare against a share token
-clim diff "clim:v1:H4sIAAAA..."
+klim diff "klim:v1:H4sIAAAA..."
 
 # Force fresh scan for accurate comparison
-clim diff tools.yaml --refresh
+klim diff tools.yaml --refresh
 ```
 
 ## Output
@@ -91,5 +91,5 @@ Result: 1 match, 1 differ, 1 local only, 1 remote only
 
 ## See Also
 
-- [clim export](/reference/commands/export) — Export your tools to a manifest
-- [clim share](/reference/commands/share) — Generate a share token
+- [klim export](/reference/commands/export) — Export your tools to a manifest
+- [klim share](/reference/commands/share) — Generate a share token

@@ -7,11 +7,11 @@ import (
 var shellCmd = &cobra.Command{
 	Use:   "shell",
 	Short: "Shell integration — completions and hooks",
-	Long: `Configure shell integration for clim.
+	Long: `Configure shell integration for klim.
 
 Subcommands:
   completion   Generate tab completion scripts
-  hook         Generate auto-check hooks for .clim.yaml`,
+  hook         Generate auto-check hooks for .klim.yaml`,
 }
 
 func init() {

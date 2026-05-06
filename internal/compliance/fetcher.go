@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/paths"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/paths"
 )
 
 // maxRemotePolicySize caps remote downloads to prevent abuse.
@@ -78,7 +78,7 @@ func (f *HTTPFetcher) Fetch(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
-	req.Header.Set("User-Agent", "clim/compliance")
+	req.Header.Set("User-Agent", "klim/compliance")
 
 	client := f.HTTPClient
 	if client == nil {

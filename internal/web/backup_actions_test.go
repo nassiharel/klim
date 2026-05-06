@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/share"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/share"
 )
 
 // startBackupServer wires a Server with a fixture loader plus an
 // override for the user-config dir so save/delete tests don't touch
-// the real ~/.config/clim/backups/. paths.BackupsDir() reads the
+// the real ~/.config/klim/backups/. paths.BackupsDir() reads the
 // XDG / OS-specific config root via the paths package, which honours
 // XDG_CONFIG_HOME on Linux and CLIM_CONFIG_HOME everywhere; we set
 // the latter so tests stay isolated regardless of host OS.
@@ -185,7 +185,7 @@ func TestBackupPreview_RejectsEmptyAndMalformed(t *testing.T) {
 	}{
 		{"empty", url.Values{}, "paste a manifest"},
 		{"malformed yaml", url.Values{"manifest": {"this is: not\n valid yaml: ["}}, "couldn%27t+parse+input"},
-		{"bogus token", url.Values{"token": {"clim:v1:not-base64"}}, "couldn%27t+parse+input"},
+		{"bogus token", url.Values{"token": {"klim:v1:not-base64"}}, "couldn%27t+parse+input"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

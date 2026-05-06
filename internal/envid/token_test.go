@@ -43,7 +43,7 @@ func TestEncodeDecode_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	if !strings.HasPrefix(token, "clim:env:v1:") {
+	if !strings.HasPrefix(token, "klim:env:v1:") {
 		t.Errorf("token missing prefix: %s", token[:min(40, len(token))])
 	}
 
@@ -91,21 +91,21 @@ func TestDecode_InvalidPrefix(t *testing.T) {
 }
 
 func TestDecode_UnknownVersion(t *testing.T) {
-	_, err := Decode("clim:env:v99:abcdef")
+	_, err := Decode("klim:env:v99:abcdef")
 	if !errors.Is(err, ErrUnknownVersion) {
 		t.Errorf("err = %v, want ErrUnknownVersion", err)
 	}
 }
 
 func TestDecode_EmptyToken(t *testing.T) {
-	_, err := Decode("clim:env:v1:")
+	_, err := Decode("klim:env:v1:")
 	if !errors.Is(err, ErrEmptyToken) {
 		t.Errorf("err = %v, want ErrEmptyToken", err)
 	}
 }
 
 func TestDecode_CorruptBase64(t *testing.T) {
-	_, err := Decode("clim:env:v1:!!!notbase64!!!")
+	_, err := Decode("klim:env:v1:!!!notbase64!!!")
 	if !errors.Is(err, ErrCorruptToken) {
 		t.Errorf("err = %v, want ErrCorruptToken", err)
 	}
@@ -113,14 +113,14 @@ func TestDecode_CorruptBase64(t *testing.T) {
 
 func TestDecode_TamperedGzip(t *testing.T) {
 	// Valid base64 of garbage bytes that aren't a gzip stream.
-	_, err := Decode("clim:env:v1:AAECAwQFBgc")
+	_, err := Decode("klim:env:v1:AAECAwQFBgc")
 	if !errors.Is(err, ErrCorruptToken) {
 		t.Errorf("err = %v, want ErrCorruptToken", err)
 	}
 }
 
 func TestDecode_TooLarge(t *testing.T) {
-	huge := "clim:env:v1:" + strings.Repeat("A", maxEncodedLen+1)
+	huge := "klim:env:v1:" + strings.Repeat("A", maxEncodedLen+1)
 	_, err := Decode(huge)
 	if !errors.Is(err, ErrTokenTooLarge) {
 		t.Errorf("err = %v, want ErrTokenTooLarge", err)
