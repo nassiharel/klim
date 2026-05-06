@@ -81,20 +81,12 @@ func (r fsRoots) objectPath(id ObjectID) string {
 	return filepath.Join(r.objects, string(id[:2]), string(id[2:])+".yaml")
 }
 
-// writeObject writes the snapshot body content-addressed by id, idempotently.
-// See writeObjectReportingCreated; this preserves the original signature
-// for callers that don't need the boolean.
-func writeObject(r fsRoots, id ObjectID, body []byte) error {
-	_, err := writeObjectReportingCreated(r, id, body)
-	return err
-}
-
-// writeObjectReportingCreated is writeObject's full-information variant:
-// it returns true only when this call wrote a fresh file (vs. observed
-// an existing one with matching hash). Capture uses the boolean to
-// decide whether a saveLog rollback should also delete the object —
-// touching an idempotent reuse would clobber state another in-flight
-// capture might depend on.
+// writeObjectReportingCreated writes the snapshot body content-addressed
+// by id, idempotently. It returns true only when this call wrote a
+// fresh file (vs. observed an existing one with matching hash).
+// Capture uses the boolean to decide whether a saveLog rollback should
+// also delete the object — touching an idempotent reuse would clobber
+// state another in-flight capture might depend on.
 //
 // If the object already exists on disk, we re-hash the stored bytes and
 // compare against id. A mismatch means a previous capture wrote a good
@@ -400,10 +392,7 @@ func hasTrailRemnants(r fsRoots) bool {
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false
-		}
-		return true
+		return !errors.Is(err, os.ErrNotExist)
 	}
 	return hasFile
 }

@@ -39,11 +39,6 @@ func allConfigSettings() []configSetting {
 	return config.AllSettings()
 }
 
-// currentValue returns the display string for a setting.
-func currentValue(s configSetting, cfg *config.Config) string {
-	return s.Display(cfg)
-}
-
 // rawValue returns the underlying value for editing (not the display string).
 
 // settingLineOffset estimates the rendered line offset for a setting at index idx,

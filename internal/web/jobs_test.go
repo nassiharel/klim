@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -22,10 +21,9 @@ import (
 // tests can pause execution between lines and observe streaming
 // behavior deterministically.
 type scriptedExecutor struct {
-	lines  []string
-	exit   error
-	gate   chan struct{} // unbuffered; receiver blocks before each line
-	gateMu sync.Mutex
+	lines []string
+	exit  error
+	gate  chan struct{} // unbuffered; receiver blocks before each line
 }
 
 func newScriptedExecutor(lines []string, exit error, gate chan struct{}) *scriptedExecutor {

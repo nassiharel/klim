@@ -721,7 +721,9 @@ func TestLoadLog_RejectsTrailingYAMLDocs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tampered := append(body, []byte("---\nschema_version: 1\nentries: []\n")...)
+	tampered := make([]byte, 0, len(body)+64)
+	tampered = append(tampered, body...)
+	tampered = append(tampered, []byte("---\nschema_version: 1\nentries: []\n")...)
 	if err := os.WriteFile(logPath, tampered, 0o644); err != nil { //nolint:gosec
 		t.Fatal(err)
 	}

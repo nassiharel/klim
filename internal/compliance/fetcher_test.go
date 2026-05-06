@@ -33,7 +33,7 @@ func TestHTTPFetcher(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != string(policy) {
+	if !bytes.Equal(data, policy) {
 		t.Errorf("got %q, want %q", data, policy)
 	}
 }
@@ -165,7 +165,7 @@ func TestLoadOrFetch_RejectsBadFreshFetchAndPreservesCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(stillThere) != string(good) {
+	if !bytes.Equal(stillThere, good) {
 		t.Errorf("cache was poisoned. got %q, want %q", stillThere, good)
 	}
 }
@@ -197,7 +197,7 @@ func TestRefresh_RejectsBadFreshFetchAndPreservesCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(stillThere) != string(good) {
+	if !bytes.Equal(stillThere, good) {
 		t.Errorf("cache was poisoned. got %q, want %q", stillThere, good)
 	}
 }

@@ -168,16 +168,17 @@ func Load() (map[string]Entry, time.Time, error) {
 // user can't even run.
 func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 	for i := range tools {
-		entry, ok := entries[tools[i].Name]
+		t := &tools[i] //nolint:gosec // G602: i is bounded by range; gosec's flow analysis can't see that.
+		entry, ok := entries[t.Name]
 		if !ok {
 			continue
 		}
-		tools[i].Latest = entry.Latest
-		tools[i].LatestFrom = entry.LatestFrom
+		t.Latest = entry.Latest
+		t.LatestFrom = entry.LatestFrom
 		if len(entry.Instances) == 0 {
-			tools[i].Instances = nil
-			tools[i].Latest = ""
-			tools[i].LatestFrom = ""
+			t.Instances = nil
+			t.Latest = ""
+			t.LatestFrom = ""
 			continue
 		}
 		insts := make([]registry.Instance, 0, len(entry.Instances))
@@ -211,7 +212,7 @@ func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 		// once — the previous "first match wins" approach silently
 		// dropped distinct later-PATH installations.
 		if anyStale {
-			for _, recovered := range lookupAllOnPATH(tools[i].BinaryNames) {
+			for _, recovered := range lookupAllOnPATH(t.BinaryNames) {
 				if _, dup := seenPaths[recovered]; dup {
 					continue
 				}
@@ -227,14 +228,14 @@ func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 			}
 		}
 
-		tools[i].Instances = insts
+		t.Instances = insts
 		if len(insts) == 0 {
 			// Every cached instance vanished and no recovery
 			// found a replacement — the tool's gone. Clear stale
 			// metadata so the UI doesn't show upgrade hints for
 			// something uninstalled.
-			tools[i].Latest = ""
-			tools[i].LatestFrom = ""
+			t.Latest = ""
+			t.LatestFrom = ""
 		}
 	}
 	return tools
@@ -250,19 +251,6 @@ func pathExists(path string) bool {
 	}
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
-}
-
-// lookupOnPATH returns the resolved path of the first binary name
-// found on the same merged PATH the finder uses, or ("", false)
-// when none are present. Kept for callers that explicitly want a
-// single-match result; Apply uses lookupAllOnPATH for full
-// PATH-walk recovery.
-func lookupOnPATH(binaryNames []string) (string, bool) {
-	all := lookupAllOnPATH(binaryNames)
-	if len(all) == 0 {
-		return "", false
-	}
-	return all[0], true
 }
 
 // lookupAllOnPATH walks every directory in finder.PathDirectories()

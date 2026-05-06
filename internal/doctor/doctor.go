@@ -505,7 +505,7 @@ func isUserWritableDir(dir string) bool {
 	if dir == "" {
 		return false
 	}
-	info, err := os.Stat(dir) // #nosec G304 -- dir originates from PATH; checking PATH integrity is the purpose.
+	info, err := os.Stat(dir) //nolint:gosec // G304/G703: dir originates from PATH; checking PATH integrity is the purpose.
 	if err != nil || !info.IsDir() {
 		return false
 	}

@@ -349,7 +349,7 @@ func printActionSummary(ps actionSummary) {
 		emitStrings("⚠ Refused (klim self-removal blocked)", ps.selfProtected)
 	}
 	emitStrings("⚠ Not in catalog", ps.unknown)
-	emitStrings(fmt.Sprintf("⚠ No package for %s", runtime.GOOS), ps.noPackage)
+	emitStrings("⚠ No package for "+runtime.GOOS, ps.noPackage)
 	emitStrings("⚠ No supported package manager", ps.noPkgMgr)
 
 	if len(ps.toExec) > 0 {

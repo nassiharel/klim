@@ -66,7 +66,7 @@ func (m Model) handleKeyConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Block install of non-compliant tools.
 		if action.action == "install" && action.toolIdx >= 0 && action.toolIdx < len(m.tools) {
 			if blocked, reason := m.complianceBlocksInstall(m.tools[action.toolIdx].Name); blocked {
-				m.statusMsg = fmt.Sprintf("✗ %s", reason)
+				m.statusMsg = "✗ " + reason
 				return m, nil
 			}
 		}

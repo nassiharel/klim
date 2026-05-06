@@ -1,0 +1,160 @@
+name: Deploy Pages
+
+# Combined GitHub Pages deploy: the website lives at the site root and
+# the documentation Starlight build is mounted under /docs/.
+#
+# Pages can only host one site per repository, so this workflow is the
+# single authority for `actions/deploy-pages@v5`. The previous
+# deploy-website.yml and deploy-docs.yml workflows fought each other
+# (last-deploy-wins) and have been removed.
+#
+# Triggers:
+#   - Pushes that change website/** or docs/** rebuild and redeploy.
+#   - The Marketplace workflow finishing on main re-runs the deploy so
+#     a fresh marketplace.yaml shows up in the docs catalog page.
+#   - Manual dispatch via the Actions tab.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'docs/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_run:
+    workflows: ["Marketplace"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Pages only stores one in-flight deployment per environment. Cancel
+# any superseded run so a fast burst of pushes doesn't queue up
+# multiple redundant deploys.
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Skip the run when the upstream Marketplace workflow failed —
+    # publishing the previous-good docs would silently mask a CI
+    # failure that the operator needs to see.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v6
+
+      # Go is needed for the docs catalog generator (gen-marketplace-page.go).
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # Marketplace branch holds the assembled catalog YAML used by
+      # the docs site to render its catalog page. When the branch
+      # isn't available (e.g. on a fresh fork that hasn't published
+      # the marketplace yet) we write a placeholder file so the
+      # generator uses local data instead of falling back to a remote
+      # HTTPS fetch — keeps fork deploys reproducible and works
+      # behind outbound-blocked networks. The placeholder must exceed
+      # the generator's 100-byte size guard to be accepted.
+      - name: Fetch assembled marketplace from marketplace branch
+        run: |
+          git fetch origin marketplace --depth=1 2>/dev/null || true
+          if ! git show origin/marketplace:marketplace.yaml > marketplace.yaml 2>/dev/null; then
+            cat > marketplace.yaml <<'EOF'
+          # Placeholder marketplace data used when the marketplace branch
+          # is unavailable (e.g. on a fresh fork). The docs catalog page
+          # will render as empty until the Marketplace workflow publishes
+          # assembled data to the marketplace branch.
+          tools: []
+          packs: []
+          EOF
+            echo "marketplace branch not available — using empty placeholder"
+          fi
+
+      - name: Generate marketplace catalog page
+        run: go run docs/scripts/gen-marketplace-page.go
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          # Cache against both lockfiles so a change in either kicks
+          # the cache without false reuse.
+          cache-dependency-path: |
+            website/package-lock.json
+            docs/package-lock.json
+
+      # --- Build website (root) ---
+      - name: Install website dependencies
+        working-directory: website
+        run: npm ci
+
+      - name: Build website
+        working-directory: website
+        # Same Astro `site`/`base` rule as docs: when the website is
+        # served from a sub-path (project pages), `site` is the
+        # origin only and `base` carries the repo segment.
+        # Switch to KLIM_WEBSITE_SITE=https://klim.dev and
+        # KLIM_WEBSITE_BASE=/ when the custom domain is wired.
+        env:
+          KLIM_WEBSITE_BASE: /${{ github.event.repository.name }}/
+          KLIM_WEBSITE_SITE: https://${{ github.repository_owner }}.github.io
+        run: npm run build
+
+      # --- Build docs (mounted under /docs/) ---
+      - name: Install docs dependencies
+        working-directory: docs
+        run: npm ci
+
+      - name: Build docs
+        working-directory: docs
+        # Astro requires the path-to-deployment to live entirely in
+        # `base` when `site` is set independently — putting the
+        # repository segment in `site` causes Astro to drop it from
+        # canonical/sitemap URLs. So `site` here is the origin only,
+        # and `base` carries the full <repo>/docs/ path. For a
+        # custom-domain switch, set KLIM_DOCS_SITE=https://docs.klim.dev
+        # and KLIM_DOCS_BASE=/.
+        env:
+          KLIM_DOCS_BASE: /${{ github.event.repository.name }}/docs/
+          KLIM_DOCS_SITE: https://${{ github.repository_owner }}.github.io
+        run: npm run build
+
+      # --- Combine into a single Pages artifact ---
+      # Layout written into `_pages/`:
+      #   _pages/                  ← website/dist/* (root)
+      #   _pages/docs/             ← docs/dist/* (Starlight)
+      - name: Assemble combined Pages artifact
+        run: |
+          mkdir -p _pages/docs
+          cp -r website/dist/. _pages/
+          cp -r docs/dist/. _pages/docs/
+          # Sanity check: each app must have produced its index. We
+          # check files (not the parent directories) because mkdir -p
+          # above always succeeds — testing for the directory would
+          # mask a docs build that silently produced nothing.
+          test -f _pages/index.html
+          test -f _pages/docs/index.html
+          ls -la _pages
+          ls -la _pages/docs
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

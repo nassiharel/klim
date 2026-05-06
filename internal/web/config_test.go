@@ -96,7 +96,7 @@ func TestPageConfigSave_AppliesAndRedirects(t *testing.T) {
 	if cfg.Performance.Concurrency != 12 {
 		t.Errorf("Performance.Concurrency=%d, want 12", cfg.Performance.Concurrency)
 	}
-	if cfg.Marketplace.RefreshInterval.Duration.Hours() != 6 {
+	if cfg.Marketplace.RefreshInterval.Hours() != 6 {
 		t.Errorf("Marketplace.RefreshInterval=%v, want 6h", cfg.Marketplace.RefreshInterval)
 	}
 	if !cfg.UI.ShowPath {
@@ -283,11 +283,4 @@ func readAllString(t *testing.T, resp *http.Response) string {
 		}
 	}
 	return string(buf)
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
