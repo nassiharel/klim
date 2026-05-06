@@ -30,6 +30,5 @@
     <circle cx="60" cy="80" r="7" fill="#ecfdf5"/>
     <circle cx="112" cy="110" r="7" fill="#ecfdf5"/>
   </g>
-  <text x="166" y="88" fill="url(#text)" font-family="Inter, Segoe UI, system-ui, sans-serif" font-size="58" font-weight="800" letter-spacing="-2">klim</text>
-  <text x="168" y="118" fill="#94a3b8" font-family="Inter, Segoe UI, system-ui, sans-serif" font-size="16" font-weight="500">Reignite dev tools</text>
+  <text x="166" y="99" fill="url(#text)" font-family="Inter, Segoe UI, system-ui, sans-serif" font-size="58" font-weight="800" letter-spacing="-2">klim</text>
 </svg>

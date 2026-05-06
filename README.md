@@ -5,7 +5,7 @@
 <h1 align="center">klim</h1>
 
 <p align="center">
-  <strong>Reignite dev tools.</strong>
+  <strong>Reignite Dev Experience.</strong>
 </p>
 
 <p align="center">
