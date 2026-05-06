@@ -7,3 +7,8 @@ Struc = "Struc"
 # Proper nouns and abbreviations
 AKS = "AKS"
 Hashi = "Hashi"
+# Short Go variable names: `pn` = pack-name iterator, `ue` = *UsageError.
+# The default dictionary suggests "on" / "use" but these are intentional
+# idiomatic Go shorthand that recur across the cli package.
+pn = "pn"
+ue = "ue"

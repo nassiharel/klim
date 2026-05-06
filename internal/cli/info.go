@@ -517,8 +517,8 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 // wordWrapStr delegates to internal/textwrap.Wrap so `klim info` and
 // the TUI detail view wrap GitHub descriptions identically with full
 // display-width awareness (CJK / emoji / combining characters). The
-// previous local implementation measured raw bytes and would mis-wrap
-// non-ASCII content.
+// previous local implementation measured raw bytes and would wrap
+// non-ASCII content at the wrong column.
 func wordWrapStr(s string, width int) []string {
 	return textwrap.Wrap(s, width)
 }

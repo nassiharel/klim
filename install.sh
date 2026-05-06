@@ -32,18 +32,18 @@ else
   RED='' GREEN='' YELLOW='' CYAN='' NC=''
 fi
 
-info()  { echo -e "${GREEN}[info]${NC}  $*"; }
-warn()  { echo -e "${YELLOW}[warn]${NC}  $*"; }
+info() { echo -e "${GREEN}[info]${NC}  $*"; }
+warn() { echo -e "${YELLOW}[warn]${NC}  $*"; }
 error() { echo -e "${RED}[error]${NC} $*" >&2; }
 
 # initArch maps uname -m to Go architecture names.
 initArch() {
   ARCH=$(uname -m)
   case "$ARCH" in
-    x86_64|amd64)   ARCH="amd64" ;;
-    aarch64|arm64)   ARCH="arm64" ;;
-    armv7*)          ARCH="armv7" ;;
-    armv6*)          ARCH="armv6" ;;
+    x86_64 | amd64) ARCH="amd64" ;;
+    aarch64 | arm64) ARCH="arm64" ;;
+    armv7*) ARCH="armv7" ;;
+    armv6*) ARCH="armv6" ;;
     *)
       warn "Unknown architecture: $ARCH — will attempt go install fallback."
       ARCH="$ARCH"
@@ -55,10 +55,10 @@ initArch() {
 initOS() {
   OS=$(uname -s | tr '[:upper:]' '[:lower:]')
   case "$OS" in
-    darwin)  OS="darwin" ;;
-    linux)   OS="linux" ;;
+    darwin) OS="darwin" ;;
+    linux) OS="linux" ;;
     freebsd) OS="freebsd" ;;
-    mingw*|cygwin*|msys*)
+    mingw* | cygwin* | msys*)
       error "Windows detected. Please use the PowerShell installer instead:"
       error "  irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex"
       exit 1
@@ -328,7 +328,7 @@ trap fail_trap EXIT
 # Parse arguments
 while [ $# -gt 0 ]; do
   case "$1" in
-    --version|-v)
+    --version | -v)
       shift
       if [ $# -eq 0 ]; then
         error "Please provide a version, e.g. --version v1.0.0"
@@ -351,7 +351,7 @@ while [ $# -gt 0 ]; do
       fi
       INSTALL_DIR="$1"
       ;;
-    --help|-h)
+    --help | -h)
       help
       exit 0
       ;;
