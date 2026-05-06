@@ -11,7 +11,7 @@ import (
 
 const (
 	defaultOwner   = "nassiharel"
-	defaultRepo    = "clim"
+	defaultRepo    = "klim"
 	defaultBaseURL = "https://api.github.com"
 )
 
@@ -37,7 +37,7 @@ func (r Release) Version() string {
 type GitHubClient struct {
 	HTTPClient *http.Client // nil = default client with 60s timeout (via Options.httpClient)
 	Owner      string       // defaults to "nassiharel"
-	Repo       string       // defaults to "clim"
+	Repo       string       // defaults to "klim"
 	BaseURL    string       // defaults to "https://api.github.com"
 }
 
@@ -51,7 +51,7 @@ func (g *GitHubClient) FetchLatestRelease(ctx context.Context) (*Release, error)
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "clim/selfupdate")
+	req.Header.Set("User-Agent", "klim/selfupdate")
 
 	resp, err := g.httpClient().Do(req)
 	if err != nil {

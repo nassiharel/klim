@@ -14,7 +14,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // validGitHubSlug is a thin wrapper around registry.ValidGitHubSlug kept
@@ -78,7 +78,7 @@ func (f *githubFetcher) fetchRepo(ctx context.Context, slug string) (*registry.G
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	req.Header.Set("User-Agent", "clim-marketplace-assemble")
+	req.Header.Set("User-Agent", "klim-marketplace-assemble")
 	if f.token != "" {
 		req.Header.Set("Authorization", "Bearer "+f.token)
 	}

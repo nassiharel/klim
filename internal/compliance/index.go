@@ -3,7 +3,7 @@ package compliance
 import (
 	"strings"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // ToolStatus represents the compliance state of a single tool.

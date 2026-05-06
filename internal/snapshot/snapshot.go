@@ -1,6 +1,6 @@
 // Package snapshot manages environment snapshots and named profiles.
-// Snapshots are timestamped manifests stored under ~/.config/clim/snapshots/.
-// Profiles are named snapshots stored under ~/.config/clim/profiles/.
+// Snapshots are timestamped manifests stored under ~/.config/klim/snapshots/.
+// Profiles are named snapshots stored under ~/.config/klim/profiles/.
 package snapshot
 
 import (
@@ -14,10 +14,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/manifest"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Snapshot extends a manifest with snapshot-specific metadata.
@@ -163,7 +163,7 @@ func buildSnapshot(tools []registry.Tool, label string) Snapshot {
 	}
 	return Snapshot{
 		Manifest: manifest.Manifest{
-			GeneratedBy: "clim snapshot",
+			GeneratedBy: "klim snapshot",
 			OS:          runtime.GOOS,
 			Arch:        runtime.GOARCH,
 			Tools:       exported,

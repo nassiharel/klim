@@ -29,7 +29,7 @@ const installEntries = Object.entries(tool.packages)
   .map((e) => ({ pm: e[0], pkgId: e[1] as string, cmd: pmData[e[0]], label: pmNames[e[0]] }));
 ---
 
-<Layout title={`${tool.display_name} - clim Marketplace` } description={tool.github_info?.description || ''}>
+<Layout title={`${tool.display_name} - klim Marketplace` } description={tool.github_info?.description || ''}>
   <Header />
   <main class="pt-28 pb-20">
     <div class="mx-auto max-w-4xl px-6">

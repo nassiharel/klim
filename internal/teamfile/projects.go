@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/paths"
+	"github.com/nassiharel/klim/internal/paths"
 )
 
 // ProjectEntry represents a registered project.

@@ -14,11 +14,11 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/custompacks"
-	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/share"
+	"github.com/nassiharel/klim/internal/custompacks"
+	"github.com/nassiharel/klim/internal/manifest"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/share"
 )
 
 // validBackupName matches the safe filename characters we accept for
@@ -35,7 +35,7 @@ var validBackupName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 var validPackName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
 // pageBackupSave persists the current toolchain manifest to a named
-// file under ~/.config/clim/backups/<name>.yaml. The flash banner on
+// file under ~/.config/klim/backups/<name>.yaml. The flash banner on
 // the next render confirms.
 func (s *Server) pageBackupSave(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("name"))
@@ -76,7 +76,7 @@ func (s *Server) pageBackupSave(w http.ResponseWriter, r *http.Request) {
 }
 
 // pageBackupSavedDelete removes one *.yaml file under
-// ~/.config/clim/backups/. Path-escapes are validated against
+// ~/.config/klim/backups/. Path-escapes are validated against
 // validBackupName to prevent directory traversal.
 func (s *Server) pageBackupSavedDelete(w http.ResponseWriter, r *http.Request) {
 	rawName := r.PathValue("name")
@@ -164,7 +164,7 @@ func (s *Server) pageBackupPreview(w http.ResponseWriter, r *http.Request) {
 		}
 		toolNames, err = manifestToolNames(body)
 		source = "Saved backup: " + stem + ".yaml"
-	case strings.HasPrefix(strings.TrimSpace(tokenInput), "clim:"):
+	case strings.HasPrefix(strings.TrimSpace(tokenInput), "klim:"):
 		toolNames, err = share.Decode(tokenInput)
 		source = "Share token"
 	case strings.TrimSpace(yamlInput) != "":

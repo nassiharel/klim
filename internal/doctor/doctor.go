@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/scancache"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/scancache"
 )
 
 // Severity classifies the importance of a diagnostic issue.
@@ -296,7 +296,7 @@ func checkStaleCache() []Issue {
 		Category: CategoryCache,
 		Title:    "Scan cache is stale",
 		Detail:   fmt.Sprintf("Last scan was %d days ago", days),
-		Fix:      "Run clim with --refresh or press r in the TUI to rescan",
+		Fix:      "Run klim with --refresh or press r in the TUI to rescan",
 	}}
 }
 
@@ -352,7 +352,7 @@ func checkOutdatedSummary(tools []registry.Tool, meta ScanMeta) []Issue {
 		Category: CategoryTools,
 		Title:    fmt.Sprintf("%d update(s) available", outdated),
 		Detail:   detail,
-		Fix:      "Switch to the Updates tab or run clim list to see details",
+		Fix:      "Switch to the Updates tab or run klim list to see details",
 	}}
 }
 

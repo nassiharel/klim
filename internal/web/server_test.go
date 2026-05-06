@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
 )
 
 // fixtureLoader serves deterministic tool data so handler tests don't

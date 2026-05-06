@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/fileutil"
 )
 
 // ReadFile loads a Profile from a YAML file on disk. The file is

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/service"
 )
 
 // startConfigServer wires a Server with a fresh in-memory config so

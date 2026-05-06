@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 
-# clim installer — downloads the latest release binary for Linux/macOS.
+# klim installer — downloads the latest release binary for Linux/macOS.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
 #   curl -fsSL ... | bash -s -- --version v1.2.3
 #   curl -fsSL ... | bash -s -- --no-sudo --install-dir ~/.local/bin
-#   wget -qO- https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash
+#   wget -qO- https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
 
 set -euo pipefail
 
-: "${BINARY_NAME:="clim"}"
+: "${BINARY_NAME:="klim"}"
 : "${USE_SUDO:="true"}"
 : "${VERIFY_CHECKSUM:="true"}"
 : "${INSTALL_DIR:="/usr/local/bin"}"
 
-GITHUB_REPO="nassiharel/clim"
+GITHUB_REPO="nassiharel/klim"
 
 HAS_CURL="$(command -v curl >/dev/null 2>&1 && echo true || echo false)"
 HAS_WGET="$(command -v wget >/dev/null 2>&1 && echo true || echo false)"
@@ -60,7 +60,7 @@ initOS() {
     freebsd) OS="freebsd" ;;
     mingw*|cygwin*|msys*)
       error "Windows detected. Please use the PowerShell installer instead:"
-      error "  irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex"
+      error "  irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex"
       exit 1
       ;;
     *)
@@ -82,7 +82,7 @@ verifySupported() {
 
   if [ "$HAS_PREBUILT" = "true" ]; then
     if [ "$HAS_CURL" != "true" ] && [ "$HAS_WGET" != "true" ]; then
-      error "Either curl or wget is required to download clim."
+      error "Either curl or wget is required to download klim."
       exit 1
     fi
 
@@ -102,7 +102,7 @@ goInstallFallback() {
   fi
 
   info "Building from source via ${CYAN}go install${NC}..."
-  go install "github.com/nassiharel/clim/cmd/clim@${TAG}"
+  go install "github.com/nassiharel/klim/cmd/klim@${TAG}"
 
   local gobin
   gobin="$(go env GOPATH)/bin"
@@ -193,7 +193,7 @@ downloadFile() {
   DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${TAG}/${DIST_FILE}"
   CHECKSUM_URL="https://github.com/${GITHUB_REPO}/releases/download/${TAG}/checksums.txt"
 
-  TMP_DIR=$(mktemp -d -t clim-install-XXXXXX)
+  TMP_DIR=$(mktemp -d -t klim-install-XXXXXX)
   TMP_FILE="${TMP_DIR}/${DIST_FILE}"
   TMP_CHECKSUM="${TMP_DIR}/checksums.txt"
 

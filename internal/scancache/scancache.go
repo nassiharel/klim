@@ -1,7 +1,7 @@
 // Package scancache persists the result of a full tool scan (PATH discovery
 // plus package-manager version resolution) to a YAML file on disk. The TUI
 // and CLI load this cache on startup so users don't pay the cost of running
-// dozens of subprocess queries (winget/brew/npm/etc.) every time clim runs.
+// dozens of subprocess queries (winget/brew/npm/etc.) every time klim runs.
 //
 // The catalog itself is still loaded via the catalog package — this cache
 // only stores the dynamic, per-host data: which tools are installed, where
@@ -23,10 +23,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/finder"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/finder"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // cacheVersion is bumped whenever the on-disk schema changes so older

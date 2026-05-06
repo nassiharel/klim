@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/paths"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/paths"
 )
 
 var marketplaceCmd = &cobra.Command{
@@ -30,14 +30,14 @@ Configure in config.yaml:
 var marketplaceAddCmd = &cobra.Command{
 	Use:   "add <url>",
 	Short: "Add an extra marketplace URL",
-	Args:  requireArgs(1, "clim config marketplace add <url>"),
+	Args:  requireArgs(1, "klim config marketplace add <url>"),
 	RunE:  runMarketplaceAdd,
 }
 
 var marketplaceRemoveCmd = &cobra.Command{
 	Use:   "remove <url>",
 	Short: "Remove an extra marketplace URL",
-	Args:  requireArgs(1, "clim config marketplace remove <url>"),
+	Args:  requireArgs(1, "klim config marketplace remove <url>"),
 	RunE:  runMarketplaceRemove,
 }
 
@@ -103,7 +103,7 @@ func runMarketplaceAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "✓ Added marketplace: %s\n", rawURL)
-	fmt.Fprintf(os.Stderr, "  %d extra marketplace(s) configured. Run 'clim' to see merged tools.\n", len(c.Marketplace.ExtraURLs))
+	fmt.Fprintf(os.Stderr, "  %d extra marketplace(s) configured. Run 'klim' to see merged tools.\n", len(c.Marketplace.ExtraURLs))
 	return nil
 }
 
@@ -202,7 +202,7 @@ func runMarketplaceList(cmd *cobra.Command, args []string) error {
 
 	if len(c.Marketplace.ExtraURLs) == 0 {
 		fmt.Fprintln(os.Stderr, "\nNo extra marketplaces configured.")
-		fmt.Fprintln(os.Stderr, "Add one with: clim config marketplace add <url>")
+		fmt.Fprintln(os.Stderr, "Add one with: klim config marketplace add <url>")
 	} else {
 		fmt.Fprintf(os.Stderr, "\nExtra (%d):\n", len(c.Marketplace.ExtraURLs))
 		for i, url := range c.Marketplace.ExtraURLs {

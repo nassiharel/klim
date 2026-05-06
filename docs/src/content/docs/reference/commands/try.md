@@ -1,5 +1,5 @@
 ---
-title: "clim try"
+title: "klim try"
 description: Install a tool temporarily and run it
 ---
 
@@ -8,7 +8,7 @@ Install a tool, run it with optional arguments, then offer to remove it. Try bef
 ## Usage
 
 ```bash
-clim try <tool> [-- args...] [flags]
+klim try <tool> [-- args...] [flags]
 ```
 
 ## Flags
@@ -21,13 +21,13 @@ clim try <tool> [-- args...] [flags]
 
 ```bash
 # Install bat, open interactive mode, then ask keep/remove
-clim try bat
+klim try bat
 
 # Install bat, run it on a file, then ask keep/remove
-clim try bat -- README.md
+klim try bat -- README.md
 
 # Install ripgrep and search — keep it afterwards
-clim try ripgrep --keep -- -i "TODO" .
+klim try ripgrep --keep -- -i "TODO" .
 ```
 
 ## How It Works
@@ -40,10 +40,10 @@ clim try ripgrep --keep -- -i "TODO" .
 
 ## Notes
 
-- If the tool is already installed, `clim try` just runs it (no cleanup prompt)
+- If the tool is already installed, `klim try` just runs it (no cleanup prompt)
 - The tool's exit code is propagated to the caller
 - `--keep` skips the cleanup prompt entirely
 
 ## See Also
 
-- [clim proxy](/reference/commands/proxy) — Auto-install shims for permanent lazy-loading
+- [klim proxy](/reference/commands/proxy) — Auto-install shims for permanent lazy-loading

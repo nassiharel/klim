@@ -8,8 +8,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/score"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/score"
 )
 
 // computeScore returns the cached environment health score.

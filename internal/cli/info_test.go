@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Star-count formatting tests live in internal/githubfmt; the CLI uses
@@ -15,7 +15,7 @@ import (
 func TestNotFoundError_IsUsageError(t *testing.T) {
 	// A typo on the tool name is malformed user input, so it must
 	// surface as a UsageError so Run() maps it to exit code 2.
-	// Otherwise scripts can't tell `clim info kubctl` (typo) apart
+	// Otherwise scripts can't tell `klim info kubctl` (typo) apart
 	// from a genuine runtime failure (exit 1).
 	for _, suggestion := range []string{"", "kubectl"} {
 		err := notFoundError("kubctl", suggestion)
@@ -36,52 +36,52 @@ func TestNotFoundError_IsUsageError(t *testing.T) {
 func TestFormatInfoRef_PreservesConstraint(t *testing.T) {
 	// Optional teamfile pin must show its version constraint.
 	got := FormatReference(Reference{
-		Kind: "teamfile", Path: "/home/me/.clim.yaml",
+		Kind: "teamfile", Path: "/home/me/.klim.yaml",
 		Required: false, Constraint: ">=1.28",
 	})
-	want := ".clim.yaml (optional >=1.28) — /home/me/.clim.yaml"
+	want := ".klim.yaml (optional >=1.28) — /home/me/.klim.yaml"
 	if got != want {
 		t.Errorf("optional teamfile with constraint:\n  got:  %s\n  want: %s", got, want)
 	}
 
 	// Required teamfile pin: same constraint format.
 	got = FormatReference(Reference{
-		Kind: "teamfile", Path: "/home/me/.clim.yaml",
+		Kind: "teamfile", Path: "/home/me/.klim.yaml",
 		Required: true, Constraint: ">=1.28",
 	})
-	want = ".clim.yaml (required >=1.28) — /home/me/.clim.yaml"
+	want = ".klim.yaml (required >=1.28) — /home/me/.klim.yaml"
 	if got != want {
 		t.Errorf("required teamfile with constraint:\n  got:  %s\n  want: %s", got, want)
 	}
 
 	// Project optional with constraint — both role and constraint must appear.
 	got = FormatReference(Reference{
-		Kind: "project", Name: "myapp", Path: "/projects/myapp/.clim.yaml",
+		Kind: "project", Name: "myapp", Path: "/projects/myapp/.klim.yaml",
 		Required: false, Constraint: "~1.5",
 	})
-	want = `Project "myapp" (optional ~1.5) — /projects/myapp/.clim.yaml`
+	want = `Project "myapp" (optional ~1.5) — /projects/myapp/.klim.yaml`
 	if got != want {
 		t.Errorf("project optional with constraint:\n  got:  %s\n  want: %s", got, want)
 	}
 
 	// Empty constraint: role appears alone, no trailing space.
 	got = FormatReference(Reference{
-		Kind: "teamfile", Path: "/home/me/.clim.yaml", Required: true,
+		Kind: "teamfile", Path: "/home/me/.klim.yaml", Required: true,
 	})
-	want = ".clim.yaml (required) — /home/me/.clim.yaml"
+	want = ".klim.yaml (required) — /home/me/.klim.yaml"
 	if got != want {
 		t.Errorf("teamfile required no constraint:\n  got:  %s\n  want: %s", got, want)
 	}
 }
 
 // TestBuildInfoReport_JSONContract locks the documented JSON shape of
-// `clim info <tool> --output json`. Specifically:
+// `klim info <tool> --output json`. Specifically:
 //   - empty arrays must serialize as [] (not null) for tags/instances/
 //     packages/references/related_tools/warnings
 //   - GitHub block is populated when GitHubInfo is present
 //   - non-empty packages list is preserved in canonical order (winget,
 //     choco, scoop, brew, apt, snap, npm) — drift here would change
-//     `clim info --output json | jq` consumers' assumptions
+//     `klim info --output json | jq` consumers' assumptions
 func TestBuildInfoReport_JSONContract(t *testing.T) {
 	chdirTemp(t)
 	redirectConfig(t)

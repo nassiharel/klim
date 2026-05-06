@@ -1,5 +1,5 @@
 ---
-title: "clim why"
+title: "klim why"
 description: Show why a tool is needed and where it's referenced
 ---
 
@@ -8,7 +8,7 @@ Show all references to a tool across projects, packs, and your system.
 ## Usage
 
 ```bash
-clim why <tool> [flags]
+klim why <tool> [flags]
 ```
 
 ## Flags
@@ -20,7 +20,7 @@ clim why <tool> [flags]
 ## What It Shows
 
 - **Install status** — version, source, binary path, available updates
-- **Project references** — which `.clim.yaml` files require or optionally include it
+- **Project references** — which `.klim.yaml` files require or optionally include it
 - **Pack references** — which marketplace and custom packs include it
 - **Available packages** — all package manager IDs for the tool
 - **Related tools** — installed tools in the same category/tags
@@ -28,7 +28,7 @@ clim why <tool> [flags]
 ## Examples
 
 ```bash
-clim why kubectl
+klim why kubectl
 ```
 
 ```
@@ -38,7 +38,7 @@ kubectl (K8s)
   ✓ Installed: 1.28.0 (brew) at /usr/local/bin/kubectl
 
   Referenced by:
-    • .clim.yaml (required >=1.28) — /home/user/myproject/.clim.yaml
+    • .klim.yaml (required >=1.28) — /home/user/myproject/.klim.yaml
     • Pack "K8s Essentials" (k8s-essentials)
     • Custom pack "My Stack" (my-stack)
 
@@ -62,7 +62,7 @@ kubectl (K8s)
   "references": [
     {
       "kind": "teamfile",
-      "path": "/home/user/myproject/.clim.yaml",
+      "path": "/home/user/myproject/.klim.yaml",
       "required": true,
       "version_constraint": ">=1.28"
     },
@@ -81,7 +81,7 @@ kubectl (K8s)
 }
 ```
 
-If `.clim.yaml` files (in or above CWD, or registered via the project registry) fail to parse, the parse error is surfaced in `warnings` rather than silently dropped.
+If `.klim.yaml` files (in or above CWD, or registered via the project registry) fail to parse, the parse error is surfaced in `warnings` rather than silently dropped.
 
 ## TUI
 
@@ -89,5 +89,5 @@ The tool detail view (press Enter on any tool) includes a **"Referenced By"** se
 
 ## See Also
 
-- [clim check](/reference/commands/check) — Validate project requirements
+- [klim check](/reference/commands/check) — Validate project requirements
 - [Team Manifests guide](/guides/team-manifests)

@@ -1,12 +1,12 @@
 // Package favorites manages the user's favorites list stored
-// in ~/.config/clim/favorites/favorites.yaml. Each entry is a tool name.
+// in ~/.config/klim/favorites/favorites.yaml. Each entry is a tool name.
 package favorites
 
 import (
 	"sort"
 
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/paths"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/paths"
 )
 
 // favFile is the on-disk YAML structure.
@@ -14,7 +14,7 @@ type favFile struct {
 	Tools []string `yaml:"tools"`
 }
 
-const yamlHeader = "# clim — Favorites\n# Managed by clim; safe to edit manually.\n\n"
+const yamlHeader = "# klim — Favorites\n# Managed by klim; safe to edit manually.\n\n"
 
 // StoragePath returns the path to the favorites file.
 func StoragePath() (string, error) {

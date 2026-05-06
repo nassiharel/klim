@@ -24,14 +24,14 @@ Switch to the **★ Favorites** tab (press `2`) to see all your favorited tools 
 
 ## Export Favorites
 
-Press `e` on the Favorites tab to export your favorited tools to a YAML manifest file. This creates a portable file you can use with `clim import` on another machine.
+Press `e` on the Favorites tab to export your favorited tools to a YAML manifest file. This creates a portable file you can use with `klim import` on another machine.
 
 ## Share Favorites
 
 Press `s` to generate a compact share token that encodes your favorited tools. Send this token to a colleague — they run:
 
 ```bash
-clim open <token>
+klim open <token>
 ```
 
 to install the same set of tools.
@@ -39,8 +39,8 @@ to install the same set of tools.
 ## Storage
 
 Favorites are stored at:
-- **macOS:** `~/Library/Application Support/clim/favorites/favorites.yaml`
-- **Linux:** `~/.config/clim/favorites/favorites.yaml`
-- **Windows:** `%AppData%\clim\favorites\favorites.yaml`
+- **macOS:** `~/Library/Application Support/klim/favorites/favorites.yaml`
+- **Linux:** `~/.config/klim/favorites/favorites.yaml`
+- **Windows:** `%AppData%\klim\favorites\favorites.yaml`
 
 The file contains a simple list of tool names.

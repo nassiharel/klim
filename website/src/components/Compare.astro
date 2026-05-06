@@ -6,7 +6,7 @@ const rows = [
     verMgr: 'Only managed tools',
     scripts: 'Fragile',
     agent: 'Slow + costs tokens',
-    clim: 'All detected tools',
+    klim: 'All detected tools',
   },
   {
     capability: 'Show versions',
@@ -14,7 +14,7 @@ const rows = [
     verMgr: 'Per-manager',
     scripts: 'Partial',
     agent: 'Re-runs every time',
-    clim: 'Unified view',
+    klim: 'Unified view',
   },
   {
     capability: 'Show install paths',
@@ -22,7 +22,7 @@ const rows = [
     verMgr: '✗',
     scripts: 'Manual',
     agent: 'Re-discovers each call',
-    clim: 'Automatic',
+    klim: 'Automatic',
   },
   {
     capability: 'Cross-manager support',
@@ -30,7 +30,7 @@ const rows = [
     verMgr: 'Limited',
     scripts: '✗',
     agent: 'Hand-rolled per call',
-    clim: '7 managers',
+    klim: '7 managers',
   },
   {
     capability: 'Upgrade suggestions',
@@ -38,7 +38,7 @@ const rows = [
     verMgr: 'Per-manager',
     scripts: '✗',
     agent: 'Knowledge-cutoff stale',
-    clim: 'Single view',
+    klim: 'Single view',
   },
   {
     capability: 'Export/Import toolchain',
@@ -46,7 +46,7 @@ const rows = [
     verMgr: 'Partial',
     scripts: '✗',
     agent: 'No portable artifact',
-    clim: 'YAML manifest',
+    klim: 'YAML manifest',
   },
   {
     capability: 'Interactive TUI',
@@ -54,7 +54,7 @@ const rows = [
     verMgr: '✗',
     scripts: '✗',
     agent: 'Chat only',
-    clim: 'Full TUI',
+    klim: 'Full TUI',
   },
   {
     capability: 'Team standardization',
@@ -62,7 +62,7 @@ const rows = [
     verMgr: 'Partial',
     scripts: '✗',
     agent: 'Prompt drift',
-    clim: '.clim.yaml',
+    klim: '.klim.yaml',
   },
   {
     capability: 'Per-tool detail (sources, GitHub, refs)',
@@ -70,7 +70,7 @@ const rows = [
     verMgr: '✗',
     scripts: '✗',
     agent: 'Plausible, not reliable',
-    clim: 'clim info',
+    klim: 'klim info',
   },
   {
     capability: 'Toolchain history & diff',
@@ -78,7 +78,7 @@ const rows = [
     verMgr: '✗',
     scripts: 'Manual',
     agent: 'Forgets across sessions',
-    clim: 'clim trail',
+    klim: 'klim trail',
   },
   {
     capability: 'Cross-manager install/upgrade/remove',
@@ -86,7 +86,7 @@ const rows = [
     verMgr: 'Per-manager',
     scripts: 'Manual',
     agent: 'Non-deterministic',
-    clim: 'clim install / upgrade / remove',
+    klim: 'klim install / upgrade / remove',
   },
   {
     capability: 'CI / Dockerfile usage',
@@ -94,7 +94,7 @@ const rows = [
     verMgr: 'Limited',
     scripts: 'Manual',
     agent: 'Tokens per build, flaky',
-    clim: '--output json, exit codes',
+    klim: '--output json, exit codes',
   },
   {
     capability: 'Compliance policy enforcement',
@@ -102,7 +102,7 @@ const rows = [
     verMgr: '✗',
     scripts: 'Manual',
     agent: 'Best-effort',
-    clim: 'Hard refusal',
+    klim: 'Hard refusal',
   },
   {
     capability: 'Vulnerability scan (CVE/GHSA)',
@@ -110,7 +110,7 @@ const rows = [
     verMgr: '✗',
     scripts: '✗',
     agent: 'Knowledge-cutoff stale',
-    clim: 'OSV.dev, cached',
+    klim: 'OSV.dev, cached',
   },
   {
     capability: 'Offline / air-gapped',
@@ -118,7 +118,7 @@ const rows = [
     verMgr: '✓',
     scripts: '✓',
     agent: '✗',
-    clim: '✓',
+    klim: '✓',
   },
   {
     capability: 'Reproducible across machines',
@@ -126,7 +126,7 @@ const rows = [
     verMgr: 'Per-manager',
     scripts: 'Manual',
     agent: 'Coin flip',
-    clim: 'Identical every run',
+    klim: 'Identical every run',
   },
 ];
 ---
@@ -135,10 +135,10 @@ const rows = [
   <div class="mx-auto max-w-6xl px-6">
     <div class="text-center">
       <h2 class="text-3xl font-bold text-white sm:text-4xl">
-        How clim compares
+        How klim compares
       </h2>
       <p class="mt-4 text-lg text-gray-400">
-        clim complements your existing tools — it doesn't replace them.
+        klim complements your existing tools — it doesn't replace them.
       </p>
     </div>
 
@@ -151,7 +151,7 @@ const rows = [
             <th class="px-4 py-3 font-medium text-gray-400">Version Managers</th>
             <th class="px-4 py-3 font-medium text-gray-400">Ad-hoc Scripts</th>
             <th class="px-4 py-3 font-medium text-gray-400">AI Agent + Shell</th>
-            <th class="px-4 py-3 font-medium text-green-400">clim</th>
+            <th class="px-4 py-3 font-medium text-green-400">klim</th>
           </tr>
         </thead>
         <tbody>
@@ -162,7 +162,7 @@ const rows = [
               <td class="px-4 py-3 text-gray-500">{row.verMgr}</td>
               <td class="px-4 py-3 text-gray-500">{row.scripts}</td>
               <td class="px-4 py-3 text-gray-500">{row.agent}</td>
-              <td class="px-4 py-3 font-medium text-green-400">{row.clim}</td>
+              <td class="px-4 py-3 font-medium text-green-400">{row.klim}</td>
             </tr>
           ))}
         </tbody>

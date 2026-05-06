@@ -12,9 +12,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Looker queries one Coord at a time. OSVClient implements it; tests
@@ -39,7 +39,7 @@ type LookupOptions struct {
 
 // ReadCache loads the most recent persisted Report for sourceKey
 // without ever hitting the network. Returns (nil, false) when no
-// cache exists or it can't be parsed. Used by surfaces (clim info,
+// cache exists or it can't be parsed. Used by surfaces (klim info,
 // TUI tool detail, web tool page) that want to show vuln data when
 // it's already there but not pay the latency of a fresh fetch.
 func ReadCache(sourceKey string) (*Report, bool) {
@@ -79,7 +79,7 @@ func Lookup(ctx context.Context, looker Looker, tools []registry.Tool, sourceKey
 	report, fetchErr := fetch(ctx, looker, tools, sourceKey, opts.Concurrency)
 	if fetchErr != nil {
 		// Fall back to stale cache when available — this is what makes
-		// `clim security vuln` work on a plane / disconnected. But not
+		// `klim security vuln` work on a plane / disconnected. But not
 		// when the caller explicitly asked for fresh data: returning a
 		// silent stale value to a `--force-refresh-vulns` user makes
 		// CI gating unsafe.

@@ -7,11 +7,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/audit"
-	"github.com/nassiharel/clim/internal/compliance"
-	"github.com/nassiharel/clim/internal/doctor"
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/score"
+	"github.com/nassiharel/klim/internal/audit"
+	"github.com/nassiharel/klim/internal/compliance"
+	"github.com/nassiharel/klim/internal/doctor"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/score"
 )
 
 var scoreBadgeFlag bool

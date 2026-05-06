@@ -19,14 +19,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nassiharel/clim/internal/catalog"
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/finder"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/pkgmgr"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/scancache"
+	"github.com/nassiharel/klim/internal/catalog"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/finder"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/pkgmgr"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/scancache"
 )
 
 // ScanSource describes where fully-resolved tool data came from.
@@ -113,7 +113,7 @@ func NewWithConfig(cfg *config.Config) *ToolService {
 
 // LoadAndResolve loads the tool catalog, scans PATH, resolves versions,
 // and returns the tools sorted by name. This is the full pipeline used
-// by `clim list` and `clim export`.
+// by `klim list` and `klim export`.
 func (s *ToolService) LoadAndResolve(ctx context.Context) ([]registry.Tool, *CatalogInfo, error) {
 	tools, info, err := s.Catalog.LoadTools(ctx)
 	if err != nil {
@@ -166,7 +166,7 @@ func (s *ToolService) LoadAndResolveCached(ctx context.Context, force bool) ([]r
 }
 
 // ScanOnly loads the catalog and scans PATH without resolving versions.
-// Used by `clim import`, `clim open`, and the TUI import plan builder
+// Used by `klim import`, `klim open`, and the TUI import plan builder
 // where only installed/not-installed status is needed.
 func (s *ToolService) ScanOnly(ctx context.Context) ([]registry.Tool, *CatalogInfo, error) {
 	tools, info, err := s.Catalog.LoadTools(ctx)
@@ -381,7 +381,7 @@ func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error)
 }
 
 // fetchExtraCached fetches an extra marketplace with local file caching.
-// Cache files are stored under ~/.config/clim/marketplace/extra-<hash>.yaml.
+// Cache files are stored under ~/.config/klim/marketplace/extra-<hash>.yaml.
 func fetchExtraCached(ctx context.Context, fetcher catalog.MarketplaceFetcher, index int, maxAge time.Duration) ([]byte, error) {
 	// Determine the URL for cache key.
 	url := ""

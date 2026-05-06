@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/progress"
+	"github.com/nassiharel/klim/internal/progress"
 )
 
 var watchOutputFmt func() (OutputFormat, error)
@@ -20,14 +20,14 @@ Designed to run periodically (cron, Task Scheduler) or on-demand.
 Use --output=json for machine-readable output suitable for notifications.
 
 Examples:
-  clim watch                         # human-readable check
-  clim watch --output json           # JSON output for scripts
+  klim watch                         # human-readable check
+  klim watch --output json           # JSON output for scripts
 
   # Cron job (daily at 9am):
-  0 9 * * * clim watch --output json >> ~/.config/clim/watch.log
+  0 9 * * * klim watch --output json >> ~/.config/klim/watch.log
 
   # Windows Task Scheduler:
-  schtasks /create /tn "clim-watch" /tr "clim watch" /sc daily /st 09:00`,
+  schtasks /create /tn "klim-watch" /tr "klim watch" /sc daily /st 09:00`,
 	RunE: runWatch,
 }
 
@@ -99,6 +99,6 @@ func runWatch(cmd *cobra.Command, args []string) error {
 	for _, u := range updates {
 		fmt.Fprintf(os.Stderr, "  ⬆ %-20s %s → %s  (%s)\n", u.Tool, u.Installed, u.Latest, u.Source)
 	}
-	fmt.Fprintf(os.Stderr, "\nRun 'clim' to upgrade interactively, or upgrade individually with your package manager.\n")
+	fmt.Fprintf(os.Stderr, "\nRun 'klim' to upgrade interactively, or upgrade individually with your package manager.\n")
 	return nil
 }

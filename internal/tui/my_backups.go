@@ -13,7 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/manifest"
+	"github.com/nassiharel/klim/internal/manifest"
 )
 
 // backupFileInfo describes one backup file in the backups directory.

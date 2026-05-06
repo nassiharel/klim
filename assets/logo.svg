@@ -21,8 +21,8 @@
   <!-- Prompt symbol -->
   <text x="28" y="95" font-family="'SF Mono','Fira Code','JetBrains Mono','Cascadia Code',Consolas,monospace" font-size="48" font-weight="700" fill="url(#accent)">$</text>
 
-  <!-- clim text -->
-  <text x="80" y="95" font-family="'SF Mono','Fira Code','JetBrains Mono','Cascadia Code',Consolas,monospace" font-size="56" font-weight="700" fill="url(#text-grad)" letter-spacing="-1">clim</text>
+  <!-- klim text -->
+  <text x="80" y="95" font-family="'SF Mono','Fira Code','JetBrains Mono','Cascadia Code',Consolas,monospace" font-size="56" font-weight="700" fill="url(#text-grad)" letter-spacing="-1">klim</text>
 
   <!-- Tagline -->
   <text x="28" y="132" font-family="'Inter','SF Pro','Segoe UI',system-ui,sans-serif" font-size="16" fill="#64748B" letter-spacing="0.5">detect</text>

@@ -1,12 +1,12 @@
 ---
 title: Architecture
-description: Internal architecture and module layout of clim
+description: Internal architecture and module layout of klim
 ---
 
 ## Module Layout
 
 ```
-cmd/clim/main.go           Entry point → cli.Execute()
+cmd/klim/main.go           Entry point → cli.Execute()
 internal/
   build/        Version/Commit/Date (ldflags) + Info(), VersionOnly()
   catalog/      Fetch marketplace.yaml from GitHub, cache locally
@@ -98,7 +98,7 @@ CLI commands call `svc.LoadAndResolve()` (or the cached variant) which handles e
 
 ### Shared Utilities
 
-**`internal/paths`** — Single source for all `~/.config/clim/*` paths:
+**`internal/paths`** — Single source for all `~/.config/klim/*` paths:
 ```go
 paths.Config()       // config/config.yaml
 paths.Favorites()    // favorites/favorites.yaml

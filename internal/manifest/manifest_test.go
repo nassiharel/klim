@@ -8,7 +8,7 @@ import (
 
 func TestManifest_RoundTrip(t *testing.T) {
 	original := Manifest{
-		GeneratedBy: "clim export",
+		GeneratedBy: "klim export",
 		OS:          "windows",
 		Arch:        "amd64",
 		Tools: []Tool{

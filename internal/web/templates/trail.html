@@ -2,11 +2,11 @@
 {{$d := .Data}}
 <section class="page-header">
   <h1>Trail</h1>
-  <p class="muted">Git-style history for your toolchain. Run <code>clim trail capture</code> to record a new entry.</p>
+  <p class="muted">Git-style history for your toolchain. Run <code>klim trail capture</code> to record a new entry.</p>
 </section>
 
 {{if eq (len $d.Entries) 0}}
-  <p class="empty">No trail entries yet. <code>clim trail capture --label initial</code> creates the first one.</p>
+  <p class="empty">No trail entries yet. <code>klim trail capture --label initial</code> creates the first one.</p>
 {{else}}
 <table class="grid">
   <thead>

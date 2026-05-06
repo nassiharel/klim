@@ -18,7 +18,7 @@
 //     Object — that's how identical-environment captures dedupe.
 //
 // Reads are strict: any unknown YAML field or unknown
-// schema_version returns an error. clim owns this on-disk format,
+// schema_version returns an error. klim owns this on-disk format,
 // so we do not need lenient forward-compat.
 package trail
 
@@ -31,7 +31,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // SchemaVersion is the on-disk format version. Bumped on
@@ -75,8 +75,8 @@ func (o ObjectID) IsValid() bool {
 // are machine-specific (e.g. `C:\Users\alice\...`), so storing them
 // would either prevent cross-machine dedupe or — worse — let stale
 // paths from the first capture survive deduped re-captures and
-// mislead `clim trail show`. Per-binary paths still live in the
-// regular catalog/scan output (`clim list`, `clim info`); the trail
+// mislead `klim trail show`. Per-binary paths still live in the
+// regular catalog/scan output (`klim list`, `klim info`); the trail
 // captures only the env-defining content.
 type Snapshot struct {
 	SchemaVersion int    `yaml:"schema_version" json:"schema_version"`

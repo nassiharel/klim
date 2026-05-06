@@ -12,10 +12,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/finder"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/teamfile"
+	"github.com/nassiharel/klim/internal/finder"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/teamfile"
 )
 
 // noopFinder satisfies finder.ToolFinder without touching PATH —
@@ -40,7 +40,7 @@ func withInitCtx(t *testing.T, tools ...registry.Tool) *cobra.Command {
 var _ finder.ToolFinder = noopFinder{}
 
 // chdirWithExistingTeamfile cd's into a fresh temp dir, redirects the
-// user-config dir, and creates an existing .clim.yaml so we can test
+// user-config dir, and creates an existing .klim.yaml so we can test
 // the overwrite-refusal logic.
 func chdirWithExistingTeamfile(t *testing.T, contents string) string {
 	t.Helper()
@@ -80,7 +80,7 @@ func TestInit_RefusesToOverwriteByDefault(t *testing.T) {
 
 	err := runInit(cmd, nil)
 	if err == nil {
-		t.Fatal("expected error when .clim.yaml exists and --force is not set")
+		t.Fatal("expected error when .klim.yaml exists and --force is not set")
 	}
 	if !strings.Contains(err.Error(), "--force") {
 		t.Errorf("error should mention --force, got: %v", err)
@@ -159,7 +159,7 @@ func TestInit_ForceNoProjectFiles_RefusesToBlankExistingFile(t *testing.T) {
 
 	initForceFlag = true
 	// Default project detection (no --all). The temp dir has only
-	// .clim.yaml itself, no Dockerfile/go.mod/etc., so detection
+	// .klim.yaml itself, no Dockerfile/go.mod/etc., so detection
 	// returns 0 detected tools.
 
 	err := runInit(cmd, nil)
@@ -220,14 +220,14 @@ func TestInit_ForceProjectDetectedButNoneInstalled(t *testing.T) {
 }
 
 // TestInit_DanglingSymlinkRequiresForce verifies that a dangling
-// .clim.yaml symlink is recognised as "exists" by Lstat, so plain
-// `clim init` refuses to clobber it the same way it would refuse
+// .klim.yaml symlink is recognised as "exists" by Lstat, so plain
+// `klim init` refuses to clobber it the same way it would refuse
 // for a regular existing file.
 func TestInit_DanglingSymlinkRequiresForce(t *testing.T) {
 	resetInitFlags(t)
 	dir := chdirTemp(t)
 	redirectConfig(t)
-	// Dangling symlink: .clim.yaml → /nonexistent/template.yaml.
+	// Dangling symlink: .klim.yaml → /nonexistent/template.yaml.
 	// Skip-on-permission-error so this exercises Windows CI when
 	// developer mode is enabled and skips when it isn't.
 	if err := tryCreateSymlink("/nonexistent/template.yaml", filepath.Join(dir, teamfile.FileName)); err != nil {
@@ -240,7 +240,7 @@ func TestInit_DanglingSymlinkRequiresForce(t *testing.T) {
 
 	err := runInit(cmd, nil)
 	if err == nil {
-		t.Fatal("expected error when dangling .clim.yaml symlink exists and --force is not set")
+		t.Fatal("expected error when dangling .klim.yaml symlink exists and --force is not set")
 	}
 	if !strings.Contains(err.Error(), "--force") {
 		t.Errorf("error should mention --force, got: %v", err)

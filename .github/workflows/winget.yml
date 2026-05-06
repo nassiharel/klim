@@ -12,5 +12,5 @@ jobs:
     steps:
       - uses: vedantmgoyal9/winget-releaser@v2
         with:
-          identifier: nassiharel.clim
+          identifier: nassiharel.klim
           token: ${{ secrets.WINGET_TOKEN }}

@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/service"
 )
 
 // cliCtx carries the runtime collaborators (config + service) that command

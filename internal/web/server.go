@@ -1,4 +1,4 @@
-// Package web serves clim's local browser UI. The package is a thin
+// Package web serves klim's local browser UI. The package is a thin
 // frontend over internal/service: every page and JSON endpoint resolves
 // data through the same composition root the TUI and other CLI commands
 // use, so business logic never duplicates into HTTP handlers.
@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/service"
 )
 
-// Options configure a clim browser server.
+// Options configure a klim browser server.
 type Options struct {
 	// Bind is the listen address. Defaults to "127.0.0.1" (loopback).
 	Bind string
@@ -62,7 +62,7 @@ type Options struct {
 	Logger *slog.Logger
 }
 
-// Server is a clim browser HTTP server.
+// Server is a klim browser HTTP server.
 type Server struct {
 	opts      Options
 	mux       *http.ServeMux
@@ -201,7 +201,7 @@ func (s *Server) EnableAutoShutdown(cancel context.CancelFunc) {
 //
 // All running package-manager jobs are also cancelled on shutdown by
 // way of the jobCtx that Serve installs as a child of ctx — this
-// stops orphaning long install/upgrade subprocesses past clim's own
+// stops orphaning long install/upgrade subprocesses past klim's own
 // exit.
 func (s *Server) Serve(ctx context.Context) error {
 	// Tear down the placeholder Background context set up in New and
@@ -337,7 +337,7 @@ func withAccessLog(log *slog.Logger, next http.Handler) http.Handler {
 }
 
 // withRecover converts handler panics into 500s rather than tearing
-// down the server. clim is meant to keep running across stray bugs.
+// down the server. klim is meant to keep running across stray bugs.
 func withRecover(log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

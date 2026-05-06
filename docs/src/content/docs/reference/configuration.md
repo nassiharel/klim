@@ -3,27 +3,27 @@ title: Configuration Reference
 description: Complete reference for config.yaml options
 ---
 
-clim uses a `config.yaml` file for persistent settings. The file is created with defaults on first run.
+klim uses a `config.yaml` file for persistent settings. The file is created with defaults on first run.
 
 ## File Location
 
 | OS | Path |
 |----|------|
-| macOS | `~/Library/Application Support/clim/config/config.yaml` |
-| Linux | `~/.config/clim/config/config.yaml` |
-| Windows | `%AppData%\clim\config\config.yaml` |
+| macOS | `~/Library/Application Support/klim/config/config.yaml` |
+| Linux | `~/.config/klim/config/config.yaml` |
+| Windows | `%AppData%\klim\config\config.yaml` |
 
 Find the exact path on your system:
 
 ```bash
-clim config path
+klim config path
 ```
 
 ## Editing
 
 ```bash
 # Open in your editor
-clim config edit
+klim config edit
 
 # Or edit in the TUI (Config tab, press 8)
 ```
@@ -46,15 +46,15 @@ logging:
 | `verbose` | `false` | Additionally output logs to stderr (useful for debugging). |
 
 Log file location:
-- macOS: `~/Library/Application Support/clim/logs/clim.log`
-- Linux: `~/.config/clim/logs/clim.log`
-- Windows: `%AppData%\clim\logs\clim.log`
+- macOS: `~/Library/Application Support/klim/logs/klim.log`
+- Linux: `~/.config/klim/logs/klim.log`
+- Windows: `%AppData%\klim\logs\klim.log`
 
 ### Marketplace
 
 ```yaml
 marketplace:
-  url: "https://raw.githubusercontent.com/nassiharel/clim/marketplace/marketplace.yaml"
+  url: "https://raw.githubusercontent.com/nassiharel/klim/marketplace/marketplace.yaml"
   auto_refresh: false
   refresh_interval: "24h"
 ```
@@ -95,4 +95,4 @@ ui:
 
 ## Defaults
 
-If `config.yaml` doesn't exist, clim uses sensible defaults and writes the default file on first run. Deleting the file resets all settings.
+If `config.yaml` doesn't exist, klim uses sensible defaults and writes the default file on first run. Deleting the file resets all settings.

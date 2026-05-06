@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/nassiharel/clim/internal/audit"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/security"
-	"github.com/nassiharel/clim/internal/vuln"
+	"github.com/nassiharel/klim/internal/audit"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/security"
+	"github.com/nassiharel/klim/internal/vuln"
 )
 
 // securityView is the data shape for the /security page. We
@@ -28,7 +28,7 @@ type securityView struct {
 // pageSecurity renders the umbrella Security page. It aggregates:
 //   - audit findings (in-memory; cheap)
 //   - cached vulnerability scan results (no network — tells the user
-//     to run `clim security vuln` if no cache exists)
+//     to run `klim security vuln` if no cache exists)
 //
 // We deliberately don't fetch fresh vuln data here — the web view
 // shouldn't block its render on a 30s OSV.dev round-trip. The user
@@ -71,7 +71,7 @@ func (s *Server) pageSecurity(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// resolveVulnSourceKey returns the cache key the CLI's `clim security
+// resolveVulnSourceKey returns the cache key the CLI's `klim security
 // vuln` writes under, given the server's loaded config. Surfaces that
 // read passively (tool detail, /security) must match this key or
 // they'll look at the wrong cache file.

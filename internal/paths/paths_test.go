@@ -11,7 +11,7 @@ func TestBaseDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BaseDir: %v", err)
 	}
-	if !strings.HasSuffix(dir, "clim") {
+	if !strings.HasSuffix(dir, "klim") {
 		t.Fatalf("unexpected base dir: %s", dir)
 	}
 }
@@ -38,7 +38,7 @@ func TestAllPaths(t *testing.T) {
 		{"ScanCache", ScanCache, "scan-cache.yaml"},
 		{"CatalogCache", CatalogCache, "marketplace-cache.yaml"},
 		{"BackupsDir", BackupsDir, "backups"},
-		{"LogFile", LogFile, "clim.log"},
+		{"LogFile", LogFile, "klim.log"},
 		{"CompliancePolicy", CompliancePolicy, "policy.yaml"},
 		{"TrailDir", TrailDir, "trail"},
 		{"TrailHEAD", TrailHEAD, "HEAD"},

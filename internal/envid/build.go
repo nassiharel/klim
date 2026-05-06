@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nassiharel/clim/internal/audit"
-	"github.com/nassiharel/clim/internal/build"
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/custompacks"
-	"github.com/nassiharel/clim/internal/favorites"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/security"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/vuln"
+	"github.com/nassiharel/klim/internal/audit"
+	"github.com/nassiharel/klim/internal/build"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/custompacks"
+	"github.com/nassiharel/klim/internal/favorites"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/security"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/vuln"
 )
 
 // BuildOptions controls Build. Zero value is valid for normal use.

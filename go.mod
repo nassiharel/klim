@@ -1,4 +1,4 @@
-module github.com/nassiharel/clim
+module github.com/nassiharel/klim
 
 go 1.25.9
 

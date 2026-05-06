@@ -13,7 +13,7 @@ import (
 // zero, a grace timer starts; if no new connection arrives before it
 // fires, the server's shutdown is triggered.
 //
-// This gives `clim browser` the same UX as `npm start --open`: as
+// This gives `klim browser` the same UX as `npm start --open`: as
 // soon as the user closes the last tab, the local server stops on
 // its own. The grace period covers in-page navigation, where the
 // outgoing tab closes its EventSource a few ms before the new page

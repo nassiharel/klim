@@ -5,10 +5,10 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/nassiharel/clim/internal/audit"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/security"
-	"github.com/nassiharel/clim/internal/vuln"
+	"github.com/nassiharel/klim/internal/audit"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/security"
+	"github.com/nassiharel/klim/internal/vuln"
 )
 
 // renderSecuritySection renders the per-tool Security panel for the
@@ -19,7 +19,7 @@ import (
 //
 // Vuln data is read from cache only — opening a tool detail page must
 // never block on a 30s OSV.dev round-trip. The user populates the
-// cache via `clim security vuln` (or the "v" key on the Security tab).
+// cache via `klim security vuln` (or the "v" key on the Security tab).
 func (m Model) renderSecuritySection(tool registry.Tool) string {
 	if !tool.IsInstalled() {
 		return ""
@@ -63,14 +63,14 @@ func (m Model) renderSecuritySection(tool registry.Tool) string {
 			}
 		}
 	} else if !cacheLoaded {
-		b.WriteString("\n    " + dashDim.Render("vulnerability cache empty — run `clim security vuln` to populate") + "\n")
+		b.WriteString("\n    " + dashDim.Render("vulnerability cache empty — run `klim security vuln` to populate") + "\n")
 	}
 	b.WriteString("\n")
 	return b.String()
 }
 
 // vulnSourceKey returns the OSV cache key matching whatever
-// `clim security vuln` writes. Reads from the loaded config; falls
+// `klim security vuln` writes. Reads from the loaded config; falls
 // back to the default OSV endpoint when unconfigured.
 func (m Model) vulnSourceKey() string {
 	if m.cfg != nil {

@@ -18,7 +18,7 @@ const (
 
 // initColorHelp installs a colorized help template on rootCmd. Subcommands
 // continue to use Cobra's default help so that piped/captured output (e.g.
-// `clim list --help | less`) is unaffected by color codes.
+// `klim list --help | less`) is unaffected by color codes.
 func initColorHelp() {
 	defaultHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
@@ -32,7 +32,7 @@ func initColorHelp() {
 		}
 
 		// Brand header.
-		brand := cBold + cWhite + "\033[48;5;37m" + " clim " + cReset
+		brand := cBold + cWhite + "\033[48;5;37m" + " klim " + cReset
 		p("\n  %s  %s\n\n", brand, cmd.Short)
 
 		// Description.

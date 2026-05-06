@@ -9,7 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Policy defines a company's tool compliance rules.
@@ -25,7 +25,7 @@ type Policy struct {
 	// for any tool whose vuln scan found a CVE/GHSA at or above this
 	// severity. Values: "low" / "medium" / "high" / "critical".
 	// Empty (default) means vuln findings don't block installs (they
-	// still surface in the security badge and `clim security vuln`).
+	// still surface in the security badge and `klim security vuln`).
 	MaxVulnSeverity string `yaml:"max_vuln_severity,omitempty"`
 }
 
@@ -163,8 +163,8 @@ func Check(policy *Policy, tools []registry.Tool, vulnSeverityByTool map[string]
 		// threshold AND the caller supplied a severity map (typically
 		// read from the local vuln cache). If the cache hasn't been
 		// populated, this gate is silently skipped — that's a feature:
-		// `clim install` shouldn't refuse to run because the user
-		// hasn't run `clim security vuln` yet. Operators who want to
+		// `klim install` shouldn't refuse to run because the user
+		// hasn't run `klim security vuln` yet. Operators who want to
 		// require a fresh scan can run it in CI.
 		if thresholdRank > 0 && len(vulnSeverityByTool) > 0 {
 			if sev, ok := vulnSeverityByTool[t.Name]; ok && severityRank(sev) >= thresholdRank {

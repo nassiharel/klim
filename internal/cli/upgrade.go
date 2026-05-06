@@ -17,18 +17,18 @@ var upgradeCmd = &cobra.Command{
 For each target:
   · installed with an update available → upgrade
   · installed and already at the latest → skipped (listed under "Up to date")
-  · not installed                       → skipped (use 'clim install' for those)
+  · not installed                       → skipped (use 'klim install' for those)
 
-Source precedence is the same as 'clim install':
+Source precedence is the same as 'klim install':
   1. --source flag
   2. defaults.preferred_source in config.yaml
   3. OS-priority fallback
 
 Examples:
-  clim upgrade jq
-  clim upgrade --pack go-dev
-  clim upgrade jq fzf --source brew --yes
-  clim upgrade --pack rust-dev --dry-run`,
+  klim upgrade jq
+  klim upgrade --pack go-dev
+  klim upgrade jq fzf --source brew --yes
+  klim upgrade --pack rust-dev --dry-run`,
 	GroupID: "tools",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAction(cmd, args, ActionUpgrade, upgradeFlags, upgradeOutputFmt)

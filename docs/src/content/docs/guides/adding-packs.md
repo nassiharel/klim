@@ -1,6 +1,6 @@
 ---
 title: Adding Packs
-description: How to add a curated tool pack to the clim marketplace
+description: How to add a curated tool pack to the klim marketplace
 ---
 
 Packs are curated bundles of related tools. They help developers quickly install a complete toolset for a specific workflow.

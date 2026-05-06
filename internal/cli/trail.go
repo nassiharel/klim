@@ -11,17 +11,17 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/trail"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/trail"
 )
 
-// --- root: clim trail ---
+// --- root: klim trail ---
 
 var trailCmd = &cobra.Command{
 	Use:   "trail",
 	Short: "Inspect your environment history (git for your toolchain)",
-	Long: `clim trail records every captured environment state as a
+	Long: `klim trail records every captured environment state as a
 content-addressed snapshot, exposing git-style history inspection.
 
 Two captures of an identical toolchain share storage. Each capture
@@ -38,12 +38,12 @@ A <ref> can be: HEAD (or latest, an alias), HEAD~N, @<index>, a content
 hash (full or 7+ char prefix), or an entry's --label.`,
 }
 
-// --- clim trail capture ---
+// --- klim trail capture ---
 
-// trailCaptureFresh controls whether `clim trail capture` does a fresh
+// trailCaptureFresh controls whether `klim trail capture` does a fresh
 // PATH scan (default true) or reuses the on-disk scan cache. Default is
 // true so captures match the user's current toolchain; pass
-// `--refresh=false` to opt into cached behavior for back-to-back clim
+// `--refresh=false` to opt into cached behavior for back-to-back klim
 // commands.
 var (
 	trailCaptureLabel string
@@ -63,19 +63,19 @@ Pass --label to tag the entry for later reference (e.g. "before-upgrade").
 By default capture forces a fresh PATH scan so the recorded snapshot
 matches the toolchain you have right now (not whatever the scan cache
 last saw). Pass --refresh=false to use cached scan data — useful only
-when you've just run another clim command that already populated the
+when you've just run another klim command that already populated the
 cache and want to capture the exact same view.
 
 Examples:
-  clim trail capture                            # snapshot current state
-  clim trail capture --label before-upgrade     # tag for later reference
-  clim trail capture --op install               # mark this as an install delta
-  clim trail capture --refresh=false            # reuse the scan cache`,
+  klim trail capture                            # snapshot current state
+  klim trail capture --label before-upgrade     # tag for later reference
+  klim trail capture --op install               # mark this as an install delta
+  klim trail capture --refresh=false            # reuse the scan cache`,
 	Args: cobra.NoArgs,
 	RunE: runTrailCapture,
 }
 
-// --- clim trail log ---
+// --- klim trail log ---
 
 var (
 	trailLogLimit  int
@@ -93,15 +93,15 @@ var trailLogCmd = &cobra.Command{
   --output text|json
 
 Examples:
-  clim trail log                          # all entries, newest first
-  clim trail log --limit 10               # most recent 10
-  clim trail log --since 7d               # the last week of activity
-  clim trail log --output json | jq .     # machine-readable, scriptable`,
+  klim trail log                          # all entries, newest first
+  klim trail log --limit 10               # most recent 10
+  klim trail log --since 7d               # the last week of activity
+  klim trail log --output json | jq .     # machine-readable, scriptable`,
 	Args: cobra.NoArgs,
 	RunE: runTrailLog,
 }
 
-// --- clim trail show ---
+// --- klim trail show ---
 
 var trailShowOutput func() (OutputFormat, error)
 
@@ -115,16 +115,16 @@ A <ref> is anything Resolve accepts: HEAD or latest, HEAD~N, @<index>,
 a content hash (full or 7+ char prefix), or an entry's --label.
 
 Examples:
-  clim trail show HEAD              # newest capture
-  clim trail show HEAD~3            # 3 captures back
-  clim trail show before-upgrade    # by label
-  clim trail show abcdef0           # 7-char hash prefix
-  clim trail show HEAD --output json   # machine-readable for scripts`,
-	Args: requireArgs(1, "clim trail show <ref>"),
+  klim trail show HEAD              # newest capture
+  klim trail show HEAD~3            # 3 captures back
+  klim trail show before-upgrade    # by label
+  klim trail show abcdef0           # 7-char hash prefix
+  klim trail show HEAD --output json   # machine-readable for scripts`,
+	Args: requireArgs(1, "klim trail show <ref>"),
 	RunE: runTrailShow,
 }
 
-// --- clim trail diff ---
+// --- klim trail diff ---
 
 var trailDiffOutput func() (OutputFormat, error)
 
@@ -133,9 +133,9 @@ var trailDiffCmd = &cobra.Command{
 	Short: "Compare two trail entries (defaults the second arg to HEAD)",
 	Long: `Show the change set between two entries.
 
-  clim trail diff HEAD~1            # HEAD~1 vs HEAD
-  clim trail diff HEAD~3 HEAD       # explicit two-arg form
-  clim trail diff before-upgrade    # vs HEAD (label)`,
+  klim trail diff HEAD~1            # HEAD~1 vs HEAD
+  klim trail diff HEAD~3 HEAD       # explicit two-arg form
+  klim trail diff before-upgrade    # vs HEAD (label)`,
 	Args: trailDiffArgs,
 	RunE: runTrailDiff,
 }
@@ -147,11 +147,11 @@ func trailDiffArgs(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	return &UsageError{Err: fmt.Errorf(
-		"requires 1 or 2 arguments, got %d\n\nUsage:\n  clim trail diff <ref> [<ref>]\n\nRun '%s --help' for more information",
+		"requires 1 or 2 arguments, got %d\n\nUsage:\n  klim trail diff <ref> [<ref>]\n\nRun '%s --help' for more information",
 		len(args), cmd.CommandPath())}
 }
 
-// --- clim trail prune ---
+// --- klim trail prune ---
 
 var (
 	trailPruneKeep      int
@@ -170,9 +170,9 @@ Both filters apply (AND). After log pruning, any object no entry
 references is deleted from disk.
 
 Examples:
-  clim trail prune --keep 50                  # keep just the 50 newest
-  clim trail prune --older-than 90d           # drop anything older than 3 months
-  clim trail prune --keep 50 --older-than 90d # both — newest 50 of the last 90 days`,
+  klim trail prune --keep 50                  # keep just the 50 newest
+  klim trail prune --older-than 90d           # drop anything older than 3 months
+  klim trail prune --keep 50 --older-than 90d # both — newest 50 of the last 90 days`,
 	Args: cobra.NoArgs,
 	RunE: runTrailPrune,
 }
@@ -337,7 +337,7 @@ func runTrailLog(cmd *cobra.Command, _ []string) error {
 	}
 
 	if len(entries) == 0 {
-		fmt.Fprintln(os.Stderr, "No trail entries yet. Run `clim trail capture` to record one.")
+		fmt.Fprintln(os.Stderr, "No trail entries yet. Run `klim trail capture` to record one.")
 		return nil
 	}
 
@@ -625,7 +625,7 @@ func refPrefixLenForObject(id trail.ObjectID, entries []trail.Entry) int {
 // replacing the dropped suffix with "…". Uses go-runewidth so wide
 // characters (CJK, emoji, etc.) count as 2 columns and combining marks
 // as 0 — that's the only definition of "fits in N columns" that keeps
-// `clim trail log`'s tabwriter columns aligned for non-ASCII labels.
+// `klim trail log`'s tabwriter columns aligned for non-ASCII labels.
 //
 // Always emits valid UTF-8: drops whole runes, never bytes.
 func truncate(s string, n int) string {

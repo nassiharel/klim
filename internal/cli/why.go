@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 var whyOutputFmt func() (OutputFormat, error)
@@ -20,10 +20,10 @@ var whyCmd = &cobra.Command{
 	Long: `Show all references to a tool across projects, packs, and your system.
 
 Examples:
-  clim why kubectl
-  clim why terraform
-  clim why kubectl --output json`,
-	Args: requireArgs(1, "clim why <tool>"),
+  klim why kubectl
+  klim why terraform
+  klim why kubectl --output json`,
+	Args: requireArgs(1, "klim why <tool>"),
 	RunE: runWhy,
 }
 
@@ -40,7 +40,7 @@ func init() {
 type whyReference = Reference
 
 // whyPackageEntry is now an alias for the shared cli.PackageEntry so
-// `clim why` and `clim info` list the same package-manager sources.
+// `klim why` and `klim info` list the same package-manager sources.
 type whyPackageEntry = PackageEntry
 
 type whyReport struct {
@@ -126,7 +126,7 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 		r.UpdateAvail = t.HasUpdate()
 	}
 
-	// References + warnings: shared scanner so `clim why` and `clim info`
+	// References + warnings: shared scanner so `klim why` and `klim info`
 	// cannot drift in their reference-discovery rules.
 	refs, warnings := CollectReferences(cmd, toolName)
 	if refs != nil {
@@ -134,7 +134,7 @@ func buildWhyReport(cmd *cobra.Command, toolName string, t *registry.Tool, tools
 	}
 	r.Warnings = append(r.Warnings, warnings...)
 
-	// Available packages: shared helper so `clim why` and `clim info`
+	// Available packages: shared helper so `klim why` and `klim info`
 	// can't drift on which package managers they enumerate.
 	r.AvailableVia = append(r.AvailableVia, CollectPackageEntries(t.Packages)...)
 

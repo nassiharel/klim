@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // resolveAction picks the package-manager command for action+tool. It
@@ -90,7 +90,7 @@ func (s *Server) startActionJob(ctx context.Context, action JobAction, name stri
 	// does, and we don't want the redirect's request cancellation to
 	// kill the install. The server-lifetime jobCtx still cancels on
 	// Ctrl-C / SIGTERM / auto-shutdown so jobs aren't orphaned past
-	// clim's own exit.
+	// klim's own exit.
 	return s.jobs.Start(s.jobContext(), action, tool.Name, source, args)
 }
 
@@ -274,7 +274,7 @@ func splitSSELines(data string) []string {
 	// Normalise \r\n and bare \r to \n first; then split on \n only.
 	// Carriage-return-as-line-terminator is extremely common in
 	// install/update tooling that overwrites a single line with
-	// progress percentages — clim's job log doesn't render those
+	// progress percentages — klim's job log doesn't render those
 	// in-place anyway, so we treat each \r-terminated chunk as its
 	// own line.
 	normalised := strings.ReplaceAll(strings.ReplaceAll(data, "\r\n", "\n"), "\r", "\n")

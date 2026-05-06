@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Title}} — clim</title>
+  <title>{{.Title}} — klim</title>
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 </head>
 <body>
   <header class="topbar">
-    <a href="/" class="brand">clim</a>
+    <a href="/" class="brand">klim</a>
     <nav>
       <a href="/" class="{{if eq .ActiveTab "installed"}}active{{end}}">Installed</a>
       <a href="/updates" class="{{if eq .ActiveTab "updates"}}active{{end}}">Updates</a>
@@ -29,7 +29,7 @@
     {{template "content" .}}
   </main>
   <footer>
-    <span>clim · local server</span>
+    <span>klim · local server</span>
   </footer>
   <script>
     // Keep an SSE connection open so the server knows this tab is

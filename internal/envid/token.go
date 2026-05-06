@@ -14,8 +14,8 @@ import (
 
 const (
 	// tokenPrefix is prepended to every Env ID token for recognition
-	// and versioning. Mirrors internal/share's `clim:v1:` pattern.
-	tokenPrefix = "clim:env:v1:" //nolint:gosec // not a credential, just a token format prefix
+	// and versioning. Mirrors internal/share's `klim:v1:` pattern.
+	tokenPrefix = "klim:env:v1:" //nolint:gosec // not a credential, just a token format prefix
 
 	// maxEncodedLen caps the base64 portion before any decoding work.
 	// 256 KB is generous — typical 30-tool envs are under 1 KB.
@@ -28,13 +28,13 @@ const (
 
 // Sentinel errors for token I/O.
 var (
-	ErrInvalidToken    = errors.New("not a valid clim env token")
+	ErrInvalidToken    = errors.New("not a valid klim env token")
 	ErrTokenTooLarge   = errors.New("env token too large")
 	ErrPayloadTooLarge = errors.New("env payload too large after decompression")
 	ErrUnknownVersion  = errors.New("unknown env schema version")
 	ErrEmptyToken      = errors.New("empty env token")
 	ErrCorruptToken    = errors.New("env token is corrupt")
-	ErrSchemaMismatch  = errors.New("env schema version does not match this clim build")
+	ErrSchemaMismatch  = errors.New("env schema version does not match this klim build")
 )
 
 // Encode serializes p into a compact base64 token.
@@ -76,13 +76,13 @@ func Decode(token string) (*Profile, error) {
 	if token == "" {
 		return nil, ErrEmptyToken
 	}
-	if !strings.HasPrefix(token, "clim:env:") {
+	if !strings.HasPrefix(token, "klim:env:") {
 		return nil, ErrInvalidToken
 	}
 	if !strings.HasPrefix(token, tokenPrefix) {
 		parts := strings.SplitN(token, ":", 4)
 		if len(parts) >= 3 {
-			return nil, fmt.Errorf("%w: token version %q (this clim supports v1)", ErrUnknownVersion, parts[2])
+			return nil, fmt.Errorf("%w: token version %q (this klim supports v1)", ErrUnknownVersion, parts[2])
 		}
 		return nil, ErrInvalidToken
 	}

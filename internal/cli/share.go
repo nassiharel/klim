@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/share"
+	"github.com/nassiharel/klim/internal/share"
 )
 
 var shareOutputFmt func() (OutputFormat, error)
@@ -19,9 +19,9 @@ var shareCmd = &cobra.Command{
 a token shared by a teammate.
 
 Usage:
-  clim share                         # generate a share token (text)
-  clim share --output json           # generate a share token (JSON)
-  clim share open <token>            # install from a share token`,
+  klim share                         # generate a share token (text)
+  klim share --output json           # generate a share token (JSON)
+  klim share open <token>            # install from a share token`,
 	Args: cobra.NoArgs,
 	RunE: runShare,
 }
@@ -90,6 +90,6 @@ func runShareGenerate(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "\nShare token (%d tools):\n\n", len(names))
 	fmt.Println(token)
-	fmt.Fprintf(os.Stderr, "\nRecipients can install with: clim share open <token>\n")
+	fmt.Fprintf(os.Stderr, "\nRecipients can install with: klim share open <token>\n")
 	return nil
 }

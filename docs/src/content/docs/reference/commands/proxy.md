@@ -1,35 +1,35 @@
 ---
-title: "clim proxy"
+title: "klim proxy"
 description: Manage auto-install shims for CLI tools
 ---
 
-Create lightweight shims that auto-install tools on first use. When you run a shimmed tool that isn't installed, clim automatically installs it via the best available package manager, then runs it.
+Create lightweight shims that auto-install tools on first use. When you run a shimmed tool that isn't installed, klim automatically installs it via the best available package manager, then runs it.
 
 ## Subcommands
 
 | Command | Description |
 |---------|-------------|
-| `clim proxy setup` | Create the shims directory and show PATH instructions |
-| `clim proxy add <tool> [tool...]` | Create shims for one or more tools |
-| `clim proxy remove <tool> [tool...]` | Remove shims |
-| `clim proxy list` | List active shims |
+| `klim proxy setup` | Create the shims directory and show PATH instructions |
+| `klim proxy add <tool> [tool...]` | Create shims for one or more tools |
+| `klim proxy remove <tool> [tool...]` | Remove shims |
+| `klim proxy list` | List active shims |
 
 ## Setup
 
 ```bash
 # Create the shims directory
-clim proxy setup
+klim proxy setup
 
 # Add shims directory to your PATH (shown by setup)
-export PATH="$HOME/.config/clim/shims:$PATH"
+export PATH="$HOME/.config/klim/shims:$PATH"
 
 # Create shims for tools
-clim proxy add kubectl terraform helm
+klim proxy add kubectl terraform helm
 ```
 
 ## How It Works
 
-1. `clim proxy add kubectl` creates a lightweight shim script in `~/.config/clim/shims/`
+1. `klim proxy add kubectl` creates a lightweight shim script in `~/.config/klim/shims/`
 2. When you run `kubectl`, the shim checks if the real `kubectl` is installed elsewhere in PATH
 3. If found → runs it directly
 4. If not found → installs via the best available package manager, then runs it
@@ -38,16 +38,16 @@ clim proxy add kubectl terraform helm
 
 ```bash
 # Set up and create shims
-clim proxy setup
-clim proxy add kubectl terraform helm jq
+klim proxy setup
+klim proxy add kubectl terraform helm jq
 
 # List active shims
-clim proxy list
+klim proxy list
 
 # Remove a shim
-clim proxy remove kubectl
+klim proxy remove kubectl
 ```
 
 ## See Also
 
-- [clim try](/reference/commands/try) — Try a tool temporarily
+- [klim try](/reference/commands/try) — Try a tool temporarily

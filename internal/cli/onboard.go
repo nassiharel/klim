@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/onboard"
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/onboard"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 var onboardCmd = &cobra.Command{
@@ -28,9 +28,9 @@ Available roles:
   security  Security / Pen-testing
 
 Usage:
-  clim onboard              # interactive — shows role picker
-  clim onboard devops       # recommend tools for DevOps
-  clim onboard web --list   # just list, don't install`,
+  klim onboard              # interactive — shows role picker
+  klim onboard devops       # recommend tools for DevOps
+  klim onboard web --list   # just list, don't install`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runOnboard,
 }

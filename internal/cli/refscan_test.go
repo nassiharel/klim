@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/custompacks"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/teamfile"
+	"github.com/nassiharel/klim/internal/custompacks"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/teamfile"
 )
 
 // stubCatalog is a minimal ToolCatalog that returns whatever tools were
@@ -94,7 +94,7 @@ optional:
   - name: helm
     version: "~3.12"
 `)
-	if err := os.WriteFile(filepath.Join(dir, ".clim.yaml"), tf, 0o644); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(dir, ".klim.yaml"), tf, 0o644); err != nil { //nolint:gosec
 		t.Fatal(err)
 	}
 	cmd := withRefscanCtx(t, nil)
@@ -129,7 +129,7 @@ func TestCollectReferences_MalformedTeamfileBecomesWarning(t *testing.T) {
 	// reference the tool.
 	dir := chdirTemp(t)
 	redirectConfig(t)
-	if err := os.WriteFile(filepath.Join(dir, ".clim.yaml"), []byte("tools: [not-a-mapping]\n"), 0o644); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(dir, ".klim.yaml"), []byte("tools: [not-a-mapping]\n"), 0o644); err != nil { //nolint:gosec
 		t.Fatal(err)
 	}
 	cmd := withRefscanCtx(t, nil)
@@ -175,13 +175,13 @@ func TestCollectReferences_RegisteredProjects(t *testing.T) {
 	chdirTemp(t)
 	cfg := redirectConfig(t)
 
-	// Create a fake project on disk + a .clim.yaml inside it.
+	// Create a fake project on disk + a .klim.yaml inside it.
 	projDir := filepath.Join(cfg, "fake-project")
 	if err := os.MkdirAll(projDir, 0o755); err != nil { //nolint:gosec
 		t.Fatal(err)
 	}
 	tf := []byte("tools:\n  - name: kubectl\n    version: \">=1.28\"\n")
-	if err := os.WriteFile(filepath.Join(projDir, ".clim.yaml"), tf, 0o644); err != nil { //nolint:gosec
+	if err := os.WriteFile(filepath.Join(projDir, ".klim.yaml"), tf, 0o644); err != nil { //nolint:gosec
 		t.Fatal(err)
 	}
 
@@ -283,12 +283,12 @@ func TestCollectReferences_GetwdErrorBecomesWarning(t *testing.T) {
 
 // TestSamePath_WindowsCaseInsensitive guards against the
 // duplicate-suppression regression where a registered project's
-// `.clim.yaml` and the locally-discovered one differed only by case
+// `.klim.yaml` and the locally-discovered one differed only by case
 // on Windows and ended up reported twice. Other platforms keep
 // byte-wise comparison.
 func TestSamePath_WindowsCaseInsensitive(t *testing.T) {
-	a := filepath.Join("C:", "Users", "me", ".clim.yaml")
-	b := filepath.Join("c:", "users", "me", ".clim.yaml")
+	a := filepath.Join("C:", "Users", "me", ".klim.yaml")
+	b := filepath.Join("c:", "users", "me", ".klim.yaml")
 	got := samePath(a, b)
 	want := runtime.GOOS == "windows"
 	if got != want {
@@ -299,7 +299,7 @@ func TestSamePath_WindowsCaseInsensitive(t *testing.T) {
 		t.Errorf("samePath should match identical paths")
 	}
 	// Genuinely-different paths never match.
-	c := filepath.Join("C:", "Users", "other", ".clim.yaml")
+	c := filepath.Join("C:", "Users", "other", ".klim.yaml")
 	if samePath(a, c) {
 		t.Errorf("samePath(%q, %q) should be false", a, c)
 	}

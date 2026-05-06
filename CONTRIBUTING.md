@@ -1,4 +1,4 @@
-# Contributing to clim
+# Contributing to klim
 
 Thank you for your interest in contributing! This document covers the development workflow.
 
@@ -8,13 +8,13 @@ Please be respectful and constructive in all interactions. We are committed to p
 
 ## First-Time Contributors
 
-New to clim? Here's how to get started:
+New to klim? Here's how to get started:
 
-1. Look for issues labeled [`good first issue`](https://github.com/nassiharel/clim/labels/good%20first%20issue) — these are scoped tasks that are great for newcomers.
+1. Look for issues labeled [`good first issue`](https://github.com/nassiharel/klim/labels/good%20first%20issue) — these are scoped tasks that are great for newcomers.
 2. Read through this guide and [AGENTS.md](AGENTS.md) to understand the project structure.
 3. Fork the repo, create a branch, make your change, and open a PR.
 
-Not sure where to start? Open a [Discussion](https://github.com/nassiharel/clim/discussions) and we'll help you find something.
+Not sure where to start? Open a [Discussion](https://github.com/nassiharel/klim/discussions) and we'll help you find something.
 
 ## Prerequisites
 
@@ -25,9 +25,9 @@ Not sure where to start? Open a [Discussion](https://github.com/nassiharel/clim/
 ## Quick Start
 
 ```bash
-git clone https://github.com/nassiharel/clim.git
-cd clim
-make build          # compile to bin/clim
+git clone https://github.com/nassiharel/klim.git
+cd klim
+make build          # compile to bin/klim
 make test           # run tests with -race
 make lint           # run golangci-lint
 ```
@@ -36,13 +36,13 @@ make lint           # run golangci-lint
 
 | Command          | Description                          | CI Equivalent       |
 | ---------------- | ------------------------------------ | ------------------- |
-| `make build`     | Build binary to `bin/clim`           | test job (go build) |
+| `make build`     | Build binary to `bin/klim`           | test job (go build) |
 | `make test`      | Run tests with race detector         | test job            |
 | `make lint`      | Run golangci-lint                    | lint job            |
 | `make tidy`      | Check go.mod tidiness                | tidy job            |
 | `make vulncheck` | Check for known Go vulnerabilities   | govulncheck job     |
 | `make cover`     | Generate HTML coverage report        | —                   |
-| `make run`       | Build and run clim                   | —                   |
+| `make run`       | Build and run klim                   | —                   |
 | `make clean`     | Remove build artifacts               | —                   |
 | `make all`       | lint + test + build (default target) | —                   |
 
@@ -63,7 +63,7 @@ make lint           # run golangci-lint
 ## Project Structure
 
 ```
-cmd/clim/          → Entry point (main.go)
+cmd/klim/          → Entry point (main.go)
 internal/
   build/           → Version info (ldflags injection)
   cli/             → Cobra commands (root, list, version, tools, export, import, update)
@@ -85,10 +85,10 @@ When building from source, version information is injected via ldflags:
 ```bash
 go build -trimpath -ldflags "\
   -s -w \
-  -X github.com/nassiharel/clim/internal/build.Version=1.0.0 \
-  -X github.com/nassiharel/clim/internal/build.Commit=$(git rev-parse --short HEAD) \
-  -X github.com/nassiharel/clim/internal/build.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  -o clim ./cmd/clim
+  -X github.com/nassiharel/klim/internal/build.Version=1.0.0 \
+  -X github.com/nassiharel/klim/internal/build.Commit=$(git rev-parse --short HEAD) \
+  -X github.com/nassiharel/klim/internal/build.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -o klim ./cmd/klim
 ```
 
 When installed via `go install`, version info is automatically read from the Go module metadata — no ldflags needed.

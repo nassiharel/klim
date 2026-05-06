@@ -3,7 +3,7 @@ package compliance
 import (
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 func TestIndex_NoPolicy(t *testing.T) {

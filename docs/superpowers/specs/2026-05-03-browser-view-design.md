@@ -1,15 +1,15 @@
-# clim browser — local web UI for the toolchain
+# klim browser — local web UI for the toolchain
 
 ## Problem
 
-The TUI is the most feature-rich way to use clim, but it has hard limits:
+The TUI is the most feature-rich way to use klim, but it has hard limits:
 
 - **No mouse-friendly affordances** for users who prefer click navigation.
 - **No persistent multi-pane layout** — the TUI is one view at a time.
 - **Hard to share** — pointing a teammate at a screen requires SSH + a terminal that supports the TUI's wide character set.
 - **Awkward for richer content** — long descriptions, GitHub READMEs, embedded charts, copy-paste of share tokens.
 
-Goal: ship a `clim browser` subcommand that boots a local HTTP server, opens
+Goal: ship a `klim browser` subcommand that boots a local HTTP server, opens
 the user's default browser, and presents the same information the TUI does
 in a familiar mouse-driven layout. The browser view eventually reaches
 parity with the TUI; this spec covers the foundation and Phase 1 scope.
@@ -24,7 +24,7 @@ which call into the same composition root.
 
 ```
 +---------------------------+
-|        clim browser       |  cobra subcommand
+|        klim browser       |  cobra subcommand
 +-------------+-------------+
               |
               v
@@ -61,7 +61,7 @@ swapping to an SPA later.
 ## CLI surface
 
 ```
-clim browser [flags]
+klim browser [flags]
 
 Flags:
   --port int          listen port (0 = pick a free one) (default 0)
@@ -73,7 +73,7 @@ Flags:
 Behavior:
 
 - Bind defaults to `127.0.0.1`. Refuses any non-loopback address unless
-  `--insecure-bind` is passed (so `clim browser --bind 0.0.0.0` is an
+  `--insecure-bind` is passed (so `klim browser --bind 0.0.0.0` is an
   explicit decision, not an accident).
 - Default port is `0` (kernel picks a free one). Print the chosen URL
   to stderr; tools like `xdg-open` use the printed URL.
@@ -115,8 +115,8 @@ existing tooling (and tests) can read both indistinguishably.
 
 - `httptest.NewServer` for handler tests; assert HTTP status + body
   contains key fields, not raw HTML byte-equality (templates evolve).
-- JSON handlers are tested with the same fixtures used by `clim list
-  --output json` and `clim info --output json` so contract drift fails
+- JSON handlers are tested with the same fixtures used by `klim list
+  --output json` and `klim info --output json` so contract drift fails
   one of the two.
 - Browser-open is behind an interface so tests can substitute a no-op.
 - No headless-browser tests in MVP — handler + JSON coverage is enough.
@@ -183,13 +183,13 @@ docs/src/content/docs/reference/commands/browser.md
 
 ## Definition of done (this spec)
 
-- `clim browser` boots a server on a free port, opens the user's
+- `klim browser` boots a server on a free port, opens the user's
   browser, and serves the Installed page populated from a real scan.
 - Tool detail, Dashboard, Trail list, and Snapshot pages render with
   real data from the existing service layer.
 - JSON API counterpart for each page.
 - Stub pages for the four remaining TUI tabs.
 - Handler tests cover happy paths and 404 / 405 cases.
-- `clim browser --help`, the docs reference page, and the docs sidebar
+- `klim browser --help`, the docs reference page, and the docs sidebar
   all surface the new subcommand.
 - Build is single-binary, offline-capable, no new heavy deps.

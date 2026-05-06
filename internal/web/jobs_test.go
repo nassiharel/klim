@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
 )
 
 // scriptedExecutor emits a fixed set of lines and a chosen final

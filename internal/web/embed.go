@@ -50,7 +50,7 @@ func loadTemplates() (map[string]*template.Template, error) {
 	if err != nil {
 		return nil, err
 	}
-	base, err := template.New("clim-browser").Funcs(templateFuncs()).ParseFS(sub, "layout.html")
+	base, err := template.New("klim-browser").Funcs(templateFuncs()).ParseFS(sub, "layout.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing layout.html: %w", err)
 	}

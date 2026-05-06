@@ -22,7 +22,7 @@ import (
 //  2. A same-origin Origin/Referer check. Browsers always include
 //     at least one of these headers on POSTs from page contexts;
 //     comparing them to r.Host blocks classic CSRF (a malicious
-//     page on a *different* origin that POSTs to clim).
+//     page on a *different* origin that POSTs to klim).
 //
 // Non-loopback binds (--insecure-bind) skip the Host allowlist
 // because the user is intentionally exposing the server to a LAN
@@ -69,7 +69,7 @@ func isLoopbackHostHeader(hostHeader string) bool {
 
 // requestOrigin reconstructs the browser-facing origin from the
 // request's Host header. Scheme is best-guessed via TLS; "http" on
-// loopback is the common case for clim.
+// loopback is the common case for klim.
 func requestOrigin(r *http.Request) string {
 	scheme := "http"
 	if r.TLS != nil {
@@ -131,7 +131,7 @@ func portMatches(got, want *url.URL) bool {
 	gp := got.Port()
 	wp := want.Port()
 	// Strict equality. We never need to treat default ports as
-	// equivalent because clim always binds to an explicit, non-
+	// equivalent because klim always binds to an explicit, non-
 	// standard port (the listener Addr ports are always present in
 	// both Origin headers and r.Host), so any mismatch here is
 	// genuinely a different origin.

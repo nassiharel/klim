@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/teamfile"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/teamfile"
 )
 
 var initMinVersionFlag bool
@@ -21,24 +21,24 @@ var initForceFlag bool
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Generate a .clim.yaml from project files",
+	Short: "Generate a .klim.yaml from project files",
 	Long: `Scan your project directory to detect which CLI tools it needs,
-then generate a .clim.yaml team manifest. Detection reads Dockerfile,
+then generate a .klim.yaml team manifest. Detection reads Dockerfile,
 package.json, go.mod, CI workflows, Helm charts, Terraform files, and more.
 
 Only tools that are both detected AND installed are included (so versions
 can be pinned). Tools detected but not installed are listed as suggestions.
 
-When .clim.yaml already exists clim refuses to clobber it; pass --force
+When .klim.yaml already exists klim refuses to clobber it; pass --force
 to overwrite. (No -f shorthand: docs/cli-conventions.md reserves -f for
 --file paths.)
 
 Usage:
-  clim init                        # auto-detect from project files
-  clim init --all                  # include ALL installed tools (no detection)
-  clim init --min-version          # include >=X.Y version constraints
-  clim init --name my-project      # set project name
-  clim init --force                # overwrite an existing .clim.yaml`,
+  klim init                        # auto-detect from project files
+  klim init --all                  # include ALL installed tools (no detection)
+  klim init --min-version          # include >=X.Y version constraints
+  klim init --name my-project      # set project name
+  klim init --force                # overwrite an existing .klim.yaml`,
 	RunE: runInit,
 }
 
@@ -47,7 +47,7 @@ func init() {
 	initCmd.Flags().StringVar(&initNameFlag, "name", "", "Project name for the manifest")
 	initCmd.Flags().BoolVar(&initAllFlag, "all", false, "Include all installed tools (skip project detection)")
 	// No -f shorthand: docs/cli-conventions.md reserves -f for --file.
-	initCmd.Flags().BoolVar(&initForceFlag, "force", false, "Overwrite an existing .clim.yaml")
+	initCmd.Flags().BoolVar(&initForceFlag, "force", false, "Overwrite an existing .klim.yaml")
 	// Registered in root.go with command group.
 }
 
@@ -55,9 +55,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	outPath := filepath.Join(".", teamfile.FileName)
 
 	// Refuse to clobber an existing manifest unless --force is set.
-	// We use Lstat so a *dangling* .clim.yaml symlink still trips the
+	// We use Lstat so a *dangling* .klim.yaml symlink still trips the
 	// safety check — Stat would follow the link, see ENOENT, and
-	// happily let `clim init` (no --force) replace the symlink.
+	// happily let `klim init` (no --force) replace the symlink.
 	manifestExists := false
 	if _, err := os.Lstat(outPath); err == nil {
 		manifestExists = true
@@ -154,7 +154,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			for _, d := range notInstalled {
 				fmt.Fprintf(os.Stderr, "    · %s  (from %s)\n", d.Name, d.Source)
 			}
-			fmt.Fprintln(os.Stderr, "  Install them first, then re-run clim init to pin versions.")
+			fmt.Fprintln(os.Stderr, "  Install them first, then re-run klim init to pin versions.")
 		}
 
 		// Ecosystem suggestions.
@@ -178,7 +178,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		// With --force on an existing file the user expects a
 		// replacement. Emitting "No tools to include" + exit 0 would
 		// silently leave the previous manifest in place — a script
-		// running `clim init --force` would believe the regenerate
+		// running `klim init --force` would believe the regenerate
 		// succeeded. Surface this as an error instead, with a hint
 		// tailored to the mode that produced the empty result.
 		if initForceFlag && manifestExists {
@@ -214,6 +214,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	_ = teamfile.AddProject(filepath.Dir(abs), name, len(tf.Tools))
 
 	fmt.Fprintln(os.Stderr, "\nTeammates can now run:")
-	fmt.Fprintln(os.Stderr, "  clim check    # validate their environment")
+	fmt.Fprintln(os.Stderr, "  klim check    # validate their environment")
 	return nil
 }

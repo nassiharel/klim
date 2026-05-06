@@ -1,5 +1,5 @@
 ---
-title: "clim config marketplace"
+title: "klim config marketplace"
 description: Manage extra marketplace URLs
 ---
 
@@ -9,9 +9,9 @@ Add, remove, and list extra marketplace URLs. Extra marketplaces extend the defa
 
 | Command | Description |
 |---------|-------------|
-| `clim config marketplace list` | Show primary and extra marketplace URLs |
-| `clim config marketplace add <url>` | Add an extra marketplace URL |
-| `clim config marketplace remove <url>` | Remove an extra marketplace URL |
+| `klim config marketplace list` | Show primary and extra marketplace URLs |
+| `klim config marketplace add <url>` | Add an extra marketplace URL |
+| `klim config marketplace remove <url>` | Remove an extra marketplace URL |
 
 ## How It Works
 
@@ -23,20 +23,20 @@ Extra marketplaces are cached locally (per-URL) and respect the same `auto_refre
 
 ```bash
 # List all marketplace sources
-clim config marketplace list
+klim config marketplace list
 
 # Same, as JSON for scripts
-clim config marketplace list --output json
+klim config marketplace list --output json
 # {"primary": "https://...", "extra": []}
 
 # Add a team-internal marketplace
-clim config marketplace add https://raw.githubusercontent.com/myorg/tools/main/marketplace.yaml
+klim config marketplace add https://raw.githubusercontent.com/myorg/tools/main/marketplace.yaml
 
 # Remove a marketplace
-clim config marketplace remove https://example.com/old-tools.yaml
+klim config marketplace remove https://example.com/old-tools.yaml
 ```
 
-`clim config marketplace list` accepts `--output text` (default) or `--output json`. In JSON mode, a config-load failure is surfaced as an error rather than silently falling back to default URLs.
+`klim config marketplace list` accepts `--output text` (default) or `--output json`. In JSON mode, a config-load failure is surfaced as an error rather than silently falling back to default URLs.
 
 ## Configuration
 
@@ -51,7 +51,7 @@ marketplace:
 
 ## Creating a Custom Marketplace
 
-A custom marketplace YAML has the same format as clim's built-in catalog:
+A custom marketplace YAML has the same format as klim's built-in catalog:
 
 ```yaml
 tools:

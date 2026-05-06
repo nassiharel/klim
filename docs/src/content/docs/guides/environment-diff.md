@@ -3,7 +3,7 @@ title: Environment Diff
 description: Compare your tools against another developer's environment
 ---
 
-Use `clim diff` to compare your installed tools against a manifest file or share token. This is the "works on my machine" killer — quickly identify what's different between two environments.
+Use `klim diff` to compare your installed tools against a manifest file or share token. This is the "works on my machine" killer — quickly identify what's different between two environments.
 
 ## Comparing Against a Manifest
 
@@ -11,10 +11,10 @@ Export your tools on one machine, then diff on another:
 
 ```bash
 # Machine A: export
-clim export > alice-tools.yaml
+klim export > alice-tools.yaml
 
 # Machine B: compare
-clim diff alice-tools.yaml
+klim diff alice-tools.yaml
 ```
 
 ## Comparing Against a Share Token
@@ -23,11 +23,11 @@ Share tokens are compact strings you can paste in Slack or Teams:
 
 ```bash
 # Generate a token
-clim share
-# → clim:v1:H4sIAAAA...
+klim share
+# → klim:v1:H4sIAAAA...
 
 # Compare on another machine
-clim diff "clim:v1:H4sIAAAA..."
+klim diff "klim:v1:H4sIAAAA..."
 ```
 
 :::note
@@ -54,14 +54,14 @@ node      24.14.1 (winget)       —                ← local only
 
 ## CI Usage
 
-`clim diff` returns exit code 1 when differences are found:
+`klim diff` returns exit code 1 when differences are found:
 
 ```yaml
 - name: Check environment matches baseline
-  run: clim diff baseline-tools.yaml
+  run: klim diff baseline-tools.yaml
 ```
 
 ## See Also
 
 - [Backup & Restore](/guides/backup-restore) — Export and import tool manifests
-- [clim diff reference](/reference/commands/diff)
+- [klim diff reference](/reference/commands/diff)

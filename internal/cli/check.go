@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/teamfile"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/teamfile"
 )
 
 var checkFileFlag string
@@ -17,11 +17,11 @@ var checkOutput func() (OutputFormat, error)
 
 var checkCmd = &cobra.Command{
 	Use:   "check",
-	Short: "Check installed tools against .clim.yaml requirements",
-	Long: `Validate that all tools required by the project's .clim.yaml are
+	Short: "Check installed tools against .klim.yaml requirements",
+	Long: `Validate that all tools required by the project's .klim.yaml are
 installed and meet version constraints.
 
-Searches for .clim.yaml in the current directory and parent directories.
+Searches for .klim.yaml in the current directory and parent directories.
 Use --file to specify an explicit path.
 
 Exit codes:
@@ -29,14 +29,14 @@ Exit codes:
   1  One or more tools missing or outdated
 
 Usage:
-  clim check                      # auto-find .clim.yaml
-  clim check --file path/to/.clim.yaml
-  clim check --output json        # machine-readable output for CI`,
+  klim check                      # auto-find .klim.yaml
+  klim check --file path/to/.klim.yaml
+  klim check --output json        # machine-readable output for CI`,
 	RunE: runCheck,
 }
 
 func init() {
-	checkCmd.Flags().StringVarP(&checkFileFlag, "file", "f", "", "Path to .clim.yaml (default: auto-detect)")
+	checkCmd.Flags().StringVarP(&checkFileFlag, "file", "f", "", "Path to .klim.yaml (default: auto-detect)")
 	checkOutput = addOutputFlag(checkCmd, OutputText, OutputJSON)
 	checkCmd.Flags().BoolVar(&checkRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	// Registered in root.go with command group.
@@ -70,7 +70,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Find .clim.yaml.
+	// Find .klim.yaml.
 	path := checkFileFlag
 	if path == "" {
 		cwd, err := os.Getwd()
@@ -79,7 +79,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		}
 		path = teamfile.Find(cwd)
 		if path == "" {
-			return fmt.Errorf("no .clim.yaml found (searched from %s to root)", cwd)
+			return fmt.Errorf("no .klim.yaml found (searched from %s to root)", cwd)
 		}
 	}
 

@@ -18,10 +18,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // --- Fetcher ---
@@ -52,7 +52,7 @@ func (f *GitHubFetcher) Fetch(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
-	req.Header.Set("User-Agent", "clim/catalog")
+	req.Header.Set("User-Agent", "klim/catalog")
 
 	resp, err := f.httpClient().Do(req)
 	if err != nil {

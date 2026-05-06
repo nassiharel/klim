@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // Recommendation is one ranked suggestion. ToolIdx is the candidate's
@@ -38,7 +38,7 @@ type Recommendation struct {
 }
 
 // Max is the cap applied to Compute's output. The TUI's For You sub-tab
-// shares the same default and clim's UX is built around an at-a-glance
+// shares the same default and klim's UX is built around an at-a-glance
 // shortlist rather than a full search interface; users wanting more
 // browse via Discover.
 const Max = 25

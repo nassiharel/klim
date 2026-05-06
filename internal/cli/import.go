@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/manifest"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 var yesFlag bool
@@ -18,15 +18,15 @@ var yesFlag bool
 var importCmd = &cobra.Command{
 	Use:   "import <file>",
 	Short: "Install tools from an exported manifest",
-	Long: `Install tools listed in a YAML manifest (created by clim export).
+	Long: `Install tools listed in a YAML manifest (created by klim export).
 
 The manifest is cross-platform — package IDs for all managers are included,
-and clim picks the best one for your current OS.
+and klim picks the best one for your current OS.
 
 Usage:
-  clim import my-tools.yaml          # interactive: confirm before installing
-  clim import my-tools.yaml --yes    # non-interactive: install all without prompting`,
-	Args: requireArgs(1, "clim import <manifest.yaml>"),
+  klim import my-tools.yaml          # interactive: confirm before installing
+  klim import my-tools.yaml --yes    # non-interactive: install all without prompting`,
+	Args: requireArgs(1, "klim import <manifest.yaml>"),
 	RunE: runImport,
 }
 
@@ -88,7 +88,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 	succeeded, failed := executeInstalls(ps.toInstall)
 	// Any install attempt may have changed what's on PATH, so invalidate
-	// the scan cache. Subsequent `clim list` / `clim export` runs will
+	// the scan cache. Subsequent `klim list` / `klim export` runs will
 	// rescan and rewrite the cache instead of serving stale data.
 	if err := svcFrom(cmd).InvalidateScanCache(); err != nil {
 		fmt.Fprintf(os.Stderr, "  ⚠ Failed to invalidate scan cache: %v\n", err)
@@ -106,7 +106,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 
 // validateManifest checks that a parsed manifest has the minimum required
 // structure — tools must have a non-empty name. This catches cases where
-// a valid YAML file (e.g. a random config) is passed but isn't a clim manifest.
+// a valid YAML file (e.g. a random config) is passed but isn't a klim manifest.
 func validateManifest(m *manifest.Manifest) error {
 	for i, t := range m.Tools {
 		if strings.TrimSpace(t.Name) == "" {

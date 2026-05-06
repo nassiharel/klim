@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/search"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/search"
 )
 
 var searchCategoryFlag string
@@ -24,11 +24,11 @@ Results are ranked by relevance and GitHub stars, with platform badges
 showing which package managers support each tool.
 
 Examples:
-  clim search json                   # find JSON tools
-  clim search "kubernetes dashboard" # multi-word search
-  clim search cloud --category Cloud # filter by category
-  clim search json --output json     # machine-readable results`,
-	Args: requireMinArgs(1, "clim search <query>"),
+  klim search json                   # find JSON tools
+  klim search "kubernetes dashboard" # multi-word search
+  klim search cloud --category Cloud # filter by category
+  klim search json --output json     # machine-readable results`,
+	Args: requireMinArgs(1, "klim search <query>"),
 	RunE: runSearch,
 }
 

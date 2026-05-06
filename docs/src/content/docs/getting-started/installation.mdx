@@ -1,18 +1,18 @@
 ---
 title: Installation
-description: How to install clim on macOS, Linux, and Windows
+description: How to install klim on macOS, Linux, and Windows
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-clim supports macOS, Linux, and Windows across both amd64 and arm64 architectures.
+klim supports macOS, Linux, and Windows across both amd64 and arm64 architectures.
 
 ## Quick Install
 
 <Tabs>
   <TabItem label="macOS / Linux">
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/nassiharel/clim/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
     ```
 
     The installer automatically detects your OS and architecture, downloads the latest release, verifies the SHA256 checksum, and installs to `/usr/local/bin`.
@@ -28,20 +28,20 @@ clim supports macOS, Linux, and Windows across both amd64 and arm64 architecture
   </TabItem>
   <TabItem label="Windows">
     ```powershell
-    irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+    irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
     ```
 
-    The installer detects your architecture, downloads the latest release, verifies the checksum, and adds clim to your PATH.
+    The installer detects your architecture, downloads the latest release, verifies the checksum, and adds klim to your PATH.
 
     **Options:**
     ```powershell
     # Install a specific version
     $env:CLIM_VERSION = "v1.0.0"
-    irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+    irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 
     # Custom install directory
-    $env:CLIM_INSTALL_DIR = "C:\tools\clim"
-    irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+    $env:CLIM_INSTALL_DIR = "C:\tools\klim"
+    irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
     ```
   </TabItem>
 </Tabs>
@@ -49,7 +49,7 @@ clim supports macOS, Linux, and Windows across both amd64 and arm64 architecture
 ## Homebrew (macOS / Linux)
 
 ```bash
-brew install nassiharel/tap/clim
+brew install nassiharel/tap/klim
 ```
 
 ## Go Install
@@ -57,12 +57,12 @@ brew install nassiharel/tap/clim
 If you have Go 1.25+ installed:
 
 ```bash
-go install github.com/nassiharel/clim/cmd/clim@latest
+go install github.com/nassiharel/klim/cmd/klim@latest
 ```
 
 ## Download Binary
 
-Download pre-built binaries from the [GitHub Releases](https://github.com/nassiharel/clim/releases/latest) page.
+Download pre-built binaries from the [GitHub Releases](https://github.com/nassiharel/klim/releases/latest) page.
 
 Available platforms:
 - macOS (amd64, arm64)
@@ -82,20 +82,20 @@ sudo rpm -i clim_<version>_linux_amd64.rpm
 ## Build from Source
 
 ```bash
-git clone https://github.com/nassiharel/clim.git
-cd clim
+git clone https://github.com/nassiharel/klim.git
+cd klim
 make build
-./bin/clim
+./bin/klim
 ```
 
 ## Verify Installation
 
-After installing, verify clim is working:
+After installing, verify klim is working:
 
 ```bash
-clim version
+klim version
 ```
 
 ## Next Steps
 
-Head to the [Quick Start](/getting-started/quickstart) guide to start using clim.
+Head to the [Quick Start](/getting-started/quickstart) guide to start using klim.

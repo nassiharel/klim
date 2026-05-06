@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // withTempCache redirects UserConfigDir to a temp dir for the duration of

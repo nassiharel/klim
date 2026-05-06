@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // ErrDevBuild is returned when attempting to self-update a development build.
@@ -84,7 +84,7 @@ func (o *Options) httpClient() *http.Client {
 	return &http.Client{Timeout: 60 * time.Second}
 }
 
-// Update checks for a newer version of clim and, if found, downloads and
+// Update checks for a newer version of klim and, if found, downloads and
 // installs it by replacing the running binary. It returns a Result describing
 // what happened.
 func Update(ctx context.Context, currentVersion string, opts *Options) (*Result, error) {
@@ -166,7 +166,7 @@ func downloadAsset(ctx context.Context, client *http.Client, url string) ([]byte
 	if err != nil {
 		return nil, "", fmt.Errorf("creating download request: %w", err)
 	}
-	req.Header.Set("User-Agent", "clim/selfupdate")
+	req.Header.Set("User-Agent", "klim/selfupdate")
 
 	resp, err := client.Do(req)
 	if err != nil {

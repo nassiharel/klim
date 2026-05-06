@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // stubAllPMsAvailable forces every package-manager probe to succeed
@@ -184,13 +184,13 @@ func TestBuildActionPlan_Upgrade(t *testing.T) {
 func TestBuildActionPlan_Remove_SelfProtected(t *testing.T) {
 	stubAllPMsAvailable(t)
 	tools := []registry.Tool{
-		makeTool("clim", true, "1.0", "1.0"),
+		makeTool("klim", true, "1.0", "1.0"),
 		makeTool("jq", true, "1.7", "1.7"),
 	}
-	plan := buildActionPlan(ActionRemove, []string{"clim", "jq"}, toolMap(tools...), "")
+	plan := buildActionPlan(ActionRemove, []string{"klim", "jq"}, toolMap(tools...), "")
 
 	if len(plan.selfProtected) != 1 {
-		t.Errorf("expected clim in selfProtected: %v", plan.selfProtected)
+		t.Errorf("expected klim in selfProtected: %v", plan.selfProtected)
 	}
 	if len(plan.toExec) != 1 || plan.toExec[0].name != "jq" {
 		t.Errorf("expected jq in toExec: %+v", plan.toExec)

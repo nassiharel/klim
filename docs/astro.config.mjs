@@ -2,21 +2,21 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://docs.clim.dev',
+  site: 'https://docs.klim.dev',
   integrations: [
     starlight({
-      title: 'clim',
-      description: 'Documentation for clim — the cross-platform developer tool manager',
+      title: 'klim',
+      description: 'Documentation for klim — the cross-platform developer tool manager',
       logo: {
         light: './src/assets/logo-light.svg',
         dark: './src/assets/logo-dark.svg',
         replacesTitle: false,
       },
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/nassiharel/clim' },
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/nassiharel/klim' },
       ],
       editLink: {
-        baseUrl: 'https://github.com/nassiharel/clim/edit/main/docs/',
+        baseUrl: 'https://github.com/nassiharel/klim/edit/main/docs/',
       },
       customCss: ['./src/styles/custom.css'],
       sidebar: [

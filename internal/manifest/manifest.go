@@ -2,7 +2,7 @@
 // Used by both the CLI commands and the TUI to ensure a single source of truth.
 package manifest
 
-import "github.com/nassiharel/clim/internal/registry"
+import "github.com/nassiharel/klim/internal/registry"
 
 // Manifest is the top-level YAML structure for import/export.
 type Manifest struct {

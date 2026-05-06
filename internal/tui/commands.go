@@ -18,16 +18,16 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/catalog"
-	"github.com/nassiharel/clim/internal/compliance"
-	"github.com/nassiharel/clim/internal/config"
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/manifest"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/recommend"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/service"
-	"github.com/nassiharel/clim/internal/share"
+	"github.com/nassiharel/klim/internal/catalog"
+	"github.com/nassiharel/klim/internal/compliance"
+	"github.com/nassiharel/klim/internal/config"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/manifest"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/recommend"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/service"
+	"github.com/nassiharel/klim/internal/share"
 )
 
 // resolveSem limits concurrent version resolution goroutines in the TUI.
@@ -311,7 +311,7 @@ func (c *toolActionCmd) Run() error {
 	} else {
 		_, _ = fmt.Fprintf(stderr, "\n✓ %s completed (exit code 0)\n", c.action)
 	}
-	_, _ = fmt.Fprint(stderr, "\nPress Enter to return to clim...")
+	_, _ = fmt.Fprint(stderr, "\nPress Enter to return to klim...")
 
 	// Read until newline so buffered stdin doesn't skip the pause.
 	br := bufio.NewReader(stdin)
@@ -411,7 +411,7 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 		}
 
 		m := manifest.Manifest{
-			GeneratedBy: "clim export",
+			GeneratedBy: "klim export",
 			OS:          runtime.GOOS,
 			Arch:        runtime.GOARCH,
 			Tools:       exported,
@@ -427,12 +427,12 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 			return exportFinishedMsg{err: fmt.Errorf("creating backups dir: %w", err)}
 		}
 
-		filename := filepath.Join(bdir, fmt.Sprintf("clim-export-%s.yaml", time.Now().Format("2006-01-02")))
+		filename := filepath.Join(bdir, fmt.Sprintf("klim-export-%s.yaml", time.Now().Format("2006-01-02")))
 		// Avoid silently overwriting an existing export from today.
 		if _, err := os.Stat(filename); err == nil {
-			filename = filepath.Join(bdir, fmt.Sprintf("clim-export-%s.yaml", time.Now().Format("2006-01-02-150405")))
+			filename = filepath.Join(bdir, fmt.Sprintf("klim-export-%s.yaml", time.Now().Format("2006-01-02-150405")))
 		}
-		header := "# clim — Installed Tools Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   clim import my-tools.yaml\n#\n\n"
+		header := "# klim — Installed Tools Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   klim import my-tools.yaml\n#\n\n"
 
 		if err := fileutil.AtomicWrite(filename, []byte(header+string(data)), 0o644); err != nil {
 			return exportFinishedMsg{err: err}
@@ -735,7 +735,7 @@ func exportFavoritesCmd(tools []registry.Tool, favNames map[string]bool) tea.Cmd
 		})
 
 		m := manifest.Manifest{
-			GeneratedBy: "clim favorites export",
+			GeneratedBy: "klim favorites export",
 			OS:          runtime.GOOS,
 			Arch:        runtime.GOARCH,
 			Tools:       exported,
@@ -751,11 +751,11 @@ func exportFavoritesCmd(tools []registry.Tool, favNames map[string]bool) tea.Cmd
 			return exportFinishedMsg{err: fmt.Errorf("creating backups dir: %w", err)}
 		}
 
-		filename := filepath.Join(bdir, fmt.Sprintf("clim-favorites-%s.yaml", time.Now().Format("2006-01-02")))
+		filename := filepath.Join(bdir, fmt.Sprintf("klim-favorites-%s.yaml", time.Now().Format("2006-01-02")))
 		if _, err := os.Stat(filename); err == nil {
-			filename = filepath.Join(bdir, fmt.Sprintf("clim-favorites-%s.yaml", time.Now().Format("2006-01-02-150405")))
+			filename = filepath.Join(bdir, fmt.Sprintf("klim-favorites-%s.yaml", time.Now().Format("2006-01-02-150405")))
 		}
-		header := "# clim — Favorites Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   clim import favorites.yaml\n#\n\n"
+		header := "# klim — Favorites Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   klim import favorites.yaml\n#\n\n"
 
 		if err := fileutil.AtomicWrite(filename, []byte(header+string(data)), 0o644); err != nil {
 			return exportFinishedMsg{err: err}

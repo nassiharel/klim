@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/fileutil"
 )
 
 // acquireLock takes an advisory lock on path. It blocks until the lock

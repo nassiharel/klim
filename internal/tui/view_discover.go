@@ -6,7 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/nassiharel/clim/internal/onboard"
+	"github.com/nassiharel/klim/internal/onboard"
 )
 
 func (m Model) renderForYouList() string {
@@ -15,7 +15,7 @@ func (m Model) renderForYouList() string {
 	if len(m.recommendations) == 0 {
 		b.WriteString("\n\n")
 		b.WriteString("  " + dimVersion.Render("No recommendations yet.") + "\n\n")
-		b.WriteString("  " + dimVersion.Render("Install a few tools and clim will suggest related ones") + "\n")
+		b.WriteString("  " + dimVersion.Render("Install a few tools and klim will suggest related ones") + "\n")
 		b.WriteString("  " + dimVersion.Render("based on what you use.") + "\n")
 		return b.String()
 	}

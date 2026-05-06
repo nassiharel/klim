@@ -15,9 +15,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/paths"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/paths"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // fsRoots collects the per-call resolved trail filesystem paths.
@@ -147,7 +147,7 @@ func readObject(r fsRoots, id ObjectID) (*Snapshot, error) {
 
 // decodeSnapshot strictly decodes the YAML bytes into a Snapshot.
 // Unknown fields, unknown schema versions, and trailing YAML documents
-// are rejected — clim writes exactly one document per object file, so
+// are rejected — klim writes exactly one document per object file, so
 // any extra content was added by a hand-edit or corruption.
 func decodeSnapshot(data []byte, id ObjectID) (*Snapshot, error) {
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
@@ -166,12 +166,12 @@ func decodeSnapshot(data []byte, id ObjectID) (*Snapshot, error) {
 	// SchemaVersion == 0 means the field was missing; we have never
 	// written versionless objects, so this is corruption / hand-edit
 	// rather than a forward-compat issue. Distinguish the message so
-	// users aren't told to "upgrade clim" when nothing newer can fix it.
+	// users aren't told to "upgrade klim" when nothing newer can fix it.
 	if s.SchemaVersion == 0 {
 		return nil, fmt.Errorf("trail object %s is missing schema_version (corrupted or hand-edited?)", id.Short())
 	}
 	if s.SchemaVersion != SchemaVersion {
-		return nil, fmt.Errorf("trail object %s has unsupported schema version %d (this clim supports %d) — upgrade clim",
+		return nil, fmt.Errorf("trail object %s has unsupported schema version %d (this klim supports %d) — upgrade klim",
 			id.Short(), s.SchemaVersion, SchemaVersion)
 	}
 	// Required-field presence check at the YAML node level: zero-valued
@@ -255,7 +255,7 @@ func loadLog(r fsRoots) (*logFile, error) {
 		return nil, fmt.Errorf("trail log is missing schema_version (corrupted or hand-edited?) — delete %s to start over", r.log)
 	}
 	if lf.SchemaVersion != SchemaVersion {
-		return nil, fmt.Errorf("trail log has unsupported schema version %d (this clim supports %d) — upgrade clim",
+		return nil, fmt.Errorf("trail log has unsupported schema version %d (this klim supports %d) — upgrade klim",
 			lf.SchemaVersion, SchemaVersion)
 	}
 	if err := validateLogEntryRequiredFields(data, r.log); err != nil {
@@ -507,7 +507,7 @@ func ValidateOp(op string) error {
 }
 
 // invalidLabelReason rejects labels that would corrupt the human-readable
-// `clim trail log` table or `clim trail show` output: tabs and newlines
+// `klim trail log` table or `klim trail show` output: tabs and newlines
 // would split columns / inject extra lines, and other control runes can
 // produce malformed terminal output. Returning a non-empty string ⇒
 // reject; empty ⇒ label is structurally OK (further checks may apply).
@@ -561,7 +561,7 @@ type LabelInUseError struct {
 }
 
 func (e *LabelInUseError) Error() string {
-	return fmt.Sprintf("trail: label %q is already used by entry @%d (use `clim trail capture` without --label, or pick a different name)",
+	return fmt.Sprintf("trail: label %q is already used by entry @%d (use `klim trail capture` without --label, or pick a different name)",
 		e.Label, e.Index)
 }
 
@@ -636,7 +636,7 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 	// the entry will actually be appended.
 	summary, err := summarize(r, lf, &snap)
 	if err != nil {
-		return nil, fmt.Errorf("trail: previous entry's snapshot is unreadable, cannot extend trail: %w (resolve the corruption or run `clim trail prune` to recover)", err)
+		return nil, fmt.Errorf("trail: previous entry's snapshot is unreadable, cannot extend trail: %w (resolve the corruption or run `klim trail prune` to recover)", err)
 	}
 
 	nextIdx := 0
@@ -761,7 +761,7 @@ func Log(opts LogOptions) ([]Entry, error) {
 //
 // The ref resolution and object read happen under a single trail lock so a
 // concurrent `prune` cannot remove the just-resolved entry's object file
-// between Resolve and readObject — otherwise `clim trail show <ref>` could
+// between Resolve and readObject — otherwise `klim trail show <ref>` could
 // fail with a missing-object error even though the ref was valid when the
 // command started.
 func Show(refSpec string) (*Snapshot, *Entry, error) {

@@ -1,22 +1,22 @@
-# clim installer — downloads the latest release binary for Windows.
+# klim installer — downloads the latest release binary for Windows.
 #
 # Usage:
-#   irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 #
 #   # Install a specific version:
-#   $env:CLIM_VERSION = "v1.2.3"; irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+#   $env:CLIM_VERSION = "v1.2.3"; irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 #
 #   # Custom install directory:
-#   $env:CLIM_INSTALL_DIR = "C:\tools\clim"; irm https://raw.githubusercontent.com/nassiharel/clim/main/install.ps1 | iex
+#   $env:CLIM_INSTALL_DIR = "C:\tools\klim"; irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
-$BinaryName = "clim"
-$GithubRepo = "nassiharel/clim"
+$BinaryName = "klim"
+$GithubRepo = "nassiharel/klim"
 
 # --- Configuration via env vars ---
 $DesiredVersion = $env:CLIM_VERSION
-$InstallDir = if ($env:CLIM_INSTALL_DIR) { $env:CLIM_INSTALL_DIR } else { "$env:LOCALAPPDATA\Programs\clim" }
+$InstallDir = if ($env:CLIM_INSTALL_DIR) { $env:CLIM_INSTALL_DIR } else { "$env:LOCALAPPDATA\Programs\klim" }
 $VerifyChecksum = if ($env:CLIM_VERIFY_CHECKSUM -eq "false") { $false } else { $true }
 
 function Get-LatestVersion {
@@ -96,7 +96,7 @@ function Install-GoFallback {
     }
 
     Write-Host "[info]  Building from source via go install..." -ForegroundColor Green
-    & go install "github.com/nassiharel/clim/cmd/clim@$Tag"
+    & go install "github.com/nassiharel/klim/cmd/klim@$Tag"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[error] go install failed." -ForegroundColor Red
         exit 1
@@ -168,7 +168,7 @@ function Install-Clim {
     $checksumUrl = "https://github.com/$GithubRepo/releases/download/$tag/checksums.txt"
 
     # Create temp directory
-    $tempDir = Join-Path $env:TEMP "clim-install-$(Get-Random)"
+    $tempDir = Join-Path $env:TEMP "klim-install-$(Get-Random)"
     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 
     $zipPath = Join-Path $tempDir $zipName

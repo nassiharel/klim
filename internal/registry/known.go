@@ -43,7 +43,7 @@ type ToolDef struct {
 }
 
 // GitHubInfo captures the subset of GitHub repository metadata that is
-// interesting for display in clim (star count, description, homepage,
+// interesting for display in klim (star count, description, homepage,
 // license, topics, and recent activity timestamps).
 type GitHubInfo struct {
 	Stars       int      `yaml:"stars"`

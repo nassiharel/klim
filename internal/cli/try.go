@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/progress"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/progress"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 var tryCmd = &cobra.Command{
@@ -20,13 +20,13 @@ var tryCmd = &cobra.Command{
 	Long: `Install a tool, run it with optional arguments, then offer to remove it.
 
 This lets you try tools without committing to a permanent install.
-After the tool exits, clim asks whether to keep or remove it.
+After the tool exits, klim asks whether to keep or remove it.
 
 Examples:
-  clim try bat                       # install bat, open a shell, then offer cleanup
-  clim try bat -- README.md          # install bat, run 'bat README.md', then offer cleanup
-  clim try ripgrep -- -i "TODO" .    # install ripgrep, search, then offer cleanup`,
-	Args: requireMinArgs(1, "clim try <tool> [-- args...]"),
+  klim try bat                       # install bat, open a shell, then offer cleanup
+  klim try bat -- README.md          # install bat, run 'bat README.md', then offer cleanup
+  klim try ripgrep -- -i "TODO" .    # install ripgrep, search, then offer cleanup`,
+	Args: requireMinArgs(1, "klim try <tool> [-- args...]"),
 	RunE: runTry,
 }
 

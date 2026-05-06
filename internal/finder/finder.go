@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // ErrEmptyPATH is returned when the PATH environment variable is empty or not set.
@@ -312,7 +312,7 @@ func PathDirectories() []string {
 }
 
 // DetectSource maps a resolved binary path to the install source
-// clim believes owns it (winget, brew, apt, scoop, choco, npm,
+// klim believes owns it (winget, brew, apt, scoop, choco, npm,
 // manual, …). Exported so callers re-resolving a path outside the
 // main scan loop (notably scancache.Apply when recovering a stale
 // cached entry via PATH lookup) classify the source the same way.

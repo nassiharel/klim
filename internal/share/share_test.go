@@ -78,7 +78,7 @@ func TestDecode_InvalidPrefix(t *testing.T) {
 }
 
 func TestDecode_UnknownVersion(t *testing.T) {
-	_, err := Decode("clim:v99:somedata")
+	_, err := Decode("klim:v99:somedata")
 	if err == nil {
 		t.Fatal("expected error for unknown version")
 	}
@@ -88,7 +88,7 @@ func TestDecode_UnknownVersion(t *testing.T) {
 }
 
 func TestDecode_InvalidBase64(t *testing.T) {
-	_, err := Decode("clim:v1:!!!not-valid-base64!!!")
+	_, err := Decode("klim:v1:!!!not-valid-base64!!!")
 	if err == nil {
 		t.Fatal("expected error for invalid base64")
 	}
@@ -98,7 +98,7 @@ func TestDecode_InvalidBase64(t *testing.T) {
 }
 
 func TestDecode_CorruptGzip(t *testing.T) {
-	_, err := Decode("clim:v1:aGVsbG8") // valid base64 but not gzip
+	_, err := Decode("klim:v1:aGVsbG8") // valid base64 but not gzip
 	if err == nil {
 		t.Fatal("expected error for non-gzip data")
 	}
@@ -108,7 +108,7 @@ func TestDecode_CorruptGzip(t *testing.T) {
 }
 
 func TestDecode_EmptyPayload(t *testing.T) {
-	_, err := Decode("clim:v1:")
+	_, err := Decode("klim:v1:")
 	if !errors.Is(err, ErrEmptyToken) {
 		t.Fatalf("expected ErrEmptyToken, got %v", err)
 	}

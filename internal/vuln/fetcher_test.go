@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // stubLooker returns canned vulnerabilities per coord. Errors only when

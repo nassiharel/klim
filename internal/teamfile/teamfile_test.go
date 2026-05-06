@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 func TestParseConstraint(t *testing.T) {
@@ -62,13 +62,13 @@ func TestCheckConstraint(t *testing.T) {
 }
 
 func TestFind(t *testing.T) {
-	// Create temp dir with .clim.yaml.
+	// Create temp dir with .klim.yaml.
 	root := t.TempDir()
 	sub := filepath.Join(root, "a", "b", "c")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	climFile := filepath.Join(root, ".clim.yaml")
+	climFile := filepath.Join(root, ".klim.yaml")
 	if err := os.WriteFile(climFile, []byte("tools:\n  - name: git\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestFind(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".clim.yaml")
+	path := filepath.Join(dir, ".klim.yaml")
 
 	t.Run("valid", func(t *testing.T) {
 		data := "name: test-project\ntools:\n  - name: git\n  - name: kubectl\n    version: \">=1.28\"\n"
@@ -207,7 +207,7 @@ func TestGenerate(t *testing.T) {
 
 // TestWrite_PreservesInodeAndMode guards the contract that
 // teamfile.Write rewrites in place: the inode of an existing
-// .clim.yaml stays stable across a Write call (so hardlinks and
+// .klim.yaml stays stable across a Write call (so hardlinks and
 // rich metadata like ACLs / xattrs survive — atomic temp+rename
 // would replace the inode and drop them) and a manually-set mode
 // is preserved by os.WriteFile's overwrite semantics.
@@ -250,7 +250,7 @@ func TestWrite_PreservesInodeAndMode(t *testing.T) {
 	}
 }
 
-// TestWrite_FollowsSymlinkAndPreservesIt guards that a .clim.yaml
+// TestWrite_FollowsSymlinkAndPreservesIt guards that a .klim.yaml
 // symlink points to a shared template stays a symlink after Write,
 // and the new contents land at the target.
 func TestWrite_FollowsSymlinkAndPreservesIt(t *testing.T) {
@@ -290,7 +290,7 @@ func TestWrite_FollowsSymlinkAndPreservesIt(t *testing.T) {
 }
 
 // TestWrite_DanglingSymlinkCreatesTarget covers the platform-sensitive
-// path called out in init.md: a .clim.yaml symlink whose target
+// path called out in init.md: a .klim.yaml symlink whose target
 // doesn't exist yet but whose parent directory does. os.WriteFile
 // follows the link with O_CREATE and creates the target through it.
 // This is what makes the "shared-template + first write" workflow

@@ -13,7 +13,7 @@ import (
 // OutputFormat names the canonical output formats supported by commands.
 //
 // AGENTS.md ("CLI Standards"): commands should expose `--output` for
-// machine-readable output. clim adopts `--output={text,json,yaml}` as the
+// machine-readable output. klim adopts `--output={text,json,yaml}` as the
 // canonical flag and keeps `--json` as a deprecated alias for backward
 // compatibility.
 type OutputFormat string

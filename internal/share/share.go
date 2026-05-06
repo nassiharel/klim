@@ -15,7 +15,7 @@ import (
 
 const (
 	// tokenPrefix is prepended to every share token for recognition and versioning.
-	tokenPrefix = "clim:v1:"
+	tokenPrefix = "klim:v1:"
 
 	// maxTokenSize limits the decompressed payload to prevent abuse.
 	maxTokenSize = 64 << 10 // 64 KB
@@ -29,14 +29,14 @@ const (
 // Sentinel errors for token encoding/decoding.
 var (
 	ErrEmptyToolList  = errors.New("no tools to encode")
-	ErrInvalidToken   = errors.New("not a valid clim share token")
+	ErrInvalidToken   = errors.New("not a valid klim share token")
 	ErrMalformedToken = errors.New("malformed share token")
 	ErrEmptyToken     = errors.New("empty share token")
 	ErrNoToolsInToken = errors.New("share token contains no tools")
 )
 
 // Encode converts a list of tool names into a compact, URL-safe share token.
-// The format is: clim:v1:<base64url(gzip(comma-separated names))>
+// The format is: klim:v1:<base64url(gzip(comma-separated names))>
 func Encode(names []string) (string, error) {
 	if len(names) == 0 {
 		return "", ErrEmptyToolList
@@ -63,15 +63,15 @@ func Encode(names []string) (string, error) {
 func Decode(token string) ([]string, error) {
 	token = strings.TrimSpace(token)
 
-	if !strings.HasPrefix(token, "clim:") {
+	if !strings.HasPrefix(token, "klim:") {
 		return nil, ErrInvalidToken
 	}
 
 	if !strings.HasPrefix(token, tokenPrefix) {
-		// Has "clim:" but wrong version.
+		// Has "klim:" but wrong version.
 		ver := strings.SplitN(token, ":", 3)
 		if len(ver) >= 2 {
-			return nil, fmt.Errorf("unsupported token version %q (this clim supports v1)", ver[1])
+			return nil, fmt.Errorf("unsupported token version %q (this klim supports v1)", ver[1])
 		}
 		return nil, ErrMalformedToken
 	}

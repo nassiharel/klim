@@ -6,8 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nassiharel/clim/internal/favorites"
-	"github.com/nassiharel/clim/internal/registry"
+	"github.com/nassiharel/klim/internal/favorites"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
 // loadFavoriteNames loads favorites from disk into a map for quick lookups.
@@ -305,7 +305,7 @@ func (m Model) renderFavShareToken() string {
 	}
 	b.WriteString("\n")
 	b.WriteString("  " + dimVersion.Render("Recipients can import with:") + "\n")
-	b.WriteString("  clim open <token>\n")
+	b.WriteString("  klim open <token>\n")
 
 	return b.String()
 }

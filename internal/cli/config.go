@@ -8,12 +8,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/klim/internal/config"
 )
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage clim configuration",
+	Short: "Manage klim configuration",
 }
 
 var configPathCmd = &cobra.Command{

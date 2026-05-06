@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/clim/internal/config"
+	"github.com/nassiharel/klim/internal/config"
 )
 
 // withComplianceCmdCtx wires a cobra.Command with a cliCtx whose Cfg is
@@ -159,8 +159,8 @@ func TestLoadPolicyForCmd_NoSource_ReturnsHelpfulError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when nothing is configured")
 	}
-	if !strings.Contains(err.Error(), "clim security compliance init") {
-		t.Errorf("error should suggest `clim compliance init`, got: %v", err)
+	if !strings.Contains(err.Error(), "klim security compliance init") {
+		t.Errorf("error should suggest `klim compliance init`, got: %v", err)
 	}
 }
 

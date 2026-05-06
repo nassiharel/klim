@@ -4,7 +4,7 @@
 <section class="page-header">
   <a href="/packs" class="back">← Packs</a>
   <h1>{{if $p.DisplayName}}{{$p.DisplayName}}{{else}}{{$p.Name}}{{end}}</h1>
-  {{if $d.IsCustom}}<p class="muted small">Custom pack from <code>~/.config/clim/marketplace/custom-packs.yaml</code>.</p>{{end}}
+  {{if $d.IsCustom}}<p class="muted small">Custom pack from <code>~/.config/klim/marketplace/custom-packs.yaml</code>.</p>{{end}}
   {{if $p.Description}}<p class="muted">{{$p.Description}}</p>{{end}}
 </section>
 
@@ -55,7 +55,7 @@
 {{if $d.IsCustom}}
 <section class="card">
   <h2>Custom pack actions</h2>
-  <p class="muted">This pack is stored in your <code>~/.config/clim/marketplace/custom-packs.yaml</code>.</p>
+  <p class="muted">This pack is stored in your <code>~/.config/klim/marketplace/custom-packs.yaml</code>.</p>
   <form method="POST" action="/backup/packs/{{$p.Name}}/delete" class="inline" onsubmit="return confirm('Delete pack {{$p.Name}}? Tools stay installed.')">
     <button type="submit" class="btn-danger">Delete pack</button>
   </form>

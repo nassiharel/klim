@@ -11,10 +11,10 @@ import (
 	"charm.land/lipgloss/v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/nassiharel/clim/internal/custompacks"
-	"github.com/nassiharel/clim/internal/fileutil"
-	"github.com/nassiharel/clim/internal/registry"
-	"github.com/nassiharel/clim/internal/share"
+	"github.com/nassiharel/klim/internal/custompacks"
+	"github.com/nassiharel/klim/internal/fileutil"
+	"github.com/nassiharel/klim/internal/registry"
+	"github.com/nassiharel/klim/internal/share"
 )
 
 // My Packs detail action indices.
@@ -195,7 +195,7 @@ func exportMyPackFileCmd(pack registry.Pack) tea.Cmd {
 			}
 			filename = fmt.Sprintf("%s-%d.yaml", safeName, i)
 		}
-		header := fmt.Sprintf("# clim — Custom Pack: %s\n# %s\n\n", pack.DisplayName, pack.Description)
+		header := fmt.Sprintf("# klim — Custom Pack: %s\n# %s\n\n", pack.DisplayName, pack.Description)
 		if err := fileutil.AtomicWrite(filename, []byte(header+string(data)), 0o644); err != nil {
 			return myPackActionMsg{action: "export", err: err}
 		}
@@ -355,7 +355,7 @@ func (m Model) renderMyPackDetailView() string {
 		if token != "" {
 			b.WriteString("    " + token + "\n")
 		}
-		b.WriteString("\n  " + dimVersion.Render("Recipients install with:") + " clim open <token>\n")
+		b.WriteString("\n  " + dimVersion.Render("Recipients install with:") + " klim open <token>\n")
 	}
 
 	return b.String()

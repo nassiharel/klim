@@ -10,17 +10,17 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/nassiharel/clim/internal/build"
-	"github.com/nassiharel/clim/internal/logging"
-	"github.com/nassiharel/clim/internal/tui"
+	"github.com/nassiharel/klim/internal/build"
+	"github.com/nassiharel/klim/internal/logging"
+	"github.com/nassiharel/klim/internal/tui"
 )
 
 var verboseFlag bool
 
 var rootCmd = &cobra.Command{
-	Use:   "clim",
+	Use:   "klim",
 	Short: "Interactive CLI manager — detect, check, and manage your dev tools",
-	Long: `clim is a developer tool manager that detects installed CLI tools,
+	Long: `klim is a developer tool manager that detects installed CLI tools,
 shows their versions and install sources, checks for updates,
 and helps you keep everything current.
 
@@ -215,7 +215,7 @@ func Execute() error {
 	return nil
 }
 
-var errCLIFailed = errors.New("clim: command failed")
+var errCLIFailed = errors.New("klim: command failed")
 
 // requireArgs returns a Cobra Args validator that requires exactly n arguments
 // and prints a helpful error message with usage hint when they're missing.

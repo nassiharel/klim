@@ -1,10 +1,10 @@
 ---
-title: "clim info"
+title: "klim info"
 description: Show everything about a tool — versions, packages, references, GitHub info
 ---
 
-`clim info <tool>` is the CLI counterpart to the TUI's tool detail
-page. It shows everything clim knows about a tool: every detected
+`klim info <tool>` is the CLI counterpart to the TUI's tool detail
+page. It shows everything klim knows about a tool: every detected
 installation, available package managers across all sources, GitHub
 project metadata, project / pack references, and related installed
 tools.
@@ -12,7 +12,7 @@ tools.
 ## Usage
 
 ```bash
-clim info <tool> [flags]
+klim info <tool> [flags]
 ```
 
 ## Flags
@@ -21,18 +21,18 @@ clim info <tool> [flags]
 |------|-------------|
 | `--output` | `text` (default) or `json` |
 
-`clim info` always runs a fresh scan: it walks PATH once to build the
+`klim info` always runs a fresh scan: it walks PATH once to build the
 catalog state, then re-checks PATH for the requested tool and resolves
 its package-manager versions. Catalog-wide version resolution is
-skipped, so a single `clim info <tool>` is much cheaper than the
+skipped, so a single `klim info <tool>` is much cheaper than the
 previous behaviour that fanned out package-manager queries for every
 tool in the marketplace. There is no cache to bypass.
 
 ## Examples
 
 ```bash
-clim info kubectl                     # human-readable
-clim info terraform --output json     # machine-readable for scripts
+klim info kubectl                     # human-readable
+klim info terraform --output json     # machine-readable for scripts
 ```
 
 ## Output
@@ -60,7 +60,7 @@ kubectl  (Containers)  ★ 3.3k
   Tags: kubernetes, cli
 
   Referenced by:
-    • .clim.yaml (required >=1.28) — /home/me/myproject/.clim.yaml
+    • .klim.yaml (required >=1.28) — /home/me/myproject/.klim.yaml
     • Pack "Kubernetes Starter" (k8s-starter)
 
   Related installed tools: kubectx
@@ -108,16 +108,16 @@ empty, never `null`.
 
 ## Errors
 
-If the tool name is not in the catalog and a close match exists, clim
+If the tool name is not in the catalog and a close match exists, klim
 suggests it:
 
 ```
-$ clim info kubctl
+$ klim info kubctl
 Error: tool "kubctl" not found in catalog (did you mean "kubectl"?)
 ```
 
 ## See Also
 
-- [`clim why`](/reference/commands/why) — Where (and why) a tool is referenced — focused on the dependency map rather than full metadata.
-- [`clim list`](/reference/commands/list) — Every installed tool, summary table.
-- [`clim search`](/reference/commands/search) — Full-text search across the marketplace.
+- [`klim why`](/reference/commands/why) — Where (and why) a tool is referenced — focused on the dependency map rather than full metadata.
+- [`klim list`](/reference/commands/list) — Every installed tool, summary table.
+- [`klim search`](/reference/commands/search) — Full-text search across the marketplace.
