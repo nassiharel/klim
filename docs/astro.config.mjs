@@ -1,8 +1,21 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+// `site` and `base` are kept compatible with both deployment targets:
+//   - github.io project pages: base="/docs/" mounts under the parent
+//     marketing site at https://<owner>.github.io/<repo>/docs/.
+//   - Custom subdomain (docs.klim.dev): set base="/" via the
+//     KLIM_DOCS_BASE env var when building, or remove it in this file
+//     once the custom domain is fully wired.
+//
+// The combined Pages workflow (.github/workflows/deploy-pages.yml)
+// puts the docs build at `dist/docs/` of the website artifact, so
+// base="/docs/" is the correct default for the github.io setup.
+const docsBase = process.env.KLIM_DOCS_BASE ?? '/docs/';
+
 export default defineConfig({
   site: 'https://docs.klim.dev',
+  base: docsBase,
   integrations: [
     starlight({
       title: 'klim',
