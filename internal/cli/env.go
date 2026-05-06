@@ -185,7 +185,7 @@ errors. Use --yes to skip the install confirmation prompt.`,
 }
 
 func init() {
-	envApplyCmd.Flags().BoolVar(&yesFlag, "yes", false, "Skip confirmation prompts")
+	envApplyCmd.Flags().BoolVarP(&yesFlag, "yes", "y", false, "Skip confirmation prompts")
 }
 
 func runEnvIDApply(cmd *cobra.Command, args []string) error {
@@ -555,16 +555,26 @@ func applyFavorites(names []string) error {
 	// those back out.
 	existingSet := make(map[string]struct{}, len(existing))
 	merged := make([]string, 0, len(existing))
-	for _, n := range existing {
-		n = strings.TrimSpace(n)
-		if n == "" {
+	existingChanged := false
+	for i, n := range existing {
+		trimmed := strings.TrimSpace(n)
+		// Track whether normalization touched anything — even
+		// content-preserving changes (whitespace, dedup) need
+		// a save so the on-disk file is canonicalised.
+		if trimmed != n {
+			existingChanged = true
+		}
+		if trimmed == "" {
+			existingChanged = true // dropped empty/whitespace
 			continue
 		}
-		if _, ok := existingSet[n]; ok {
+		if _, ok := existingSet[trimmed]; ok {
+			existingChanged = true // dropped duplicate
 			continue
 		}
-		existingSet[n] = struct{}{}
-		merged = append(merged, n)
+		existingSet[trimmed] = struct{}{}
+		merged = append(merged, trimmed)
+		_ = i
 	}
 	added := 0
 	for _, n := range names {
@@ -579,10 +589,9 @@ func applyFavorites(names []string) error {
 		merged = append(merged, n)
 		added++
 	}
-	// If we cleaned up the existing list but added nothing new,
-	// still write so the file is left in a canonical state on
-	// next read. Users with a clean file see a no-op.
-	if added == 0 && len(merged) == len(existing) {
+	// Skip save only when nothing changed at all — neither new
+	// additions nor canonicalisation of the existing list.
+	if added == 0 && !existingChanged {
 		fmt.Fprintf(os.Stderr, "  Favorites: 0 added (of %d in env)\n", len(names))
 		return nil
 	}
@@ -608,11 +617,30 @@ func applyPacks(packs []envid.Pack) error {
 	if err != nil {
 		return err
 	}
+	// Normalize the existing pack list too — the custom-packs file
+	// is documented as safe to hand-edit, so an entry like
+	// " my-pack " on disk shouldn't masquerade as a different pack
+	// from the trimmed incoming "my-pack". Trim+drop-empty when
+	// building the lookup set; trim when seeding `merged` so the
+	// re-saved file is canonicalised.
 	existingSet := make(map[string]struct{}, len(existing))
+	merged := make([]registry.Pack, 0, len(existing))
 	for _, p := range existing {
-		existingSet[strings.ToLower(p.Name)] = struct{}{}
+		name := strings.TrimSpace(p.Name)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, ok := existingSet[key]; ok {
+			continue
+		}
+		existingSet[key] = struct{}{}
+		merged = append(merged, registry.Pack{
+			Name:        name,
+			DisplayName: strings.TrimSpace(p.DisplayName),
+			ToolNames:   p.ToolNames,
+		})
 	}
-	merged := append([]registry.Pack(nil), existing...)
 	added := 0
 	for _, p := range packs {
 		// Hygiene: hand-edited or malicious profiles may contain
