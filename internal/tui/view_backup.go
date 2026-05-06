@@ -243,9 +243,20 @@ func (m Model) renderBackupRow(item backupItem, selected bool, confirmMode bool)
 		line = selectedRowStyle.Render(line)
 	}
 
-	// Show attempted command for failed items when selected.
-	if selected && item.status == backupFailed && len(item.cmdArgs) > 0 {
-		line += "\n    " + dimVersion.Render("→ "+strings.Join(item.cmdArgs, " "))
+	// Show attempted command + any multi-line hint (e.g. winget
+	// NO_APPLICATIONS_FOUND guidance) for failed items when selected.
+	// Hints are stored separately from errMsg so the table cell
+	// itself stays single-line; we render them here, after the row,
+	// where they don't disturb alignment.
+	if selected && item.status == backupFailed {
+		if len(item.cmdArgs) > 0 {
+			line += "\n    " + dimVersion.Render("→ "+strings.Join(item.cmdArgs, " "))
+		}
+		if item.hint != "" {
+			for _, hl := range strings.Split(item.hint, "\n") {
+				line += "\n    " + dimVersion.Render(hl)
+			}
+		}
 	}
 
 	return line

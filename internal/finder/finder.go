@@ -278,6 +278,15 @@ func normaliseName(name string) string {
 	return name
 }
 
+// BinaryCandidateNames returns the OS-aware list of file names to
+// look for when resolving a binary by its catalog name. On Windows
+// the list expands by PATHEXT (.exe, .cmd, .bat, .com, …) so a tool
+// listed as "go" matches "go.exe" / "go.cmd" / etc. Exported so the
+// scancache fast-path uses the same expansion the full scan does.
+func BinaryCandidateNames(name string) []string {
+	return binaryCandidateNames(name)
+}
+
 // binaryCandidateNames returns the normalised file names to look for in a directory.
 func binaryCandidateNames(name string) []string {
 	if runtime.GOOS == "windows" {
@@ -289,6 +298,26 @@ func binaryCandidateNames(name string) []string {
 		return candidates
 	}
 	return []string{name}
+}
+
+// PathDirectories returns the deduplicated list of directories the
+// finder will scan on this OS. Equivalent to splitting $PATH but
+// also merging Windows registry PATH entries that the current
+// process may not have inherited (e.g. winget portable installs
+// that update PATH after launch). Exported so scancache (and other
+// fast-path callers) can consult the same view of PATH the finder
+// uses.
+func PathDirectories() []string {
+	return pathDirectories()
+}
+
+// DetectSource maps a resolved binary path to the install source
+// clim believes owns it (winget, brew, apt, scoop, choco, npm,
+// manual, …). Exported so callers re-resolving a path outside the
+// main scan loop (notably scancache.Apply when recovering a stale
+// cached entry via PATH lookup) classify the source the same way.
+func DetectSource(path string) registry.InstallSource {
+	return detectSource(path)
 }
 
 func pathDirectories() []string {
@@ -388,8 +417,10 @@ func detectSource(path string) registry.InstallSource {
 		strings.Contains(lower, "/git/mingw64/bin/"):
 		return registry.SourceManual
 
-	// Windows: winget installs to many locations beyond Program Files.
-	case strings.Contains(lower, "program files"):
+	// Windows: WinGet stores its package metadata under
+	// %LOCALAPPDATA%\Microsoft\WinGet\Packages\<id_<source>>. Binaries
+	// living there are unambiguously winget-managed.
+	case strings.Contains(lower, "/microsoft/winget/packages/"):
 		return registry.SourceWinget
 	case strings.Contains(lower, "8wekyb3d8bbwe"):
 		// 8wekyb3d8bbwe is the package family suffix for Microsoft Store (MSIX)
@@ -398,10 +429,27 @@ func detectSource(path string) registry.InstallSource {
 	case strings.Contains(lower, "microsoft/windowsapps/"):
 		// Windows Store / App Execution Aliases (e.g. python)
 		return registry.SourceWinget
+
+	// AppData\Local\Programs and Program Files are *predominantly*
+	// winget territory on modern Windows: most managed MSIs (VS
+	// Code, Azure Dev CLI, machine-wide installs, etc.) land there
+	// via winget. Calling them SourceManual previously regressed
+	// the happy path for legitimately winget-managed tools — they
+	// stopped getting upgrade/remove actions and lost winget
+	// latest-version resolution.
+	//
+	// Path alone genuinely is ambiguous (Cursor, GitHub Desktop,
+	// Docker Desktop, manual MSIs, and Chocolatey use these
+	// directories too), so when we're wrong, the user hits a
+	// "winget reports no installed package" error. The friendlier
+	// hint we surface for that exact exit code (see
+	// internal/tui/action_hints.go) is the safety net for the
+	// false-positive case; classifying here as SourceWinget keeps
+	// the much more common winget-actually-owns-it case working
+	// without a manual rescan.
 	case strings.Contains(lower, "appdata/local/programs/"):
-		// Per-user installs (VS Code, Azure Dev CLI, etc.)
 		return registry.SourceWinget
-	case strings.Contains(lower, "programdata/"):
+	case strings.Contains(lower, "program files"):
 		return registry.SourceWinget
 
 	default:

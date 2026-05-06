@@ -17,11 +17,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/clim/internal/fileutil"
+	"github.com/nassiharel/clim/internal/finder"
 	"github.com/nassiharel/clim/internal/paths"
 	"github.com/nassiharel/clim/internal/registry"
 )
@@ -142,6 +145,27 @@ func Load() (map[string]Entry, time.Time, error) {
 // Apply overlays cached scan data onto the catalog tools. Tools not present
 // in the cache are left untouched (they will look "not installed"), which
 // is the correct behaviour for newly-added catalog entries.
+//
+// For each cached instance we verify the recorded path still exists.
+// If it doesn't, we recover the tool by walking the same merged PATH
+// the finder would use during a full scan and collecting every
+// matching binary (mirrors finder.scanDir which emits every match
+// per tool, not just the first). That handles:
+//   - external upgrade rotates a versioned dir under brew/winget
+//     (the binary is still on PATH at a different resolved path)
+//   - tool has multiple installed copies and several moved at once
+//
+// Recovered paths are deduped within the per-tool loop so multiple
+// stale entries collapsing to the same live binary appear once.
+// Recovered instances get a fresh source classification via
+// finder.DetectSource (the cached source could now be wrong if the
+// binary was reinstalled via a different manager).
+//
+// When no original path stat-checks AND no recovery match anywhere
+// on PATH, the tool's Latest/LatestFrom are also cleared — leaving
+// stale 'latest version' metadata on a now-uninstalled tool would
+// have the UI confidently render upgrade hints for something the
+// user can't even run.
 func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 	for i := range tools {
 		entry, ok := entries[tools[i].Name]
@@ -152,19 +176,154 @@ func Apply(tools []registry.Tool, entries map[string]Entry) []registry.Tool {
 		tools[i].LatestFrom = entry.LatestFrom
 		if len(entry.Instances) == 0 {
 			tools[i].Instances = nil
+			tools[i].Latest = ""
+			tools[i].LatestFrom = ""
 			continue
 		}
 		insts := make([]registry.Instance, 0, len(entry.Instances))
+		seenPaths := make(map[string]struct{}, len(entry.Instances))
+
+		// First pass: keep instances whose cached path still
+		// exists. Tracking which entries were stale lets us know
+		// whether to bother walking PATH for recovery.
+		anyStale := false
 		for _, e := range entry.Instances {
+			if !pathExists(e.Path) {
+				anyStale = true
+				continue
+			}
+			if _, dup := seenPaths[e.Path]; dup {
+				continue
+			}
+			seenPaths[e.Path] = struct{}{}
 			insts = append(insts, registry.Instance{
 				Path:    e.Path,
 				Version: e.Version,
 				Source:  registry.InstallSource(e.Source),
 			})
 		}
+
+		// Second pass: if any cached path was stale, walk PATH and
+		// append every matching binary that we haven't already
+		// recorded. Doing it once (rather than per-stale-instance)
+		// keeps the scan cheap, and collecting all matches lets a
+		// tool with multiple cached installs recover several at
+		// once — the previous "first match wins" approach silently
+		// dropped distinct later-PATH installations.
+		if anyStale {
+			for _, recovered := range lookupAllOnPATH(tools[i].BinaryNames) {
+				if _, dup := seenPaths[recovered]; dup {
+					continue
+				}
+				seenPaths[recovered] = struct{}{}
+				insts = append(insts, registry.Instance{
+					Path:   recovered,
+					Source: finder.DetectSource(recovered),
+					// Version is intentionally empty: a fresh scan
+					// runs the per-PM resolver to populate it.
+					// Carrying a stale cached version here would
+					// be misleading for a binary at a new path.
+				})
+			}
+		}
+
 		tools[i].Instances = insts
+		if len(insts) == 0 {
+			// Every cached instance vanished and no recovery
+			// found a replacement — the tool's gone. Clear stale
+			// metadata so the UI doesn't show upgrade hints for
+			// something uninstalled.
+			tools[i].Latest = ""
+			tools[i].LatestFrom = ""
+		}
 	}
 	return tools
+}
+
+// pathExists is a tiny wrapper around os.Stat used by Apply to drop
+// cached instances whose binary has been removed since the last
+// scan. Symlinks resolve through Stat (vs Lstat) so a broken symlink
+// is treated as gone.
+func pathExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// lookupOnPATH returns the resolved path of the first binary name
+// found on the same merged PATH the finder uses, or ("", false)
+// when none are present. Kept for callers that explicitly want a
+// single-match result; Apply uses lookupAllOnPATH for full
+// PATH-walk recovery.
+func lookupOnPATH(binaryNames []string) (string, bool) {
+	all := lookupAllOnPATH(binaryNames)
+	if len(all) == 0 {
+		return "", false
+	}
+	return all[0], true
+}
+
+// lookupAllOnPATH walks every directory in finder.PathDirectories()
+// and returns every binary that matches one of binaryNames (with
+// PATHEXT expansion on Windows), in PATH order. Resolved through
+// EvalSymlinks. Each path is returned at most once. Mirrors
+// finder.scanDir which emits every match per tool, so the scancache
+// fast-path can recover multiple cached installations that all
+// moved to new resolved paths in one pass.
+func lookupAllOnPATH(binaryNames []string) []string {
+	if len(binaryNames) == 0 {
+		return nil
+	}
+	dirs := finder.PathDirectories()
+	if len(dirs) == 0 {
+		// Test/edge environments: fall back to exec.LookPath so we
+		// still produce something useful. Returns at most one
+		// match — exec.LookPath doesn't expose siblings.
+		if path, ok := lookupViaExec(binaryNames); ok {
+			return []string{path}
+		}
+		return nil
+	}
+	seen := make(map[string]struct{})
+	out := make([]string, 0, 2)
+	for _, dir := range dirs {
+		for _, name := range binaryNames {
+			for _, candidate := range finder.BinaryCandidateNames(name) {
+				full := filepath.Join(dir, candidate)
+				info, err := os.Stat(full)
+				if err != nil || info.IsDir() {
+					continue
+				}
+				resolved, err := filepath.EvalSymlinks(full)
+				if err != nil || resolved == "" {
+					resolved = full
+				}
+				if _, dup := seen[resolved]; dup {
+					continue
+				}
+				seen[resolved] = struct{}{}
+				out = append(out, resolved)
+			}
+		}
+	}
+	return out
+}
+
+func lookupViaExec(binaryNames []string) (string, bool) {
+	for _, name := range binaryNames {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil || resolved == "" {
+			resolved = path
+		}
+		return resolved, true
+	}
+	return "", false
 }
 
 // Delete removes the cache file. A missing file is not an error.

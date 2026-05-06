@@ -136,7 +136,8 @@ type backupItem struct {
 	source   string
 	status   backupStatus
 	errMsg   string
-	selected bool // true = will be installed on confirm (import only)
+	hint     string // multi-line user-facing guidance (e.g. winget NOT_INSTALLED hint); rendered separately so it never breaks the table cell
+	selected bool   // true = will be installed on confirm (import only)
 }
 
 // --- Backup messages ---
@@ -303,6 +304,9 @@ func (c *toolActionCmd) Run() error {
 			_, _ = fmt.Fprintf(stderr, "\n✗ %s failed (exit code %d)\n", c.action, exitCode)
 		} else {
 			_, _ = fmt.Fprintf(stderr, "\n✗ %s failed: %s\n", c.action, runErr)
+		}
+		if hint := actionFailureHint(c.args, exitCode); hint != "" {
+			_, _ = fmt.Fprintf(stderr, "\n%s\n", hint)
 		}
 	} else {
 		_, _ = fmt.Fprintf(stderr, "\n✓ %s completed (exit code 0)\n", c.action)
@@ -559,6 +563,7 @@ type packItem struct {
 	source  string
 	status  packItemStatus
 	errMsg  string
+	hint    string // multi-line user-facing guidance; never embedded in errMsg so the table cell stays single-line
 }
 
 // packItemDoneMsg is sent when one pack tool install/remove finishes.

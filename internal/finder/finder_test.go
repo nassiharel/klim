@@ -115,7 +115,12 @@ func TestDetectSource(t *testing.T) {
 			registry.SourceManual,
 		},
 
-		// WinGet — Program Files.
+		// Program Files is predominantly winget territory on modern
+		// Windows; classify as SourceWinget so the common case (a
+		// winget MSI install) gets upgrade/remove actions. Non-
+		// winget binaries that happen to live here surface a
+		// friendly hint at remove time instead of a generic error
+		// (see internal/tui/action_hints.go).
 		{
 			"program files",
 			`C:\Program Files\Git\cmd\git.exe`,
@@ -141,17 +146,30 @@ func TestDetectSource(t *testing.T) {
 			registry.SourceWinget,
 		},
 
-		// WinGet — per-user programs.
+		// AppData\Local\Programs: same reasoning as Program Files —
+		// winget per-user MSIs (VS Code, Azure Dev CLI) are the
+		// common case; misattributed third-party installers get
+		// the friendly hint at remove time.
 		{
 			"local programs",
 			`C:\Users\user\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd`,
 			registry.SourceWinget,
 		},
 
-		// WinGet — ProgramData.
+		// ProgramData / DockerDesktop / etc.: not a winget signal —
+		// the path is shared by Docker, Chocolatey (caught earlier),
+		// and various installers. We can't attribute it without more
+		// context, so call it manual.
 		{
-			"programdata",
+			"programdata docker desktop",
 			`C:\ProgramData\DockerDesktop\version-bin\docker.exe`,
+			registry.SourceManual,
+		},
+
+		// WinGet — explicit packages dir under AppData.
+		{
+			"winget packages dir",
+			`C:\Users\user\AppData\Local\Microsoft\WinGet\Packages\jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe\jq.exe`,
 			registry.SourceWinget,
 		},
 
