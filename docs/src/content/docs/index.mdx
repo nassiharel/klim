@@ -1,6 +1,6 @@
 ---
 title: klim Documentation
-description: Learn how to use klim as a productivity booster for dev tools
+description: Klim — the developer environment control plane and productivity booster for dev tools
 template: splash
 hero:
   tagline: Reignite Dev Experience.
@@ -9,33 +9,212 @@ hero:
       link: /getting-started/installation/
       icon: right-arrow
       variant: primary
+    - text: Quick Start
+      link: /getting-started/quickstart/
+      icon: rocket
+      variant: secondary
     - text: View on GitHub
       link: https://github.com/nassiharel/klim
       icon: external
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-Klim is the developer environment control plane and productivity booster for dev tools: it maps the tools your projects depend on, turns them into portable contracts, and automates install, audit, diff, upgrade, and restore workflows through native package managers.
+export const base = import.meta.env.BASE_URL;
+
+Klim is the **developer environment control plane**and **productivity booster for dev tools**. It maps the tools your projects depend on, turns them into portable contracts, and automates install, audit, diff, upgrade, and restore workflows through native package managers.
+
+One binary. Cross-platform. Zero lock-in: every operation delegates to `winget`, `brew`, `apt`, `scoop`, `choco`, `snap`, or `npm` — the package managers you already trust.
+
+## Get started
 
 <CardGrid stagger>
-  <Card title="Start with an environment map" icon="rocket">
-    Install Klim, launch the TUI, and see installed tools, versions, sources, paths, update status, and marketplace context. [Get started ->](/getting-started/installation/)
-  </Card>
-  <Card title="Interactive control plane" icon="laptop">
-    Browse tools, batch upgrade, manage favorites, inspect health, and move between inventory, projects, backups, dashboard, and configuration. [TUI guide ->](/guides/tui-overview/)
-  </Card>
-  <Card title="Project contracts" icon="setting">
-    Define required tools in `.klim.yaml`, validate them locally or in CI, and generate workflows, Dockerfiles, and devcontainers from the same source. [Team manifests ->](/guides/team-manifests/)
-  </Card>
-  <Card title="Portable environments" icon="seti:clock">
-    Export, import, share, diff, and capture trail snapshots so a known-good toolchain can move across machines and time. [Backup and restore ->](/guides/backup-restore/)
-  </Card>
-  <Card title="Security and compliance" icon="shield">
-    Audit unmanaged installs, PATH risks, archived upstreams, stale projects, licenses, vulnerabilities, and SBOM output for compliance pipelines. [Security guide ->](/guides/security/)
-  </Card>
-  <Card title="Deterministic automation" icon="document">
-    Use stable commands, JSON output, and predictable exit codes from scripts, CI, and AI agents instead of relying on ad-hoc shell guessing. [Commands ->](/reference/commands/list/)
-  </Card>
+  <LinkCard
+    title="Install klim"
+    description="One-line installer for macOS, Linux, and Windows. Pre-built binaries, brew tap, Go install, and Linux packages also available."
+    href={`${base}getting-started/installation/`}
+  />
+  <LinkCard
+    title="Quick Start"
+    description="Launch the TUI, list installed tools, run klim check, and import a manifest in five minutes."
+    href={`${base}getting-started/quickstart/`}
+  />
 </CardGrid>
+
+## What klim does
+
+<CardGrid>
+  <LinkCard
+    title="Interactive TUI"
+    description="Nine tabs covering installed tools, favorites, updates, marketplace discovery, backups, project files, dashboard, configuration, and security health."
+    href={`${base}guides/tui-overview/`}
+  />
+  <LinkCard
+    title="Team Manifests (.klim.yaml)"
+    description="Encode required tools and version constraints. klim check validates locally and in CI; klim init scaffolds one from your repo files."
+    href={`${base}guides/team-manifests/`}
+  />
+  <LinkCard
+    title="Generate CI / Containers"
+    description="Turn .klim.yaml into a GitHub Actions workflow, Dockerfile, or devcontainer.json — same source, three targets."
+    href={`${base}reference/commands/generate/`}
+  />
+  <LinkCard
+    title="Backup & Restore"
+    description="Export your toolchain to a YAML manifest and reinstall everything on a new machine with klim import."
+    href={`${base}guides/backup-restore/`}
+  />
+  <LinkCard
+    title="Share via tokens"
+    description="Compact klim:v1:... tokens for chat. Recipients run klim open <token> to install your toolchain."
+    href={`${base}reference/commands/share/`}
+  />
+  <LinkCard
+    title="Env profiles (klim env)"
+    description="Capture the full environment fingerprint: tools, favorites, custom packs, klim version, OS, and audit counts. Diff and apply across machines."
+    href={`${base}reference/commands/env/`}
+  />
+  <LinkCard
+    title="Toolchain history (klim trail)"
+    description="Git-style content-addressed snapshots of your environment. Capture, label, log, show, diff, and prune."
+    href={`${base}reference/commands/trail/`}
+  />
+  <LinkCard
+    title="Environment Diff"
+    description="Compare your local toolchain against a manifest, share token, or env profile. Side-by-side output and CI-friendly exit codes."
+    href={`${base}guides/environment-diff/`}
+  />
+</CardGrid>
+
+## Security and compliance
+
+<CardGrid>
+  <LinkCard
+    title="Health, audit, vulns, compliance"
+    description="klim security covers PATH issues, archived upstreams, license inventory, OSV-backed CVE/GHSA lookup, and policy enforcement."
+    href={`${base}guides/security/`}
+  />
+  <LinkCard
+    title="Compliance policy"
+    description="Define allowed sources, allowed/blocked licenses, blocked tools, required tools, and a max vulnerability severity threshold."
+    href={`${base}reference/commands/security/`}
+  />
+  <LinkCard
+    title="Vulnerability scan"
+    description="Cross-reference installed versions against OSV.dev for known CVEs and GHSAs. Cached, severity-graded, scriptable."
+    href={`${base}reference/commands/vuln/`}
+  />
+  <LinkCard
+    title="Environment Score"
+    description="Single 0–100 metric combining tool freshness, doctor health, audit findings, compliance, and managed sources. Grade scale A+ to F, badge for shields.io."
+    href={`${base}reference/commands/score/`}
+  />
+</CardGrid>
+
+## Discovery and automation
+
+<CardGrid>
+  <LinkCard
+    title="Marketplace catalog"
+    description="110+ curated developer tools across categories. Filter by tag, category, or platform. Curated packs (Cloud Essentials, K8s Starter) bundle related tools."
+    href={`${base}marketplace/catalog/`}
+  />
+  <LinkCard
+    title="Onboarding wizard"
+    description="klim onboard scores tools by your dev role (web, devops, data, mobile, systems, security) and installs in one shot."
+    href={`${base}reference/commands/onboard/`}
+  />
+  <LinkCard
+    title="Try a tool"
+    description="klim try <tool> installs temporarily, runs your command, then asks keep-or-remove. Like npx, but for any CLI."
+    href={`${base}reference/commands/try/`}
+  />
+  <LinkCard
+    title="Auto-install shims (proxy)"
+    description="klim proxy add kubectl creates a shim that installs the tool on first run. Lazy installation for tools you might need."
+    href={`${base}reference/commands/proxy/`}
+  />
+  <LinkCard
+    title="Update watch"
+    description="klim watch reports available updates across the whole toolchain. Cron-friendly with --output json for notification scripts."
+    href={`${base}reference/commands/watch/`}
+  />
+  <LinkCard
+    title="Why is this installed?"
+    description="klim why <tool> shows where a tool is referenced — projects, packs, related tools, and the package managers that can supply it."
+    href={`${base}reference/commands/why/`}
+  />
+</CardGrid>
+
+## Tool management
+
+<CardGrid>
+  <LinkCard
+    title="Install / upgrade / remove"
+    description="Scriptable, --output json, --dry-run preview, --pack expansion, --source pin. Same command from terminal, CI, and AI agents."
+    href={`${base}reference/commands/install/`}
+  />
+  <LinkCard
+    title="Tool detail (klim info)"
+    description="Every install location, every available package source, GitHub stats, project / pack references, related tools — one screen."
+    href={`${base}reference/commands/info/`}
+  />
+  <LinkCard
+    title="Search"
+    description="klim search <query> ranks the marketplace by name, tag, and description. Use it from the CLI or the TUI's filter sidebar."
+    href={`${base}reference/commands/search/`}
+  />
+  <LinkCard
+    title="Adding tools to the catalog"
+    description="Drop a YAML file in marketplace/tools/ with package IDs and a github slug. CI assembles, GitHub enrichment fills the rest."
+    href={`${base}guides/adding-tools/`}
+  />
+  <LinkCard
+    title="Adding curated packs"
+    description="Bundle related tools (e.g. Cloud Essentials) so users install a whole stack with klim install --pack."
+    href={`${base}guides/adding-packs/`}
+  />
+  <LinkCard
+    title="Favorites"
+    description="Star tools you care about; the * indicator follows them everywhere. Export favorites as their own manifest or share token."
+    href={`${base}guides/favorites/`}
+  />
+</CardGrid>
+
+## Shell and CI integration
+
+<CardGrid>
+  <LinkCard
+    title="Shell completions"
+    description="Native tab completion for bash, zsh, fish, and PowerShell. klim completion <shell>."
+    href={`${base}reference/commands/completion/`}
+  />
+  <LinkCard
+    title="Shell hooks (auto-check on cd)"
+    description="Like nvm/direnv: cd into a project with .klim.yaml and klim quietly tells you about missing or outdated tools."
+    href={`${base}reference/commands/hook/`}
+  />
+  <LinkCard
+    title="Configuration"
+    description="config.yaml controls logging, marketplace URL, refresh behaviour, concurrency, and UI preferences. Edit in-TUI or open with klim config edit."
+    href={`${base}reference/configuration/`}
+  />
+  <LinkCard
+    title="Custom marketplaces"
+    description="Add internal/community marketplace URLs via klim config marketplace add. Tools merge with the default catalog."
+    href={`${base}reference/commands/marketplace/`}
+  />
+</CardGrid>
+
+## CLI reference
+
+The full command reference lives under <a href={`${base}reference/commands/list/`}>Commands</a>. Highlights:
+
+- **Core**: `list`, `update`, `version`, `browser`
+- **Project**: `init`, `check`, `generate`
+- **Tools**: `install`, `upgrade`, `remove`, `info`, `search`, `try`, `onboard`, `why`, `watch`, `diff`
+- **Backup & sharing**: `export`, `import`, `share`, `open`, `env`, `trail`
+- **Health & security**: `security health`, `security audit`, `security vuln`, `security compliance`, `score`
+- **Shell integration**: `shell completion`, `shell hook`, `proxy`
+- **Configuration**: `config`, `config marketplace`

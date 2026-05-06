@@ -122,6 +122,6 @@ klim export show upgrade       # also matches
 
 ## See Also
 
-- [`klim import`](/reference/commands/import) — Install tools from a manifest
-- [`klim share`](/reference/commands/share) — Generate a compact share token
-- [`klim diff`](/reference/commands/diff) — Compare against a snapshot or manifest
+- [`klim import`](./import.md) — Install tools from a manifest
+- [`klim share`](./share.md) — Generate a compact share token
+- [`klim diff`](./diff.md) — Compare against a snapshot or manifest

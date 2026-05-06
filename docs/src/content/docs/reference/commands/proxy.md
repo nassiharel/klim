@@ -50,4 +50,4 @@ klim proxy remove kubectl
 
 ## See Also
 
-- [klim try](/reference/commands/try) — Try a tool temporarily
+- [klim try](./try.md) — Try a tool temporarily

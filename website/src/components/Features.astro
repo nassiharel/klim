@@ -31,6 +31,81 @@ const pillars = [
     description: 'Let AI agents and CI call stable Klim commands with predictable exit codes and JSON output instead of improvising shell commands from scratch.',
   },
 ];
+
+const capabilities = [
+  {
+    title: 'Interactive TUI',
+    description: 'Nine tabs covering Installed, Favorites, Updates, Discover, Backup, Project, Dashboard, Config, and Security.',
+  },
+  {
+    title: 'Manifests (.klim.yaml)',
+    description: 'Codify required tools and version ranges. klim init scaffolds one from your repo files automatically.',
+  },
+  {
+    title: 'klim check / klim score',
+    description: 'CI-friendly validation of project requirements plus a 0–100 environment health grade with shields.io badges.',
+  },
+  {
+    title: 'klim trail',
+    description: 'Git-style content-addressed snapshots of your environment with capture, label, log, show, diff, and prune.',
+  },
+  {
+    title: 'klim env',
+    description: 'Capture the full environment fingerprint (tools, favorites, custom packs, OS, audit). Diff and apply across machines.',
+  },
+  {
+    title: 'klim diff',
+    description: 'Compare local toolchain against a manifest, share token, or env profile with side-by-side output and CI exit codes.',
+  },
+  {
+    title: 'klim generate',
+    description: 'Turn .klim.yaml into a GitHub Actions workflow, Dockerfile, or devcontainer.json — same source, three targets.',
+  },
+  {
+    title: 'klim onboard',
+    description: 'Role-based wizard (web, devops, data, mobile, systems, security) that ranks tools and installs in one shot.',
+  },
+  {
+    title: 'klim try',
+    description: 'Install a tool temporarily, run your command, then keep-or-remove. Like npx, but for any CLI.',
+  },
+  {
+    title: 'klim proxy',
+    description: 'Auto-install shims that fetch a tool on first use. Lazy installation for the long-tail of CLIs.',
+  },
+  {
+    title: 'klim watch',
+    description: 'Cron-friendly update notifier across the whole toolchain with --output json for notification scripts.',
+  },
+  {
+    title: 'klim why',
+    description: 'Reverse dependency map: where a tool is referenced (projects, packs, related tools, supplying package managers).',
+  },
+  {
+    title: 'Security audit + vulns',
+    description: 'OSV-backed CVE/GHSA lookup, license inventory, archived-upstream warnings, PATH hygiene, and CycloneDX SBOM export.',
+  },
+  {
+    title: 'Compliance policy',
+    description: 'Define allowed sources, allowed/blocked licenses, blocked/required tools, and a max vulnerability severity threshold.',
+  },
+  {
+    title: 'Marketplace + custom packs',
+    description: '110+ curated tools across categories. Bundle related tools into packs. Add internal or community marketplace URLs.',
+  },
+  {
+    title: 'Share tokens',
+    description: 'Compact klim:v1:... tokens for chat. Recipients run klim open <token> to install your toolchain.',
+  },
+  {
+    title: 'Shell completion + hooks',
+    description: 'Bash, zsh, fish, PowerShell completions plus a cd-hook that quietly checks .klim.yaml when you enter a project.',
+  },
+  {
+    title: 'Local-first and offline-friendly',
+    description: 'No auth, no telemetry, no required network. Marketplace catalog cached locally; native managers do the work.',
+  },
+];
 ---
 
 <section id="platform" class="py-20 md:py-32">
@@ -53,6 +128,26 @@ const pillars = [
           </div>
           <h3 class="mb-2 text-lg font-semibold text-white">{pillar.title}</h3>
           <p class="text-sm leading-relaxed text-slate-400">{pillar.description}</p>
+        </div>
+      ))}
+    </div>
+
+    <div class="mt-24 text-center">
+      <h3 class="text-2xl font-bold text-white sm:text-3xl">
+        Built-in capabilities
+      </h3>
+      <p class="mx-auto mt-4 max-w-3xl text-base text-slate-400">
+        One binary covers discovery, validation, automation, security, and sharing.
+        Every command works from the terminal, the TUI, CI, and AI agents — same
+        flags, same JSON, same exit codes.
+      </p>
+    </div>
+
+    <div class="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {capabilities.map((cap) => (
+        <div class="rounded-lg border border-slate-800 bg-slate-900/40 p-5 transition-colors hover:border-emerald-500/30">
+          <h4 class="mb-1.5 text-sm font-semibold text-emerald-300">{cap.title}</h4>
+          <p class="text-sm leading-relaxed text-slate-400">{cap.description}</p>
         </div>
       ))}
     </div>

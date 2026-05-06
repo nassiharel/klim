@@ -36,4 +36,4 @@ The **Config** tab (press `8`) provides an in-TUI editor for all settings. Navig
 
 ## See Also
 
-- [Configuration Reference](/reference/configuration) — All config.yaml options
+- [Configuration Reference](../configuration.md) — All config.yaml options
