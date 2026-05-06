@@ -19,7 +19,7 @@ var verboseFlag bool
 
 var rootCmd = &cobra.Command{
 	Use:   "klim",
-	Short: "Developer environment control plane for tools, teams, CI, and agents",
+	Short: "Productivity booster for dev tools, teams, CI, and agents",
 	Long: `klim maps the developer tools your projects depend on, turns them
 into portable environment contracts, and automates install, audit, diff,
 upgrade, and restore workflows through native package managers.

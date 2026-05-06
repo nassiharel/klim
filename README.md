@@ -9,18 +9,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nassiharel/klim/releases/latest"><img src="https://img.shields.io/github/v/release/nassiharel/klim?style=flat-square" alt="Release"></a>
+  <a href="https://github.com/nassiharel/klim/commits/main"><img src="https://img.shields.io/github/last-commit/nassiharel/klim?style=flat-square" alt="Last commit"></a>
   <a href="https://github.com/nassiharel/klim/actions"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/klim/ci.yml?style=flat-square" alt="CI"></a>
   <a href="https://github.com/nassiharel/klim/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/klim/codeql.yml?style=flat-square&label=CodeQL" alt="CodeQL"></a>
   <a href="https://goreportcard.com/report/github.com/nassiharel/klim"><img src="https://img.shields.io/badge/go%20report-A+-brightgreen?style=flat-square" alt="Go Report Card"></a>
   <a href="https://pkg.go.dev/github.com/nassiharel/klim"><img src="https://img.shields.io/badge/godoc-reference-blue?style=flat-square" alt="Go Reference"></a>
-  <a href="https://github.com/nassiharel/klim/releases"><img src="https://img.shields.io/github/downloads/nassiharel/klim/total?style=flat-square" alt="Downloads"></a>
+  <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/nassiharel/klim?style=flat-square&label=go" alt="Go version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/nassiharel/klim?style=flat-square" alt="License"></a>
 </p>
 
 ---
 
-Klim is the developer environment control plane and productivity booster for dev tools: a deterministic, cross-platform layer for discovering, standardizing, securing, and automating the tools every project depends on. It keeps native package managers in charge of installation while giving humans, teams, CI, and AI agents the same portable environment contracts and predictable operations.
+Klim is a productivity booster for dev tools: a deterministic, cross-platform layer for discovering, standardizing, securing, and automating the tools every project depends on. It keeps native package managers in charge of installation while giving humans, teams, CI, and AI agents the same portable environment contracts and predictable operations.
 
 ## Quick install
 
@@ -35,7 +35,7 @@ irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 brew install nassiharel/tap/klim
 ```
 
-Launch the interactive control plane:
+Launch the interactive TUI:
 
 ```bash
 klim
