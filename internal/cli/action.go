@@ -401,8 +401,9 @@ func executeActionPlans(ctx context.Context, ps actionSummary, streamStdout bool
 }
 
 // presentParticiple returns the "-ing" form of an action verb. Hand-
-// rolled because naive concatenation produces "installing" but also
-// "upgradeing" / "removeing".
+// rolled because naive concatenation would produce wrong forms for
+// "upgrade" and "remove" (where the trailing "e" must be dropped
+// before "-ing").
 func presentParticiple(a Action) string {
 	switch a {
 	case ActionInstall:

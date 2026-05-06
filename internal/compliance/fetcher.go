@@ -146,7 +146,7 @@ type LoadOptions struct {
 // LoadOrFetch loads a cached policy. If the cache is missing/stale, fetches
 // from the remote and updates the cache. On fetch failure or a malformed
 // fresh response, the stale cache (if any) is returned and preserved —
-// we never overwrite a known-good cache with an unparseable payload.
+// we never overwrite a known-good cache with an unparsable payload.
 func LoadOrFetch(ctx context.Context, fetcher Fetcher, opts LoadOptions) (*Policy, string, error) {
 	cachePath, err := cachePathFor(fetcher.CacheKey())
 	if err != nil {

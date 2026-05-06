@@ -149,7 +149,7 @@ func TestLoadOrFetch_RejectsBadFreshFetchAndPreservesCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Stub fetcher returns an unparseable HTML/login-page response.
+	// Stub fetcher returns an unparsable HTML/login-page response.
 	bad := []byte("<html><body>Please sign in</body></html>")
 	fetcher := &stubFetcher{data: bad}
 
