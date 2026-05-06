@@ -3,6 +3,7 @@
 package compliance
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -67,7 +68,7 @@ required_tools:
 // change, edit SamplePolicyYAML and both surfaces stay in sync.
 func WriteSamplePolicy(path string) error {
 	if path == "" {
-		return fmt.Errorf("compliance policy path must not be empty")
+		return errors.New("compliance policy path must not be empty")
 	}
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("%s already exists", path)

@@ -1,9 +1,6 @@
 package tui
 
 import (
-	"fmt"
-	"strings"
-
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/klim/internal/compliance"
@@ -39,21 +36,6 @@ func (m Model) complianceBadge(toolName string) string {
 	}
 }
 
-// complianceShortBadge returns a single-character badge for compact rows.
-func (m Model) complianceShortBadge(toolName string) string {
-	if m.complianceIndex == nil || !m.complianceIndex.HasPolicy() {
-		return ""
-	}
-	switch m.complianceIndex.Status(toolName) {
-	case compliance.StatusViolation:
-		return complianceErrorStyle.Render("✗")
-	case compliance.StatusWarning:
-		return complianceWarnStyle.Render("⚠")
-	default:
-		return ""
-	}
-}
-
 // complianceVerdictChip returns a hero-header chip for the tool's
 // compliance state. Compliant tools and the "no policy" case both
 // return "" so the page stays uncluttered when there's nothing to flag.
@@ -74,18 +56,6 @@ func (m Model) complianceVerdictChip(toolName string) string {
 	}
 }
 
-// complianceReasons returns human-readable reasons for status, joined by "; ".
-func (m Model) complianceReasons(toolName string) string {
-	if m.complianceIndex == nil {
-		return ""
-	}
-	reasons := m.complianceIndex.Reasons(toolName)
-	if len(reasons) == 0 {
-		return ""
-	}
-	return strings.Join(reasons, "; ")
-}
-
 // complianceBlocksInstall returns (true, reason) when policy forbids installing the tool
 // AND the user has block_installs=true configured.
 func (m Model) complianceBlocksInstall(toolName string) (bool, string) {
@@ -99,5 +69,5 @@ func (m Model) complianceBlocksInstall(toolName string) (bool, string) {
 	if ok {
 		return false, ""
 	}
-	return true, fmt.Sprintf("compliance blocked: %s", reason)
+	return true, "compliance blocked: " + reason
 }

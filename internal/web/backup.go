@@ -128,11 +128,11 @@ func (s *Server) downloadSavedBackup(w http.ResponseWriter, r *http.Request) {
 	// file. Even though paths.BackupsDir() is a fixed location, a
 	// careless join could escape it via "..".
 	if name == "" || strings.ContainsAny(name, "/\\") || strings.HasPrefix(name, ".") {
-		s.serveError(w, r, fmt.Errorf("invalid backup name"), http.StatusBadRequest)
+		s.serveError(w, r, errors.New("invalid backup name"), http.StatusBadRequest)
 		return
 	}
 	if !strings.HasSuffix(strings.ToLower(name), ".yaml") {
-		s.serveError(w, r, fmt.Errorf("only .yaml backups are downloadable"), http.StatusBadRequest)
+		s.serveError(w, r, errors.New("only .yaml backups are downloadable"), http.StatusBadRequest)
 		return
 	}
 	dir, err := paths.BackupsDir()
@@ -141,7 +141,7 @@ func (s *Server) downloadSavedBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	full := filepath.Join(dir, name)
-	body, err := os.ReadFile(full)
+	body, err := os.ReadFile(full) //nolint:gosec // G703: name is validated above (no '/'/'\'/'.' prefix; .yaml suffix).
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			s.serveError(w, r, fmt.Errorf("backup %q not found", name), http.StatusNotFound)
@@ -152,7 +152,7 @@ func (s *Server) downloadSavedBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, name))
-	_, _ = w.Write(body)
+	_, _ = w.Write(body) //nolint:gosec // G705: Content-Type set to application/yaml; body is the user's own backup.
 }
 
 // downloadExport returns the manifest as a YAML attachment so the user

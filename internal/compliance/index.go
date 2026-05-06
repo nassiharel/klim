@@ -9,6 +9,7 @@ import (
 // ToolStatus represents the compliance state of a single tool.
 type ToolStatus int
 
+// ToolStatus enum values, ordered from lowest concern to highest.
 const (
 	StatusUnknown   ToolStatus = iota // no policy, or policy doesn't apply
 	StatusCompliant                   // passes all rules

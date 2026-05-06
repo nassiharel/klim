@@ -886,7 +886,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Capture succeeded — reload the log so the new entry
 		// appears at the top, and report the hash so users can
 		// reference it later.
-		m.statusMsg = fmt.Sprintf("✓ Captured trail entry %s", string(msg.entry.Object)[:7])
+		m.statusMsg = "✓ Captured trail entry " + string(msg.entry.Object)[:7]
 		return m, loadTrailLogCmd(0)
 
 	case marketplaceRefreshMsg:
@@ -2066,10 +2066,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.statusMsg = "Still scanning — please wait..."
 					return m, nil
 				}
-				return m, m.startEnvSubview()
+				cmd := m.startEnvSubview()
+				return m, cmd
 			case backupMenuTrail:
 				// Trail — open the toolchain history sub-view.
-				return m, m.startTrailSubview()
+				cmd := m.startTrailSubview()
+				return m, cmd
 			case backupMenuCreatePack:
 				// Create Pack — enter pack creation wizard.
 				if m.phase < phaseDone {

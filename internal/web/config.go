@@ -1,7 +1,7 @@
 package web
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -41,9 +41,10 @@ func (s *Server) pageConfig(w http.ResponseWriter, r *http.Request) {
 // can't observe a half-updated struct.
 func (s *Server) pageConfigSave(w http.ResponseWriter, r *http.Request) {
 	if s.opts.Config == nil {
-		s.serveError(w, r, fmt.Errorf("no config loaded"), http.StatusInternalServerError)
+		s.serveError(w, r, errors.New("no config loaded"), http.StatusInternalServerError)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB is generous for the config form
 	if err := r.ParseForm(); err != nil {
 		s.serveError(w, r, err, http.StatusBadRequest)
 		return

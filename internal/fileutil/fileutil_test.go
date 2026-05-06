@@ -140,12 +140,12 @@ func TestAtomicWritePreservesDanglingSymlink(t *testing.T) {
 // the final regular file, with both intermediate links intact.
 func TestAtomicWriteFollowsSymlinkChain(t *testing.T) {
 	dir := t.TempDir()
-	real := filepath.Join(dir, "real.txt")
-	if err := os.WriteFile(real, []byte("v1"), 0o644); err != nil {
+	target := filepath.Join(dir, "real.txt")
+	if err := os.WriteFile(target, []byte("v1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	mid := filepath.Join(dir, "mid.txt")
-	mustSymlink(t, real, mid)
+	mustSymlink(t, target, mid)
 	top := filepath.Join(dir, "top.txt")
 	mustSymlink(t, mid, top)
 
@@ -162,7 +162,7 @@ func TestAtomicWriteFollowsSymlinkChain(t *testing.T) {
 			t.Errorf("link %s was replaced with a regular file", link)
 		}
 	}
-	got, _ := os.ReadFile(real)
+	got, _ := os.ReadFile(target)
 	if string(got) != "v2" {
 		t.Errorf("end-of-chain content = %q, want v2", got)
 	}
@@ -178,8 +178,8 @@ func TestAtomicWriteRelativeSymlink(t *testing.T) {
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	real := filepath.Join(dir, "real.txt")
-	if err := os.WriteFile(real, []byte("v1"), 0o644); err != nil {
+	target := filepath.Join(dir, "real.txt")
+	if err := os.WriteFile(target, []byte("v1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(sub, "link.txt")
@@ -190,7 +190,7 @@ func TestAtomicWriteRelativeSymlink(t *testing.T) {
 		t.Fatalf("AtomicWrite via relative symlink: %v", err)
 	}
 
-	got, _ := os.ReadFile(real)
+	got, _ := os.ReadFile(target)
 	if string(got) != "v2" {
 		t.Errorf("relative-symlink target = %q, want v2", got)
 	}
@@ -325,7 +325,7 @@ func TestAtomicWritePropagatesLstatErrors(t *testing.T) {
 	if err := os.Chmod(gated, 0o000); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(gated, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(gated, 0o755) }) //nolint:gosec // G302: 0755 is the standard restore perm for a test temp dir.
 
 	err := AtomicWrite(link, []byte("v2"), 0o644)
 	if err == nil {

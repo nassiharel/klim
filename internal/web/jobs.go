@@ -19,15 +19,15 @@ import (
 // reader keeps draining the pipe so the subprocess never blocks.
 const scanMaxLineBytes = 1 << 20 // 1 MiB
 
-// appendCapped grows buf with chunk's bytes up to max total bytes.
-// Anything past max is dropped (we still drain the pipe so the
+// appendCapped grows buf with chunk's bytes up to maxBytes total.
+// Anything past maxBytes is dropped (we still drain the pipe so the
 // subprocess can't block on a full buffer; truncation is preferable
 // to a hung install).
-func appendCapped(buf []byte, chunk []byte, max int) []byte {
-	if max <= 0 || len(buf) >= max {
+func appendCapped(buf []byte, chunk []byte, maxBytes int) []byte {
+	if maxBytes <= 0 || len(buf) >= maxBytes {
 		return buf
 	}
-	room := max - len(buf)
+	room := maxBytes - len(buf)
 	if len(chunk) > room {
 		chunk = chunk[:room]
 	}
@@ -49,6 +49,7 @@ func trimEOL(line []byte) []byte {
 // JobStatus is a job's lifecycle state.
 type JobStatus string
 
+// JobStatus enum values.
 const (
 	JobStatusRunning JobStatus = "running"
 	JobStatusSuccess JobStatus = "success"
@@ -58,6 +59,7 @@ const (
 // JobAction enumerates the package-manager actions a Job can run.
 type JobAction string
 
+// JobAction enum values.
 const (
 	ActionInstall JobAction = "install"
 	ActionUpgrade JobAction = "upgrade"
@@ -107,6 +109,8 @@ type execExecutor struct{}
 
 func newExecExecutor() Executor { return execExecutor{} }
 
+// Run executes args[0] with args[1:] as a real OS subprocess and
+// streams stdout+stderr lines through the returned output channel.
 func (execExecutor) Run(ctx context.Context, args []string) (<-chan string, <-chan error) {
 	out := make(chan string, 32)
 	done := make(chan error, 1)

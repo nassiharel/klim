@@ -84,7 +84,7 @@ func TestHintFromError_RealExecExitError(t *testing.T) {
 	defer func(orig int) { wingetExitNotInstalled = orig }(wingetExitNotInstalled)
 	wingetExitNotInstalled = 42
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestHintHelperProcess")
+	cmd := exec.Command(os.Args[0], "-test.run=TestHintHelperProcess") //nolint:gosec // G702: re-exec self for helper-process pattern in a test.
 	cmd.Env = append(os.Environ(), "GO_HELPER_PROCESS=1")
 	err := cmd.Run()
 	if err == nil {

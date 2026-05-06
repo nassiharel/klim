@@ -37,7 +37,15 @@ var validPackName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 // pageBackupSave persists the current toolchain manifest to a named
 // file under ~/.config/klim/backups/<name>.yaml. The flash banner on
 // the next render confirms.
+// maxFormBytes caps the request body size for form/multipart parsing
+// in this package. 8 MiB comfortably fits the largest realistic
+// manifest/import payload (toolchain YAML for hundreds of tools is
+// well under 1 MiB) while preventing memory exhaustion from a
+// malicious oversize submission.
+const maxFormBytes = 8 << 20
+
 func (s *Server) pageBackupSave(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
 	name := strings.TrimSpace(r.FormValue("name"))
 	if !validBackupName.MatchString(name) {
 		s.redirectBackupFlash(w, r, "err", fmt.Sprintf("invalid backup name %q (use letters, digits, underscores, dashes — first character must be alphanumeric)", name))
@@ -87,7 +95,7 @@ func (s *Server) pageBackupSavedDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	stem := strings.TrimSuffix(name, ".yaml")
 	if !validBackupName.MatchString(stem) {
-		s.serveError(w, r, fmt.Errorf("invalid backup name"), http.StatusBadRequest)
+		s.serveError(w, r, errors.New("invalid backup name"), http.StatusBadRequest)
 		return
 	}
 	dir, err := paths.BackupsDir()
@@ -95,7 +103,7 @@ func (s *Server) pageBackupSavedDelete(w http.ResponseWriter, r *http.Request) {
 		s.serveError(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if err := os.Remove(filepath.Join(dir, stem+".yaml")); err != nil {
+	if err := os.Remove(filepath.Join(dir, stem+".yaml")); err != nil { //nolint:gosec // G703: stem is validated by validBackupName above.
 		if errors.Is(err, os.ErrNotExist) {
 			s.redirectBackupFlash(w, r, "err", fmt.Sprintf("backup %q not found", stem))
 			return
@@ -113,6 +121,7 @@ func (s *Server) pageBackupSavedDelete(w http.ResponseWriter, r *http.Request) {
 // per-tool /tools/{name}/install endpoint, so the actual install runs
 // through the same job pipeline as everything else.
 func (s *Server) pageBackupPreview(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		// Fallback for non-multipart submissions (the form's enctype
 		// only matters when the user attaches a file).
@@ -149,7 +158,7 @@ func (s *Server) pageBackupPreview(w http.ResponseWriter, r *http.Request) {
 	case restoreName != "":
 		stem := strings.TrimSuffix(restoreName, ".yaml")
 		if !validBackupName.MatchString(stem) {
-			s.serveError(w, r, fmt.Errorf("invalid backup name"), http.StatusBadRequest)
+			s.serveError(w, r, errors.New("invalid backup name"), http.StatusBadRequest)
 			return
 		}
 		dir, derr := paths.BackupsDir()
@@ -157,7 +166,7 @@ func (s *Server) pageBackupPreview(w http.ResponseWriter, r *http.Request) {
 			s.serveError(w, r, derr, http.StatusInternalServerError)
 			return
 		}
-		body, rerr := os.ReadFile(filepath.Join(dir, stem+".yaml"))
+		body, rerr := os.ReadFile(filepath.Join(dir, stem+".yaml")) //nolint:gosec // G703: stem is validated by validBackupName above.
 		if rerr != nil {
 			s.redirectBackupFlash(w, r, "err", fmt.Sprintf("couldn't read backup %s.yaml: %v", stem, rerr))
 			return
@@ -217,6 +226,7 @@ func (s *Server) pageBackupPreview(w http.ResponseWriter, r *http.Request) {
 // pack's detail page on success so the user can review what they
 // just created.
 func (s *Server) pageBackupPackCreate(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
 	if err := r.ParseForm(); err != nil {
 		s.serveError(w, r, err, http.StatusBadRequest)
 		return
@@ -251,7 +261,7 @@ func (s *Server) pageBackupPackCreate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) pageBackupPackDelete(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if !validPackName.MatchString(name) {
-		s.serveError(w, r, fmt.Errorf("invalid pack name"), http.StatusBadRequest)
+		s.serveError(w, r, errors.New("invalid pack name"), http.StatusBadRequest)
 		return
 	}
 	if err := custompacks.Delete(name); err != nil {
@@ -330,7 +340,7 @@ func manifestToolNames(body []byte) ([]string, error) {
 	if err := yaml.Unmarshal(body, &flat); err == nil && len(flat) > 0 {
 		return flat, nil
 	}
-	return nil, fmt.Errorf("manifest contains no tools (expected `tools: [...]` or a YAML list)")
+	return nil, errors.New("manifest contains no tools (expected `tools: [...]` or a YAML list)")
 }
 
 // normalisePackTools accepts the textarea content from the create-
