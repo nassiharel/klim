@@ -22,6 +22,11 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # Install syft so GoReleaser's `sboms:` step (CycloneDX per archive)
+      # can run. Without this the release fails with
+      # `exec: "syft": executable file not found in $PATH`.
+      - uses: anchore/sbom-action/download-syft@v0
+
       - uses: goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8 # v7.2.1
         with:
           version: "~> v2"
