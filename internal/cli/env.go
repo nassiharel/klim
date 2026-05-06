@@ -556,7 +556,7 @@ func applyFavorites(names []string) error {
 	existingSet := make(map[string]struct{}, len(existing))
 	merged := make([]string, 0, len(existing))
 	existingChanged := false
-	for i, n := range existing {
+	for _, n := range existing {
 		trimmed := strings.TrimSpace(n)
 		// Track whether normalization touched anything — even
 		// content-preserving changes (whitespace, dedup) need
@@ -574,7 +574,6 @@ func applyFavorites(names []string) error {
 		}
 		existingSet[trimmed] = struct{}{}
 		merged = append(merged, trimmed)
-		_ = i
 	}
 	added := 0
 	for _, n := range names {

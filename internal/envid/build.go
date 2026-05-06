@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
@@ -98,7 +97,10 @@ func collectTools(tools []registry.Tool) []Tool {
 		}
 		out = append(out, entry)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	// Sorting is intentionally omitted here — Build calls
+	// canonicalize(p) after collectTools, which sorts and dedupes
+	// in one place. Doing it twice was redundant and risked
+	// behavioural drift between the two paths.
 	return out
 }
 
