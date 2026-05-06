@@ -9,18 +9,22 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nassiharel/klim/releases/latest"><img src="https://img.shields.io/github/v/release/nassiharel/klim?style=flat-square" alt="Release"></a>
+  <a href="https://github.com/nassiharel/klim/commits/main"><img src="https://img.shields.io/github/last-commit/nassiharel/klim?style=flat-square" alt="Last commit"></a>
   <a href="https://github.com/nassiharel/klim/actions"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/klim/ci.yml?style=flat-square" alt="CI"></a>
   <a href="https://github.com/nassiharel/klim/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/klim/codeql.yml?style=flat-square&label=CodeQL" alt="CodeQL"></a>
   <a href="https://goreportcard.com/report/github.com/nassiharel/klim"><img src="https://img.shields.io/badge/go%20report-A+-brightgreen?style=flat-square" alt="Go Report Card"></a>
   <a href="https://pkg.go.dev/github.com/nassiharel/klim"><img src="https://img.shields.io/badge/godoc-reference-blue?style=flat-square" alt="Go Reference"></a>
-  <a href="https://github.com/nassiharel/klim/releases"><img src="https://img.shields.io/github/downloads/nassiharel/klim/total?style=flat-square" alt="Downloads"></a>
+  <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/nassiharel/klim?style=flat-square&label=go" alt="Go version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/nassiharel/klim?style=flat-square" alt="License"></a>
 </p>
 
 ---
 
-Klim is the developer environment control plane and productivity booster for dev tools: a deterministic, cross-platform layer for discovering, standardizing, securing, and automating the tools every project depends on. It keeps native package managers in charge of installation while giving humans, teams, CI, and AI agents the same portable environment contracts and predictable operations.
+Klim is a productivity booster for dev tools: a deterministic, cross-platform layer for discovering, standardizing, securing, and automating the tools every project depends on. It keeps native package managers in charge of installation while giving humans, teams, CI, and AI agents the same portable environment contracts and predictable operations.
+
+<p align="center">
+  <img src="assets/examples/klim-installed-tui.png" alt="klim Installed view: every tool on the machine with version, install source, category, and GitHub stars" width="900">
+</p>
 
 ## Quick install
 
@@ -35,7 +39,7 @@ irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 brew install nassiharel/tap/klim
 ```
 
-Launch the interactive control plane:
+Launch the interactive TUI:
 
 ```bash
 klim
@@ -82,11 +86,42 @@ AI agents are good at translating intent. Klim is the stable local primitive the
 
 ## Screenshots
 
-<p align="center">
-  <img src="assets/tui-installed.png" alt="Installed tab" width="720">
-</p>
+<table>
+  <tr>
+    <td align="center"><strong>Installed</strong><br><sub>Every tool, every version, every install source</sub></td>
+    <td align="center"><strong>Dashboard</strong><br><sub>Score, coverage, GitHub highlights, package-manager mix</sub></td>
+  </tr>
+  <tr>
+    <td><img src="assets/examples/klim-installed-tui.png" alt="klim Installed view"></td>
+    <td><img src="assets/examples/klim-dashboard-tui.png" alt="klim Dashboard view"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Marketplace</strong><br><sub>110+ curated tools with category, stars, and policy state</sub></td>
+    <td align="center"><strong>Curated packs</strong><br><sub>Bundle status across Cloud Essentials, Kubernetes Starter, Go Developer, …</sub></td>
+  </tr>
+  <tr>
+    <td><img src="assets/examples/klim-marketplace-tui.png" alt="klim Marketplace tab"></td>
+    <td><img src="assets/examples/klim-marketplace-packs-tui.png" alt="klim Marketplace Packs sub-tab"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>For You</strong><br><sub>Personalised recommendations ranked by overlap with your installed set</sub></td>
+    <td align="center"><strong>Project scan</strong><br><sub>Auto-detect required tools from <code>go.mod</code>, <code>package.json</code>, <code>.github/</code></sub></td>
+  </tr>
+  <tr>
+    <td><img src="assets/examples/klim-marketplace-for-you-tui.png" alt="klim Marketplace For You sub-tab"></td>
+    <td><img src="assets/examples/klim-project-tui.png" alt="klim Project tab"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Compliance</strong><br><sub>Disallowed sources, blocked tools, license violations against your active policy</sub></td>
+    <td align="center"><strong>Local browser</strong><br><sub><code>klim browser</code> — same data and actions as the TUI in your default browser</sub></td>
+  </tr>
+  <tr>
+    <td><img src="assets/examples/klim-security-compliance-tui.png" alt="klim Security tab on Compliance"></td>
+    <td><img src="assets/examples/klim-local-browser-view.png" alt="klim browser local web view"></td>
+  </tr>
+</table>
 
-> The TUI shows detected tools with version status, install source, and upgrade availability. Navigate between tabs to discover tools, manage project contracts, audit health, export toolchains, and inspect dashboard metrics.
+> Nine TUI tabs and an optional local web view. Same data, same actions, same JSON — whichever surface you prefer.
 
 ---
 
@@ -104,7 +139,7 @@ AI agents are good at translating intent. Klim is the stable local primitive the
 
 ## Feature map
 
-- **Interactive TUI**: Installed, Favorites, Updates, Discover, Backup, Project, Dashboard, Config, and Security views.
+- **Interactive TUI**: Installed, Favorites, Updates, Marketplace, Backup, Project, Dashboard, Config, and Security views.
 - **Marketplace and packs**: Browse 110+ curated developer tools, install bundles, and create custom packs.
 - **Team manifests**: Versioned `.klim.yaml` contracts for local checks, CI, generated workflows, Dockerfiles, and devcontainers.
 - **Environment tokens**: `klim env` captures tools, favorites, custom packs, package managers, Klim version, OS, and security state into a privacy-safe token.

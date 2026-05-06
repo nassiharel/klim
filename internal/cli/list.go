@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/klim/internal/catalog"
-	"github.com/nassiharel/klim/internal/progress"
 	"github.com/nassiharel/klim/internal/registry"
 	"github.com/nassiharel/klim/internal/service"
 )
@@ -62,7 +61,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	sp := progress.New("Loading marketplace catalog...")
+	sp := spinnerFor(out, "Loading marketplace catalog...")
 	tools, info, scanInfo, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), listRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
@@ -93,11 +92,13 @@ func runList(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
-	fmt.Fprintf(os.Stderr, "  ✓ Found %d installed tools", installed)
-	if updates > 0 {
-		fmt.Fprintf(os.Stderr, ", %d updates available", updates)
+	if out == OutputText {
+		fmt.Fprintf(os.Stderr, "  ✓ Found %d installed tools", installed)
+		if updates > 0 {
+			fmt.Fprintf(os.Stderr, ", %d updates available", updates)
+		}
+		fmt.Fprintln(os.Stderr)
 	}
-	fmt.Fprintln(os.Stderr)
 
 	// --categories: print available categories and exit.
 	if listCategoriesFlag {

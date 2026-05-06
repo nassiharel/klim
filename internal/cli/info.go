@@ -10,7 +10,6 @@ import (
 
 	"github.com/nassiharel/klim/internal/audit"
 	"github.com/nassiharel/klim/internal/githubfmt"
-	"github.com/nassiharel/klim/internal/progress"
 	"github.com/nassiharel/klim/internal/registry"
 	"github.com/nassiharel/klim/internal/security"
 	"github.com/nassiharel/klim/internal/textwrap"
@@ -128,7 +127,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	//   3. RefreshTool — single-tool PATH check + version resolution
 	//      for the requested tool only.
 	svc := svcFrom(cmd)
-	sp := progress.New("Resolving tool info...")
+	sp := spinnerFor(out, "Resolving tool info...")
 	tools, _, err := svc.Catalog.LoadTools(cmd.Context())
 	if err != nil {
 		sp.Fail(err.Error())

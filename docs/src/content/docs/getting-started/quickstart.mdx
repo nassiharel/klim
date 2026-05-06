@@ -21,37 +21,28 @@ Klim will scan your `$PATH` to discover installed developer tools, then display 
 
 The TUI opens on the **Installed** tab showing all detected tools:
 
-```
-┌─ Installed ─ ★ Favorites ─ Updates ─ Discover ─ Backup ─ Project ─ Dashboard ─ Config ─┐
-│                                                                                          │
-│  ✓ az          2.67.0    (brew)     Azure CLI                                            │
-│  ⬆ docker      24.0.7    (manual)   Docker CLI             → 27.1.0                     │
-│  ✓ git         2.47.0    (brew)     Git version control                                  │
-│  ✓ go          1.25.0    (brew)     Go programming language                              │
-│  ⬆ kubectl     1.28.4    (brew)     Kubernetes CLI          → 1.31.0                     │
-│  ✓ node        22.11.0   (brew)     Node.js runtime                                     │
-│                                                                                          │
-│  ↑↓ navigate  ←→ tab  * favorite  s sort  Enter detail  f filter  r refresh  q quit     │
-└──────────────────────────────────────────────────────────────────────────────────────────┘
-```
+![klim TUI Installed view with the filter sidebar and tool list](../../../assets/examples/klim-installed-tui.png)
 
 - **✓** — Tool is up to date
 - **⬆** — An update is available (latest version shown on the right)
+- **★** — Tool is favorited
+- **⚠ policy / ✗ blocked** — Compliance status from your active policy
 
 ## Navigate the Tabs
 
-Use **←/→** arrow keys, **Tab/Shift+Tab**, or number keys **1–8** to switch tabs:
+Use **←/→** arrow keys, **Tab/Shift+Tab**, or number keys **1–9** to switch tabs:
 
 | Tab | Key | What it shows |
 |-----|-----|---------------|
 | Installed | 1 | All detected tools with versions |
 | ★ Favorites | 2 | Your favorited tools |
 | Updates | 3 | Tools with available upgrades |
-| Discover | 4 | Browse 110+ tools from the marketplace |
+| Marketplace | 4 | Browse 110+ tools from the marketplace |
 | Backup | 5 | Export, import, and share your toolchain |
 | Project | 6 | Multi-project `.klim.yaml` management |
 | Dashboard | 7 | Stats and breakdowns |
 | Config | 8 | Edit settings |
+| Security | 9 | Health, audit, and compliance |
 
 ## CLI Mode
 

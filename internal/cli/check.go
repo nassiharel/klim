@@ -5,10 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/cobra"
-
-	"github.com/nassiharel/klim/internal/progress"
 	"github.com/nassiharel/klim/internal/teamfile"
+	"github.com/spf13/cobra"
 )
 
 var checkFileFlag string
@@ -90,7 +88,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	// Scan installed tools and resolve versions (cached by default for speed).
-	sp := progress.New("Scanning installed tools...")
+	sp := spinnerFor(out, "Scanning installed tools...")
 	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), checkRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())

@@ -5,6 +5,8 @@ description: How to add a curated tool pack to the klim marketplace
 
 Packs are curated bundles of related tools. They help developers quickly install a complete toolset for a specific workflow.
 
+![klim Marketplace tab on the Packs sub-tab showing pack completion progress](../../../assets/examples/klim-marketplace-packs-tui.png)
+
 ## Pack Definition Format
 
 Each pack is defined in `marketplace/packs/<name>.yaml`:

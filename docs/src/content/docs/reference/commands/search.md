@@ -5,6 +5,8 @@ description: Search the tool marketplace
 
 Search the tool marketplace by name, description, category, tags, or GitHub topics. Results are ranked by relevance and GitHub stars.
 
+![klim Marketplace tab with a live search filter for "laz" matching lazygit, lazydocker, lazysql, and others](../../../../assets/examples/klim-search-tui.png)
+
 ## Usage
 
 ```bash

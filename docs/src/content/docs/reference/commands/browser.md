@@ -8,6 +8,8 @@ in your default browser. The web view is a thin frontend over the same
 service layer the TUI and other CLI commands use; every page renders
 from a real PATH scan and version resolution, no separate data store.
 
+![klim browser local web view showing the For You page with tool cards and match scores](../../../../assets/examples/klim-local-browser-view.png)
+
 ## Usage
 
 ```bash

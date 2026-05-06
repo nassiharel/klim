@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/klim/internal/audit"
-	"github.com/nassiharel/klim/internal/progress"
 	"github.com/nassiharel/klim/internal/registry"
 	"github.com/nassiharel/klim/internal/service"
 )
@@ -66,7 +65,7 @@ func runAudit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	sp := progress.New("Scanning installed tools...")
+	sp := spinnerFor(out, "Scanning installed tools...")
 	tools, _, scanInfo, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), auditRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
