@@ -35,5 +35,5 @@ The catalog source of truth is the `marketplace/` directory in the klim reposito
 
 ## See Also
 
-- [Adding Tools](/guides/adding-tools) — How to contribute to the catalog
-- [Marketplace guide](/guides/marketplace) — Browsing the catalog in the TUI
+- [Adding Tools](../../guides/adding-tools.mdx) — How to contribute to the catalog
+- [Adding Tools guide](../../guides/adding-tools.mdx) — Browsing the catalog in the TUI

@@ -55,5 +55,5 @@ The TUI search (press `/` on any tab) uses the same search engine. It matches ag
 
 ## See Also
 
-- [klim onboard](/reference/commands/onboard) — Role-based tool recommendations
-- [Tool Catalog](/marketplace/catalog) — Browse all tools
+- [klim onboard](./onboard.md) — Role-based tool recommendations
+- [Tool Catalog](../../marketplace/catalog.mdx) — Browse all tools

@@ -50,4 +50,4 @@ klim onboard web --list
 
 ## See Also
 
-- [Marketplace guide](/guides/marketplace) — Browse and discover tools in the TUI
+- [Adding Tools guide](../../guides/adding-tools.mdx) — Browse and discover tools in the TUI

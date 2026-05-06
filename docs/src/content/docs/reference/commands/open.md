@@ -41,5 +41,5 @@ klim open klim:v1:H4sIAAAA... --yes
 
 ## See Also
 
-- [`klim share`](/reference/commands/share) — Generate a share token
-- [`klim import`](/reference/commands/import) — Install from a YAML manifest
+- [`klim share`](./share.md) — Generate a share token
+- [`klim import`](./import.md) — Install from a YAML manifest

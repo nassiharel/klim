@@ -78,4 +78,4 @@ CI validates that:
 
 ## Custom Packs
 
-Users can also create personal packs from the TUI (Backup tab → Create Pack). These are stored locally and not part of the marketplace. See [Backup & Restore](/guides/backup-restore) for details.
+Users can also create personal packs from the TUI (Backup tab → Create Pack). These are stored locally and not part of the marketplace. See [Backup & Restore](./backup-restore.mdx) for details.

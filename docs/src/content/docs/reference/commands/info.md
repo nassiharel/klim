@@ -118,6 +118,6 @@ Error: tool "kubctl" not found in catalog (did you mean "kubectl"?)
 
 ## See Also
 
-- [`klim why`](/reference/commands/why) — Where (and why) a tool is referenced — focused on the dependency map rather than full metadata.
-- [`klim list`](/reference/commands/list) — Every installed tool, summary table.
-- [`klim search`](/reference/commands/search) — Full-text search across the marketplace.
+- [`klim why`](./why.md) — Where (and why) a tool is referenced — focused on the dependency map rather than full metadata.
+- [`klim list`](./list.md) — Every installed tool, summary table.
+- [`klim search`](./search.md) — Full-text search across the marketplace.
