@@ -38,7 +38,7 @@ func acquireLock(path string, readOnly bool) (func(), error) {
 		lockOp = unix.LOCK_SH
 	}
 	for {
-		err := unix.Flock(int(f.Fd()), lockOp)
+		err := unix.Flock(int(f.Fd()), lockOp) //nolint:gosec // G115: fd is a small positive integer; uintptr->int never overflows.
 		if err == nil {
 			break
 		}
@@ -49,7 +49,7 @@ func acquireLock(path string, readOnly bool) (func(), error) {
 		return nil, fmt.Errorf("acquiring lock %s: %w", path, err)
 	}
 	return func() {
-		_ = unix.Flock(int(f.Fd()), unix.LOCK_UN)
+		_ = unix.Flock(int(f.Fd()), unix.LOCK_UN) //nolint:gosec // G115: see above.
 		_ = f.Close()
 	}, nil
 }

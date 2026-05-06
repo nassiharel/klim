@@ -267,9 +267,14 @@ func (m *jobManager) Start(ctx context.Context, action JobAction, tool, source s
 	}
 	m.jobs[id] = job
 	m.running[tool] = id
+	// Snapshot under the lock — once we Unlock and spawn `run`,
+	// the runner goroutine starts appending to job.Output, and a
+	// snapshot taken outside the lock would race with that
+	// append. Race detector caught this in CI.
+	snap := job.snapshot()
 	m.mu.Unlock()
 	go m.run(ctx, job)
-	return job.snapshot(), nil
+	return snap, nil
 }
 
 // run consumes the executor's output channel into the job's Output
