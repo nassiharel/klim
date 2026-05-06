@@ -1,5 +1,6 @@
 ---
 const { pack, resolvedTools } = Astro.props;
+const base = import.meta.env.BASE_URL;
 
 function fmtStars(n: number): string {
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
@@ -20,7 +21,7 @@ const categoryIcons: Record<string, string> = {
 ---
 
 <nav class="mb-8 text-sm text-gray-500">
-  <a href="/marketplace" class="hover:text-green-400 transition-colors">&#8592; Marketplace</a>
+  <a href={`${base}marketplace`} class="hover:text-green-400 transition-colors">&#8592; Marketplace</a>
 </nav>
 
 <!-- Header Card -->
@@ -75,7 +76,7 @@ const categoryIcons: Record<string, string> = {
       const pmCount = Object.keys(tool.packages).length;
       return (
         <a
-          href={`/marketplace/tools/${tool.name}`}
+          href={`${base}marketplace/tools/${tool.name}`}
           class="group flex items-start gap-4 rounded-xl border border-gray-800 bg-gray-950/50 p-5 transition-all hover:border-green-500/40 hover:bg-gray-900 block"
         >
           <span class="mt-0.5 text-2xl">{categoryIcons[tool.category] || '🔧'}</span>

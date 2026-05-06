@@ -19,6 +19,8 @@ on:
     paths:
       - 'website/**'
       - 'docs/**'
+      - 'go.mod'
+      - 'go.sum'
       - '.github/workflows/deploy-pages.yml'
   workflow_run:
     workflows: ["Marketplace"]
@@ -54,14 +56,27 @@ jobs:
           go-version-file: go.mod
 
       # Marketplace branch holds the assembled catalog YAML used by
-      # the docs site to render its catalog page. Soft-fail when the
-      # branch isn't available so a brand-new fork can still deploy
-      # without a marketplace branch having been published yet.
+      # the docs site to render its catalog page. When the branch
+      # isn't available (e.g. on a fresh fork that hasn't published
+      # the marketplace yet) we write a placeholder file so the
+      # generator uses local data instead of falling back to a remote
+      # HTTPS fetch — keeps fork deploys reproducible and works
+      # behind outbound-blocked networks. The placeholder must exceed
+      # the generator's 100-byte size guard to be accepted.
       - name: Fetch assembled marketplace from marketplace branch
         run: |
           git fetch origin marketplace --depth=1 2>/dev/null || true
-          git show origin/marketplace:marketplace.yaml > marketplace.yaml 2>/dev/null \
-            || echo "marketplace branch not available — docs will render with an empty catalog"
+          if ! git show origin/marketplace:marketplace.yaml > marketplace.yaml 2>/dev/null; then
+            cat > marketplace.yaml <<'EOF'
+          # Placeholder marketplace data used when the marketplace branch
+          # is unavailable (e.g. on a fresh fork). The docs catalog page
+          # will render as empty until the Marketplace workflow publishes
+          # assembled data to the marketplace branch.
+          tools: []
+          packs: []
+          EOF
+            echo "marketplace branch not available — using empty placeholder"
+          fi
 
       - name: Generate marketplace catalog page
         run: go run docs/scripts/gen-marketplace-page.go
@@ -83,6 +98,14 @@ jobs:
 
       - name: Build website
         working-directory: website
+        # Same Astro `site`/`base` rule as docs: when the website is
+        # served from a sub-path (project pages), `site` is the
+        # origin only and `base` carries the repo segment.
+        # Switch to KLIM_WEBSITE_SITE=https://klim.dev and
+        # KLIM_WEBSITE_BASE=/ when the custom domain is wired.
+        env:
+          KLIM_WEBSITE_BASE: /${{ github.event.repository.name }}/
+          KLIM_WEBSITE_SITE: https://${{ github.repository_owner }}.github.io
         run: npm run build
 
       # --- Build docs (mounted under /docs/) ---
@@ -92,11 +115,16 @@ jobs:
 
       - name: Build docs
         working-directory: docs
-        # base="/docs/" is the default in docs/astro.config.mjs; we
-        # set it explicitly here too so the workflow file is the
-        # one source of truth for the deployment shape.
+        # Astro requires the path-to-deployment to live entirely in
+        # `base` when `site` is set independently — putting the
+        # repository segment in `site` causes Astro to drop it from
+        # canonical/sitemap URLs. So `site` here is the origin only,
+        # and `base` carries the full <repo>/docs/ path. For a
+        # custom-domain switch, set KLIM_DOCS_SITE=https://docs.klim.dev
+        # and KLIM_DOCS_BASE=/.
         env:
-          KLIM_DOCS_BASE: /docs/
+          KLIM_DOCS_BASE: /${{ github.event.repository.name }}/docs/
+          KLIM_DOCS_SITE: https://${{ github.repository_owner }}.github.io
         run: npm run build
 
       # --- Combine into a single Pages artifact ---
@@ -108,11 +136,12 @@ jobs:
           mkdir -p _pages/docs
           cp -r website/dist/. _pages/
           cp -r docs/dist/. _pages/docs/
-          # Light sanity check: the website must have an index.html and
-          # docs must have produced something. Failing fast here is
-          # cheaper than diagnosing a 404 after the deploy lands.
+          # Sanity check: each app must have produced its index. We
+          # check files (not the parent directories) because mkdir -p
+          # above always succeeds — testing for the directory would
+          # mask a docs build that silently produced nothing.
           test -f _pages/index.html
-          test -d _pages/docs
+          test -f _pages/docs/index.html
           ls -la _pages
           ls -la _pages/docs
 

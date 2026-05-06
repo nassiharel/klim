@@ -1,5 +1,6 @@
 ---
 const { tool, installEntries } = Astro.props;
+const base = import.meta.env.BASE_URL;
 const info = tool.github_info;
 const description = info ? info.description : '';
 const stars = info ? info.stars : 0;
@@ -16,7 +17,7 @@ function fmtStars(n: number): string {
 ---
 
 <nav class="mb-8 text-sm text-gray-500">
-  <a href="/marketplace" class="hover:text-green-400 transition-colors">&#8592; Marketplace</a>
+  <a href={`${base}marketplace`} class="hover:text-green-400 transition-colors">&#8592; Marketplace</a>
 </nav>
 
 <!-- Header Card -->
