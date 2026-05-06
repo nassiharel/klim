@@ -1,4 +1,6 @@
 ---
+const base = import.meta.env.BASE_URL;
+const docsURL = process.env.KLIM_WEBSITE_DOCS_URL ?? `${base}docs/`;
 ---
 
 <footer class="border-t border-slate-800 py-12">
@@ -20,7 +22,7 @@
       </div>
 
       <div class="flex items-center gap-6 text-sm text-slate-400">
-        <a href="https://docs.klim.dev" class="transition-colors hover:text-white">Docs</a>
+        <a href={docsURL} class="transition-colors hover:text-white">Docs</a>
         <a href="https://github.com/nassiharel/klim" class="transition-colors hover:text-white" target="_blank" rel="noopener noreferrer">GitHub</a>
         <a href="https://github.com/nassiharel/klim/releases" class="transition-colors hover:text-white" target="_blank" rel="noopener noreferrer">Releases</a>
         <a href="https://github.com/nassiharel/klim/blob/main/LICENSE" class="transition-colors hover:text-white" target="_blank" rel="noopener noreferrer">MIT License</a>
