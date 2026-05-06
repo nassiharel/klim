@@ -5,8 +5,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-
-	"github.com/nassiharel/klim/internal/progress"
 )
 
 var watchOutputFmt func() (OutputFormat, error)
@@ -55,7 +53,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	sp := progress.New("Checking for updates...")
+	sp := spinnerFor(out, "Checking for updates...")
 	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), true) // always fresh
 	if err != nil {
 		sp.Fail(err.Error())

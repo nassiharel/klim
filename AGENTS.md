@@ -4,7 +4,7 @@
 
 ## What is klim
 
-Developer environment control plane. Discovers, standardizes, reproduces, secures, and automates developer toolchains through native package managers (winget, scoop, brew, apt, choco, snap, npm). Written in Go 1.25, Bubbletea v2 TUI, Cobra CLI.
+Productivity booster for dev tools. Discovers, standardizes, reproduces, secures, and automates developer toolchains through native package managers (winget, scoop, brew, apt, choco, snap, npm). Written in Go 1.25, Bubbletea v2 TUI, Cobra CLI.
 
 Module: `github.com/nassiharel/klim`
 

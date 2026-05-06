@@ -190,13 +190,13 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	sp := progress.New("Scanning tools...")
+	sp := spinnerFor(out, "Scanning tools...")
 	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), complianceRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
 	}
-	sp.Done("Done")
+	sp.Stop()
 
 	result := compliance.Check(policy, tools, loadVulnSeveritiesForCompliance())
 

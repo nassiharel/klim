@@ -10,7 +10,6 @@ import (
 	"github.com/nassiharel/klim/internal/audit"
 	"github.com/nassiharel/klim/internal/compliance"
 	"github.com/nassiharel/klim/internal/doctor"
-	"github.com/nassiharel/klim/internal/progress"
 	"github.com/nassiharel/klim/internal/score"
 )
 
@@ -42,13 +41,13 @@ func runScore(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	sp := progress.New("Scanning...")
+	sp := spinnerFor(out, "Scanning...")
 	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), scoreRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
 	}
-	sp.Done("Done")
+	sp.Stop()
 
 	// Run doctor.
 	doctorIssues := doctor.Diagnose(tools, doctor.ScanMeta{})

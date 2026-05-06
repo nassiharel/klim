@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/klim/internal/doctor"
-	"github.com/nassiharel/klim/internal/progress"
 	"github.com/nassiharel/klim/internal/service"
 )
 
@@ -51,7 +50,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	sp := progress.New("Running diagnostics...")
+	sp := spinnerFor(out, "Running diagnostics...")
 	tools, _, scanInfo, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), doctorRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())

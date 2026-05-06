@@ -5,6 +5,8 @@ description: Recommend and install tools based on your development role
 
 Interactive onboarding wizard that recommends tools based on what kind of development you do.
 
+![klim Marketplace tab on the For You sub-tab showing personalised tool recommendations with match scores](../../../../assets/examples/klim-marketplace-for-you-tui.png)
+
 ## Usage
 
 ```bash
