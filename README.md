@@ -5,7 +5,7 @@
 <h1 align="center">klim</h1>
 
 <p align="center">
-  <strong>Dev tools, organized for productivity.</strong>
+  <strong>Reignite dev tools.</strong>
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
 
 ---
 
-Klim is the developer environment control plane: a deterministic, cross-platform layer for discovering, standardizing, reproducing, securing, and automating the tools every project depends on. It keeps native package managers in charge of installation while giving humans, teams, CI, and AI agents the same portable environment contracts and predictable operations.
+Klim is the developer environment control plane and productivity booster for dev tools: a deterministic, cross-platform layer for discovering, standardizing, securing, and automating the tools every project depends on. It keeps native package managers in charge of installation while giving humans, teams, CI, and AI agents the same portable environment contracts and predictable operations.
 
 ## Quick install
 
