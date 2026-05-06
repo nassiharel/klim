@@ -5,6 +5,8 @@ description: View aggregate stats and breakdowns of your developer tools
 
 The **Dashboard** tab (press `7`) provides a high-level overview of your developer tool ecosystem.
 
+![klim Dashboard tab with environment score, tool coverage, GitHub highlights, package managers chart, and category breakdown](../../../assets/examples/klim-dashboard-tui.png)
+
 ## What It Shows
 
 ### Summary Gauges

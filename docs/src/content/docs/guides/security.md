@@ -5,6 +5,8 @@ description: Diagnose environment issues and audit your toolchain for security a
 
 Klim includes two complementary health-check features: **Doctor** for environment diagnostics and **Audit** for security/compliance analysis. Together they make toolchain risk visible enough to use in local development, CI, and compliance workflows.
 
+![klim Security tab on the Compliance sub-tab listing disallowed_source and disallowed_license violations](../../../assets/examples/klim-security-compliance-tui.png)
+
 ## Doctor
 
 The doctor checks your environment for common issues that can cause confusion or break tools.

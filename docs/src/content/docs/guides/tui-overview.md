@@ -5,6 +5,8 @@ description: Use the klim TUI as an interactive interface for your toolchain
 
 The Klim TUI is an interactive interface for your developer environment. Launch it by running `klim` with no arguments to inspect installed tools, project contracts, updates, health, backups, and configuration from one place.
 
+![klim TUI on the Installed tab with the filter sidebar and tool list](../../../assets/examples/klim-installed-tui.png)
+
 ## Tabs
 
 The TUI has 9 tabs, accessible via arrow keys or number keys:
@@ -14,12 +16,36 @@ The TUI has 9 tabs, accessible via arrow keys or number keys:
 | **Installed** | 1 | All detected tools with version status |
 | **★ Favorites** | 2 | Your favorited tools |
 | **Updates** | 3 | Tools with available upgrades |
-| **Discover** | 4 | Browse the marketplace (Tools, Packs, For You) |
+| **Marketplace** | 4 | Browse and install (sub-tabs: Tools, Packs, For You, Onboard) |
 | **Backup** | 5 | Export, import, share, custom packs, saved backups |
 | **Project** | 6 | Multi-project `.klim.yaml` management |
 | **Dashboard** | 7 | Stats, gauges, category breakdowns |
 | **Config** | 8 | View and edit settings |
-| **Doctor** | 9 | Environment diagnostics, security audit, and compliance (sub-tabs: Health / Audit / Compliance) |
+| **Security** | 9 | Environment diagnostics, security audit, and compliance (sub-tabs: Health / Audit / Compliance) |
+
+### Marketplace
+
+Browse the full catalog with category, platform, and tag filters; sub-tabs cover individual **Tools**, curated **Packs**, personalised **For You** recommendations, and the role-based **Onboard** wizard.
+
+![klim TUI Marketplace tab with sub-tabs and filter sidebar](../../../assets/examples/klim-marketplace-tui.png)
+
+### Project
+
+Auto-detect required tools from `.github/`, `go.mod`, `package.json`, and friends. Press Enter to write `.klim.yaml`.
+
+![klim TUI Project tab with detected tools and suggested additions](../../../assets/examples/klim-project-tui.png)
+
+### Dashboard
+
+A single page with environment score, tool coverage, attention items, GitHub highlights, top picks, package-manager mix, and category breakdown.
+
+![klim TUI Dashboard tab with environment score, coverage gauges, and category histograms](../../../assets/examples/klim-dashboard-tui.png)
+
+### Security
+
+Health diagnostics, security audit, and policy compliance grouped under one tab.
+
+![klim TUI Security tab on the Compliance sub-tab listing policy violations](../../../assets/examples/klim-security-compliance-tui.png)
 
 ## Global Keybindings
 
