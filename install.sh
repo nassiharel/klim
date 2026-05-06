@@ -46,7 +46,6 @@ initArch() {
     armv6*)          ARCH="armv6" ;;
     *)
       warn "Unknown architecture: $ARCH — will attempt go install fallback."
-      ARCH="$ARCH"
       ;;
   esac
 }
