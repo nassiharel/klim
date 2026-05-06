@@ -1,0 +1,46 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>Favorites</h1>
+  <p class="muted">{{$d.Total}} favorited tool{{if ne $d.Total 1}}s{{end}}.</p>
+</section>
+
+{{if eq $d.Total 0}}
+  <p class="empty">No favorites yet. Open any tool's <a href="/discover">detail page</a> and click ☆ at the top, or hit ☆ on any row in <a href="/discover">Discover</a>, <a href="/updates">Updates</a>, or <a href="/foryou">For You</a>.</p>
+{{else}}
+<table class="grid">
+  <thead>
+    <tr>
+      <th></th>
+      <th>Tool</th>
+      <th>Version</th>
+      <th>Category</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range $d.Tools}}
+      <tr>
+        <td>
+          <form method="POST" action="/favorites/{{.Name}}/toggle" class="inline">
+            <button class="iconbtn" type="submit" title="Unfavorite">★</button>
+          </form>
+        </td>
+        <td><a href="/tools/{{.Name}}" class="tool-link">{{.Name}}</a>{{if .DisplayName}} <span class="muted">{{.DisplayName}}</span>{{end}}</td>
+        <td><code>{{primaryVersion .}}</code></td>
+        <td>{{dash .Category}}</td>
+        <td>
+          {{if updateAvailable .}}
+            <span class="badge update">⬆ update</span>
+          {{else if .IsInstalled}}
+            <span class="badge ok">✓ installed</span>
+          {{else}}
+            <span class="badge muted">not installed</span>
+          {{end}}
+        </td>
+      </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}

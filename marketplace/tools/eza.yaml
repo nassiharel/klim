@@ -1,0 +1,14 @@
+name: eza
+display_name: eza
+category: CLI
+tags:
+    - cli
+binary_names:
+    - eza
+packages:
+    winget: eza-community.eza
+    scoop: eza
+    choco: eza
+    brew: eza
+    apt: eza
+github: eza-community/eza

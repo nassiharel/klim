@@ -1,0 +1,11 @@
+name: gopls
+display_name: gopls
+category: Language
+tags:
+    - golang
+    - ide
+binary_names:
+    - gopls
+packages:
+    brew: gopls
+github: golang/tools

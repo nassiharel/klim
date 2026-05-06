@@ -1,0 +1,15 @@
+name: xh
+display_name: xh
+category: CLI
+tags:
+    - http-client
+    - api
+    - cli
+binary_names:
+    - xh
+packages:
+    winget: ducaale.xh
+    scoop: xh
+    choco: xh
+    brew: xh
+github: ducaale/xh

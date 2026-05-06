@@ -1,0 +1,7 @@
+name: azure-developer
+display_name: Azure Developer
+description: Azure-specific CLI tools for cloud development.
+tools:
+    - az
+    - azd
+    - kubelogin

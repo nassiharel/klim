@@ -1,0 +1,11 @@
+name: zellij
+display_name: zellij
+category: Shell
+tags:
+    - cli
+    - dev-workflow
+binary_names:
+    - zellij
+packages:
+    brew: zellij
+github: zellij-org/zellij

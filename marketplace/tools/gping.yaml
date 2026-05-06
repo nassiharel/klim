@@ -1,0 +1,15 @@
+name: gping
+display_name: gping
+category: Network
+tags:
+    - networking
+    - cli
+    - cross-platform
+binary_names:
+    - gping
+packages:
+    winget: orf.gping
+    scoop: gping
+    choco: gping
+    brew: gping
+github: orf/gping

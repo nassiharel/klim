@@ -1,0 +1,16 @@
+name: python
+display_name: Python
+category: Language
+tags:
+    - python
+    - automation
+binary_names:
+    - python3
+    - python
+packages:
+    winget: Python.Python.3.12
+    scoop: python
+    choco: python3
+    brew: python@3
+    apt: python3
+github: python/cpython

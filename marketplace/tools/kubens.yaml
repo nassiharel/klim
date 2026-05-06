@@ -1,0 +1,15 @@
+name: kubens
+display_name: kubens
+category: Containers
+tags:
+    - kubernetes
+    - cli
+binary_names:
+    - kubens
+packages:
+    winget: ahmetb.kubens
+    scoop: kubens
+    choco: kubens
+    brew: kubectx
+    apt: kubectx
+github: ahmetb/kubectx

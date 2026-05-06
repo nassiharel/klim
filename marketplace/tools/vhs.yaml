@@ -1,0 +1,13 @@
+name: vhs
+display_name: VHS
+category: CLI
+tags:
+    - cli
+    - charm
+binary_names:
+    - vhs
+packages:
+    winget: charmbracelet.vhs
+    scoop: vhs
+    brew: vhs
+github: charmbracelet/vhs

@@ -1,0 +1,135 @@
+---
+title: Quick Start
+description: Map, inspect, and reproduce a developer environment with klim
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+This guide walks through Klim's core loop: map the tools on this machine, inspect what changed, encode project requirements, and use the same deterministic commands from a TUI, scripts, CI, or agents.
+
+## Launch the TUI
+
+Simply run `klim` with no arguments to launch the interactive terminal UI:
+
+```bash
+klim
+```
+
+Klim will scan your `$PATH` to discover installed developer tools, then display them in an interactive environment map with version information, install sources, and update status.
+
+## What You'll See
+
+The TUI opens on the **Installed** tab showing all detected tools:
+
+```
+┌─ Installed ─ ★ Favorites ─ Updates ─ Discover ─ Backup ─ Project ─ Dashboard ─ Config ─┐
+│                                                                                          │
+│  ✓ az          2.67.0    (brew)     Azure CLI                                            │
+│  ⬆ docker      24.0.7    (manual)   Docker CLI             → 27.1.0                     │
+│  ✓ git         2.47.0    (brew)     Git version control                                  │
+│  ✓ go          1.25.0    (brew)     Go programming language                              │
+│  ⬆ kubectl     1.28.4    (brew)     Kubernetes CLI          → 1.31.0                     │
+│  ✓ node        22.11.0   (brew)     Node.js runtime                                     │
+│                                                                                          │
+│  ↑↓ navigate  ←→ tab  * favorite  s sort  Enter detail  f filter  r refresh  q quit     │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **✓** — Tool is up to date
+- **⬆** — An update is available (latest version shown on the right)
+
+## Navigate the Tabs
+
+Use **←/→** arrow keys, **Tab/Shift+Tab**, or number keys **1–8** to switch tabs:
+
+| Tab | Key | What it shows |
+|-----|-----|---------------|
+| Installed | 1 | All detected tools with versions |
+| ★ Favorites | 2 | Your favorited tools |
+| Updates | 3 | Tools with available upgrades |
+| Discover | 4 | Browse 110+ tools from the marketplace |
+| Backup | 5 | Export, import, and share your toolchain |
+| Project | 6 | Multi-project `.klim.yaml` management |
+| Dashboard | 7 | Stats and breakdowns |
+| Config | 8 | Edit settings |
+
+## CLI Mode
+
+For non-interactive usage in scripts, CI, or agent workflows, use subcommands directly:
+
+<Steps>
+1. **List installed tools:**
+   ```bash
+   klim list
+   ```
+
+2. **Inspect a single tool:**
+   ```bash
+   klim info kubectl
+   ```
+
+3. **Export your toolchain:**
+   ```bash
+   klim export > my-tools.yaml
+   ```
+
+4. **Import on another machine:**
+   ```bash
+   klim import my-tools.yaml
+   ```
+
+5. **Capture your environment for later comparison:**
+   ```bash
+   klim trail capture --label before-upgrade
+   ```
+
+6. **Check for klim updates:**
+   ```bash
+   klim update --check
+   ```
+</Steps>
+
+## Common Workflows
+
+### Favorite and Share Your Tools
+
+1. In the TUI, press **\*** on any tool to favorite it
+2. Switch to the **★ Favorites** tab (press **2**)
+3. Press **s** to generate a share token
+4. Send the token to a colleague — they run `klim open <token>` to install the same tools
+
+### Batch Upgrade
+
+1. Switch to the **Updates** tab (press **3**)
+2. Press **a** to select all outdated tools
+3. Press **u** to upgrade them all at once
+
+### Create a Project Environment Contract
+
+1. Export your toolchain: `klim export > .klim.yaml`
+2. Commit `.klim.yaml` to your repository
+3. Team members and CI run: `klim check` to verify the environment contract
+
+### Track Toolchain Changes Over Time
+
+`klim trail` is git-style history for your environment. Capture, diff, and roll forward across upgrades:
+
+1. Capture before risky changes: `klim trail capture --label before-kubectl-upgrade`
+2. Make your changes (`brew upgrade kubectl`, etc.)
+3. Capture again: `klim trail capture`
+4. See exactly what changed: `klim trail diff before-kubectl-upgrade`
+
+### Inspect a Single Tool
+
+`klim info <tool>` is the CLI counterpart of the TUI's tool detail page — every install location, every available package source, GitHub stats, project / pack references, and related installed tools:
+
+```bash
+klim info terraform
+klim info terraform --output json   # for scripts
+```
+
+## Next Steps
+
+- Learn about all [TUI features](/guides/tui-overview)
+- Explore the [CLI command reference](/reference/commands/list)
+- Set up [team manifests](/guides/team-manifests) for your project

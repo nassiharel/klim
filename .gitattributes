@@ -1,0 +1,16 @@
+# Default text files to LF line endings — keeps the embedded web
+# templates and Go sources consistent across Windows / macOS / Linux
+# checkouts. Without this, files created on Windows can land in git
+# with CRLF and produce noisy diffs the next time they're touched
+# from another OS.
+* text=auto eol=lf
+
+# Binary files: don't even try to normalize.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.exe binary

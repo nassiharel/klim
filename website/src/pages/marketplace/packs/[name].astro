@@ -1,0 +1,29 @@
+---
+import '../../../styles/global.css';
+import Layout from '../../../layouts/Layout.astro';
+import Header from '../../../components/Header.astro';
+import Footer from '../../../components/Footer.astro';
+import PackDetail from '../../../components/PackDetail.astro';
+import marketplace from '../../../data/marketplace.json';
+
+export function getStaticPaths() {
+  return marketplace.packs.map((pack: any) => ({
+    params: { name: pack.name },
+    props: { pack },
+  }));
+}
+
+const { pack } = Astro.props;
+const toolMap = new Map(marketplace.tools.map((t: any) => [t.name, t]));
+const resolvedTools = pack.tools.map((name: string) => toolMap.get(name)).filter(Boolean);
+---
+
+<Layout title={`${pack.display_name} - klim Marketplace`}>
+  <Header />
+  <main class="pt-28 pb-20">
+    <div class="mx-auto max-w-4xl px-6">
+      <PackDetail pack={pack} resolvedTools={resolvedTools} />
+    </div>
+  </main>
+  <Footer />
+</Layout>

@@ -1,0 +1,14 @@
+name: kustomize
+display_name: Kustomize
+category: IaC
+tags:
+    - kubernetes
+    - configuration-management
+binary_names:
+    - kustomize
+packages:
+    winget: Kubernetes.kustomize
+    scoop: kustomize
+    choco: kustomize
+    brew: kustomize
+github: kubernetes-sigs/kustomize

@@ -1,0 +1,14 @@
+name: mods
+display_name: mods
+category: AI
+tags:
+    - coding-assistant
+    - cli
+    - charm
+binary_names:
+    - mods
+packages:
+    winget: charmbracelet.mods
+    scoop: mods
+    brew: mods
+github: charmbracelet/mods

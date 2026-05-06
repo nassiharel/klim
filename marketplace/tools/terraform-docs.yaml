@@ -1,0 +1,15 @@
+name: terraform-docs
+display_name: terraform-docs
+category: IaC
+tags:
+    - terraform
+    - docs
+    - cli
+binary_names:
+    - terraform-docs
+packages:
+    winget: terraform-docs.terraform-docs
+    scoop: terraform-docs
+    choco: terraform-docs
+    brew: terraform-docs
+github: terraform-docs/terraform-docs

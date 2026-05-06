@@ -1,0 +1,16 @@
+name: node
+display_name: Node.js
+category: Language
+tags:
+    - javascript
+    - typescript
+binary_names:
+    - node
+packages:
+    winget: OpenJS.NodeJS.LTS
+    scoop: node
+    choco: nodejs
+    brew: node
+    apt: nodejs
+    snap: node
+github: nodejs/node

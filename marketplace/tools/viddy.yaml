@@ -1,0 +1,13 @@
+name: viddy
+display_name: viddy
+category: CLI
+tags:
+    - cli
+    - automation
+    - dev-workflow
+binary_names:
+    - viddy
+packages:
+    scoop: viddy
+    brew: viddy
+github: sachaos/viddy

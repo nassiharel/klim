@@ -1,0 +1,13 @@
+name: redis-cli
+display_name: Redis CLI
+category: Database
+tags:
+    - database
+    - cli
+binary_names:
+    - redis-cli
+packages:
+    choco: redis
+    brew: redis
+    apt: redis-tools
+github: redis/redis

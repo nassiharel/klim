@@ -1,0 +1,15 @@
+name: azd
+display_name: Azure Dev CLI
+category: Cloud
+tags:
+    - microsoft
+    - cloud
+    - dev-workflow
+binary_names:
+    - azd
+packages:
+    winget: Microsoft.Azd
+    scoop: azd
+    choco: azd
+    brew: azure/azd/azd
+github: Azure/azure-dev

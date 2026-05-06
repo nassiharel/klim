@@ -1,0 +1,15 @@
+name: infracost
+display_name: Infracost
+category: Cloud
+tags:
+    - terraform
+    - cloud
+    - cli
+binary_names:
+    - infracost
+packages:
+    winget: Infracost.Infracost
+    scoop: infracost
+    choco: infracost
+    brew: infracost
+github: infracost/infracost

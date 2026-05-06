@@ -1,0 +1,12 @@
+name: tmux
+display_name: tmux
+category: Shell
+tags:
+    - tui
+    - cli
+binary_names:
+    - tmux
+packages:
+    brew: tmux
+    apt: tmux
+github: tmux/tmux

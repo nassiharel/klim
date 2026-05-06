@@ -1,0 +1,14 @@
+name: vagrant
+display_name: Vagrant
+category: IaC
+tags:
+    - hashicorp
+    - dev-workflow
+binary_names:
+    - vagrant
+packages:
+    winget: Hashicorp.Vagrant
+    scoop: vagrant
+    choco: vagrant
+    brew: vagrant
+github: hashicorp/vagrant

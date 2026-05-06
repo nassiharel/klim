@@ -1,0 +1,40 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>Projects</h1>
+  <p class="muted">Multi-project overview. Each row links to a per-project check.</p>
+</section>
+
+{{if eq (len $d.Projects) 0}}
+  <p class="empty">No registered projects yet. Run <code>klim init</code> in a project directory to drop a <code>.klim.yaml</code> and add it to the registry.</p>
+{{else}}
+<table class="grid">
+  <thead>
+    <tr>
+      <th>Project</th>
+      <th>Path</th>
+      <th>.klim.yaml</th>
+      <th>Tools</th>
+      <th>Last checked</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range $d.Projects}}
+      <tr>
+        <td><a href="/projects/{{.PathURL}}" class="tool-link">{{.Entry.Name}}</a></td>
+        <td><code class="muted">{{.Entry.Path}}</code></td>
+        <td>
+          {{if .HasFile}}
+            {{if .ParseErrMsg}}<span class="badge update" title="{{.ParseErrMsg}}">parse error</span>{{else}}<span class="badge ok">present</span>{{end}}
+          {{else}}
+            <span class="badge muted">missing</span>
+          {{end}}
+        </td>
+        <td>{{if .HasFile}}{{.ToolsCount}}{{else}}—{{end}}</td>
+        <td class="muted small">{{if .Entry.LastChecked.IsZero}}—{{else}}{{.Entry.LastChecked.Local.Format "2006-01-02 15:04"}}{{end}}</td>
+      </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}

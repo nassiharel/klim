@@ -1,0 +1,6 @@
+name: python-developer
+display_name: Python Developer
+description: Tools for Python development.
+tools:
+    - python
+    - uv

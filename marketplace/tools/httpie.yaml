@@ -1,0 +1,16 @@
+name: httpie
+display_name: HTTPie
+category: CLI
+tags:
+    - http-client
+    - api
+binary_names:
+    - http
+    - https
+packages:
+    winget: HTTPie.HTTPie
+    scoop: httpie
+    choco: httpie
+    brew: httpie
+    apt: httpie
+github: httpie/cli

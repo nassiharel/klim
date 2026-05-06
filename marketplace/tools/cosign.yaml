@@ -1,0 +1,14 @@
+name: cosign
+display_name: Cosign
+category: Security
+tags:
+    - security
+    - container
+    - encryption
+binary_names:
+    - cosign
+packages:
+    winget: Sigstore.Cosign
+    scoop: cosign
+    brew: cosign
+github: sigstore/cosign

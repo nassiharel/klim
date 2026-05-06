@@ -1,0 +1,13 @@
+name: jj
+display_name: Jujutsu
+category: VCS
+tags:
+    - git
+    - cli
+binary_names:
+    - jj
+packages:
+    winget: jj-vcs.jj
+    scoop: jj
+    brew: jj
+github: jj-vcs/jj

@@ -1,0 +1,15 @@
+name: just
+display_name: just
+category: CLI
+tags:
+    - task-runner
+    - build-system
+    - cli
+binary_names:
+    - just
+packages:
+    winget: Casey.Just
+    scoop: just
+    choco: just
+    brew: just
+github: casey/just

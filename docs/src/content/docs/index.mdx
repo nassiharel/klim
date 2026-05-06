@@ -1,0 +1,41 @@
+---
+title: klim Documentation
+description: Learn how to use klim as a productivity booster for dev tools
+template: splash
+hero:
+  tagline: Reignite Dev Experience.
+  actions:
+    - text: Get Started
+      link: /getting-started/installation/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/nassiharel/klim
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+Klim is the developer environment control plane and productivity booster for dev tools: it maps the tools your projects depend on, turns them into portable contracts, and automates install, audit, diff, upgrade, and restore workflows through native package managers.
+
+<CardGrid stagger>
+  <Card title="Start with an environment map" icon="rocket">
+    Install Klim, launch the TUI, and see installed tools, versions, sources, paths, update status, and marketplace context. [Get started ->](/getting-started/installation/)
+  </Card>
+  <Card title="Interactive control plane" icon="laptop">
+    Browse tools, batch upgrade, manage favorites, inspect health, and move between inventory, projects, backups, dashboard, and configuration. [TUI guide ->](/guides/tui-overview/)
+  </Card>
+  <Card title="Project contracts" icon="setting">
+    Define required tools in `.klim.yaml`, validate them locally or in CI, and generate workflows, Dockerfiles, and devcontainers from the same source. [Team manifests ->](/guides/team-manifests/)
+  </Card>
+  <Card title="Portable environments" icon="seti:clock">
+    Export, import, share, diff, and capture trail snapshots so a known-good toolchain can move across machines and time. [Backup and restore ->](/guides/backup-restore/)
+  </Card>
+  <Card title="Security and compliance" icon="shield">
+    Audit unmanaged installs, PATH risks, archived upstreams, stale projects, licenses, vulnerabilities, and SBOM output for compliance pipelines. [Security guide ->](/guides/security/)
+  </Card>
+  <Card title="Deterministic automation" icon="document">
+    Use stable commands, JSON output, and predictable exit codes from scripts, CI, and AI agents instead of relying on ad-hoc shell guessing. [Commands ->](/reference/commands/list/)
+  </Card>
+</CardGrid>

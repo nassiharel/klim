@@ -1,0 +1,130 @@
+version: 2
+
+project_name: klim
+
+before:
+  hooks:
+    - go mod download
+    - go generate ./...
+    - go mod tidy
+
+builds:
+  - id: klim
+    main: ./cmd/klim
+    binary: klim
+    env:
+      - CGO_ENABLED=0
+      - SOURCE_DATE_EPOCH={{ .CommitTimestamp }}
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/nassiharel/klim/internal/build.Version={{.Version}}
+      - -X github.com/nassiharel/klim/internal/build.Commit={{.ShortCommit}}
+      - -X github.com/nassiharel/klim/internal/build.Date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+    files:
+      - README.md
+      - LICENSE
+
+nfpms:
+  - id: packages
+    package_name: klim
+    vendor: nassiharel
+    homepage: https://github.com/nassiharel/klim
+    maintainer: nassiharel
+    description: >-
+      Deterministic developer toolchains across local machines, teams, CI, and agents.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+
+brews:
+  - repository:
+      owner: nassiharel
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/nassiharel/klim
+    description: >-
+      Deterministic developer toolchains across local machines, teams, CI, and agents.
+    license: MIT
+    install: |
+      bin.install "klim"
+    test: |
+      system bin/"klim", "version"
+
+sboms:
+  - artifacts: archive
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ .Tag }}-devel"
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))?\!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\(.+\))?\!?:.+$'
+      order: 1
+    - title: Dependencies
+      regexp: '^.*?(deps|build\(deps\))(\(.+\))?\!?:.+$'
+      order: 2
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+release:
+  github:
+    owner: nassiharel
+    name: klim
+  prerelease: auto
+  name_template: "v{{ .Version }}"
+  footer: |
+    ## Install
+
+    **Quick install (macOS/Linux):**
+    ```
+    curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
+    ```
+
+    **Quick install (Windows PowerShell):**
+    ```
+    irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
+    ```
+
+    **Homebrew**: `brew install nassiharel/tap/klim`
+    **Go**: `go install github.com/nassiharel/klim/cmd/klim@v{{ .Version }}`
+    **Debian/Ubuntu**: `sudo dpkg -i klim_{{ .Version }}_linux_amd64.deb`
+    **RPM**: `sudo rpm -i klim_{{ .Version }}_linux_amd64.rpm`
+    **Binary**: Download from the assets below

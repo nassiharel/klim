@@ -1,0 +1,11 @@
+name: npm
+display_name: npm
+category: PkgMgr
+tags:
+    - javascript
+    - package-manager
+binary_names:
+    - npm
+packages:
+    npm: npm
+github: npm/cli

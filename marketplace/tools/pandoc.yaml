@@ -1,0 +1,15 @@
+name: pandoc
+display_name: Pandoc
+category: CLI
+tags:
+    - data-processing
+    - cli
+binary_names:
+    - pandoc
+packages:
+    winget: JohnMacFarlane.Pandoc
+    scoop: pandoc
+    choco: pandoc
+    brew: pandoc
+    apt: pandoc
+github: jgm/pandoc

@@ -1,0 +1,16 @@
+name: fzf
+display_name: fzf
+category: CLI
+tags:
+    - fuzzy-finder
+    - search
+    - cli
+binary_names:
+    - fzf
+packages:
+    winget: junegunn.fzf
+    scoop: fzf
+    choco: fzf
+    brew: fzf
+    apt: fzf
+github: junegunn/fzf

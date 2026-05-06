@@ -1,0 +1,226 @@
+package config
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"gopkg.in/yaml.v3"
+)
+
+func TestDefault(t *testing.T) {
+	cfg := Default()
+
+	if cfg.Logging.Level != "debug" {
+		t.Errorf("default logging level = %q, want debug", cfg.Logging.Level)
+	}
+	if cfg.Logging.File != true {
+		t.Error("default logging file should be true")
+	}
+	if cfg.Logging.Verbose != false {
+		t.Error("default logging verbose should be false")
+	}
+	if cfg.Marketplace.URL != DefaultMarketplaceURL {
+		t.Errorf("default marketplace URL = %q, want DefaultMarketplaceURL", cfg.Marketplace.URL)
+	}
+	if cfg.Marketplace.AutoRefresh != false {
+		t.Error("default auto_refresh should be false")
+	}
+	if cfg.Marketplace.RefreshInterval.Duration != 24*time.Hour {
+		t.Errorf("default refresh_interval = %v, want 24h", cfg.Marketplace.RefreshInterval)
+	}
+	if cfg.Performance.Concurrency != 0 {
+		t.Errorf("default concurrency = %d, want 0", cfg.Performance.Concurrency)
+	}
+	if cfg.Performance.CommandTimeout.Duration != 30*time.Second {
+		t.Errorf("default command_timeout = %v, want 30s", cfg.Performance.CommandTimeout)
+	}
+	if cfg.UI.DefaultTab != "installed" {
+		t.Errorf("default tab = %q, want installed", cfg.UI.DefaultTab)
+	}
+	if cfg.UI.ShowPath != true {
+		t.Error("default show_path should be true")
+	}
+	if cfg.UI.SidebarRight != false {
+		t.Error("default sidebar_right should be false")
+	}
+}
+
+func TestDuration_MarshalYAML(t *testing.T) {
+	d := Duration{10 * time.Second}
+	v, err := d.MarshalYAML()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != "10s" {
+		t.Errorf("MarshalYAML() = %v, want 10s", v)
+	}
+}
+
+func TestDuration_UnmarshalYAML(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"seconds", "10s", 10 * time.Second, false},
+		{"hours", "24h", 24 * time.Hour, false},
+		{"minutes", "5m", 5 * time.Minute, false},
+		{"complex", "1h30m", 90 * time.Minute, false},
+		{"invalid", "notaduration", 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var d Duration
+			node := &yaml.Node{Kind: yaml.ScalarNode, Value: tt.yaml}
+			err := d.UnmarshalYAML(node)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if d.Duration != tt.want {
+				t.Errorf("UnmarshalYAML(%q) = %v, want %v", tt.yaml, d.Duration, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfig_RoundTrip(t *testing.T) {
+	// Test that a Config can be marshaled and unmarshaled without loss.
+	original := Default()
+	original.Marketplace.URL = "http://localhost:5000/marketplace.yaml"
+	original.UI.SidebarRight = true
+
+	data, err := yaml.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var restored Config
+	if err := yaml.Unmarshal(data, &restored); err != nil {
+		t.Fatal(err)
+	}
+
+	if restored.Marketplace.URL != original.Marketplace.URL {
+		t.Errorf("URL = %q, want %q", restored.Marketplace.URL, original.Marketplace.URL)
+	}
+	if restored.UI.SidebarRight != original.UI.SidebarRight {
+		t.Errorf("SidebarRight = %v, want %v", restored.UI.SidebarRight, original.UI.SidebarRight)
+	}
+	if restored.Performance.CommandTimeout.Duration != original.Performance.CommandTimeout.Duration {
+		t.Errorf("CommandTimeout = %v, want %v",
+			restored.Performance.CommandTimeout.Duration,
+			original.Performance.CommandTimeout.Duration)
+	}
+}
+
+func TestValidate_ExtraURLs(t *testing.T) {
+	tests := []struct {
+		name    string
+		urls    []string
+		wantLen int // expected number of warnings from extra_urls
+	}{
+		{"valid https", []string{"https://example.com/marketplace.yaml"}, 0},
+		{"valid http", []string{"http://localhost:8080/m.yaml"}, 0},
+		{"invalid scheme", []string{"ftp://example.com/m.yaml"}, 1},
+		{"no scheme", []string{"just-a-string"}, 1},
+		{"empty string", []string{""}, 0},
+		{"missing host", []string{"https://"}, 1},
+		{"mixed valid and invalid", []string{"https://ok.com/m.yaml", "bad", "https://also-ok.com"}, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Marketplace.ExtraURLs = tt.urls
+			warnings := cfg.Validate()
+			count := 0
+			for _, w := range warnings {
+				if contains(w, "extra_urls") {
+					count++
+				}
+			}
+			if count != tt.wantLen {
+				t.Errorf("got %d extra_urls warnings, want %d: %v", count, tt.wantLen, warnings)
+			}
+		})
+	}
+}
+
+func TestValidate_PreferredSource(t *testing.T) {
+	tests := []struct {
+		name      string
+		source    string
+		wantWarns int
+	}{
+		{"empty (default)", "", 0},
+		{"valid brew", "brew", 0},
+		{"valid winget", "winget", 0},
+		{"valid scoop", "scoop", 0},
+		{"valid choco", "choco", 0},
+		{"valid apt", "apt", 0},
+		{"valid snap", "snap", 0},
+		{"valid npm", "npm", 0},
+		{"unknown source", "foobar", 1},
+		{"unknown go", "go", 1}, // not yet a real install source
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Defaults.PreferredSource = tt.source
+			warnings := cfg.Validate()
+			count := 0
+			for _, w := range warnings {
+				if strings.Contains(w, "defaults.preferred_source") {
+					count++
+				}
+			}
+			if count != tt.wantWarns {
+				t.Errorf("got %d preferred_source warnings, want %d: %v", count, tt.wantWarns, warnings)
+			}
+		})
+	}
+}
+
+func TestValidate_ComplianceURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantLen int
+	}{
+		{"empty", "", 0},
+		{"valid https", "https://example.com/policy.yaml", 0},
+		{"valid http", "http://localhost:8080/p.yaml", 0},
+		{"file scheme rejected", "file:///etc/passwd", 1},
+		{"ftp rejected", "ftp://example.com/p.yaml", 1},
+		{"missing host", "https://", 1},
+		{"plain text", "just-a-string", 1},
+		{"surrounding whitespace warned", " https://example.com/p.yaml ", 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.Compliance.URL = tt.url
+			warnings := cfg.Validate()
+			count := 0
+			for _, w := range warnings {
+				if strings.Contains(w, "compliance.url") {
+					count++
+				}
+			}
+			if count != tt.wantLen {
+				t.Errorf("got %d compliance.url warnings, want %d: %v", count, tt.wantLen, warnings)
+			}
+		})
+	}
+}
+
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && strings.Contains(s, sub)
+}

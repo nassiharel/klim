@@ -1,0 +1,15 @@
+name: btm
+display_name: bottom
+category: Observability
+tags:
+    - process-monitoring
+    - tui
+    - cross-platform
+binary_names:
+    - btm
+packages:
+    winget: Clement.bottom
+    scoop: bottom
+    choco: bottom
+    brew: bottom
+github: ClementTsang/bottom

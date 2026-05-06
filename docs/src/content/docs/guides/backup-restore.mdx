@@ -1,0 +1,102 @@
+---
+title: Backup & Restore
+description: Export, import, and share your developer toolchain
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+The **Backup** tab (press `5`) provides tools for exporting, importing, and sharing your toolchain.
+
+## Backup Tab Menu
+
+The Backup tab presents a menu with these options:
+
+| Option | Description |
+|--------|-------------|
+| **Export** | Save installed tools to a YAML manifest |
+| **Import** | Install tools from a manifest file |
+| **Share** | Generate a compact share token |
+| **Open Token** | Install tools from a share token |
+| **Create Pack** | Create a custom pack from selected tools |
+| **My Packs** | Manage your custom packs |
+| **My Backups** | Browse previously saved backups |
+
+## Export / Import
+
+### Export Your Toolchain
+
+<Steps>
+1. Select **Export** from the Backup menu (or use CLI: `klim export`)
+2. klim creates a YAML manifest with all your installed tools
+3. The manifest includes tool names, versions, and package IDs for all platforms
+</Steps>
+
+**CLI usage:**
+```bash
+# Export to file
+klim export > my-tools.yaml
+
+# Force fresh scan before export
+klim export --refresh > my-tools.yaml
+```
+
+### Import on Another Machine
+
+<Steps>
+1. Copy the YAML manifest to the new machine
+2. Select **Import** from the Backup menu (or use CLI: `klim import`)
+3. klim reads the manifest and installs each tool via the best available package manager
+</Steps>
+
+**CLI usage:**
+```bash
+# Interactive — confirm before installing
+klim import my-tools.yaml
+
+# Non-interactive — install all
+klim import my-tools.yaml --yes
+```
+
+The manifest is **cross-platform** — it contains package IDs for all package managers (brew, winget, apt, scoop, choco, snap, npm), and klim automatically picks the right one for the current OS.
+
+## Share Tokens
+
+Share tokens are a compact way to share your toolchain without files.
+
+### Generate a Token
+
+```bash
+klim share
+# Output: klim:v1:H4sIAAAA...
+```
+
+Or press `s` on the **★ Favorites** tab to share just your favorites.
+
+### Install from a Token
+
+```bash
+klim open klim:v1:H4sIAAAA...
+
+# Non-interactive
+klim open klim:v1:H4sIAAAA... --yes
+```
+
+Share tokens are perfect for sending via Slack, Teams, email, or any messaging platform.
+
+## Custom Packs
+
+Create your own curated tool bundles:
+
+1. Select **Create Pack** from the Backup menu
+2. Pick tools from the list
+3. Name your pack
+4. Your pack is saved and available under **My Packs**
+
+Custom packs are stored at `~/.config/klim/marketplace/custom-packs.yaml`.
+
+## Backup Storage
+
+Exported backups are saved to:
+- **macOS:** `~/Library/Application Support/klim/backups/`
+- **Linux:** `~/.config/klim/backups/`
+- **Windows:** `%AppData%\klim\backups\`

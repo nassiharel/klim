@@ -1,0 +1,15 @@
+name: k3d
+display_name: k3d
+category: Containers
+tags:
+    - kubernetes
+    - local-cluster
+    - docker
+binary_names:
+    - k3d
+packages:
+    winget: k3d.k3d
+    scoop: k3d
+    choco: k3d
+    brew: k3d
+github: k3d-io/k3d

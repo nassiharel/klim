@@ -1,0 +1,15 @@
+name: hyperfine
+display_name: hyperfine
+category: Testing
+tags:
+    - benchmarking
+    - cli
+binary_names:
+    - hyperfine
+packages:
+    winget: sharkdp.hyperfine
+    scoop: hyperfine
+    choco: hyperfine
+    brew: hyperfine
+    apt: hyperfine
+github: sharkdp/hyperfine

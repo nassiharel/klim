@@ -1,0 +1,25 @@
+[CmdletBinding()]
+param([switch]$NewOnly)
+
+. "$PSScriptRoot/_common.ps1"
+Assert-RepoRoot
+
+Write-Step "Linting"
+if (-not (Get-Command golangci-lint -ErrorAction SilentlyContinue)) {
+    Write-Warn "golangci-lint not found — skipping"; exit 0
+}
+
+$lintArgs = @("run")
+if ($NewOnly) {
+    & git rev-parse --verify "HEAD~1^{commit}" *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $lintArgs += "--new-from-rev=HEAD~1"
+    }
+    else {
+        Write-Warn "HEAD~1 is not available; running full golangci-lint"
+    }
+}
+
+& golangci-lint @lintArgs
+if ($LASTEXITCODE -ne 0) { Write-Err "Lint failed"; exit 1 }
+Write-OK "Lint passed"

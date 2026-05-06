@@ -1,0 +1,11 @@
+name: choose
+display_name: choose
+category: CLI
+tags:
+    - cli
+    - data-processing
+binary_names:
+    - choose
+packages:
+    brew: choose-rust
+github: theryangeary/choose

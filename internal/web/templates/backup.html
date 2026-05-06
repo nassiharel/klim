@@ -1,0 +1,123 @@
+{{define "content"}}
+{{$d := .Data}}
+<section class="page-header">
+  <h1>Backup &amp; Share</h1>
+  <p class="muted">{{$d.Count}} installed tool{{if ne $d.Count 1}}s{{end}}.</p>
+</section>
+
+{{if $d.FlashMsg}}
+<section class="card flash {{if eq $d.FlashLevel "ok"}}flash-ok{{else}}flash-err{{end}}">
+  <p>{{if eq $d.FlashLevel "ok"}}✓ {{else}}✗ {{end}}{{$d.FlashMsg}}</p>
+</section>
+{{end}}
+
+<section class="card">
+  <h2>Save current toolchain</h2>
+  <p>Write your installed tools to <code>~/.config/klim/backups/&lt;name&gt;.yaml</code> for later restore.</p>
+  <form method="POST" action="/backup/save" class="inline-form">
+    <input type="text" name="name" placeholder="backup name (e.g. dev-laptop-2026-05)" pattern="[A-Za-z0-9][A-Za-z0-9._-]*" maxlength="64" required>
+    <button class="btn-primary" type="submit">Save</button>
+  </form>
+  <p class="muted small">You can also <a href="/backup/export.yaml" download>download a manifest</a> directly without saving.</p>
+</section>
+
+<section class="card">
+  <h2>Restore / Import</h2>
+  <p>Paste a manifest, drop in a YAML file, or paste a share token. We'll show a preview before installing anything.</p>
+  <form method="POST" action="/backup/preview" enctype="multipart/form-data" class="stacked-form">
+    <label>
+      <span>Manifest YAML (paste or attach)</span>
+      <textarea name="manifest" rows="6" placeholder="tools:&#10;  - name: kubectl&#10;  - name: terraform"></textarea>
+      <input type="file" name="manifest_file" accept=".yaml,.yml,application/yaml">
+    </label>
+    <label>
+      <span>or paste a share token</span>
+      <input type="text" name="token" placeholder="klim:v1:..." autocomplete="off">
+    </label>
+    <div class="actions">
+      <button class="btn-primary" type="submit">Preview install</button>
+    </div>
+  </form>
+</section>
+
+{{if $d.Backups}}
+<section class="card">
+  <h2>My Backups</h2>
+  <p class="muted">Saved backup files in <code>~/.config/klim/backups/</code>.</p>
+  <table class="grid">
+    <thead>
+      <tr><th>File</th><th>Size</th><th>Modified</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {{range $d.Backups}}
+        <tr>
+          <td><a href="{{.DownloadURL}}" class="tool-link">{{.Name}}</a></td>
+          <td>{{.Size}} bytes</td>
+          <td class="muted small">{{.ModifiedAt.Local.Format "2006-01-02 15:04"}}</td>
+          <td>
+            <form method="POST" action="/backup/preview" class="inline">
+              <input type="hidden" name="restore" value="{{.Name}}">
+              <button type="submit" class="btn-link">Restore</button>
+            </form>
+            <form method="POST" action="/backup/saved/{{.Name}}/delete" class="inline" onsubmit="return confirm('Delete {{.Name}}?')">
+              <button type="submit" class="btn-link">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{else if $d.BackupsErr}}
+<section class="card">
+  <h2>My Backups</h2>
+  <p class="muted">Couldn't list backups: {{$d.BackupsErr}}</p>
+</section>
+{{end}}
+
+<section class="card">
+  <h2>Create a custom pack</h2>
+  <p>Bundle a set of tools so you can install them together later from the <a href="/packs">Packs</a> tab.</p>
+  <form method="POST" action="/backup/packs/new" class="stacked-form">
+    <label>
+      <span>Slug (lowercase, dashes)</span>
+      <input type="text" name="name" placeholder="my-stack" pattern="[a-z0-9][a-z0-9-]*" maxlength="64" required>
+    </label>
+    <label>
+      <span>Display name</span>
+      <input type="text" name="display_name" placeholder="My Stack" maxlength="80">
+    </label>
+    <label>
+      <span>Description</span>
+      <input type="text" name="description" placeholder="What this pack is for" maxlength="200">
+    </label>
+    <label>
+      <span>Tools (comma- or newline-separated)</span>
+      <textarea name="tools" rows="4" placeholder="kubectl, terraform, helm" required></textarea>
+    </label>
+    <div class="actions">
+      <button class="btn-primary" type="submit">Create pack</button>
+    </div>
+  </form>
+</section>
+
+{{if $d.ShareToken}}
+<section class="card">
+  <h2>Share token (current toolchain)</h2>
+  <p>Compact, copy-pasteable token. Recipient runs <code>klim open &lt;token&gt;</code> or pastes it under Restore / Import above.</p>
+  <pre class="log">{{$d.ShareToken}}</pre>
+</section>
+{{else if $d.ShareErr}}
+<section class="card">
+  <h2>Share token</h2>
+  <p class="muted">{{$d.ShareErr}}</p>
+</section>
+{{end}}
+
+{{if $d.YAML}}
+<section class="card">
+  <h2>Manifest preview</h2>
+  <pre class="log">{{$d.YAML}}</pre>
+</section>
+{{end}}
+{{end}}

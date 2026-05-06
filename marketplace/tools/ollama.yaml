@@ -1,0 +1,12 @@
+name: ollama
+display_name: Ollama
+category: AI
+tags:
+    - cli
+binary_names:
+    - ollama
+packages:
+    winget: Ollama.Ollama
+    scoop: ollama
+    brew: ollama
+github: ollama/ollama

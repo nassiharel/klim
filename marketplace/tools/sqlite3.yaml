@@ -1,0 +1,15 @@
+name: sqlite3
+display_name: SQLite
+category: Database
+tags:
+    - database
+    - cli
+binary_names:
+    - sqlite3
+packages:
+    winget: SQLite.SQLite
+    scoop: sqlite3
+    choco: sqlite
+    brew: sqlite
+    apt: sqlite3
+github: sqlite/sqlite

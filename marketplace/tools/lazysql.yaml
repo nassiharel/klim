@@ -1,0 +1,11 @@
+name: lazysql
+display_name: lazysql
+category: Database
+tags:
+    - database
+    - tui
+binary_names:
+    - lazysql
+packages:
+    brew: lazysql
+github: jorgerojas26/lazysql

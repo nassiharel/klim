@@ -1,0 +1,14 @@
+name: wget
+display_name: Wget
+category: CLI
+tags:
+    - file-transfer
+    - cli
+binary_names:
+    - wget
+packages:
+    winget: JernejSimoncic.Wget
+    scoop: wget
+    choco: wget
+    brew: wget
+    apt: wget

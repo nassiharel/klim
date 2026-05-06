@@ -1,0 +1,13 @@
+name: copilot
+display_name: GitHub Copilot CLI
+category: AI
+tags:
+    - coding-assistant
+    - github
+binary_names:
+    - github-copilot-cli
+    - copilot
+packages:
+    winget: GitHub.Copilot
+    scoop: copilot
+github: github/copilot-cli

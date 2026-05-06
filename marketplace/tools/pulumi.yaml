@@ -1,0 +1,14 @@
+name: pulumi
+display_name: Pulumi
+category: IaC
+tags:
+    - cloud
+    - provisioning
+binary_names:
+    - pulumi
+packages:
+    winget: Pulumi.Pulumi
+    scoop: pulumi
+    choco: pulumi
+    brew: pulumi
+github: pulumi/pulumi

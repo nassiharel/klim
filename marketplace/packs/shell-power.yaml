@@ -1,0 +1,10 @@
+name: shell-power
+display_name: Shell Power User
+description: Shell customization and productivity tools.
+tools:
+    - starship
+    - tmux
+    - direnv
+    - atuin
+    - zoxide
+    - fzf

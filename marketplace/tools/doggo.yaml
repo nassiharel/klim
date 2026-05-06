@@ -1,0 +1,12 @@
+name: doggo
+display_name: doggo
+category: Network
+tags:
+    - networking
+    - cli
+binary_names:
+    - doggo
+packages:
+    scoop: doggo
+    brew: doggo
+github: mr-karan/doggo

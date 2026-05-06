@@ -1,0 +1,15 @@
+name: kind
+display_name: kind
+category: Containers
+tags:
+    - kubernetes
+    - local-cluster
+    - docker
+binary_names:
+    - kind
+packages:
+    winget: Kubernetes.kind
+    scoop: kind
+    choco: kind
+    brew: kind
+github: kubernetes-sigs/kind

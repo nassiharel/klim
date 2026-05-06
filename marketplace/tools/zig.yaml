@@ -1,0 +1,14 @@
+name: zig
+display_name: Zig
+category: Language
+tags:
+    - cli
+binary_names:
+    - zig
+packages:
+    winget: zig.zig
+    scoop: zig
+    choco: zig
+    brew: zig
+    snap: zig
+github: ziglang/zig

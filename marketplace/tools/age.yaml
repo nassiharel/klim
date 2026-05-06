@@ -1,0 +1,16 @@
+name: age
+display_name: age
+category: Security
+tags:
+    - encryption
+    - security
+    - cli
+binary_names:
+    - age
+packages:
+    winget: FiloSottile.age
+    scoop: age
+    choco: age.portable
+    brew: age
+    apt: age
+github: FiloSottile/age

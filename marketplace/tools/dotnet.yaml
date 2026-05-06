@@ -1,0 +1,17 @@
+name: dotnet
+display_name: .NET
+category: Language
+tags:
+    - csharp
+    - fsharp
+    - microsoft
+binary_names:
+    - dotnet
+packages:
+    winget: Microsoft.DotNet.SDK.8
+    scoop: dotnet
+    choco: dotnet-sdk
+    brew: dotnet
+    apt: dotnet-sdk-8.0
+    snap: dotnet-sdk
+github: dotnet/sdk

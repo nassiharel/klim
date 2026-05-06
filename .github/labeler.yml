@@ -1,0 +1,40 @@
+go:
+  - changed-files:
+      - any-glob-to-any-file:
+          - cmd/**
+          - internal/**
+          - go.mod
+          - go.sum
+
+tui:
+  - changed-files:
+      - any-glob-to-any-file:
+          - internal/tui/**
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+
+build:
+  - changed-files:
+      - any-glob-to-any-file:
+          - Makefile
+          - .goreleaser.yml
+
+marketplace:
+  - changed-files:
+      - any-glob-to-any-file:
+          - marketplace/**
+          - internal/marketplace/**
+
+install:
+  - changed-files:
+      - any-glob-to-any-file:
+          - install.sh
+          - install.ps1

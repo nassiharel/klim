@@ -1,0 +1,16 @@
+name: gh
+display_name: GitHub CLI
+category: VCS
+tags:
+    - github
+    - vcs
+    - git
+binary_names:
+    - gh
+packages:
+    winget: GitHub.cli
+    scoop: gh
+    choco: gh
+    brew: gh
+    apt: gh
+github: cli/cli

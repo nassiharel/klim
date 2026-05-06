@@ -1,0 +1,13 @@
+name: cargo
+display_name: Cargo
+category: Language
+tags:
+    - rust
+    - package-manager
+    - build-system
+binary_names:
+    - cargo
+packages:
+    brew: rust
+    apt: cargo
+github: rust-lang/cargo

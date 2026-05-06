@@ -1,0 +1,54 @@
+# Binaries
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+vendor/
+
+# Cache
+cache.json
+
+# Coverage
+coverage.out
+coverage.html
+
+# Fuzz
+testdata/fuzz/
+
+# Marketplace (assembled from marketplace/tools/ and marketplace/packs/ by CI)
+/marketplace.yaml
+
+# Node.js (docs/ and website/)
+node_modules/
+
+# Generated marketplace data (website)
+website/src/data/marketplace.json
+
+# Environment
+.env
+.env.*

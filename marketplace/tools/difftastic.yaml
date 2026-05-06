@@ -1,0 +1,16 @@
+name: difftastic
+display_name: difftastic
+category: CLI
+tags:
+    - cli
+    - git
+    - syntax-highlighting
+    - cross-platform
+binary_names:
+    - difft
+packages:
+    winget: difftastic
+    scoop: difftastic
+    choco: difftastic
+    brew: difftastic
+github: Wilfred/difftastic
