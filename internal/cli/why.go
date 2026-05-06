@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-
-	"github.com/nassiharel/klim/internal/progress"
 	"github.com/nassiharel/klim/internal/registry"
 )
 
@@ -68,13 +66,13 @@ func runWhy(cmd *cobra.Command, args []string) error {
 	}
 	toolName := args[0]
 
-	sp := progress.New("Scanning...")
+	sp := spinnerFor(out, "Scanning...")
 	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), false)
 	if err != nil {
 		sp.Fail(err.Error())
 		return err
 	}
-	sp.Done("Done")
+	sp.Stop()
 
 	// Find the tool.
 	toolMap := registry.ToolMap(tools)

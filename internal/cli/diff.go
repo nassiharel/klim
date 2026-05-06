@@ -12,7 +12,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/klim/internal/manifest"
-	"github.com/nassiharel/klim/internal/progress"
 	"github.com/nassiharel/klim/internal/service"
 	"github.com/nassiharel/klim/internal/share"
 )
@@ -69,7 +68,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load local tools.
-	sp := progress.New("Scanning installed tools...")
+	sp := spinnerFor(out, "Scanning installed tools...")
 	tools, _, scanInfo, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), diffRefreshFlag)
 	if err != nil {
 		sp.Fail(err.Error())

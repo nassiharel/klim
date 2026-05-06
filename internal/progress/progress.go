@@ -24,6 +24,7 @@ type Spinner struct {
 	done    chan struct{}
 	stopped bool
 	isTTY   bool
+	silent  bool
 }
 
 // New creates and starts a spinner with the given message.
@@ -40,6 +41,17 @@ func New(msg string) *Spinner {
 		fmt.Fprintf(os.Stderr, "  %s\n", msg)
 	}
 	return s
+}
+
+// NewSilent returns a spinner whose animation, status updates, and
+// completion / failure messages are all suppressed. Use this when the
+// caller is producing structured output (JSON / YAML) and any progress
+// chatter on stderr would interleave with the data stream the user is
+// trying to read or pipe.
+//
+// All methods on a silent spinner are safe no-ops.
+func NewSilent() *Spinner {
+	return &Spinner{silent: true, stopped: true, done: make(chan struct{})}
 }
 
 func (s *Spinner) animate() {
@@ -73,6 +85,9 @@ func (s *Spinner) render() {
 
 // Update changes the spinner message without stopping it.
 func (s *Spinner) Update(msg string) {
+	if s.silent {
+		return
+	}
 	s.mu.Lock()
 	s.msg = msg
 	s.mu.Unlock()
@@ -84,6 +99,9 @@ func (s *Spinner) Update(msg string) {
 
 // Done stops the spinner and prints a success message with a ✓ prefix.
 func (s *Spinner) Done(msg string) {
+	if s.silent {
+		return
+	}
 	s.stop()
 	if s.isTTY {
 		fmt.Fprintf(os.Stderr, "\r\033[K  ✓ %s\n", msg)
@@ -97,6 +115,9 @@ func (s *Spinner) Done(msg string) {
 // itself is the success signal (e.g. `klim info`, `klim list`) and a
 // trailing "✓ Done" would be redundant noise.
 func (s *Spinner) Stop() {
+	if s.silent {
+		return
+	}
 	s.stop()
 	if s.isTTY {
 		fmt.Fprint(os.Stderr, "\r\033[K")
@@ -105,6 +126,9 @@ func (s *Spinner) Stop() {
 
 // Fail stops the spinner and prints an error message with a ✗ prefix.
 func (s *Spinner) Fail(msg string) {
+	if s.silent {
+		return
+	}
 	s.stop()
 	if s.isTTY {
 		fmt.Fprintf(os.Stderr, "\r\033[K  ✗ %s\n", msg)
