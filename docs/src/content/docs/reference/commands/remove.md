@@ -42,7 +42,7 @@ Same as [`klim install`](./install#flags):
 klim remove jq
 
 # Remove every installed tool in a pack
-klim remove --pack go-dev --yes
+klim remove --pack go-developer --yes
 
 # Pin the package manager
 klim remove jq fzf --source brew --dry-run

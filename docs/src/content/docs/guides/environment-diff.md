@@ -1,9 +1,9 @@
 ---
 title: Environment Diff
-description: Compare your tools against another developer's environment
+description: Compare one developer environment against another
 ---
 
-Use `klim diff` to compare your installed tools against a manifest file or share token. This is the "works on my machine" killer — quickly identify what's different between two environments.
+Use `klim diff` to compare your installed tools against a manifest file or share token. It turns "works on my machine" into a concrete environment delta you can fix, review, or enforce in CI.
 
 ## Comparing Against a Manifest
 

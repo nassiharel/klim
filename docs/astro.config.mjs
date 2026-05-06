@@ -6,7 +6,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'klim',
-      description: 'Documentation for klim — the cross-platform developer tool manager',
+      description: 'Documentation for klim — deterministic developer toolchains across local machines, teams, CI, and agents',
       logo: {
         light: './src/assets/logo-light.svg',
         dark: './src/assets/logo-dark.svg',

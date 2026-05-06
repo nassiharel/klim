@@ -1,132 +1,60 @@
 ---
 const rows = [
   {
-    capability: 'List all installed CLIs',
-    pkgMgr: 'Only their own',
-    verMgr: 'Only managed tools',
-    scripts: 'Fragile',
-    agent: 'Slow + costs tokens',
-    klim: 'All detected tools',
+    capability: 'Complete local tool inventory',
+    pkgMgr: 'One manager at a time',
+    verMgr: 'Managed runtimes only',
+    scripts: 'Hand-rolled',
+    agent: 'Re-discovers per prompt',
+    klim: 'Unified environment map',
   },
   {
-    capability: 'Show versions',
-    pkgMgr: 'Per-manager',
-    verMgr: 'Per-manager',
-    scripts: 'Partial',
-    agent: 'Re-runs every time',
-    klim: 'Unified view',
-  },
-  {
-    capability: 'Show install paths',
-    pkgMgr: '✗',
-    verMgr: '✗',
-    scripts: 'Manual',
-    agent: 'Re-discovers each call',
-    klim: 'Automatic',
-  },
-  {
-    capability: 'Cross-manager support',
-    pkgMgr: '✗',
-    verMgr: 'Limited',
-    scripts: '✗',
-    agent: 'Hand-rolled per call',
-    klim: '7 managers',
-  },
-  {
-    capability: 'Upgrade suggestions',
-    pkgMgr: 'Per-manager',
-    verMgr: 'Per-manager',
-    scripts: '✗',
-    agent: 'Knowledge-cutoff stale',
-    klim: 'Single view',
-  },
-  {
-    capability: 'Export/Import toolchain',
-    pkgMgr: '✗',
+    capability: 'Project environment contract',
+    pkgMgr: 'No',
     verMgr: 'Partial',
-    scripts: '✗',
-    agent: 'No portable artifact',
-    klim: 'YAML manifest',
-  },
-  {
-    capability: 'Interactive TUI',
-    pkgMgr: '✗',
-    verMgr: '✗',
-    scripts: '✗',
-    agent: 'Chat only',
-    klim: 'Full TUI',
-  },
-  {
-    capability: 'Team standardization',
-    pkgMgr: '✗',
-    verMgr: 'Partial',
-    scripts: '✗',
+    scripts: 'Informal',
     agent: 'Prompt drift',
     klim: '.klim.yaml',
   },
   {
-    capability: 'Per-tool detail (sources, GitHub, refs)',
-    pkgMgr: 'Per-manager only',
-    verMgr: '✗',
-    scripts: '✗',
-    agent: 'Plausible, not reliable',
-    klim: 'klim info',
-  },
-  {
-    capability: 'Toolchain history & diff',
-    pkgMgr: '✗',
-    verMgr: '✗',
-    scripts: 'Manual',
-    agent: 'Forgets across sessions',
-    klim: 'klim trail',
-  },
-  {
-    capability: 'Cross-manager install/upgrade/remove',
-    pkgMgr: 'Per-manager',
-    verMgr: 'Per-manager',
-    scripts: 'Manual',
-    agent: 'Non-deterministic',
-    klim: 'klim install / upgrade / remove',
-  },
-  {
-    capability: 'CI / Dockerfile usage',
-    pkgMgr: '✓',
+    capability: 'Cross-OS reproduction',
+    pkgMgr: 'Per platform',
     verMgr: 'Limited',
-    scripts: 'Manual',
-    agent: 'Tokens per build, flaky',
-    klim: '--output json, exit codes',
+    scripts: 'Fragile branches',
+    agent: 'Non-deterministic',
+    klim: 'Native PM mapping',
   },
   {
-    capability: 'Compliance policy enforcement',
-    pkgMgr: '✗',
-    verMgr: '✗',
-    scripts: 'Manual',
-    agent: 'Best-effort',
-    klim: 'Hard refusal',
-  },
-  {
-    capability: 'Vulnerability scan (CVE/GHSA)',
+    capability: 'Machine-readable CI interface',
     pkgMgr: 'Inconsistent',
-    verMgr: '✗',
-    scripts: '✗',
-    agent: 'Knowledge-cutoff stale',
-    klim: 'OSV.dev, cached',
+    verMgr: 'Partial',
+    scripts: 'Custom',
+    agent: 'Tokens per build',
+    klim: 'Stable JSON + exit codes',
   },
   {
-    capability: 'Offline / air-gapped',
-    pkgMgr: '✓',
-    verMgr: '✓',
-    scripts: '✓',
-    agent: '✗',
-    klim: '✓',
-  },
-  {
-    capability: 'Reproducible across machines',
-    pkgMgr: 'Per-manager',
-    verMgr: 'Per-manager',
+    capability: 'Security and compliance posture',
+    pkgMgr: 'Package-local',
+    verMgr: 'No',
     scripts: 'Manual',
-    agent: 'Coin flip',
-    klim: 'Identical every run',
+    agent: 'Best effort',
+    klim: 'Audit, score, SBOM',
+  },
+  {
+    capability: 'Toolchain history and diff',
+    pkgMgr: 'No',
+    verMgr: 'No',
+    scripts: 'Manual files',
+    agent: 'Forgets sessions',
+    klim: 'Trail + diff',
+  },
+  {
+    capability: 'Agent-safe operations',
+    pkgMgr: 'Low-level commands',
+    verMgr: 'Low-level commands',
+    scripts: 'Opaque',
+    agent: 'Improvises',
+    klim: 'Deterministic primitive',
   },
 ];
 ---
@@ -135,34 +63,36 @@ const rows = [
   <div class="mx-auto max-w-6xl px-6">
     <div class="text-center">
       <h2 class="text-3xl font-bold text-white sm:text-4xl">
-        How klim compares
+        Klim is the layer above packages, scripts, and prompts
       </h2>
-      <p class="mt-4 text-lg text-gray-400">
-        klim complements your existing tools — it doesn't replace them.
+      <p class="mx-auto mt-4 max-w-3xl text-lg text-slate-400">
+        Package managers install packages. Scripts automate one workflow. Agents
+        translate intent. Klim provides the environment contract and deterministic
+        operations layer they can all rely on.
       </p>
     </div>
 
     <div class="mt-12 overflow-x-auto">
       <table class="w-full text-left text-sm">
         <thead>
-          <tr class="border-b border-gray-800">
-            <th class="px-4 py-3 font-medium text-gray-400">Capability</th>
-            <th class="px-4 py-3 font-medium text-gray-400">Package Managers</th>
-            <th class="px-4 py-3 font-medium text-gray-400">Version Managers</th>
-            <th class="px-4 py-3 font-medium text-gray-400">Ad-hoc Scripts</th>
-            <th class="px-4 py-3 font-medium text-gray-400">AI Agent + Shell</th>
-            <th class="px-4 py-3 font-medium text-green-400">klim</th>
+          <tr class="border-b border-slate-800">
+            <th class="px-4 py-3 font-medium text-slate-400">Capability</th>
+            <th class="px-4 py-3 font-medium text-slate-400">Package Managers</th>
+            <th class="px-4 py-3 font-medium text-slate-400">Version Managers</th>
+            <th class="px-4 py-3 font-medium text-slate-400">Ad-hoc Scripts</th>
+            <th class="px-4 py-3 font-medium text-slate-400">AI Agent + Shell</th>
+            <th class="px-4 py-3 font-medium text-emerald-300">klim</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr class="border-b border-gray-800/50">
-              <td class="px-4 py-3 text-gray-300">{row.capability}</td>
-              <td class="px-4 py-3 text-gray-500">{row.pkgMgr}</td>
-              <td class="px-4 py-3 text-gray-500">{row.verMgr}</td>
-              <td class="px-4 py-3 text-gray-500">{row.scripts}</td>
-              <td class="px-4 py-3 text-gray-500">{row.agent}</td>
-              <td class="px-4 py-3 font-medium text-green-400">{row.klim}</td>
+            <tr class="border-b border-slate-800/50">
+              <td class="px-4 py-3 text-slate-300">{row.capability}</td>
+              <td class="px-4 py-3 text-slate-500">{row.pkgMgr}</td>
+              <td class="px-4 py-3 text-slate-500">{row.verMgr}</td>
+              <td class="px-4 py-3 text-slate-500">{row.scripts}</td>
+              <td class="px-4 py-3 text-slate-500">{row.agent}</td>
+              <td class="px-4 py-3 font-medium text-emerald-300">{row.klim}</td>
             </tr>
           ))}
         </tbody>

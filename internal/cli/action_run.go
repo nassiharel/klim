@@ -75,7 +75,7 @@ func runAction(cmd *cobra.Command, args []string, action Action, flags *actionFl
 	}
 	if len(args) == 0 && len(flags.packs) == 0 {
 		return usageErrorf(
-			"requires at least one tool name or --pack <name>\n\nExamples:\n  klim %s jq fzf\n  klim %s --pack go-dev",
+			"requires at least one tool name or --pack <name>\n\nExamples:\n  klim %s jq fzf\n  klim %s --pack go-developer",
 			action, action,
 		)
 	}

@@ -1,9 +1,9 @@
 ---
 title: TUI Overview
-description: Complete guide to the klim interactive terminal UI
+description: Use the klim TUI as an interactive control plane for your toolchain
 ---
 
-The klim TUI (Terminal User Interface) provides a rich interactive experience for managing your developer tools. Launch it by running `klim` with no arguments.
+The Klim TUI is an interactive control plane for your developer environment. Launch it by running `klim` with no arguments to inspect installed tools, project contracts, updates, health, backups, and configuration from one place.
 
 ## Tabs
 

@@ -1,9 +1,9 @@
 ---
 title: Doctor & Audit
-description: Diagnose environment issues and audit your toolchain for security concerns
+description: Diagnose environment issues and audit your toolchain for security and compliance
 ---
 
-klim includes two complementary health-check features: **Doctor** for environment diagnostics and **Audit** for security/compliance analysis.
+Klim includes two complementary health-check features: **Doctor** for environment diagnostics and **Audit** for security/compliance analysis. Together they make toolchain risk visible enough to use in local development, CI, and compliance workflows.
 
 ## Doctor
 

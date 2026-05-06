@@ -3,7 +3,10 @@ interface Props {
   title: string;
   description?: string;
 }
-const { title, description = 'One command to discover, inspect, and upgrade every CLI on your system.' } = Astro.props;
+const {
+  title,
+  description = 'Deterministic developer toolchains across local machines, teams, CI, and agents.',
+} = Astro.props;
 ---
 
 <!doctype html>
@@ -16,7 +19,7 @@ const { title, description = 'One command to discover, inspect, and upgrade ever
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title}</title>
   </head>
-  <body class="bg-gray-950 text-gray-100 antialiased">
+  <body class="bg-slate-950 text-slate-100 antialiased">
     <slot />
   </body>
 </html>

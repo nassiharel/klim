@@ -19,10 +19,10 @@ var verboseFlag bool
 
 var rootCmd = &cobra.Command{
 	Use:   "klim",
-	Short: "Interactive CLI manager — detect, check, and manage your dev tools",
-	Long: `klim is a developer tool manager that detects installed CLI tools,
-shows their versions and install sources, checks for updates,
-and helps you keep everything current.
+	Short: "Developer environment control plane for tools, teams, CI, and agents",
+	Long: `klim maps the developer tools your projects depend on, turns them
+into portable environment contracts, and automates install, audit, diff,
+upgrade, and restore workflows through native package managers.
 
 Run without arguments to launch the interactive TUI, or use subcommands
 for non-interactive operation.`,

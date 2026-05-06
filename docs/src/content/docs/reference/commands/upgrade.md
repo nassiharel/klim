@@ -57,7 +57,7 @@ Same as [`klim install`](./install#flags):
 klim upgrade jq
 
 # Upgrade everything in a pack
-klim upgrade --pack go-dev
+klim upgrade --pack go-developer
 
 # Force a specific manager
 klim upgrade jq --source brew --yes
@@ -66,7 +66,7 @@ klim upgrade jq --source brew --yes
 klim upgrade --pack rust-dev --pack web-dev --dry-run
 
 # JSON for scripts
-klim upgrade --pack go-dev --output json --yes
+klim upgrade --pack go-developer --output json --yes
 ```
 
 ## Exit codes

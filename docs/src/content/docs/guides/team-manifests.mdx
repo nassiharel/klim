@@ -1,11 +1,11 @@
 ---
 title: Team Manifests
-description: Use .klim.yaml to standardize developer tools across your team
+description: Use .klim.yaml as a portable developer environment contract
 ---
 
 import { Steps } from '@astrojs/starlight/components';
 
-A `.klim.yaml` file defines the tools your project requires, with optional version constraints. Drop it in your repository root and every developer can verify their setup with a single command.
+A `.klim.yaml` file is a portable contract for the tools your project requires, with optional version constraints. Drop it in your repository root and every developer, CI job, or agent can verify the same setup deterministically.
 
 ## Creating a .klim.yaml
 
@@ -68,7 +68,7 @@ klim auto-detects `.klim.yaml` in the current directory or parent directories an
 
 ## CI Integration
 
-Use `klim check` in your CI pipeline to fail fast if tools are missing:
+Use `klim check` in your CI pipeline to fail fast if the environment contract is not satisfied:
 
 ```yaml
 # GitHub Actions example

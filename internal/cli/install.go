@@ -27,7 +27,7 @@ run.
 
 Examples:
   klim install jq fzf
-  klim install --pack go-dev
+  klim install --pack go-developer
   klim install jq --source brew --yes
   klim install --pack rust-dev --pack web-dev --dry-run
   klim install jq --output json`,

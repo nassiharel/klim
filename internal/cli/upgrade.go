@@ -26,7 +26,7 @@ Source precedence is the same as 'klim install':
 
 Examples:
   klim upgrade jq
-  klim upgrade --pack go-dev
+  klim upgrade --pack go-developer
   klim upgrade jq fzf --source brew --yes
   klim upgrade --pack rust-dev --dry-run`,
 	GroupID: "tools",

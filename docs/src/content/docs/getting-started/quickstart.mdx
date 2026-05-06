@@ -1,11 +1,11 @@
 ---
 title: Quick Start
-description: Get up and running with klim in minutes
+description: Map, inspect, and reproduce a developer environment with klim
 ---
 
 import { Steps } from '@astrojs/starlight/components';
 
-This guide walks you through using klim for the first time.
+This guide walks through Klim's core loop: map the tools on this machine, inspect what changed, encode project requirements, and use the same deterministic commands from a TUI, scripts, CI, or agents.
 
 ## Launch the TUI
 
@@ -15,7 +15,7 @@ Simply run `klim` with no arguments to launch the interactive terminal UI:
 klim
 ```
 
-klim will scan your `$PATH` to discover installed developer tools, then display them in an interactive interface with version information and update status.
+Klim will scan your `$PATH` to discover installed developer tools, then display them in an interactive environment map with version information, install sources, and update status.
 
 ## What You'll See
 
@@ -55,7 +55,7 @@ Use **←/→** arrow keys, **Tab/Shift+Tab**, or number keys **1–8** to switc
 
 ## CLI Mode
 
-For non-interactive usage (scripts, CI), use subcommands directly:
+For non-interactive usage in scripts, CI, or agent workflows, use subcommands directly:
 
 <Steps>
 1. **List installed tools:**
@@ -104,11 +104,11 @@ For non-interactive usage (scripts, CI), use subcommands directly:
 2. Press **a** to select all outdated tools
 3. Press **u** to upgrade them all at once
 
-### Team Standardization
+### Create a Project Environment Contract
 
 1. Export your toolchain: `klim export > .klim.yaml`
 2. Commit `.klim.yaml` to your repository
-3. Team members run: `klim check` to verify they have all required tools
+3. Team members and CI run: `klim check` to verify the environment contract
 
 ### Track Toolchain Changes Over Time
 

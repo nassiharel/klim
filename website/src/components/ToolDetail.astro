@@ -75,9 +75,9 @@ function fmtStars(n: number): string {
 <!-- Install -->
 {installEntries.length > 0 && (
   <div class="rounded-2xl border border-gray-800 bg-gray-900/50 p-8 mb-8">
-    <h2 class="text-xl font-bold text-white mb-6">Install with klim</h2>
+    <h2 class="text-xl font-bold text-white mb-6">Add to your environment with klim</h2>
     <div class="mb-6 overflow-hidden rounded-xl border border-green-500/30 bg-green-500/5 p-5">
-      <p class="text-sm text-gray-400 mb-2">The fastest way — let klim pick the best package manager:</p>
+      <p class="text-sm text-gray-400 mb-2">Let Klim route the install through the best native package manager:</p>
       <pre class="font-mono text-sm text-green-400">klim install {tool.name}</pre>
       <p class="mt-3 text-xs text-gray-500">Want a specific manager? Pass <code class="text-gray-300">--source brew</code> (or any of winget / choco / scoop / apt / snap / npm), or set <code class="text-gray-300">defaults.preferred_source</code> in <code class="text-gray-300">config.yaml</code>.</p>
     </div>

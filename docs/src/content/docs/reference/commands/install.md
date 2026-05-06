@@ -47,7 +47,7 @@ falls through to the next level rather than failing.
 klim install jq fzf
 
 # Install everything in a curated pack
-klim install --pack go-dev
+klim install --pack go-developer
 
 # Force a specific package manager and skip the prompt
 klim install jq --source brew --yes

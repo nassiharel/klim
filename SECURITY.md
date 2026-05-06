@@ -4,7 +4,7 @@
 
 This policy covers the `klim` binary and its build/release pipeline. It does **not** cover:
 
-- Third-party CLI tools that klim detects or upgrades
+- Third-party developer tools that klim detects or upgrades
 - The native package managers klim invokes (brew, winget, apt, etc.)
 
 ## Reporting a Vulnerability

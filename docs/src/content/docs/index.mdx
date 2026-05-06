@@ -1,9 +1,9 @@
 ---
 title: klim Documentation
-description: Learn how to use klim — the cross-platform developer tool manager
+description: Learn how to use klim to make developer environments reproducible
 template: splash
 hero:
-  tagline: One command to discover, inspect, and upgrade every CLI on your system.
+  tagline: Make every developer environment reproducible.
   actions:
     - text: Get Started
       link: /getting-started/installation/
@@ -17,23 +17,25 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
+Klim is the developer environment control plane: it maps the tools your projects depend on, turns them into portable contracts, and automates install, audit, diff, upgrade, and restore workflows through native package managers.
+
 <CardGrid stagger>
-  <Card title="Quick Install" icon="rocket">
-    Install klim in seconds on macOS, Linux, or Windows. [Get started →](/getting-started/installation/)
+  <Card title="Start with an environment map" icon="rocket">
+    Install Klim, launch the TUI, and see installed tools, versions, sources, paths, update status, and marketplace context. [Get started ->](/getting-started/installation/)
   </Card>
-  <Card title="Interactive TUI" icon="laptop">
-    A rich terminal UI with 8 tabs — browse tools, batch upgrade, manage favorites, and more. [TUI guide →](/guides/tui-overview/)
+  <Card title="Interactive control plane" icon="laptop">
+    Browse tools, batch upgrade, manage favorites, inspect health, and move between inventory, projects, backups, dashboard, and configuration. [TUI guide ->](/guides/tui-overview/)
   </Card>
-  <Card title="CLI Reference" icon="document">
-    Full reference for all commands: list, info, export, import, check, share, and more. [Commands →](/reference/commands/list/)
+  <Card title="Project contracts" icon="setting">
+    Define required tools in `.klim.yaml`, validate them locally or in CI, and generate workflows, Dockerfiles, and devcontainers from the same source. [Team manifests ->](/guides/team-manifests/)
   </Card>
-  <Card title="Tool Detail" icon="information">
-    `klim info <tool>` shows every install location, every package source, GitHub stats, and references — the CLI counterpart of the TUI detail page. [info →](/reference/commands/info/)
+  <Card title="Portable environments" icon="seti:clock">
+    Export, import, share, diff, and capture trail snapshots so a known-good toolchain can move across machines and time. [Backup and restore ->](/guides/backup-restore/)
   </Card>
-  <Card title="Toolchain History" icon="seti:clock">
-    `klim trail` records every captured state of your environment. Capture, diff, and prune git-style. [trail →](/reference/commands/trail/)
+  <Card title="Security and compliance" icon="shield">
+    Audit unmanaged installs, PATH risks, archived upstreams, stale projects, licenses, vulnerabilities, and SBOM output for compliance pipelines. [Security guide ->](/guides/security/)
   </Card>
-  <Card title="Team Manifests" icon="setting">
-    Define required tools in `.klim.yaml` for your project. CI-ready validation. [Learn more →](/guides/team-manifests/)
+  <Card title="Deterministic automation" icon="document">
+    Use stable commands, JSON output, and predictable exit codes from scripts, CI, and AI agents instead of relying on ad-hoc shell guessing. [Commands ->](/reference/commands/list/)
   </Card>
 </CardGrid>

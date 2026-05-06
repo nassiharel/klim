@@ -51,7 +51,7 @@ nfpms:
     homepage: https://github.com/nassiharel/klim
     maintainer: nassiharel
     description: >-
-      One command to discover, inspect, and upgrade every CLI on your system.
+      Deterministic developer toolchains across local machines, teams, CI, and agents.
     license: MIT
     formats:
       - deb
@@ -66,7 +66,7 @@ brews:
     directory: Formula
     homepage: https://github.com/nassiharel/klim
     description: >-
-      One command to discover, inspect, and upgrade every CLI on your system.
+      Deterministic developer toolchains across local machines, teams, CI, and agents.
     license: MIT
     install: |
       bin.install "klim"
@@ -125,6 +125,6 @@ release:
 
     **Homebrew**: `brew install nassiharel/tap/klim`
     **Go**: `go install github.com/nassiharel/klim/cmd/klim@v{{ .Version }}`
-    **Debian/Ubuntu**: `sudo dpkg -i clim_{{ .Version }}_linux_amd64.deb`
-    **RPM**: `sudo rpm -i clim_{{ .Version }}_linux_amd64.rpm`
+    **Debian/Ubuntu**: `sudo dpkg -i klim_{{ .Version }}_linux_amd64.deb`
+    **RPM**: `sudo rpm -i klim_{{ .Version }}_linux_amd64.rpm`
     **Binary**: Download from the assets below

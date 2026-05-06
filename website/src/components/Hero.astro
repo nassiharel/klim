@@ -2,66 +2,81 @@
 ---
 
 <section class="relative overflow-hidden pt-32 pb-20 md:pt-40 md:pb-32">
-  <!-- Gradient background -->
   <div class="absolute inset-0 -z-10">
-    <div class="absolute left-1/2 top-0 h-[500px] w-[800px] -translate-x-1/2 rounded-full bg-green-500/10 blur-3xl"></div>
+    <div class="absolute left-1/2 top-0 h-[520px] w-[860px] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-3xl"></div>
+    <div class="absolute right-0 top-32 h-72 w-72 rounded-full bg-teal-500/10 blur-3xl"></div>
   </div>
 
-  <div class="mx-auto max-w-4xl px-6 text-center">
-    <div class="mb-6 inline-flex items-center rounded-full border border-green-500/20 bg-green-500/10 px-4 py-1.5 text-sm text-green-400">
-      Open source CLI tool manager
+  <div class="mx-auto max-w-5xl px-6 text-center">
+    <div class="mb-6 inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-1.5 text-sm text-emerald-300">
+      Developer environment control plane
     </div>
 
     <h1 class="text-4xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl">
-      One command to manage
-      <span class="bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
-        every CLI
+      Make every developer environment
+      <span class="bg-gradient-to-r from-emerald-300 via-green-400 to-teal-300 bg-clip-text text-transparent">
+        reproducible
       </span>
-      on your system
     </h1>
 
-    <p class="mx-auto mt-6 max-w-2xl text-lg text-gray-400 md:text-xl">
-      klim discovers, inspects, and upgrades 110+ developer tools across
-      macOS, Linux, and Windows — using your native package managers.
+    <p class="mx-auto mt-6 max-w-3xl text-lg text-slate-400 md:text-xl">
+      Klim maps the tools your projects depend on, turns them into portable
+      environment contracts, and automates install, audit, diff, upgrade, and
+      restore workflows through native package managers.
     </p>
+
+    <div class="mt-8 grid gap-3 text-sm text-slate-400 sm:grid-cols-3">
+      <div class="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+        <span class="font-semibold text-emerald-300">Humans</span> get one clear view of their toolchain.
+      </div>
+      <div class="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+        <span class="font-semibold text-emerald-300">Teams</span> get versioned environment contracts.
+      </div>
+      <div class="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+        <span class="font-semibold text-emerald-300">CI and agents</span> get deterministic primitives.
+      </div>
+    </div>
 
     <div class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
       <a
         href="#install"
-        class="inline-flex items-center rounded-lg bg-green-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-green-500/25 transition-all hover:bg-green-400 hover:shadow-green-500/40"
+        class="inline-flex items-center rounded-lg bg-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-400 hover:shadow-emerald-500/40"
       >
-        Get Started
+        Start mapping your environment
       </a>
       <a
         href="https://docs.klim.dev"
-        class="inline-flex items-center rounded-lg border border-gray-700 px-6 py-3 text-sm font-semibold text-gray-300 transition-all hover:border-gray-500 hover:text-white"
+        class="inline-flex items-center rounded-lg border border-slate-700 px-6 py-3 text-sm font-semibold text-slate-300 transition-all hover:border-slate-500 hover:text-white"
       >
         Read the Docs →
       </a>
     </div>
 
-    <!-- Terminal preview -->
-    <div class="mx-auto mt-16 max-w-3xl overflow-hidden rounded-xl border border-gray-800 bg-gray-900 shadow-2xl">
-      <div class="flex items-center gap-2 border-b border-gray-800 px-4 py-3">
+    <div class="mx-auto mt-16 max-w-4xl overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-2xl">
+      <div class="flex items-center gap-2 border-b border-slate-800 px-4 py-3">
         <div class="h-3 w-3 rounded-full bg-red-500/60"></div>
         <div class="h-3 w-3 rounded-full bg-yellow-500/60"></div>
-        <div class="h-3 w-3 rounded-full bg-green-500/60"></div>
-        <span class="ml-2 text-xs text-gray-500">Terminal</span>
+        <div class="h-3 w-3 rounded-full bg-emerald-500/60"></div>
+        <span class="ml-2 text-xs text-slate-500">Environment contract</span>
       </div>
-      <div class="p-6 text-left font-mono text-sm leading-relaxed">
-        <p class="text-gray-500">$ klim</p>
-        <p class="mt-2 text-gray-400">┌─ <span class="text-green-400 font-bold">Installed</span> ─ ★ Favorites ─ Updates ─ Discover ─ Backup ─ Dashboard ─ Config ─┐</p>
-        <p class="text-gray-400">│</p>
-        <p class="text-gray-400">│  <span class="text-green-400">✓</span> az          2.67.0    <span class="text-gray-600">(brew)</span>     Azure CLI</p>
-        <p class="text-gray-400">│  <span class="text-yellow-400">⬆</span> docker      24.0.7    <span class="text-gray-600">(manual)</span>   Docker CLI          <span class="text-yellow-400">→ 27.1.0</span></p>
-        <p class="text-gray-400">│  <span class="text-green-400">✓</span> git         2.47.0    <span class="text-gray-600">(brew)</span>     Git</p>
-        <p class="text-gray-400">│  <span class="text-green-400">✓</span> go          1.25.0    <span class="text-gray-600">(brew)</span>     Go</p>
-        <p class="text-gray-400">│  <span class="text-yellow-400">⬆</span> kubectl     1.28.4    <span class="text-gray-600">(brew)</span>     Kubernetes CLI      <span class="text-yellow-400">→ 1.31.0</span></p>
-        <p class="text-gray-400">│  <span class="text-green-400">✓</span> node        22.11.0   <span class="text-gray-600">(brew)</span>     Node.js</p>
-        <p class="text-gray-400">│  <span class="text-green-400">✓</span> terraform   1.7.2     <span class="text-gray-600">(brew)</span>     Terraform</p>
-        <p class="text-gray-400">│</p>
-        <p class="text-gray-500">│  ↑↓ navigate  ←→ tab  * favorite  s sort  Enter detail  f filter  q quit</p>
-        <p class="text-gray-400">└──────────────────────────────────────────────────────────────────────────┘</p>
+      <div class="grid gap-0 text-left font-mono text-sm leading-relaxed md:grid-cols-[1.05fr_0.95fr]">
+        <div class="border-b border-slate-800 p-6 md:border-b-0 md:border-r">
+          <p class="text-slate-500">$ klim check --output json</p>
+          <p class="mt-3 text-slate-400">{'{'}</p>
+          <p class="text-slate-400">  "project": ".klim.yaml",</p>
+          <p class="text-slate-400">  "status": "needs_action",</p>
+          <p class="text-slate-400">  "missing": ["terraform"],</p>
+          <p class="text-slate-400">  "outdated": ["kubectl"]</p>
+          <p class="text-slate-400">{'}'}</p>
+        </div>
+        <div class="p-6">
+          <p class="text-slate-500">$ klim diff teammate.yaml</p>
+          <p class="mt-3 text-slate-400">git       <span class="text-emerald-300">match</span></p>
+          <p class="text-slate-400">docker    <span class="text-yellow-300">differs</span></p>
+          <p class="text-slate-400">terraform <span class="text-sky-300">remote only</span></p>
+          <p class="mt-4 text-slate-500">$ klim security audit --sbom</p>
+          <p class="text-slate-400">CycloneDX written to stdout</p>
+        </div>
       </div>
     </div>
   </div>

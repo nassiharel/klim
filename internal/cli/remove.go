@@ -23,7 +23,7 @@ Source precedence is the same as 'klim install'.
 
 Examples:
   klim remove jq
-  klim remove --pack go-dev --yes
+  klim remove --pack go-developer --yes
   klim remove jq fzf --source brew --dry-run`,
 	GroupID: "tools",
 	RunE: func(cmd *cobra.Command, args []string) error {
