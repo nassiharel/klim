@@ -64,7 +64,11 @@ jobs:
         with:
           files: coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+          # Be strict on push-to-main so token / repo-activation drift surfaces
+          # immediately and the badge stays accurate; lenient on PRs (especially
+          # from forks) so transient Codecov outages don't fail otherwise-green
+          # contributor builds.
+          fail_ci_if_error: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
   govulncheck:
     name: Govulncheck

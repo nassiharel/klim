@@ -5,7 +5,7 @@ description: Install klim and start mapping your developer environment
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Klim supports macOS, Linux, and Windows across both amd64 and arm64 architectures. Installing it is the first step toward turning a local machine into a productivity booster for dev tools.
+Klim supports macOS, Linux, and Windows. Pre-built binaries are published for `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, and `windows/amd64`. Windows ARM64 falls back to `go install` until ARM64 binaries are published. Installing klim is the first step toward turning a local machine into a productivity booster for dev tools.
 
 ## Quick Install
 
@@ -59,7 +59,7 @@ scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket
 scoop install klim
 ```
 
-The Scoop manifest is published to [`nassiharel/scoop-bucket`](https://github.com/nassiharel/scoop-bucket) on every release and points at the official `klim_<version>_windows_amd64.zip` asset from the corresponding GitHub Release, so version and contents are guaranteed to match. Scoop currently supports `windows/amd64` only — on Windows ARM64, fall back to `go install` (see below) until ARM64 binaries are published.
+The Scoop manifest is published to [`nassiharel/scoop-bucket`](https://github.com/nassiharel/scoop-bucket) on every release and points at the official `klim_<version>_windows_amd64.zip` asset from the corresponding GitHub Release, so version and contents are guaranteed to match. Scoop itself runs on Windows ARM64, but klim only ships a `windows/amd64` archive today (the GoReleaser build matrix explicitly skips `windows/arm64`). On Windows ARM64, fall back to `go install` (see below) until ARM64 binaries are published.
 
 ## winget (Windows)
 
@@ -84,16 +84,16 @@ Download pre-built binaries from the [GitHub Releases](https://github.com/nassih
 Available platforms:
 - macOS (amd64, arm64)
 - Linux (amd64, arm64)
-- Windows (amd64, arm64)
+- Windows (amd64) — Windows ARM64 is not yet published; use `go install`
 
 ## Linux Packages
 
 ```bash
-# Debian / Ubuntu
-sudo dpkg -i klim_<version>_linux_amd64.deb
+# Debian / Ubuntu (amd64 or arm64)
+sudo dpkg -i klim_<version>_linux_<arch>.deb
 
-# RPM-based (Fedora, CentOS, RHEL)
-sudo rpm -i klim_<version>_linux_amd64.rpm
+# RPM-based (Fedora, CentOS, RHEL — amd64 or arm64)
+sudo rpm -i klim_<version>_linux_<arch>.rpm
 ```
 
 ## Build from Source
