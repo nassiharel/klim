@@ -37,26 +37,104 @@ Klim is a productivity booster for dev tools: a deterministic, cross-platform la
 
 ## Quick install
 
+### macOS / Linux
+
 ```bash
-# macOS / Linux — script
+# Recommended — installer script
 curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
+```
 
-# Windows PowerShell — script
-irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
-
-# Homebrew (macOS / Linux)
+```bash
+# Homebrew tap
 brew install nassiharel/tap/klim
+```
 
-# Scoop (Windows)
+### Windows
+
+```powershell
+# Recommended — installer script
+irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
+```
+
+```powershell
+# Scoop bucket
 scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket
 scoop install klim
+```
 
-# winget (Windows — once the Microsoft moderators merge the auto-submitted PR)
+```powershell
+# winget (after Microsoft moderators merge the auto-submitted PR)
 winget install nassiharel.klim
+```
 
-# Go install (any OS with Go 1.25+)
+### Any OS with Go 1.25+
+
+```bash
 go install github.com/nassiharel/klim/cmd/klim@latest
 ```
+
+### Verify
+
+```bash
+klim version
+```
+
+<details>
+<summary>Other install options (deb / rpm / direct binary)</summary>
+
+#### Debian / Ubuntu
+
+```bash
+# Replace <arch> with amd64 or arm64
+curl -LO https://github.com/nassiharel/klim/releases/latest/download/klim_<version>_linux_<arch>.deb
+sudo dpkg -i klim_<version>_linux_<arch>.deb
+```
+
+#### Fedora / CentOS / RHEL
+
+```bash
+# Replace <arch> with amd64 or arm64
+curl -LO https://github.com/nassiharel/klim/releases/latest/download/klim_<version>_linux_<arch>.rpm
+sudo rpm -i klim_<version>_linux_<arch>.rpm
+```
+
+#### Direct binary
+
+Pre-built archives for every platform are attached to each [GitHub Release](https://github.com/nassiharel/klim/releases/latest):
+
+- `klim_<version>_darwin_amd64.tar.gz` / `klim_<version>_darwin_arm64.tar.gz`
+- `klim_<version>_linux_amd64.tar.gz` / `klim_<version>_linux_arm64.tar.gz`
+- `klim_<version>_windows_amd64.zip`
+
+Each archive ships with a CycloneDX SBOM (`*.sbom.json`) and an entry in the release's `checksums.txt`. Verify a download with:
+
+```bash
+sha256sum klim_<version>_<platform>.tar.gz
+# compare against checksums.txt
+```
+
+#### Pin a specific version
+
+```bash
+# install.sh — bash flag
+curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash -s -- --version v0.1.2
+
+# install.ps1 — env var
+$env:CLIM_VERSION = "v0.1.2"
+irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
+
+# go install — version suffix
+go install github.com/nassiharel/klim/cmd/klim@v0.1.2
+
+# brew / scoop / winget — pin via the package manager itself
+brew install nassiharel/tap/klim@0.1.2
+scoop install klim@0.1.2
+winget install nassiharel.klim --version 0.1.2
+```
+
+Or download the matching archive from the [tagged release page](https://github.com/nassiharel/klim/releases) directly.
+
+</details>
 
 Launch the interactive TUI:
 
