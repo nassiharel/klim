@@ -45,8 +45,9 @@ type ToolFinder interface {
 	// ctx argument must be non-nil; callers that don't have a
 	// meaningful context should pass context.Background(). FindAll
 	// returns ctx.Err() when ctx is cancelled mid-scan, ErrEmptyPATH
-	// when PATH is unset and Phase 5 produced no results, or nil
-	// on success.
+	// when no PATH directories are available (including Windows
+	// registry PATH directories) and Phase 5 produced no results,
+	// or nil on success.
 	FindAll(ctx context.Context, tools []registry.Tool) error
 }
 
