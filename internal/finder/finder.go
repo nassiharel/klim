@@ -181,8 +181,13 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 	}
 
 	for i := range tools {
+		// gosec G602 false positive: i is bounded by `range tools`,
+		// so &tools[i] is always safe. Taking the pointer once
+		// scopes the suppression to a single line and lets the
+		// remaining mutations read cleanly.
+		t := &tools[i] //nolint:gosec // G602: i is bounded by range tools.
 		// Clear previous instances so rescans don't accumulate duplicates.
-		tools[i].Instances = nil
+		t.Instances = nil
 
 		tms := toolMatches[i]
 		// Sort by PATH order using the original scanning directory.
@@ -206,16 +211,18 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 				continue
 			}
 			seen[key] = struct{}{}
-			tools[i].Instances = append(tools[i].Instances, m.instance) //nolint:gosec // G602: i is bounded by range; gosec's flow analysis can't see that.
+			t.Instances = append(t.Instances, m.instance)
 		}
 	}
 
 	// Phase 4: Fallback via exec.LookPath for tools with no instances.
 	for i := range tools {
-		if len(tools[i].Instances) > 0 {
+		// gosec G602 false positive: same justification as Phase 3.
+		t := &tools[i] //nolint:gosec // G602: i is bounded by range tools.
+		if len(t.Instances) > 0 {
 			continue
 		}
-		for _, binName := range tools[i].BinaryNames {
+		for _, binName := range t.BinaryNames {
 			path, err := exec.LookPath(binName)
 			if err != nil {
 				continue
@@ -224,7 +231,7 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 			if err != nil || resolved == "" {
 				resolved = path
 			}
-			tools[i].Instances = append(tools[i].Instances, registry.Instance{ //nolint:gosec // G602: i is bounded by range; gosec's flow analysis can't see that.
+			t.Instances = append(t.Instances, registry.Instance{
 				Path:   resolved,
 				Source: detectSource(resolved),
 			})
@@ -505,7 +512,7 @@ func detectSource(path string) registry.InstallSource {
 //   - only walks roots curated as "winget-user-scope friendly"
 //   - bails out cheaply when a root doesn't exist
 func scanExtraInstallRoots(ctx context.Context, tools []registry.Tool) int {
-	return scanExtraInstallRootsAt(ctx, tools, extraInstallRootsFn())
+	return scanExtraInstallRootsAt(ctx, tools, extraInstallRootsFn(), nil)
 }
 
 // extraInstallRootsFn is the function Phase 5 calls to discover the
@@ -514,14 +521,16 @@ func scanExtraInstallRoots(ctx context.Context, tools []registry.Tool) int {
 // root so the FindAll empty-PATH branch can be exercised end-to-end.
 var extraInstallRootsFn = extraInstallRoots
 
-// onSubdirVisited is a test hook that fires for every subdir Phase 5
-// actually reads. Production code never sets it. Tests use it to verify
-// that the walk short-circuits once every pending tool is resolved.
-var onSubdirVisited func(string)
-
 // scanExtraInstallRootsAt is the testable form of scanExtraInstallRoots:
 // callers supply the install roots explicitly so unit tests can exercise
 // the directory walk on any OS without depending on real install paths.
+//
+// The optional visit callback fires for every subdir actually read.
+// Production callers pass nil; tests use it to assert that the walker
+// short-circuits once every pending tool is resolved. Threading the
+// visitor as a parameter (rather than a package-level var) keeps the
+// production state immutable and avoids data-race risk if tests are
+// ever parallelised.
 //
 // Walks lazily: each subdir is read on demand, every still-pending tool
 // is matched against that subdir's entries (BinaryNames in declared
@@ -538,7 +547,7 @@ var onSubdirVisited func(string)
 // so the priority distinction is theoretical here, while reading every
 // root up-front purely to honour it would defeat the early-exit
 // guarantee callers (and reviewers) reasonably expect.
-func scanExtraInstallRootsAt(ctx context.Context, tools []registry.Tool, roots []string) int {
+func scanExtraInstallRootsAt(ctx context.Context, tools []registry.Tool, roots []string, visit func(string)) int {
 	if ctx != nil && ctx.Err() != nil {
 		return 0
 	}
@@ -577,8 +586,8 @@ walk:
 				return added
 			}
 			sub := filepath.Join(root, re.Name())
-			if onSubdirVisited != nil {
-				onSubdirVisited(sub)
+			if visit != nil {
+				visit(sub)
 			}
 			files, err := os.ReadDir(sub)
 			if err != nil {

@@ -441,7 +441,7 @@ func TestScanExtraInstallRoots(t *testing.T) {
 		},
 	}
 
-	scanExtraInstallRootsAt(context.Background(), tools, []string{root})
+	scanExtraInstallRootsAt(context.Background(), tools, []string{root}, nil)
 
 	if len(tools[0].Instances) != 1 {
 		t.Fatalf("freelens expected 1 instance, got %d", len(tools[0].Instances))
@@ -463,7 +463,7 @@ func TestScanExtraInstallRoots_NoRoots(t *testing.T) {
 	// Must be a no-op (and not panic) when no roots are configured —
 	// matches the non-Windows case where extraInstallRoots() returns nil.
 	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
-	scanExtraInstallRootsAt(context.Background(), tools, nil)
+	scanExtraInstallRootsAt(context.Background(), tools, nil, nil)
 	if len(tools[0].Instances) != 0 {
 		t.Errorf("expected no instances, got %v", tools[0].Instances)
 	}
@@ -492,7 +492,7 @@ func TestScanExtraInstallRoots_BinaryNameOrder(t *testing.T) {
 	// so a non-deterministic implementation would eventually flip.
 	for i := 0; i < 25; i++ {
 		tools := []registry.Tool{{Name: "py", BinaryNames: []string{"python", "python3"}}}
-		scanExtraInstallRootsAt(context.Background(), tools, []string{root})
+		scanExtraInstallRootsAt(context.Background(), tools, []string{root}, nil)
 		if len(tools[0].Instances) != 1 {
 			t.Fatalf("iter %d: expected 1 instance, got %d", i, len(tools[0].Instances))
 		}
@@ -525,7 +525,7 @@ func TestScanExtraInstallRoots_FirstMatchWins(t *testing.T) {
 	}
 
 	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
-	scanExtraInstallRootsAt(context.Background(), tools, []string{root})
+	scanExtraInstallRootsAt(context.Background(), tools, []string{root}, nil)
 	if len(tools[0].Instances) != 1 {
 		t.Fatalf("expected exactly 1 instance, got %d: %+v", len(tools[0].Instances), tools[0].Instances)
 	}
@@ -534,8 +534,8 @@ func TestScanExtraInstallRoots_FirstMatchWins(t *testing.T) {
 // TestScanExtraInstallRoots_ShortCircuitsAfterAllResolved verifies the
 // observable claim in the doc comment: once every pending tool has been
 // resolved, Phase 5 stops walking — subdirs alphabetically after the
-// last match are not even read. The onSubdirVisited test hook records
-// every subdir the walker reaches.
+// last match are not even read. The visit callback records every subdir
+// the walker reaches.
 func TestScanExtraInstallRoots_ShortCircuitsAfterAllResolved(t *testing.T) {
 	root := t.TempDir()
 	// "AAA_Freelens" sorts before "ZZZ_Trap" — once we resolve freelens
@@ -552,12 +552,10 @@ func TestScanExtraInstallRoots_ShortCircuitsAfterAllResolved(t *testing.T) {
 	}
 
 	var visited []string
-	prev := onSubdirVisited
-	onSubdirVisited = func(p string) { visited = append(visited, p) }
-	t.Cleanup(func() { onSubdirVisited = prev })
+	visit := func(p string) { visited = append(visited, p) }
 
 	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
-	scanExtraInstallRootsAt(context.Background(), tools, []string{root})
+	scanExtraInstallRootsAt(context.Background(), tools, []string{root}, visit)
 
 	if len(tools[0].Instances) != 1 {
 		t.Fatalf("expected freelens resolved, got instances=%v", tools[0].Instances)
@@ -583,12 +581,10 @@ func TestScanExtraInstallRoots_RespectsCancelledContext(t *testing.T) {
 	cancel()
 
 	var visited []string
-	prev := onSubdirVisited
-	onSubdirVisited = func(p string) { visited = append(visited, p) }
-	t.Cleanup(func() { onSubdirVisited = prev })
+	visit := func(p string) { visited = append(visited, p) }
 
 	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
-	scanExtraInstallRootsAt(ctx, tools, []string{root})
+	scanExtraInstallRootsAt(ctx, tools, []string{root}, visit)
 
 	if len(tools[0].Instances) != 0 {
 		t.Fatalf("expected no resolution under cancelled ctx, got %v", tools[0].Instances)
