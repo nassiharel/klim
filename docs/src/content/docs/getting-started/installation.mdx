@@ -59,7 +59,7 @@ scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket
 scoop install klim
 ```
 
-The Scoop manifest is published to [`nassiharel/scoop-bucket`](https://github.com/nassiharel/scoop-bucket) on every release and uses the same Windows zip from GitHub Releases that the PowerShell installer uses, so version, hash, and contents are identical.
+The Scoop manifest is published to [`nassiharel/scoop-bucket`](https://github.com/nassiharel/scoop-bucket) on every release and points at the official `klim_<version>_windows_amd64.zip` asset from the corresponding GitHub Release, so version and contents are guaranteed to match. Scoop currently supports `windows/amd64` only — on Windows ARM64, fall back to `go install` (see below) until ARM64 binaries are published.
 
 ## winget (Windows)
 
