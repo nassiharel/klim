@@ -215,7 +215,7 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 	// and never expose a binary on PATH, so PATH scanning alone leaves
 	// them invisible to klim. extraInstallRoots() returns nothing on
 	// Linux/macOS, making this a no-op there.
-	scanExtraInstallRoots(tools)
+	scanExtraInstallRoots(ctx, tools)
 
 	found := 0
 	for _, t := range tools {
@@ -476,26 +476,42 @@ func detectSource(path string) registry.InstallSource {
 //   - only runs for tools the regular PATH/LookPath phases missed
 //   - only walks roots curated as "winget-user-scope friendly"
 //   - bails out cheaply when a root doesn't exist
-func scanExtraInstallRoots(tools []registry.Tool) {
-	scanExtraInstallRootsAt(tools, extraInstallRoots())
+func scanExtraInstallRoots(ctx context.Context, tools []registry.Tool) {
+	scanExtraInstallRootsAt(ctx, tools, extraInstallRoots())
 }
+
+// onSubdirVisited is a test hook that fires for every subdir Phase 5
+// actually reads. Production code never sets it. Tests use it to verify
+// that the walk short-circuits once every pending tool is resolved.
+var onSubdirVisited func(string)
 
 // scanExtraInstallRootsAt is the testable form of scanExtraInstallRoots:
 // callers supply the install roots explicitly so unit tests can exercise
 // the directory walk on any OS without depending on real install paths.
 //
-// Iteration order is fully deterministic: tools in their input order,
-// BinaryNames in declared order, subdirs in the order returned by
-// os.ReadDir (which is sorted by name). The loop short-circuits a tool
-// the moment it gains an instance, and stops walking entirely once
-// every pending tool has been resolved.
-func scanExtraInstallRootsAt(tools []registry.Tool, roots []string) {
+// Walks lazily: each subdir is read on demand, every still-pending tool
+// is matched against that subdir's entries (BinaryNames in declared
+// order), then resolved tools are dropped from the pending set. The
+// outer loop breaks the moment the pending set drains, so subdirs that
+// alphabetically follow the last match are never read at all. ctx
+// cancellation is honoured between roots and between subdirs.
+//
+// Note: this design picks subdir-order over cross-subdir BinaryNames
+// priority — i.e. for a tool declaring BinaryNames [python, python3],
+// finding "python3" in subdir "A" wins over "python" in later subdir
+// "B". That's deliberate: %LOCALAPPDATA%\Programs subdirs are app-name
+// directories that don't ship multiple-named binaries of the same tool,
+// so the priority distinction is theoretical here, while reading every
+// root up-front purely to honour it would defeat the early-exit
+// guarantee callers (and reviewers) reasonably expect.
+func scanExtraInstallRootsAt(ctx context.Context, tools []registry.Tool, roots []string) {
+	if ctx != nil && ctx.Err() != nil {
+		return
+	}
 	if len(roots) == 0 {
 		return
 	}
 
-	// Pending = indices of tools that still need an instance. Tools with
-	// no BinaryNames are skipped — the lookup has nothing to match on.
 	pending := make([]int, 0, len(tools))
 	for i := range tools {
 		if len(tools[i].Instances) == 0 && len(tools[i].BinaryNames) > 0 {
@@ -506,21 +522,13 @@ func scanExtraInstallRootsAt(tools []registry.Tool, roots []string) {
 		return
 	}
 
-	// Read every root once, building a flat list of (subdir, entryNames)
-	// pairs. Doing the directory I/O up-front means each pending tool is
-	// resolved purely from in-memory maps regardless of how many tools
-	// need scanning.
-	type subdir struct {
-		path string
-		// entries maps normaliseName(file) -> original file name, mirroring
-		// scanDir so PATHEXT expansion via binaryCandidateNames works the
-		// same way here as in Phase 2.
-		entries map[string]string
-	}
-	var subdirs []subdir
+walk:
 	for _, root := range roots {
 		if root == "" {
 			continue
+		}
+		if ctx != nil && ctx.Err() != nil {
+			return
 		}
 		rootEntries, err := os.ReadDir(root)
 		if err != nil {
@@ -530,59 +538,71 @@ func scanExtraInstallRootsAt(tools []registry.Tool, roots []string) {
 			if !re.IsDir() {
 				continue
 			}
+			if ctx != nil && ctx.Err() != nil {
+				return
+			}
 			sub := filepath.Join(root, re.Name())
+			if onSubdirVisited != nil {
+				onSubdirVisited(sub)
+			}
 			files, err := os.ReadDir(sub)
 			if err != nil {
 				continue
 			}
-			names := make(map[string]string, len(files))
+			entries := make(map[string]string, len(files))
 			for _, f := range files {
 				if f.IsDir() {
 					continue
 				}
-				names[normaliseName(f.Name())] = f.Name()
+				entries[normaliseName(f.Name())] = f.Name()
 			}
-			if len(names) > 0 {
-				subdirs = append(subdirs, subdir{path: sub, entries: names})
+			if len(entries) == 0 {
+				continue
 			}
-		}
-	}
-	if len(subdirs) == 0 {
-		return
-	}
 
-	for _, idx := range pending {
-		t := &tools[idx]
-		matched := false
-		for _, bin := range t.BinaryNames {
-			for _, cand := range binaryCandidateNames(normaliseName(bin)) {
-				for _, sd := range subdirs {
-					orig, ok := sd.entries[cand]
-					if !ok {
-						continue
+			// Filter pending in place: keep tools that did NOT match
+			// in this subdir; matched tools get an instance appended
+			// and are dropped from future iterations. Reading and
+			// writing through pending[:n] is safe because n is
+			// always <= the current read index.
+			n := 0
+			for _, idx := range pending {
+				t := &tools[idx]
+				matched := false
+				for _, bin := range t.BinaryNames {
+					if matched {
+						break
 					}
-					full := filepath.Join(sd.path, orig)
-					resolved, err := filepath.EvalSymlinks(full)
-					if err != nil {
-						continue
+					for _, cand := range binaryCandidateNames(normaliseName(bin)) {
+						orig, ok := entries[cand]
+						if !ok {
+							continue
+						}
+						full := filepath.Join(sub, orig)
+						resolved, err := filepath.EvalSymlinks(full)
+						if err != nil {
+							continue
+						}
+						info, err := os.Stat(resolved)
+						if err != nil || info.IsDir() {
+							continue
+						}
+						t.Instances = append(t.Instances, registry.Instance{
+							Path:   resolved,
+							Source: detectSource(resolved),
+						})
+						matched = true
+						break
 					}
-					info, err := os.Stat(resolved)
-					if err != nil || info.IsDir() {
-						continue
-					}
-					t.Instances = append(t.Instances, registry.Instance{
-						Path:   resolved,
-						Source: detectSource(resolved),
-					})
-					matched = true
-					break
 				}
-				if matched {
-					break
+				if !matched {
+					pending[n] = idx
+					n++
 				}
 			}
-			if matched {
-				break
+			pending = pending[:n]
+			if len(pending) == 0 {
+				break walk
 			}
 		}
 	}

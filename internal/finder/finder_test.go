@@ -1,6 +1,7 @@
 package finder
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -350,7 +351,7 @@ func TestScanExtraInstallRoots(t *testing.T) {
 		},
 	}
 
-	scanExtraInstallRootsAt(tools, []string{root})
+	scanExtraInstallRootsAt(context.Background(), tools, []string{root})
 
 	if len(tools[0].Instances) != 1 {
 		t.Fatalf("freelens expected 1 instance, got %d", len(tools[0].Instances))
@@ -372,7 +373,7 @@ func TestScanExtraInstallRoots_NoRoots(t *testing.T) {
 	// Must be a no-op (and not panic) when no roots are configured —
 	// matches the non-Windows case where extraInstallRoots() returns nil.
 	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
-	scanExtraInstallRootsAt(tools, nil)
+	scanExtraInstallRootsAt(context.Background(), tools, nil)
 	if len(tools[0].Instances) != 0 {
 		t.Errorf("expected no instances, got %v", tools[0].Instances)
 	}
@@ -401,7 +402,7 @@ func TestScanExtraInstallRoots_BinaryNameOrder(t *testing.T) {
 	// so a non-deterministic implementation would eventually flip.
 	for i := 0; i < 25; i++ {
 		tools := []registry.Tool{{Name: "py", BinaryNames: []string{"python", "python3"}}}
-		scanExtraInstallRootsAt(tools, []string{root})
+		scanExtraInstallRootsAt(context.Background(), tools, []string{root})
 		if len(tools[0].Instances) != 1 {
 			t.Fatalf("iter %d: expected 1 instance, got %d", i, len(tools[0].Instances))
 		}
@@ -413,10 +414,10 @@ func TestScanExtraInstallRoots_BinaryNameOrder(t *testing.T) {
 	}
 }
 
-// TestScanExtraInstallRoots_StopsWhenAllResolved makes sure the scan
-// short-circuits and doesn't keep walking subdirs once every pending tool
-// has been resolved (Copilot review feedback on PR #71).
-func TestScanExtraInstallRoots_StopsWhenAllResolved(t *testing.T) {
+// TestScanExtraInstallRoots_FirstMatchWins verifies that when the same
+// binary exists in two sibling subdirs, only the first one is recorded —
+// the per-tool short-circuit prevents a phantom duplicate instance.
+func TestScanExtraInstallRoots_FirstMatchWins(t *testing.T) {
 	root := t.TempDir()
 	freelensDir := filepath.Join(root, "Freelens")
 	if err := os.Mkdir(freelensDir, 0o755); err != nil {
@@ -425,8 +426,6 @@ func TestScanExtraInstallRoots_StopsWhenAllResolved(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(freelensDir, "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
 		t.Fatalf("write bin: %v", err)
 	}
-	// A second copy in a parallel subdir — must NOT be picked up because
-	// the tool already has an instance from the first match.
 	otherDir := filepath.Join(root, "OtherFreelens")
 	if err := os.Mkdir(otherDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -436,9 +435,76 @@ func TestScanExtraInstallRoots_StopsWhenAllResolved(t *testing.T) {
 	}
 
 	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
-	scanExtraInstallRootsAt(tools, []string{root})
+	scanExtraInstallRootsAt(context.Background(), tools, []string{root})
 	if len(tools[0].Instances) != 1 {
 		t.Fatalf("expected exactly 1 instance, got %d: %+v", len(tools[0].Instances), tools[0].Instances)
+	}
+}
+
+// TestScanExtraInstallRoots_ShortCircuitsAfterAllResolved verifies the
+// observable claim in the doc comment: once every pending tool has been
+// resolved, Phase 5 stops walking — subdirs alphabetically after the
+// last match are not even read. The onSubdirVisited test hook records
+// every subdir the walker reaches.
+func TestScanExtraInstallRoots_ShortCircuitsAfterAllResolved(t *testing.T) {
+	root := t.TempDir()
+	// "AAA_Freelens" sorts before "ZZZ_Trap" — once we resolve freelens
+	// in AAA the walk should never reach ZZZ.
+	hit := filepath.Join(root, "AAA_Freelens")
+	skipped := filepath.Join(root, "ZZZ_Trap")
+	for _, d := range []string{hit, skipped} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", d, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(hit, "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write bin: %v", err)
+	}
+
+	var visited []string
+	prev := onSubdirVisited
+	onSubdirVisited = func(p string) { visited = append(visited, p) }
+	t.Cleanup(func() { onSubdirVisited = prev })
+
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	scanExtraInstallRootsAt(context.Background(), tools, []string{root})
+
+	if len(tools[0].Instances) != 1 {
+		t.Fatalf("expected freelens resolved, got instances=%v", tools[0].Instances)
+	}
+	if len(visited) != 1 || visited[0] != hit {
+		t.Fatalf("walker should have stopped after %q, visited=%v", hit, visited)
+	}
+}
+
+// TestScanExtraInstallRoots_RespectsCancelledContext verifies Phase 5
+// returns immediately when ctx is already cancelled, without doing any
+// filesystem I/O.
+func TestScanExtraInstallRoots_RespectsCancelledContext(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "Freelens"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Freelens", "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var visited []string
+	prev := onSubdirVisited
+	onSubdirVisited = func(p string) { visited = append(visited, p) }
+	t.Cleanup(func() { onSubdirVisited = prev })
+
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	scanExtraInstallRootsAt(ctx, tools, []string{root})
+
+	if len(tools[0].Instances) != 0 {
+		t.Fatalf("expected no resolution under cancelled ctx, got %v", tools[0].Instances)
+	}
+	if len(visited) != 0 {
+		t.Fatalf("walker should not have visited any subdir, got %v", visited)
 	}
 }
 
