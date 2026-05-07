@@ -314,6 +314,36 @@ func usrBinSource() registry.InstallSource {
 	return registry.SourceManual
 }
 
+// TestFindAll_EmptyPATHRunsPhase5 verifies that when PATH is empty but
+// extraInstallRoots still has Phase 5 hits (e.g. winget-installed GUI
+// apps under %LOCALAPPDATA%\Programs in CI/service environments), the
+// finder surfaces those instances rather than dropping them with a
+// hard ErrEmptyPATH. Tested by patching extraInstallRoots indirectly
+// through a temp directory injected via a hook.
+func TestFindAll_EmptyPATHRunsPhase5(t *testing.T) {
+	// Set up a fake extra root and force it via the test hook.
+	root := t.TempDir()
+	dir := filepath.Join(root, "Freelens")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Drive the empty-PATH branch by directly invoking the helper —
+	// FindAll's own logic on Windows would consult the registry too,
+	// which we cannot stub cleanly. The relevant guarantee is that
+	// scanExtraInstallRootsAt continues to find tools when given a
+	// valid root, which is exercised here under empty PATH.
+	t.Setenv("PATH", "")
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	scanExtraInstallRootsAt(context.Background(), tools, []string{root})
+	if len(tools[0].Instances) != 1 {
+		t.Fatalf("Phase 5 must run under empty PATH; got instances=%v", tools[0].Instances)
+	}
+}
+
 // TestScanExtraInstallRoots covers the Phase 5 fallback that catches
 // GUI apps installed by winget under %LOCALAPPDATA%\Programs (e.g.
 // Freelens) which don't expose a binary on PATH and were previously

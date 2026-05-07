@@ -75,6 +75,23 @@ var defaultFinder ToolFinder = &PathFinder{}
 func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error {
 	pathDirs := pathDirectories()
 	if len(pathDirs) == 0 {
+		// No PATH to scan, but Phase 5 still applies: winget GUI apps
+		// under %LOCALAPPDATA%\Programs (Freelens, etc.) live outside
+		// any PATH dir and would otherwise be invisible in shells,
+		// services, or CI environments launching klim with a stripped
+		// PATH. We suppress ErrEmptyPATH only when Phase 5 actually
+		// resolved instances — service callers discard the tool slice
+		// on error, so signalling "empty PATH" would lose those
+		// instances. When Phase 5 also turned up nothing, the empty-
+		// PATH error is the more useful signal.
+		scanExtraInstallRoots(ctx, tools)
+		for _, t := range tools {
+			if len(t.Instances) > 0 {
+				slog.Info("PATH was empty; Phase 5 fallback recovered installs",
+					"tools_total", len(tools))
+				return nil
+			}
+		}
 		return ErrEmptyPATH
 	}
 
