@@ -16,7 +16,6 @@ func setEnvDir(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("USERPROFILE", dir)
 	t.Setenv("HOME", dir)
-	t.Setenv("HOME", dir)
 }
 
 func TestHTTPFetcher(t *testing.T) {

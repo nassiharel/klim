@@ -12,8 +12,7 @@ func TestAddLoadDelete(t *testing.T) {
 	// Redirect storage to temp dir.
 	tmp := t.TempDir()
 	t.Setenv("USERPROFILE", tmp) // Windows
-	t.Setenv("HOME", tmp)        // Linux
-	t.Setenv("HOME", tmp)        // macOS fallback
+	t.Setenv("HOME", tmp)        // Unix
 
 	pack := registry.Pack{
 		Name:        "test-pack",
@@ -84,7 +83,6 @@ func TestExists(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("USERPROFILE", tmp)
 	t.Setenv("HOME", tmp)
-	t.Setenv("HOME", tmp)
 
 	exists, err := Exists("nope")
 	if err != nil {
@@ -105,7 +103,6 @@ func TestLoadEmptyFile(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("USERPROFILE", tmp)
 	t.Setenv("HOME", tmp)
-	t.Setenv("HOME", tmp)
 
 	// No file → empty slice.
 	packs, err := Load()
@@ -121,7 +118,6 @@ func TestDisplayNameDefault(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("USERPROFILE", tmp)
 	t.Setenv("HOME", tmp)
-	t.Setenv("HOME", tmp)
 
 	_ = Add(registry.Pack{Name: "no-display", ToolNames: []string{"git"}})
 	packs, _ := Load()
@@ -133,7 +129,6 @@ func TestDisplayNameDefault(t *testing.T) {
 func TestStoragePath(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("USERPROFILE", tmp)
-	t.Setenv("HOME", tmp)
 	t.Setenv("HOME", tmp)
 
 	path, err := StoragePath()
@@ -148,7 +143,6 @@ func TestStoragePath(t *testing.T) {
 func TestDeleteNonExistent(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("USERPROFILE", tmp)
-	t.Setenv("HOME", tmp)
 	t.Setenv("HOME", tmp)
 
 	// Deleting a pack that doesn't exist should not error.

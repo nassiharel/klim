@@ -20,7 +20,6 @@ func withTempCache(t *testing.T) {
 		t.Setenv("USERPROFILE", tmp)
 	default:
 		t.Setenv("HOME", tmp)
-		t.Setenv("HOME", tmp)
 	}
 }
 

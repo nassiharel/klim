@@ -48,7 +48,6 @@ func redirectClimConfig(t *testing.T) string {
 	dir := t.TempDir()
 	t.Setenv("USERPROFILE", dir)
 	t.Setenv("HOME", dir)
-	t.Setenv("HOME", dir)
 	return dir
 }
 

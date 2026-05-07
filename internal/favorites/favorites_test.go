@@ -10,8 +10,7 @@ func setup(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("USERPROFILE", dir) // Windows
-	t.Setenv("HOME", dir)        // Linux
-	t.Setenv("HOME", dir)        // macOS fallback
+	t.Setenv("HOME", dir)        // Unix
 }
 
 func TestLoadEmpty(t *testing.T) {

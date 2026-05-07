@@ -9,7 +9,6 @@ func TestAddAndLoadProjects(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("USERPROFILE", tmp)
 	t.Setenv("HOME", tmp)
-	t.Setenv("HOME", tmp)
 
 	// Initially empty.
 	projects, err := LoadProjects()
@@ -76,7 +75,6 @@ func TestProjectsPath(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("USERPROFILE", tmp)
 	t.Setenv("HOME", tmp)
-	t.Setenv("HOME", tmp)
 
 	path, err := ProjectsPath()
 	if err != nil {
@@ -90,7 +88,6 @@ func TestProjectsPath(t *testing.T) {
 func TestRemoveNonExistentProject(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("USERPROFILE", tmp)
-	t.Setenv("HOME", tmp)
 	t.Setenv("HOME", tmp)
 
 	if err := RemoveProject("/dev/ghost"); err != nil {

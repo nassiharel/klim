@@ -30,7 +30,6 @@ func setEnvDir(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("USERPROFILE", dir)
 	t.Setenv("HOME", dir)
-	t.Setenv("HOME", dir)
 }
 
 func mkTool(name, version, npmPkg, brewPkg, slug string) registry.Tool {
