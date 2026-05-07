@@ -167,6 +167,13 @@ release:
     name: klim
   prerelease: auto
   name_template: "v{{ .Version }}"
+  # Make a re-run of the workflow on the same tag idempotent: if the
+  # release already exists with assets from a previous (possibly
+  # partially-failed) run, overwrite them instead of erroring with
+  # `422 already_exists`. Saw this on v0.1.2 when the first run
+  # uploaded everything but failed on the winget PR step, then the
+  # re-run blew up at asset upload before it could retry winget.
+  replace_existing_artifacts: true
   footer: |
     ## Install
 
