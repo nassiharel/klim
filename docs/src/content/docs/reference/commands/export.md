@@ -106,8 +106,8 @@ The manifest is **cross-platform** — it contains package IDs for all supported
 
 ## Storage
 
-- Snapshots: `~/.config/klim/snapshots/<timestamp>-<label>.yaml`
-- Profiles: `~/.config/klim/profiles/<name>.yaml`
+- Snapshots: `~/.klim/snapshots/<timestamp>-<label>.yaml`
+- Profiles: `~/.klim/profiles/<name>.yaml`
 
 Both use the same YAML manifest format, so snapshots can also be used with `klim diff` and `klim import`.
 

@@ -19,7 +19,7 @@ Print the path to `config.yaml`:
 
 ```bash
 klim config path
-# Output: /home/user/.config/klim/config/config.yaml
+# Output: /home/user/.klim/config/config.yaml
 ```
 
 ### config edit

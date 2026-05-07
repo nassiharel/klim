@@ -1,5 +1,5 @@
 // Package logging sets up structured logging for klim using log/slog.
-// Logs are written to a file (~/.config/klim/klim.log) by default.
+// Logs are written to a file (~/.klim/logs/klim.log) by default.
 // When verbose mode is enabled, logs are also written to stderr.
 package logging
 

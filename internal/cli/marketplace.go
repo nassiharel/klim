@@ -158,8 +158,8 @@ func runMarketplaceList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Probe path resolution first. LoadWithWarnings swallows
-	// paths.Config() failure (e.g. when os.UserConfigDir() can't resolve
-	// because HOME / XDG_CONFIG_HOME / APPDATA is unset) and returns
+	// paths.Config() failure (e.g. when paths.BaseDir() can't resolve
+	// because HOME / USERPROFILE is unset) and returns
 	// Default() with a nil error, which would otherwise let JSON mode
 	// emit synthetic data. Surface that condition explicitly so:
 	//   - JSON mode fails loudly (callers never see synthetic defaults).

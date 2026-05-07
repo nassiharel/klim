@@ -41,7 +41,7 @@ Policy resolution order (highest to lowest):
   2. --url flag              (remote URL, per-invocation; check & refresh)
   3. compliance.url          (remote URL in config.yaml, with cache + auto-refresh)
   4. compliance.policy       (local file in config.yaml)
-  5. default global location (~/.config/klim/compliance/policy.yaml)
+  5. default global location (~/.klim/compliance/policy.yaml)
 
 Subcommands:
   check    Validate installed tools against the policy.

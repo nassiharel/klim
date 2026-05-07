@@ -46,8 +46,7 @@ func resetComplianceFlags(t *testing.T) {
 func redirectClimConfig(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("AppData", dir)
-	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("USERPROFILE", dir)
 	t.Setenv("HOME", dir)
 	return dir
 }

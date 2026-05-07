@@ -19,10 +19,10 @@ Print the path to the local catalog cache file:
 
 ```bash
 klim tools path
-# Output: /home/user/.config/klim/marketplace/marketplace-cache.yaml
+# Output: /home/user/.klim/marketplace/marketplace-cache.yaml
 
 klim tools path --output json
-# {"cache_path": "/home/user/.config/klim/marketplace/marketplace-cache.yaml"}
+# {"cache_path": "/home/user/.klim/marketplace/marketplace-cache.yaml"}
 ```
 
 Accepts `--output text` (default) or `--output json`.

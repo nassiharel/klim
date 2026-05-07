@@ -35,7 +35,7 @@ var validBackupName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 var validPackName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
 // pageBackupSave persists the current toolchain manifest to a named
-// file under ~/.config/klim/backups/<name>.yaml. The flash banner on
+// file under ~/.klim/backups/<name>.yaml. The flash banner on
 // the next render confirms.
 // maxFormBytes caps the request body size for form/multipart parsing
 // in this package. 8 MiB comfortably fits the largest realistic
@@ -84,7 +84,7 @@ func (s *Server) pageBackupSave(w http.ResponseWriter, r *http.Request) {
 }
 
 // pageBackupSavedDelete removes one *.yaml file under
-// ~/.config/klim/backups/. Path-escapes are validated against
+// ~/.klim/backups/. Path-escapes are validated against
 // validBackupName to prevent directory traversal.
 func (s *Server) pageBackupSavedDelete(w http.ResponseWriter, r *http.Request) {
 	rawName := r.PathValue("name")

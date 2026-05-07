@@ -1,5 +1,5 @@
 // Package custompacks manages user-created pack definitions stored
-// in ~/.config/klim/marketplace/custom-packs.yaml. Custom packs use the same
+// in ~/.klim/marketplace/custom-packs.yaml. Custom packs use the same
 // registry.Pack schema as marketplace packs but are persisted locally.
 package custompacks
 
