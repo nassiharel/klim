@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/nassiharel/klim/internal/registry"
@@ -374,6 +375,70 @@ func TestScanExtraInstallRoots_NoRoots(t *testing.T) {
 	scanExtraInstallRootsAt(tools, nil)
 	if len(tools[0].Instances) != 0 {
 		t.Errorf("expected no instances, got %v", tools[0].Instances)
+	}
+}
+
+// TestScanExtraInstallRoots_BinaryNameOrder verifies that when a tool
+// declares multiple BinaryNames (e.g. python/python3), Phase 5 picks
+// the binary whose name appears first in BinaryNames — matching Phase 4's
+// LookPath fallback semantics. Without explicit ordering the previous
+// map-based implementation could return either match nondeterministically.
+func TestScanExtraInstallRoots_BinaryNameOrder(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "Python")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Both binaries exist in the same subdir; BinaryNames lists "python"
+	// first so that's the one that should be selected.
+	for _, name := range []string{"python", "python3"} {
+		if err := os.WriteFile(filepath.Join(dir, name+exeSuffix()), []byte{}, 0o755); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	// Run several times — map iteration order varies between runs in Go,
+	// so a non-deterministic implementation would eventually flip.
+	for i := 0; i < 25; i++ {
+		tools := []registry.Tool{{Name: "py", BinaryNames: []string{"python", "python3"}}}
+		scanExtraInstallRootsAt(tools, []string{root})
+		if len(tools[0].Instances) != 1 {
+			t.Fatalf("iter %d: expected 1 instance, got %d", i, len(tools[0].Instances))
+		}
+		got := filepath.Base(tools[0].Instances[0].Path)
+		want := "python" + exeSuffix()
+		if !strings.EqualFold(got, want) {
+			t.Fatalf("iter %d: matched %q, expected %q (BinaryNames order)", i, got, want)
+		}
+	}
+}
+
+// TestScanExtraInstallRoots_StopsWhenAllResolved makes sure the scan
+// short-circuits and doesn't keep walking subdirs once every pending tool
+// has been resolved (Copilot review feedback on PR #71).
+func TestScanExtraInstallRoots_StopsWhenAllResolved(t *testing.T) {
+	root := t.TempDir()
+	freelensDir := filepath.Join(root, "Freelens")
+	if err := os.Mkdir(freelensDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(freelensDir, "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write bin: %v", err)
+	}
+	// A second copy in a parallel subdir — must NOT be picked up because
+	// the tool already has an instance from the first match.
+	otherDir := filepath.Join(root, "OtherFreelens")
+	if err := os.Mkdir(otherDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(otherDir, "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write second: %v", err)
+	}
+
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	scanExtraInstallRootsAt(tools, []string{root})
+	if len(tools[0].Instances) != 1 {
+		t.Fatalf("expected exactly 1 instance, got %d: %+v", len(tools[0].Instances), tools[0].Instances)
 	}
 }
 

@@ -483,47 +483,107 @@ func scanExtraInstallRoots(tools []registry.Tool) {
 // scanExtraInstallRootsAt is the testable form of scanExtraInstallRoots:
 // callers supply the install roots explicitly so unit tests can exercise
 // the directory walk on any OS without depending on real install paths.
+//
+// Iteration order is fully deterministic: tools in their input order,
+// BinaryNames in declared order, subdirs in the order returned by
+// os.ReadDir (which is sorted by name). The loop short-circuits a tool
+// the moment it gains an instance, and stops walking entirely once
+// every pending tool has been resolved.
 func scanExtraInstallRootsAt(tools []registry.Tool, roots []string) {
 	if len(roots) == 0 {
 		return
 	}
 
-	wantedBins := make(map[string][]toolRef)
+	// Pending = indices of tools that still need an instance. Tools with
+	// no BinaryNames are skipped — the lookup has nothing to match on.
+	pending := make([]int, 0, len(tools))
 	for i := range tools {
-		if len(tools[i].Instances) > 0 {
-			continue
-		}
-		for _, bin := range tools[i].BinaryNames {
-			key := normaliseName(bin)
-			wantedBins[key] = append(wantedBins[key], toolRef{toolIdx: i, binName: bin})
+		if len(tools[i].Instances) == 0 && len(tools[i].BinaryNames) > 0 {
+			pending = append(pending, i)
 		}
 	}
-	if len(wantedBins) == 0 {
+	if len(pending) == 0 {
 		return
 	}
 
+	// Read every root once, building a flat list of (subdir, entryNames)
+	// pairs. Doing the directory I/O up-front means each pending tool is
+	// resolved purely from in-memory maps regardless of how many tools
+	// need scanning.
+	type subdir struct {
+		path string
+		// entries maps normaliseName(file) -> original file name, mirroring
+		// scanDir so PATHEXT expansion via binaryCandidateNames works the
+		// same way here as in Phase 2.
+		entries map[string]string
+	}
+	var subdirs []subdir
 	for _, root := range roots {
 		if root == "" {
 			continue
 		}
-		entries, err := os.ReadDir(root)
+		rootEntries, err := os.ReadDir(root)
 		if err != nil {
 			continue
 		}
-		for _, e := range entries {
-			if !e.IsDir() {
+		for _, re := range rootEntries {
+			if !re.IsDir() {
 				continue
 			}
-			subdir := filepath.Join(root, e.Name())
-			scanDir(subdir, wantedBins, func(m match) {
-				// First match wins per tool — once a tool gains an
-				// instance we silently drop later matches from sibling
-				// subdirs so we don't manufacture phantom duplicates.
-				if len(tools[m.toolIdx].Instances) > 0 {
-					return
+			sub := filepath.Join(root, re.Name())
+			files, err := os.ReadDir(sub)
+			if err != nil {
+				continue
+			}
+			names := make(map[string]string, len(files))
+			for _, f := range files {
+				if f.IsDir() {
+					continue
 				}
-				tools[m.toolIdx].Instances = append(tools[m.toolIdx].Instances, m.instance)
-			})
+				names[normaliseName(f.Name())] = f.Name()
+			}
+			if len(names) > 0 {
+				subdirs = append(subdirs, subdir{path: sub, entries: names})
+			}
+		}
+	}
+	if len(subdirs) == 0 {
+		return
+	}
+
+	for _, idx := range pending {
+		t := &tools[idx]
+		matched := false
+		for _, bin := range t.BinaryNames {
+			for _, cand := range binaryCandidateNames(normaliseName(bin)) {
+				for _, sd := range subdirs {
+					orig, ok := sd.entries[cand]
+					if !ok {
+						continue
+					}
+					full := filepath.Join(sd.path, orig)
+					resolved, err := filepath.EvalSymlinks(full)
+					if err != nil {
+						continue
+					}
+					info, err := os.Stat(resolved)
+					if err != nil || info.IsDir() {
+						continue
+					}
+					t.Instances = append(t.Instances, registry.Instance{
+						Path:   resolved,
+						Source: detectSource(resolved),
+					})
+					matched = true
+					break
+				}
+				if matched {
+					break
+				}
+			}
+			if matched {
+				break
+			}
 		}
 	}
 }
