@@ -110,7 +110,7 @@ is propagated.
 ## Configuration
 
 ```yaml
-# ~/.klim/config.yaml
+# ~/.klim/config/config.yaml
 vuln:
   url: https://api.osv.dev
   auto_refresh: true

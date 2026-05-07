@@ -21,7 +21,7 @@ Create lightweight shims that auto-install tools on first use. When you run a sh
 klim proxy setup
 
 # Add shims directory to your PATH (shown by setup)
-export PATH="$HOME/.config/klim/shims:$PATH"
+export PATH="$HOME/.klim/shims:$PATH"
 
 # Create shims for tools
 klim proxy add kubectl terraform helm
