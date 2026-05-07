@@ -158,22 +158,41 @@ func TestResolveSnapshotPath_RejectsTraversalAndSpecialChars(t *testing.T) {
 	}
 }
 
-func TestResolveSnapshotPath_PrefixAndSuffixMatch(t *testing.T) {
+func TestResolveSnapshotPath_PrefixSuffixSubstringMatch(t *testing.T) {
 	pointHomeAtTemp(t)
 	tools := []registry.Tool{installedTool("git", "2.50")}
+	// Save a single snapshot; the full filename embeds today's
+	// timestamp + a sanitised label suffix, so we know the base
+	// ends with "-pre-refactor-baseline".
 	path, err := Save(tools, "pre-refactor-baseline")
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	base := strings.TrimSuffix(filepath.Base(path), ".yaml")
+	want := base + ".yaml"
 
-	// Substring of label resolves uniquely.
-	got, err := resolveSnapshotPath("refactor")
-	if err != nil {
-		t.Fatalf("resolveSnapshotPath substring: %v", err)
+	cases := []struct {
+		name, query string
+	}{
+		// Substring match — the query sits in the middle of the label.
+		{"substring", "refactor"},
+		// Suffix match — the query is the trailing segment of the label.
+		{"suffix", "baseline"},
+		// Prefix match — the query is the leading timestamp characters.
+		// resolveSnapshotPath checks HasPrefix against the full base,
+		// so the year prefix unambiguously hits a single file here.
+		{"prefix", base[:4]},
 	}
-	if filepath.Base(got) != base+".yaml" {
-		t.Errorf("substring match: want %s, got %s", base+".yaml", filepath.Base(got))
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := resolveSnapshotPath(c.query)
+			if err != nil {
+				t.Fatalf("resolveSnapshotPath(%q): %v", c.query, err)
+			}
+			if filepath.Base(got) != want {
+				t.Errorf("%s match for %q: want %s, got %s", c.name, c.query, want, filepath.Base(got))
+			}
+		})
 	}
 }
 
@@ -208,9 +227,11 @@ func TestSaveProfile_RejectsEmptyName(t *testing.T) {
 	if _, err := SaveProfile(tools, "   "); err == nil {
 		t.Errorf("expected error for empty profile name, got nil")
 	}
-	// Special-only sanitises to only dashes; sanitiseName trims spaces
-	// but does NOT reject all-dash. The helper checks safe == "" so
-	// inputs that are entirely whitespace fail; "!!!" would not.
+	// All-whitespace input sanitizes to empty; sanitizeName trims
+	// spaces but does not reject all-dash output. The helper checks
+	// safe == "" so inputs that are entirely whitespace fail; inputs
+	// that are entirely punctuation (e.g. "!!!") would sanitize to
+	// "---" and pass the empty-check.
 }
 
 func TestProfile_SaveLoadListDelete(t *testing.T) {
@@ -222,7 +243,7 @@ func TestProfile_SaveLoadListDelete(t *testing.T) {
 		t.Fatalf("SaveProfile: %v", err)
 	}
 	if !strings.HasSuffix(path, "my-profile.yaml") {
-		t.Errorf("profile path should be sanitised+.yaml, got %s", path)
+		t.Errorf("profile path should be sanitized and end in .yaml, got %s", path)
 	}
 
 	got, err := LoadProfile("My Profile")
