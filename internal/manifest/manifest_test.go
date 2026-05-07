@@ -4,7 +4,63 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/nassiharel/klim/internal/registry"
 )
+
+func TestFromRegistryTool_PopulatesEverything(t *testing.T) {
+	tool := registry.Tool{
+		Name:        "git",
+		DisplayName: "Git",
+		Category:    "VCS",
+		Packages: registry.PackageIDs{
+			Winget: "Git.Git",
+			Choco:  "git",
+			Scoop:  "git",
+			Brew:   "git",
+			Apt:    "git",
+			Snap:   "",
+			NPM:    "",
+		},
+		Instances: []registry.Instance{
+			{Path: "/usr/bin/git", Version: "2.43.0", Source: registry.SourceBrew},
+		},
+	}
+	got := FromRegistryTool(tool)
+	if got.Name != "git" {
+		t.Errorf("Name: want git, got %s", got.Name)
+	}
+	if got.DisplayName != "Git" {
+		t.Errorf("DisplayName: want Git, got %s", got.DisplayName)
+	}
+	if got.Category != "VCS" {
+		t.Errorf("Category: want VCS, got %s", got.Category)
+	}
+	if got.Version != "2.43.0" {
+		t.Errorf("Version (from PrimaryInstance): want 2.43.0, got %s", got.Version)
+	}
+	if got.Source != string(registry.SourceBrew) {
+		t.Errorf("Source: want brew, got %s", got.Source)
+	}
+	if got.Packages.Winget != "Git.Git" {
+		t.Errorf("Packages.Winget: want Git.Git, got %s", got.Packages.Winget)
+	}
+}
+
+func TestFromRegistryTool_NotInstalledLeavesVersionAndSourceEmpty(t *testing.T) {
+	tool := registry.Tool{
+		Name:     "kubectl",
+		Category: "Containers",
+		// No Instances → PrimaryInstance returns nil.
+	}
+	got := FromRegistryTool(tool)
+	if got.Version != "" {
+		t.Errorf("Version should be empty when not installed, got %q", got.Version)
+	}
+	if got.Source != "" {
+		t.Errorf("Source should be empty when not installed, got %q", got.Source)
+	}
+}
 
 func TestManifest_RoundTrip(t *testing.T) {
 	original := Manifest{
