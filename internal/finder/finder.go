@@ -604,12 +604,16 @@ walk:
 				return added
 			}
 			sub := filepath.Join(root, re.Name())
-			if visit != nil {
-				visit(sub)
-			}
 			files, err := os.ReadDir(sub)
 			if err != nil {
 				continue
+			}
+			if visit != nil {
+				// Fire only after a successful ReadDir so the
+				// callback's contract — "every subdir actually
+				// read" — holds even when a sibling is
+				// permission-denied or otherwise unreadable.
+				visit(sub)
 			}
 			entries := make(map[string]string, len(files))
 			for _, f := range files {
