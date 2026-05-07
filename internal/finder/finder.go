@@ -40,6 +40,13 @@ func hasDpkg() bool {
 
 // ToolFinder abstracts tool discovery on the filesystem.
 type ToolFinder interface {
+	// FindAll scans PATH (and a curated set of per-user install
+	// roots on Windows) and populates each tool's Instances. The
+	// ctx argument must be non-nil; callers that don't have a
+	// meaningful context should pass context.Background(). FindAll
+	// returns ctx.Err() when ctx is cancelled mid-scan, ErrEmptyPATH
+	// when PATH is unset and Phase 5 produced no results, or nil
+	// on success.
 	FindAll(ctx context.Context, tools []registry.Tool) error
 }
 
@@ -90,7 +97,7 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 		// Honour cancellation explicitly: it's strictly more
 		// informative than ErrEmptyPATH and matches the non-empty
 		// PATH branch's behaviour.
-		if ctx != nil && ctx.Err() != nil {
+		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if added > 0 {
@@ -253,7 +260,7 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 	// doesn't propagate the error itself, and Phase 4 doesn't check
 	// ctx at all — so without this check FindAll could report
 	// success on a partially-completed scan.
-	if ctx != nil && ctx.Err() != nil {
+	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
@@ -546,7 +553,9 @@ var extraInstallRootsFn = extraInstallRoots
 // order), then resolved tools are dropped from the pending set. The
 // outer loop breaks the moment the pending set drains, so subdirs that
 // alphabetically follow the last match are never read at all. ctx
-// cancellation is honoured between roots and between subdirs.
+// cancellation is honoured between roots and between subdirs. ctx
+// must be non-nil; callers should pass context.Background() when no
+// real cancellation context is available.
 //
 // Note: this design picks subdir-order over cross-subdir BinaryNames
 // priority — i.e. for a tool declaring BinaryNames [python, python3],
@@ -557,7 +566,7 @@ var extraInstallRootsFn = extraInstallRoots
 // root up-front purely to honour it would defeat the early-exit
 // guarantee callers (and reviewers) reasonably expect.
 func scanExtraInstallRootsAt(ctx context.Context, tools []registry.Tool, roots []string, visit func(string)) int {
-	if ctx != nil && ctx.Err() != nil {
+	if ctx.Err() != nil {
 		return 0
 	}
 	if len(roots) == 0 {
@@ -580,7 +589,7 @@ walk:
 		if root == "" {
 			continue
 		}
-		if ctx != nil && ctx.Err() != nil {
+		if ctx.Err() != nil {
 			return added
 		}
 		rootEntries, err := os.ReadDir(root)
@@ -591,7 +600,7 @@ walk:
 			if !re.IsDir() {
 				continue
 			}
-			if ctx != nil && ctx.Err() != nil {
+			if ctx.Err() != nil {
 				return added
 			}
 			sub := filepath.Join(root, re.Name())
@@ -632,9 +641,13 @@ walk:
 							continue
 						}
 						full := filepath.Join(sub, orig)
+						// Fall back to the unresolved path when EvalSymlinks
+						// fails (permission errors, unusual reparse points)
+						// — matches Phase 4's behaviour and keeps the tool
+						// detectable instead of dropping it silently.
 						resolved, err := filepath.EvalSymlinks(full)
-						if err != nil {
-							continue
+						if err != nil || resolved == "" {
+							resolved = full
 						}
 						info, err := os.Stat(resolved)
 						if err != nil || info.IsDir() {
