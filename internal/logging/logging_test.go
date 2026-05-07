@@ -30,8 +30,8 @@ func TestParseLevel(t *testing.T) {
 		{"warning", slog.LevelWarn},
 		{"error", slog.LevelError},
 		{"debug", slog.LevelDebug},
-		{"", slog.LevelDebug},          // default
-		{"nonsense", slog.LevelDebug},  // unknown → debug default
+		{"", slog.LevelDebug},         // default
+		{"nonsense", slog.LevelDebug}, // unknown → debug default
 	}
 	for _, c := range cases {
 		if got := parseLevel(c.in); got != c.want {

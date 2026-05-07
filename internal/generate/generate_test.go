@@ -205,10 +205,10 @@ func TestDockerfile_PerOS(t *testing.T) {
 
 func TestDevContainer_FeaturesAndPostCreate(t *testing.T) {
 	installs := []ToolInstall{
-		{Name: "kubectl"},  // → known feature
-		{Name: "terraform"}, // → known feature
+		{Name: "kubectl"},                 // → known feature
+		{Name: "terraform"},               // → known feature
 		{Name: "ripgrep", Apt: "ripgrep"}, // → postCreate (no feature)
-		{Name: "yarn", NPM: "yarn"},      // → postCreate via npm
+		{Name: "yarn", NPM: "yarn"},       // → postCreate via npm
 	}
 	got := DevContainer(installs, Options{ProjectName: "myproj"})
 	if !strings.Contains(got, `"name": "myproj"`) {

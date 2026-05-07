@@ -146,9 +146,21 @@ func TestAnalyze_LicenseInventory(t *testing.T) {
 	mit := &registry.GitHubInfo{License: "MIT"}
 	apache := &registry.GitHubInfo{License: "Apache-2.0"}
 	tools := []registry.Tool{
-		func() registry.Tool { t := installedTool("a", "1", registry.SourceBrew, ""); t.GitHubInfo = mit; return t }(),
-		func() registry.Tool { t := installedTool("b", "1", registry.SourceBrew, ""); t.GitHubInfo = mit; return t }(),
-		func() registry.Tool { t := installedTool("c", "1", registry.SourceBrew, ""); t.GitHubInfo = apache; return t }(),
+		func() registry.Tool {
+			t := installedTool("a", "1", registry.SourceBrew, "")
+			t.GitHubInfo = mit
+			return t
+		}(),
+		func() registry.Tool {
+			t := installedTool("b", "1", registry.SourceBrew, "")
+			t.GitHubInfo = mit
+			return t
+		}(),
+		func() registry.Tool {
+			t := installedTool("c", "1", registry.SourceBrew, "")
+			t.GitHubInfo = apache
+			return t
+		}(),
 		installedTool("d", "1", registry.SourceBrew, ""), // no GitHubInfo => Unknown
 	}
 	_, licenses := Analyze(tools)

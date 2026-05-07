@@ -74,20 +74,24 @@ func TestCountResults(t *testing.T) {
 
 func TestIsLoopbackAddr(t *testing.T) {
 	cases := map[string]bool{
-		"":             true,
-		"localhost":    true,
-		"  localhost ": true,
-		"127.0.0.1":    true,
-		"::1":          true,
-		"127.1.2.3":    true,
-		"8.8.8.8":      false,
-		"192.168.1.1":  false,
-		"not-an-ip":    false,
+		"":            true,
+		"localhost":   true,
+		"127.0.0.1":   true,
+		"::1":         true,
+		"127.1.2.3":   true,
+		"8.8.8.8":     false,
+		"192.168.1.1": false,
+		"not-an-ip":   false,
 	}
 	for in, want := range cases {
 		if got := isLoopbackAddr(in); got != want {
 			t.Errorf("isLoopbackAddr(%q): want %v, got %v", in, want, got)
 		}
+	}
+	// Whitespace tolerance is a separate explicit check (gocritic
+	// flags whitespace-decorated map keys).
+	if !isLoopbackAddr("  localhost ") {
+		t.Errorf("whitespace-padded localhost should still be loopback")
 	}
 	// Sanity: net.ParseIP agrees with our loopback verdict for known cases.
 	if !net.ParseIP("127.0.0.1").IsLoopback() {
@@ -224,15 +228,15 @@ func TestVersionsEqual(t *testing.T) {
 		local, remote string
 		want          bool
 	}{
-		{"", "", true},                   // no remote constraint → match
-		{"2.50", "", true},               // empty remote → match
-		{"", "2.50", false},              // missing local → mismatch
-		{"2.50", "2.50", true},           // exact
-		{"v2.50", "2.50", true},          // local v-prefix tolerated
-		{"2.50", "v2.50", true},          // remote v-prefix tolerated
-		{"v2.50", "v2.50", true},         // both v-prefixed
-		{"2.50", "2.51", false},          // mismatch
-		{"2.50.0", "2.50", false},        // pin-level mismatch
+		{"", "", true},            // no remote constraint → match
+		{"2.50", "", true},        // empty remote → match
+		{"", "2.50", false},       // missing local → mismatch
+		{"2.50", "2.50", true},    // exact
+		{"v2.50", "2.50", true},   // local v-prefix tolerated
+		{"2.50", "v2.50", true},   // remote v-prefix tolerated
+		{"v2.50", "v2.50", true},  // both v-prefixed
+		{"2.50", "2.51", false},   // mismatch
+		{"2.50.0", "2.50", false}, // pin-level mismatch
 	}
 	for _, c := range cases {
 		if got := versionsEqual(c.local, c.remote); got != c.want {
@@ -335,9 +339,9 @@ func TestUsageError(t *testing.T) {
 	if !errors.Is(ue, wrapped) {
 		t.Errorf("Is wrapped: want true")
 	}
-	// Unwrap via the explicit method.
-	if got := ue.Unwrap(); got != wrapped {
-		t.Errorf("Unwrap: want wrapped, got %v", got)
+	// Unwrap via the explicit method (use errors.Is per linter).
+	if !errors.Is(ue.Unwrap(), wrapped) {
+		t.Errorf("Unwrap: want wrapped, got %v", ue.Unwrap())
 	}
 }
 
@@ -395,7 +399,7 @@ func TestLevenshtein(t *testing.T) {
 		{"abc", "", 3},
 		{"", "abc", 3},
 		{"git", "git", 0},
-		{"git", "got", 1},   // single substitution
+		{"git", "got", 1}, // single substitution
 		{"kitten", "sitting", 3},
 	}
 	for _, c := range cases {
