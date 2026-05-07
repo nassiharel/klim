@@ -1,8 +1,13 @@
 package finder
 
 import (
+	"context"
+	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/nassiharel/klim/internal/registry"
@@ -308,4 +313,314 @@ func usrBinSource() registry.InstallSource {
 		return registry.SourceApt
 	}
 	return registry.SourceManual
+}
+
+// TestFindAll_EmptyPATHRunsPhase5 verifies that when PATH is empty,
+// FindAll still runs Phase 5 — winget GUI apps under
+// %LOCALAPPDATA%\Programs (Freelens, etc.) must remain visible in
+// stripped-PATH environments (services, scheduled tasks, some CI).
+// We swap extraInstallRootsFn to inject a temp root so the test
+// works on every OS without depending on real install paths.
+func TestFindAll_EmptyPATHRunsPhase5(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "Freelens")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	prev := extraInstallRootsFn
+	extraInstallRootsFn = func() []string { return []string{root} }
+	t.Cleanup(func() { extraInstallRootsFn = prev })
+
+	// Empty PATH must not short-circuit Phase 5 entirely. On Windows
+	// the registry PATH may still feed pathDirectories(), so we can't
+	// assert a clean ErrEmptyPATH path universally — but we *can*
+	// assert that the freelens instance is recovered either way, which
+	// is the user-visible guarantee.
+	t.Setenv("PATH", "")
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	pf := &PathFinder{}
+	err := pf.FindAll(context.Background(), tools)
+	if err != nil && !errors.Is(err, ErrEmptyPATH) {
+		t.Fatalf("FindAll returned unexpected error: %v", err)
+	}
+	if len(tools[0].Instances) != 1 {
+		t.Fatalf("Phase 5 must surface freelens under empty PATH; got instances=%v err=%v",
+			tools[0].Instances, err)
+	}
+}
+
+// TestFindAll_EmptyPATHReturnsCtxErr verifies that when PATH is empty
+// AND ctx has been cancelled, FindAll surfaces ctx.Err() rather than
+// masking cancellation with ErrEmptyPATH.
+func TestFindAll_EmptyPATHReturnsCtxErr(t *testing.T) {
+	prev := extraInstallRootsFn
+	extraInstallRootsFn = func() []string { return nil }
+	t.Cleanup(func() { extraInstallRootsFn = prev })
+
+	t.Setenv("PATH", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	err := (&PathFinder{}).FindAll(ctx, tools)
+	if runtime.GOOS == "windows" {
+		// Windows registry PATH may still populate pathDirectories,
+		// in which case the empty-PATH branch isn't hit. Skip the
+		// strict ctx assertion there — the non-empty branch already
+		// honours ctx via Phase 2/3's existing checks.
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrEmptyPATH) {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		return
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected ctx.Err()=context.Canceled, got %v", err)
+	}
+}
+
+// TestFindAll_EmptyPATHReturnsErrWhenNothingFound verifies that
+// ErrEmptyPATH still surfaces when PATH is empty AND Phase 5 finds
+// nothing — callers rely on the error to surface a misconfigured env.
+func TestFindAll_EmptyPATHReturnsErrWhenNothingFound(t *testing.T) {
+	prev := extraInstallRootsFn
+	extraInstallRootsFn = func() []string { return []string{t.TempDir()} } // empty dir
+	t.Cleanup(func() { extraInstallRootsFn = prev })
+
+	t.Setenv("PATH", "")
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	err := (&PathFinder{}).FindAll(context.Background(), tools)
+	if runtime.GOOS == "windows" {
+		// Same caveat as above — we can't force the empty-PATH branch
+		// reliably on Windows because of registry PATH. Skip strict
+		// assertion there.
+		return
+	}
+	if !errors.Is(err, ErrEmptyPATH) {
+		t.Fatalf("expected ErrEmptyPATH, got %v", err)
+	}
+}
+
+// TestFindAll_NonEmptyPATHReturnsCtxErr verifies FindAll surfaces
+// ctx.Err() when ctx is cancelled, even on the non-empty PATH path
+// (Phase 4 / Phase 5 themselves don't return errors, so without an
+// explicit check FindAll could report nil after a cancelled scan).
+func TestFindAll_NonEmptyPATHReturnsCtxErr(t *testing.T) {
+	prev := extraInstallRootsFn
+	extraInstallRootsFn = func() []string { return nil }
+	t.Cleanup(func() { extraInstallRootsFn = prev })
+
+	// Use a real PATH dir so pathDirectories() is non-empty —
+	// t.TempDir() is always populated and readable.
+	pathDir := t.TempDir()
+	t.Setenv("PATH", pathDir)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	err := (&PathFinder{}).FindAll(ctx, tools)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected ctx.Err()=context.Canceled, got %v", err)
+	}
+}
+
+// TestScanExtraInstallRoots covers the Phase 5 fallback that catches
+// GUI apps installed by winget under %LOCALAPPDATA%\Programs (e.g.
+// Freelens) which don't expose a binary on PATH and were previously
+// reported as "not installed" even when `winget list` showed them.
+func TestScanExtraInstallRoots(t *testing.T) {
+	root := t.TempDir()
+
+	// Lay out: <root>/Freelens/Freelens.exe and <root>/Other/whatever.exe.
+	freelensDir := filepath.Join(root, "Freelens")
+	if err := os.Mkdir(freelensDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	binName := "freelens" + exeSuffix()
+	freelensBin := filepath.Join(freelensDir, binName)
+	if err := os.WriteFile(freelensBin, []byte("\x00"), 0o755); err != nil {
+		t.Fatalf("write bin: %v", err)
+	}
+
+	otherDir := filepath.Join(root, "Other")
+	if err := os.Mkdir(otherDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(otherDir, "unrelated"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write unrelated: %v", err)
+	}
+
+	tools := []registry.Tool{
+		{Name: "freelens", BinaryNames: []string{"freelens"}},
+		{Name: "kubectl", BinaryNames: []string{"kubectl"}}, // not present, must stay empty
+		{
+			// Already-installed tool must not be touched.
+			Name:        "git",
+			BinaryNames: []string{"git"},
+			Instances:   []registry.Instance{{Path: "/usr/bin/git", Source: registry.SourceManual}},
+		},
+	}
+
+	scanExtraInstallRootsAt(context.Background(), tools, []string{root}, nil)
+
+	if len(tools[0].Instances) != 1 {
+		t.Fatalf("freelens expected 1 instance, got %d", len(tools[0].Instances))
+	}
+	gotPath := tools[0].Instances[0].Path
+	resolvedWant, _ := filepath.EvalSymlinks(freelensBin)
+	if gotPath != resolvedWant && gotPath != freelensBin {
+		t.Errorf("freelens path = %q, want %q (or pre-resolved %q)", gotPath, resolvedWant, freelensBin)
+	}
+	if len(tools[1].Instances) != 0 {
+		t.Errorf("kubectl should not have been found, got %v", tools[1].Instances)
+	}
+	if len(tools[2].Instances) != 1 || tools[2].Instances[0].Path != "/usr/bin/git" {
+		t.Errorf("git instance was clobbered, got %+v", tools[2].Instances)
+	}
+}
+
+func TestScanExtraInstallRoots_NoRoots(t *testing.T) {
+	// Must be a no-op (and not panic) when no roots are configured —
+	// matches the non-Windows case where extraInstallRoots() returns nil.
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	scanExtraInstallRootsAt(context.Background(), tools, nil, nil)
+	if len(tools[0].Instances) != 0 {
+		t.Errorf("expected no instances, got %v", tools[0].Instances)
+	}
+}
+
+// TestScanExtraInstallRoots_BinaryNameOrder verifies that when a tool
+// declares multiple BinaryNames (e.g. python/python3), Phase 5 picks
+// the binary whose name appears first in BinaryNames — matching Phase 4's
+// LookPath fallback semantics. Without explicit ordering the previous
+// map-based implementation could return either match nondeterministically.
+func TestScanExtraInstallRoots_BinaryNameOrder(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "Python")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Both binaries exist in the same subdir; BinaryNames lists "python"
+	// first so that's the one that should be selected.
+	for _, name := range []string{"python", "python3"} {
+		if err := os.WriteFile(filepath.Join(dir, name+exeSuffix()), []byte{}, 0o755); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	// Run several times — map iteration order varies between runs in Go,
+	// so a non-deterministic implementation would eventually flip.
+	for i := 0; i < 25; i++ {
+		tools := []registry.Tool{{Name: "py", BinaryNames: []string{"python", "python3"}}}
+		scanExtraInstallRootsAt(context.Background(), tools, []string{root}, nil)
+		if len(tools[0].Instances) != 1 {
+			t.Fatalf("iter %d: expected 1 instance, got %d", i, len(tools[0].Instances))
+		}
+		got := filepath.Base(tools[0].Instances[0].Path)
+		want := "python" + exeSuffix()
+		if !strings.EqualFold(got, want) {
+			t.Fatalf("iter %d: matched %q, expected %q (BinaryNames order)", i, got, want)
+		}
+	}
+}
+
+// TestScanExtraInstallRoots_FirstMatchWins verifies that when the same
+// binary exists in two sibling subdirs, only the first one is recorded —
+// the per-tool short-circuit prevents a phantom duplicate instance.
+func TestScanExtraInstallRoots_FirstMatchWins(t *testing.T) {
+	root := t.TempDir()
+	freelensDir := filepath.Join(root, "Freelens")
+	if err := os.Mkdir(freelensDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(freelensDir, "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write bin: %v", err)
+	}
+	otherDir := filepath.Join(root, "OtherFreelens")
+	if err := os.Mkdir(otherDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(otherDir, "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write second: %v", err)
+	}
+
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	scanExtraInstallRootsAt(context.Background(), tools, []string{root}, nil)
+	if len(tools[0].Instances) != 1 {
+		t.Fatalf("expected exactly 1 instance, got %d: %+v", len(tools[0].Instances), tools[0].Instances)
+	}
+}
+
+// TestScanExtraInstallRoots_ShortCircuitsAfterAllResolved verifies the
+// observable claim in the doc comment: once every pending tool has been
+// resolved, Phase 5 stops walking — subdirs alphabetically after the
+// last match are not even read. The visit callback records every subdir
+// the walker reaches.
+func TestScanExtraInstallRoots_ShortCircuitsAfterAllResolved(t *testing.T) {
+	root := t.TempDir()
+	// "AAA_Freelens" sorts before "ZZZ_Trap" — once we resolve freelens
+	// in AAA the walk should never reach ZZZ.
+	hit := filepath.Join(root, "AAA_Freelens")
+	skipped := filepath.Join(root, "ZZZ_Trap")
+	for _, d := range []string{hit, skipped} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", d, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(hit, "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write bin: %v", err)
+	}
+
+	var visited []string
+	visit := func(p string) { visited = append(visited, p) }
+
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	scanExtraInstallRootsAt(context.Background(), tools, []string{root}, visit)
+
+	if len(tools[0].Instances) != 1 {
+		t.Fatalf("expected freelens resolved, got instances=%v", tools[0].Instances)
+	}
+	if len(visited) != 1 || visited[0] != hit {
+		t.Fatalf("walker should have stopped after %q, visited=%v", hit, visited)
+	}
+}
+
+// TestScanExtraInstallRoots_RespectsCancelledContext verifies Phase 5
+// returns immediately when ctx is already cancelled, without doing any
+// filesystem I/O.
+func TestScanExtraInstallRoots_RespectsCancelledContext(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "Freelens"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Freelens", "freelens"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var visited []string
+	visit := func(p string) { visited = append(visited, p) }
+
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	scanExtraInstallRootsAt(ctx, tools, []string{root}, visit)
+
+	if len(tools[0].Instances) != 0 {
+		t.Fatalf("expected no resolution under cancelled ctx, got %v", tools[0].Instances)
+	}
+	if len(visited) != 0 {
+		t.Fatalf("walker should not have visited any subdir, got %v", visited)
+	}
+}
+
+func exeSuffix() string {
+	if runtime.GOOS == "windows" {
+		return ".exe"
+	}
+	return ""
 }

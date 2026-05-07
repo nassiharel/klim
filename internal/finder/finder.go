@@ -40,6 +40,14 @@ func hasDpkg() bool {
 
 // ToolFinder abstracts tool discovery on the filesystem.
 type ToolFinder interface {
+	// FindAll scans PATH (and a curated set of per-user install
+	// roots on Windows) and populates each tool's Instances. The
+	// ctx argument must be non-nil; callers that don't have a
+	// meaningful context should pass context.Background(). FindAll
+	// returns ctx.Err() when ctx is cancelled mid-scan, ErrEmptyPATH
+	// when no PATH directories are available (including Windows
+	// registry PATH directories) and Phase 5 produced no results,
+	// or nil on success.
 	FindAll(ctx context.Context, tools []registry.Tool) error
 }
 
@@ -75,6 +83,29 @@ var defaultFinder ToolFinder = &PathFinder{}
 func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error {
 	pathDirs := pathDirectories()
 	if len(pathDirs) == 0 {
+		// No PATH to scan, but Phase 5 still applies: winget GUI apps
+		// under %LOCALAPPDATA%\Programs (Freelens, etc.) live outside
+		// any PATH dir and would otherwise be invisible in shells,
+		// services, or CI environments launching klim with a stripped
+		// PATH. We suppress ErrEmptyPATH only when Phase 5 actually
+		// added an instance — service callers discard the tool slice
+		// on error, so signalling "empty PATH" would lose those
+		// instances. We track the addition count rather than counting
+		// non-empty Instances so a caller that pre-populated the slice
+		// (e.g. tests, RefreshTool replays) doesn't accidentally
+		// suppress ErrEmptyPATH when Phase 5 found nothing new.
+		added := scanExtraInstallRoots(ctx, tools)
+		// Honour cancellation explicitly: it's strictly more
+		// informative than ErrEmptyPATH and matches the non-empty
+		// PATH branch's behaviour.
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if added > 0 {
+			slog.Info("PATH was empty; Phase 5 fallback recovered installs",
+				"tools_total", len(tools), "added", added)
+			return nil
+		}
 		return ErrEmptyPATH
 	}
 
@@ -158,8 +189,13 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 	}
 
 	for i := range tools {
+		// gosec G602 false positive: i is bounded by `range tools`,
+		// so &tools[i] is always safe. Taking the pointer once
+		// scopes the suppression to a single line and lets the
+		// remaining mutations read cleanly.
+		t := &tools[i] //nolint:gosec // G602: i is bounded by range tools.
 		// Clear previous instances so rescans don't accumulate duplicates.
-		tools[i].Instances = nil
+		t.Instances = nil
 
 		tms := toolMatches[i]
 		// Sort by PATH order using the original scanning directory.
@@ -183,16 +219,18 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 				continue
 			}
 			seen[key] = struct{}{}
-			tools[i].Instances = append(tools[i].Instances, m.instance)
+			t.Instances = append(t.Instances, m.instance)
 		}
 	}
 
 	// Phase 4: Fallback via exec.LookPath for tools with no instances.
 	for i := range tools {
-		if len(tools[i].Instances) > 0 {
+		// gosec G602 false positive: same justification as Phase 3.
+		t := &tools[i] //nolint:gosec // G602: i is bounded by range tools.
+		if len(t.Instances) > 0 {
 			continue
 		}
-		for _, binName := range tools[i].BinaryNames {
+		for _, binName := range t.BinaryNames {
 			path, err := exec.LookPath(binName)
 			if err != nil {
 				continue
@@ -201,12 +239,30 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 			if err != nil || resolved == "" {
 				resolved = path
 			}
-			tools[i].Instances = append(tools[i].Instances, registry.Instance{
+			t.Instances = append(t.Instances, registry.Instance{
 				Path:   resolved,
 				Source: detectSource(resolved),
 			})
 			break
 		}
+	}
+
+	// Phase 5: Walk well-known per-user install roots one level deep for
+	// tools the previous phases missed. GUI apps installed via winget
+	// (Freelens, etc.) live under %LOCALAPPDATA%\Programs\<App>\<App>.exe
+	// and never expose a binary on PATH, so PATH scanning alone leaves
+	// them invisible to klim. extraInstallRoots() returns nothing on
+	// Linux/macOS, making this a no-op there. Returned count is ignored
+	// here because Phase 5 instances are surfaced via tools directly.
+	_ = scanExtraInstallRoots(ctx, tools)
+
+	// Surface ctx cancellation that happened during Phase 4 or 5.
+	// scanExtraInstallRootsAt returns early on cancellation but
+	// doesn't propagate the error itself, and Phase 4 doesn't check
+	// ctx at all — so without this check FindAll could report
+	// success on a partially-completed scan.
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 
 	found := 0
@@ -455,4 +511,171 @@ func detectSource(path string) registry.InstallSource {
 	default:
 		return registry.SourceManual
 	}
+}
+
+// scanExtraInstallRoots is the Phase 5 fallback: for every tool still
+// without instances, walk extraInstallRoots() one level deep looking
+// for a binary that matches one of the tool's BinaryNames. The first
+// match per tool wins. Each emitted instance gets its source classified
+// by detectSource so the resolver picks the right package manager
+// (e.g. winget for paths under %LOCALAPPDATA%\Programs).
+//
+// Returns the number of instances Phase 5 appended so callers can
+// distinguish "Phase 5 found something" from "tools already had
+// instances from earlier phases".
+//
+// This is intentionally narrow:
+//   - only runs for tools the regular PATH/LookPath phases missed
+//   - only walks roots curated as "winget-user-scope friendly"
+//   - bails out cheaply when a root doesn't exist
+func scanExtraInstallRoots(ctx context.Context, tools []registry.Tool) int {
+	return scanExtraInstallRootsAt(ctx, tools, extraInstallRootsFn(), nil)
+}
+
+// extraInstallRootsFn is the function Phase 5 calls to discover the
+// list of extra install roots. Production points at extraInstallRoots
+// (defined per-OS in path_*.go); tests swap it out to inject a fake
+// root so the FindAll empty-PATH branch can be exercised end-to-end.
+var extraInstallRootsFn = extraInstallRoots
+
+// scanExtraInstallRootsAt is the testable form of scanExtraInstallRoots:
+// callers supply the install roots explicitly so unit tests can exercise
+// the directory walk on any OS without depending on real install paths.
+//
+// The optional visit callback fires for every subdir actually read.
+// Production callers pass nil; tests use it to assert that the walker
+// short-circuits once every pending tool is resolved. Threading the
+// visitor as a parameter (rather than a package-level var) keeps the
+// production state immutable and avoids data-race risk if tests are
+// ever parallelised.
+//
+// Walks lazily: each subdir is read on demand, every still-pending tool
+// is matched against that subdir's entries (BinaryNames in declared
+// order), then resolved tools are dropped from the pending set. The
+// outer loop breaks the moment the pending set drains, so subdirs that
+// alphabetically follow the last match are never read at all. ctx
+// cancellation is honoured between roots and between subdirs. ctx
+// must be non-nil; callers should pass context.Background() when no
+// real cancellation context is available.
+//
+// Note: this design picks subdir-order over cross-subdir BinaryNames
+// priority — i.e. for a tool declaring BinaryNames [python, python3],
+// finding "python3" in subdir "A" wins over "python" in later subdir
+// "B". That's deliberate: %LOCALAPPDATA%\Programs subdirs are app-name
+// directories that don't ship multiple-named binaries of the same tool,
+// so the priority distinction is theoretical here, while reading every
+// root up-front purely to honour it would defeat the early-exit
+// guarantee callers (and reviewers) reasonably expect.
+func scanExtraInstallRootsAt(ctx context.Context, tools []registry.Tool, roots []string, visit func(string)) int {
+	if ctx.Err() != nil {
+		return 0
+	}
+	if len(roots) == 0 {
+		return 0
+	}
+
+	pending := make([]int, 0, len(tools))
+	for i := range tools {
+		if len(tools[i].Instances) == 0 && len(tools[i].BinaryNames) > 0 {
+			pending = append(pending, i)
+		}
+	}
+	if len(pending) == 0 {
+		return 0
+	}
+
+	added := 0
+walk:
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		if ctx.Err() != nil {
+			return added
+		}
+		rootEntries, err := os.ReadDir(root)
+		if err != nil {
+			continue
+		}
+		for _, re := range rootEntries {
+			if !re.IsDir() {
+				continue
+			}
+			if ctx.Err() != nil {
+				return added
+			}
+			sub := filepath.Join(root, re.Name())
+			files, err := os.ReadDir(sub)
+			if err != nil {
+				continue
+			}
+			if visit != nil {
+				// Fire only after a successful ReadDir so the
+				// callback's contract — "every subdir actually
+				// read" — holds even when a sibling is
+				// permission-denied or otherwise unreadable.
+				visit(sub)
+			}
+			entries := make(map[string]string, len(files))
+			for _, f := range files {
+				if f.IsDir() {
+					continue
+				}
+				entries[normaliseName(f.Name())] = f.Name()
+			}
+			if len(entries) == 0 {
+				continue
+			}
+
+			// Filter pending in place: keep tools that did NOT match
+			// in this subdir; matched tools get an instance appended
+			// and are dropped from future iterations. Reading and
+			// writing through pending[:n] is safe because n is
+			// always <= the current read index.
+			n := 0
+			for _, idx := range pending {
+				matched := false
+				for _, bin := range tools[idx].BinaryNames {
+					if matched {
+						break
+					}
+					for _, cand := range binaryCandidateNames(normaliseName(bin)) {
+						orig, ok := entries[cand]
+						if !ok {
+							continue
+						}
+						full := filepath.Join(sub, orig)
+						// Fall back to the unresolved path when EvalSymlinks
+						// fails (permission errors, unusual reparse points)
+						// — matches Phase 4's behaviour and keeps the tool
+						// detectable instead of dropping it silently.
+						resolved, err := filepath.EvalSymlinks(full)
+						if err != nil || resolved == "" {
+							resolved = full
+						}
+						info, err := os.Stat(resolved)
+						if err != nil || info.IsDir() {
+							continue
+						}
+						tools[idx].Instances = append(tools[idx].Instances, registry.Instance{
+							Path:   resolved,
+							Source: detectSource(resolved),
+						})
+						matched = true
+						added++
+						break
+					}
+				}
+				if !matched {
+					pending[n] = idx
+					n++
+				}
+			}
+			pending = pending[:n]
+			if len(pending) == 0 {
+				break walk
+			}
+		}
+	}
+	return added
 }
