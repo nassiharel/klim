@@ -122,8 +122,6 @@ winget:
       name: winget-pkgs
       branch: "klim-{{ .Version }}"
       token: "{{ .Env.WINGET_PAT }}"
-      git:
-        url: "https://x-access-token:{{ .Env.WINGET_PAT }}@github.com/nassiharel/winget-pkgs.git"
       pull_request:
         enabled: true
         draft: false
