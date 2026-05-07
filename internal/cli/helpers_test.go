@@ -23,7 +23,10 @@ import (
 // Safe across panics: w is closed via a defer that runs even if fn
 // panics, so the reader goroutine always reaches EOF and the test
 // can't deadlock. r is closed inside the reader goroutine after Copy
-// returns, so neither end of the pipe is leaked.
+// returns, so neither end of the pipe is leaked. os.Stdout is
+// restored via a defer (rather than t.Cleanup) so callers can run
+// multiple captureStdout blocks in the same test — the second call
+// must see the real os.Stdout, not the previous call's closed pipe.
 func captureStdout(t *testing.T, fn func()) []byte {
 	t.Helper()
 	orig := os.Stdout
@@ -31,6 +34,8 @@ func captureStdout(t *testing.T, fn func()) []byte {
 	if err != nil {
 		t.Fatalf("pipe: %v", err)
 	}
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
 
 	done := make(chan []byte, 1)
 	go func() {
@@ -39,9 +44,6 @@ func captureStdout(t *testing.T, fn func()) []byte {
 		_ = r.Close()
 		done <- buf.Bytes()
 	}()
-
-	os.Stdout = w
-	t.Cleanup(func() { os.Stdout = orig })
 
 	// Inner func + defer so w.Close() runs even if fn panics. Without
 	// this, a panicking fn would leave the reader blocked in io.Copy
