@@ -404,6 +404,30 @@ func TestFindAll_EmptyPATHReturnsErrWhenNothingFound(t *testing.T) {
 	}
 }
 
+// TestFindAll_NonEmptyPATHReturnsCtxErr verifies FindAll surfaces
+// ctx.Err() when ctx is cancelled, even on the non-empty PATH path
+// (Phase 4 / Phase 5 themselves don't return errors, so without an
+// explicit check FindAll could report nil after a cancelled scan).
+func TestFindAll_NonEmptyPATHReturnsCtxErr(t *testing.T) {
+	prev := extraInstallRootsFn
+	extraInstallRootsFn = func() []string { return nil }
+	t.Cleanup(func() { extraInstallRootsFn = prev })
+
+	// Use a real PATH dir so pathDirectories() is non-empty —
+	// t.TempDir() is always populated and readable.
+	pathDir := t.TempDir()
+	t.Setenv("PATH", pathDir)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	err := (&PathFinder{}).FindAll(ctx, tools)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected ctx.Err()=context.Canceled, got %v", err)
+	}
+}
+
 // TestScanExtraInstallRoots covers the Phase 5 fallback that catches
 // GUI apps installed by winget under %LOCALAPPDATA%\Programs (e.g.
 // Freelens) which don't expose a binary on PATH and were previously

@@ -248,6 +248,15 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 	// here because Phase 5 instances are surfaced via tools directly.
 	_ = scanExtraInstallRoots(ctx, tools)
 
+	// Surface ctx cancellation that happened during Phase 4 or 5.
+	// scanExtraInstallRootsAt returns early on cancellation but
+	// doesn't propagate the error itself, and Phase 4 doesn't check
+	// ctx at all — so without this check FindAll could report
+	// success on a partially-completed scan.
+	if ctx != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	found := 0
 	for _, t := range tools {
 		if len(t.Instances) > 0 {
