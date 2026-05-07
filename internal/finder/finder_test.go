@@ -2,6 +2,7 @@ package finder
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -343,7 +344,7 @@ func TestFindAll_EmptyPATHRunsPhase5(t *testing.T) {
 	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
 	pf := &PathFinder{}
 	err := pf.FindAll(context.Background(), tools)
-	if err != nil && err != ErrEmptyPATH {
+	if err != nil && !errors.Is(err, ErrEmptyPATH) {
 		t.Fatalf("FindAll returned unexpected error: %v", err)
 	}
 	if len(tools[0].Instances) != 1 {
@@ -371,12 +372,12 @@ func TestFindAll_EmptyPATHReturnsCtxErr(t *testing.T) {
 		// in which case the empty-PATH branch isn't hit. Skip the
 		// strict ctx assertion there — the non-empty branch already
 		// honours ctx via Phase 2/3's existing checks.
-		if err != nil && err != context.Canceled && err != ErrEmptyPATH {
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrEmptyPATH) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		return
 	}
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected ctx.Err()=context.Canceled, got %v", err)
 	}
 }
@@ -398,7 +399,7 @@ func TestFindAll_EmptyPATHReturnsErrWhenNothingFound(t *testing.T) {
 		// assertion there.
 		return
 	}
-	if err != ErrEmptyPATH {
+	if !errors.Is(err, ErrEmptyPATH) {
 		t.Fatalf("expected ErrEmptyPATH, got %v", err)
 	}
 }

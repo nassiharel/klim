@@ -206,7 +206,7 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 				continue
 			}
 			seen[key] = struct{}{}
-			tools[i].Instances = append(tools[i].Instances, m.instance)
+			tools[i].Instances = append(tools[i].Instances, m.instance) //nolint:gosec // G602: i is bounded by range; gosec's flow analysis can't see that.
 		}
 	}
 
@@ -224,7 +224,7 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 			if err != nil || resolved == "" {
 				resolved = path
 			}
-			tools[i].Instances = append(tools[i].Instances, registry.Instance{
+			tools[i].Instances = append(tools[i].Instances, registry.Instance{ //nolint:gosec // G602: i is bounded by range; gosec's flow analysis can't see that.
 				Path:   resolved,
 				Source: detectSource(resolved),
 			})
@@ -504,15 +504,15 @@ func detectSource(path string) registry.InstallSource {
 //   - only runs for tools the regular PATH/LookPath phases missed
 //   - only walks roots curated as "winget-user-scope friendly"
 //   - bails out cheaply when a root doesn't exist
+func scanExtraInstallRoots(ctx context.Context, tools []registry.Tool) int {
+	return scanExtraInstallRootsAt(ctx, tools, extraInstallRootsFn())
+}
+
 // extraInstallRootsFn is the function Phase 5 calls to discover the
 // list of extra install roots. Production points at extraInstallRoots
 // (defined per-OS in path_*.go); tests swap it out to inject a fake
 // root so the FindAll empty-PATH branch can be exercised end-to-end.
 var extraInstallRootsFn = extraInstallRoots
-
-func scanExtraInstallRoots(ctx context.Context, tools []registry.Tool) int {
-	return scanExtraInstallRootsAt(ctx, tools, extraInstallRootsFn())
-}
 
 // onSubdirVisited is a test hook that fires for every subdir Phase 5
 // actually reads. Production code never sets it. Tests use it to verify
