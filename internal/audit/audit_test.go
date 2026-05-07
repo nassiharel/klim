@@ -185,7 +185,7 @@ func TestAnalyze_FindingsSortedWarningsBeforeInfos(t *testing.T) {
 			return t
 		}(),
 		// Tool that yields a warning-level Unmanaged finding.
-		installedTool("zylophone", "1", registry.SourceManual, ""),
+		installedTool("xylophone", "1", registry.SourceManual, ""),
 	}
 	findings, _ := Analyze(tools)
 	if len(findings) < 2 {
