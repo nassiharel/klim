@@ -634,9 +634,8 @@ walk:
 			// always <= the current read index.
 			n := 0
 			for _, idx := range pending {
-				t := &tools[idx]
 				matched := false
-				for _, bin := range t.BinaryNames {
+				for _, bin := range tools[idx].BinaryNames {
 					if matched {
 						break
 					}
@@ -658,7 +657,7 @@ walk:
 						if err != nil || info.IsDir() {
 							continue
 						}
-						t.Instances = append(t.Instances, registry.Instance{
+						tools[idx].Instances = append(tools[idx].Instances, registry.Instance{
 							Path:   resolved,
 							Source: detectSource(resolved),
 						})
