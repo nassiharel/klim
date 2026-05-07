@@ -19,14 +19,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nassiharel/klim/stargazers"><img src="https://img.shields.io/github/stars/nassiharel/klim?style=flat-square&color=yellow&label=stars" alt="Stars"></a>
-  <a href="https://github.com/nassiharel/klim/releases"><img src="https://img.shields.io/github/downloads/nassiharel/klim/total?style=flat-square&color=brightgreen&label=downloads" alt="Downloads"></a>
   <a href="https://github.com/nassiharel/klim/commits/main"><img src="https://img.shields.io/github/last-commit/nassiharel/klim?style=flat-square&label=last%20commit" alt="Last commit"></a>
   <a href="https://github.com/nassiharel/klim/graphs/contributors"><img src="https://img.shields.io/github/contributors/nassiharel/klim?style=flat-square&color=blue" alt="Contributors"></a>
   <a href="https://github.com/nassiharel/klim/issues"><img src="https://img.shields.io/github/issues/nassiharel/klim?style=flat-square" alt="Open issues"></a>
   <a href="https://github.com/nassiharel/klim/blob/main/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs welcome"></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=flat-square" alt="Platforms">
-  <img src="https://img.shields.io/badge/TUI-Bubbletea-FFB6C1?style=flat-square" alt="Built with Bubbletea">
 </p>
 
 ---
