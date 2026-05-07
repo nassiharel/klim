@@ -1,7 +1,9 @@
 package finder
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -308,4 +310,79 @@ func usrBinSource() registry.InstallSource {
 		return registry.SourceApt
 	}
 	return registry.SourceManual
+}
+
+// TestScanExtraInstallRoots covers the Phase 5 fallback that catches
+// GUI apps installed by winget under %LOCALAPPDATA%\Programs (e.g.
+// Freelens) which don't expose a binary on PATH and were previously
+// reported as "not installed" even when `winget list` showed them.
+func TestScanExtraInstallRoots(t *testing.T) {
+	root := t.TempDir()
+
+	// Lay out: <root>/Freelens/Freelens.exe and <root>/Other/whatever.exe.
+	freelensDir := filepath.Join(root, "Freelens")
+	if err := os.Mkdir(freelensDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	binName := "Freelens"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	freelensBin := filepath.Join(freelensDir, binName)
+	if err := os.WriteFile(freelensBin, []byte("\x00"), 0o755); err != nil {
+		t.Fatalf("write bin: %v", err)
+	}
+
+	otherDir := filepath.Join(root, "Other")
+	if err := os.Mkdir(otherDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(otherDir, "unrelated"+exeSuffix()), []byte{}, 0o755); err != nil {
+		t.Fatalf("write unrelated: %v", err)
+	}
+
+	tools := []registry.Tool{
+		{Name: "freelens", BinaryNames: []string{"freelens"}},
+		{Name: "kubectl", BinaryNames: []string{"kubectl"}}, // not present, must stay empty
+		{
+			// Already-installed tool must not be touched.
+			Name:        "git",
+			BinaryNames: []string{"git"},
+			Instances:   []registry.Instance{{Path: "/usr/bin/git", Source: registry.SourceManual}},
+		},
+	}
+
+	scanExtraInstallRootsAt(tools, []string{root})
+
+	if len(tools[0].Instances) != 1 {
+		t.Fatalf("freelens expected 1 instance, got %d", len(tools[0].Instances))
+	}
+	gotPath := tools[0].Instances[0].Path
+	resolvedWant, _ := filepath.EvalSymlinks(freelensBin)
+	if gotPath != resolvedWant && gotPath != freelensBin {
+		t.Errorf("freelens path = %q, want %q (or pre-resolved %q)", gotPath, resolvedWant, freelensBin)
+	}
+	if len(tools[1].Instances) != 0 {
+		t.Errorf("kubectl should not have been found, got %v", tools[1].Instances)
+	}
+	if len(tools[2].Instances) != 1 || tools[2].Instances[0].Path != "/usr/bin/git" {
+		t.Errorf("git instance was clobbered, got %+v", tools[2].Instances)
+	}
+}
+
+func TestScanExtraInstallRoots_NoRoots(t *testing.T) {
+	// Must be a no-op (and not panic) when no roots are configured —
+	// matches the non-Windows case where extraInstallRoots() returns nil.
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	scanExtraInstallRootsAt(tools, nil)
+	if len(tools[0].Instances) != 0 {
+		t.Errorf("expected no instances, got %v", tools[0].Instances)
+	}
+}
+
+func exeSuffix() string {
+	if runtime.GOOS == "windows" {
+		return ".exe"
+	}
+	return ""
 }

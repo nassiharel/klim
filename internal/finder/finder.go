@@ -209,6 +209,14 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 		}
 	}
 
+	// Phase 5: Walk well-known per-user install roots one level deep for
+	// tools the previous phases missed. GUI apps installed via winget
+	// (Freelens, etc.) live under %LOCALAPPDATA%\Programs\<App>\<App>.exe
+	// and never expose a binary on PATH, so PATH scanning alone leaves
+	// them invisible to klim. extraInstallRoots() returns nothing on
+	// Linux/macOS, making this a no-op there.
+	scanExtraInstallRoots(tools)
+
 	found := 0
 	for _, t := range tools {
 		if len(t.Instances) > 0 {
@@ -454,5 +462,68 @@ func detectSource(path string) registry.InstallSource {
 
 	default:
 		return registry.SourceManual
+	}
+}
+
+// scanExtraInstallRoots is the Phase 5 fallback: for every tool still
+// without instances, walk extraInstallRoots() one level deep looking
+// for a binary that matches one of the tool's BinaryNames. The first
+// match per tool wins. Each emitted instance gets its source classified
+// by detectSource so the resolver picks the right package manager
+// (e.g. winget for paths under %LOCALAPPDATA%\Programs).
+//
+// This is intentionally narrow:
+//   - only runs for tools the regular PATH/LookPath phases missed
+//   - only walks roots curated as "winget-user-scope friendly"
+//   - bails out cheaply when a root doesn't exist
+func scanExtraInstallRoots(tools []registry.Tool) {
+	scanExtraInstallRootsAt(tools, extraInstallRoots())
+}
+
+// scanExtraInstallRootsAt is the testable form of scanExtraInstallRoots:
+// callers supply the install roots explicitly so unit tests can exercise
+// the directory walk on any OS without depending on real install paths.
+func scanExtraInstallRootsAt(tools []registry.Tool, roots []string) {
+	if len(roots) == 0 {
+		return
+	}
+
+	wantedBins := make(map[string][]toolRef)
+	for i := range tools {
+		if len(tools[i].Instances) > 0 {
+			continue
+		}
+		for _, bin := range tools[i].BinaryNames {
+			key := normaliseName(bin)
+			wantedBins[key] = append(wantedBins[key], toolRef{toolIdx: i, binName: bin})
+		}
+	}
+	if len(wantedBins) == 0 {
+		return
+	}
+
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			subdir := filepath.Join(root, e.Name())
+			scanDir(subdir, wantedBins, func(m match) {
+				// First match wins per tool — once a tool gains an
+				// instance we silently drop later matches from sibling
+				// subdirs so we don't manufacture phantom duplicates.
+				if len(tools[m.toolIdx].Instances) > 0 {
+					return
+				}
+				tools[m.toolIdx].Instances = append(tools[m.toolIdx].Instances, m.instance)
+			})
+		}
 	}
 }
