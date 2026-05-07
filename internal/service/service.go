@@ -381,7 +381,7 @@ func (c *DefaultCatalog) LoadPacks(ctx context.Context) ([]registry.Pack, error)
 }
 
 // fetchExtraCached fetches an extra marketplace with local file caching.
-// Cache files are stored under ~/.config/klim/marketplace/extra-<hash>.yaml.
+// Cache files are stored under ~/.klim/marketplace/extra-<hash>.yaml.
 func fetchExtraCached(ctx context.Context, fetcher catalog.MarketplaceFetcher, index int, maxAge time.Duration) ([]byte, error) {
 	// Determine the URL for cache key.
 	url := ""

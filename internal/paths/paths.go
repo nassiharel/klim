@@ -1,7 +1,7 @@
 // Package paths provides a single source of truth for all klim
 // configuration and data file paths. Every package that needs to
-// locate a file under ~/.config/klim should call a function here
-// instead of computing the path itself.
+// locate a file under ~/.klim should call a function here instead
+// of computing the path itself.
 package paths
 
 import (
@@ -11,13 +11,19 @@ import (
 	"path/filepath"
 )
 
-// BaseDir returns the klim root directory (~/.config/klim or OS equivalent).
+// BaseDir returns the klim root directory (~/.klim).
+//
+// klim uses a single dotfile directory under the user's home for
+// every platform, matching the convention of git, npm, kubectl, aws,
+// terraform, helm, etc. — tools developers tend to want in one
+// predictable place. Cross-platform `os.UserHomeDir()` resolves to
+// `$HOME` on Unix and `%USERPROFILE%` on Windows.
 func BaseDir() (string, error) {
-	dir, err := os.UserConfigDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "klim"), nil
+	return filepath.Join(home, ".klim"), nil
 }
 
 // Join returns BaseDir()/segments... as a single path.

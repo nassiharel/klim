@@ -38,9 +38,4 @@ to install the same set of tools.
 
 ## Storage
 
-Favorites are stored at:
-- **macOS:** `~/Library/Application Support/klim/favorites/favorites.yaml`
-- **Linux:** `~/.config/klim/favorites/favorites.yaml`
-- **Windows:** `%AppData%\klim\favorites\favorites.yaml`
-
-The file contains a simple list of tool names.
+Favorites are stored at `~/.klim/favorites/favorites.yaml` (same path on macOS, Linux, and Windows). The file contains a simple list of tool names.

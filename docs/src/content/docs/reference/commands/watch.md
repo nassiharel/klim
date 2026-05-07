@@ -31,7 +31,7 @@ klim watch --json
 
 ```bash
 # Cron (daily at 9am)
-0 9 * * * klim watch --json >> ~/.config/klim/watch.log
+0 9 * * * klim watch --json >> ~/.klim/watch.log
 
 # Windows Task Scheduler
 schtasks /create /tn "klim-watch" /tr "klim watch" /sc daily /st 09:00

@@ -330,14 +330,15 @@ func TestFetch_CancelledContext(t *testing.T) {
 	}
 }
 
-// setConfigDir redirects os.UserConfigDir() to a per-test temp dir across
+// setConfigDir redirects paths.BaseDir() to a per-test temp dir across
 // Linux/macOS/Windows so cache writes don't leak into the real user home.
+// klim resolves its base dir from os.UserHomeDir; set HOME on Unix and
+// USERPROFILE on Windows.
 func setConfigDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir) // linux
-	t.Setenv("HOME", dir)            // macOS fallback ($HOME/Library/Application Support)
-	t.Setenv("AppData", dir)         // windows
+	t.Setenv("HOME", dir)        // linux + macOS
+	t.Setenv("USERPROFILE", dir) // windows
 	return dir
 }
 

@@ -71,7 +71,7 @@ a parallel npm id will appear under `skipped` with a reason.
 
 ## Cache
 
-Results are cached at `~/.config/klim/vuln/cache-<sha256-prefix>.yaml`.
+Results are cached at `~/.klim/vuln/cache-<sha256-prefix>.yaml`.
 The cache file is keyed by OSV URL (allowing private mirrors); the
 default endpoint and any custom `vuln.url` get separate files. On
 fetch failure the last successful payload is used (stale-fallback)
@@ -110,7 +110,7 @@ is propagated.
 ## Configuration
 
 ```yaml
-# ~/.config/klim/config.yaml
+# ~/.klim/config/config.yaml
 vuln:
   url: https://api.osv.dev
   auto_refresh: true

@@ -100,7 +100,7 @@ and architecture.
 ## Storage layout
 
 ```
-~/.config/klim/trail/
+~/.klim/trail/
 ├── HEAD                   # newest entry index, single ASCII line
 ├── log.yaml               # ordered list of entries
 ├── log.lock               # cross-process advisory lock

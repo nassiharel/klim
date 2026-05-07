@@ -82,7 +82,7 @@ The compliance check validates your installed tools against a policy file that d
 ### CLI
 
 ```bash
-# Generate a starter policy at ~/.config/klim/compliance/policy.yaml
+# Generate a starter policy at ~/.klim/compliance/policy.yaml
 klim security compliance init
 
 # Validate the toolchain against the policy

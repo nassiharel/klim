@@ -14,14 +14,15 @@ import (
 
 // startBackupServer wires a Server with a fixture loader plus an
 // override for the user-config dir so save/delete tests don't touch
-// the real ~/.config/klim/backups/. paths.BackupsDir() reads the
-// XDG / OS-specific config root via the paths package, which honours
-// XDG_CONFIG_HOME on Linux and CLIM_CONFIG_HOME everywhere; we set
-// the latter so tests stay isolated regardless of host OS.
+// the real ~/.klim/backups/. paths.BackupsDir() reads from
+// paths.BaseDir() which resolves to ~/.klim via os.UserHomeDir;
+// override HOME / USERPROFILE so tests stay isolated regardless
+// of host OS.
 func startBackupServer(t *testing.T) (*httptest.Server, string) {
 	t.Helper()
 	tmp := t.TempDir()
-	t.Setenv("CLIM_CONFIG_HOME", tmp)
+	t.Setenv("HOME", tmp)        // linux + macOS
+	t.Setenv("USERPROFILE", tmp) // windows
 
 	srv, err := New(Options{Service: service.New(), Bind: "127.0.0.1"})
 	if err != nil {

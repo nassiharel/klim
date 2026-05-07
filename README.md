@@ -222,13 +222,7 @@ The marketplace is fetched from `https://raw.githubusercontent.com/nassiharel/kl
 
 ## Configuration
 
-Klim stores user data under the platform config directory:
-
-| OS | Marketplace cache |
-| --- | --- |
-| macOS | `~/Library/Application Support/klim/marketplace-cache.yaml` |
-| Linux | `~/.config/klim/marketplace-cache.yaml` |
-| Windows | `%AppData%\klim\marketplace-cache.yaml` |
+Klim stores user data under `~/.klim/` (same path on macOS, Linux, and Windows). The marketplace cache lives at `~/.klim/marketplace/marketplace-cache.yaml`.
 
 Use:
 

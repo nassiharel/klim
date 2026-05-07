@@ -22,7 +22,7 @@ Examples:
   klim watch --output json           # JSON output for scripts
 
   # Cron job (daily at 9am):
-  0 9 * * * klim watch --output json >> ~/.config/klim/watch.log
+  0 9 * * * klim watch --output json >> ~/.klim/watch.log
 
   # Windows Task Scheduler:
   schtasks /create /tn "klim-watch" /tr "klim watch" /sc daily /st 09:00`,

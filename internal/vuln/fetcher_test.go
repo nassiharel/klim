@@ -28,8 +28,7 @@ func (s *stubLooker) Query(ctx context.Context, coord Coord) ([]Vulnerability, e
 
 func setEnvDir(t *testing.T, dir string) {
 	t.Helper()
-	t.Setenv("AppData", dir)
-	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("USERPROFILE", dir)
 	t.Setenv("HOME", dir)
 }
 

@@ -35,7 +35,7 @@ type Config struct {
 // LoggingConfig controls log output.
 type LoggingConfig struct {
 	Level   string `yaml:"level"`   // debug, info, warn, error; default: debug
-	File    bool   `yaml:"file"`    // write to ~/.config/klim/klim.log; default: true
+	File    bool   `yaml:"file"`    // write to ~/.klim/logs/klim.log; default: true
 	Verbose bool   `yaml:"verbose"` // also log to stderr; default: false
 }
 

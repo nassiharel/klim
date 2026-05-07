@@ -7,11 +7,7 @@ klim uses a `config.yaml` file for persistent settings. The file is created with
 
 ## File Location
 
-| OS | Path |
-|----|------|
-| macOS | `~/Library/Application Support/klim/config/config.yaml` |
-| Linux | `~/.config/klim/config/config.yaml` |
-| Windows | `%AppData%\klim\config\config.yaml` |
+`~/.klim/config/config.yaml` (same path on macOS, Linux, and Windows). On Windows, `~` resolves to `%USERPROFILE%`, so this is typically `C:\Users\<you>\.klim\config\config.yaml`.
 
 Find the exact path on your system:
 
@@ -45,10 +41,7 @@ logging:
 | `file` | `true` | Write structured logs to the log file. |
 | `verbose` | `false` | Additionally output logs to stderr (useful for debugging). |
 
-Log file location:
-- macOS: `~/Library/Application Support/klim/logs/klim.log`
-- Linux: `~/.config/klim/logs/klim.log`
-- Windows: `%AppData%\klim\logs\klim.log`
+Log file location: `~/.klim/logs/klim.log` (same on macOS, Linux, and Windows).
 
 ### Marketplace
 
