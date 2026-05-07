@@ -50,18 +50,16 @@ func withRefscanCtx(t *testing.T, packs []registry.Pack) *cobra.Command {
 	return cmd
 }
 
-// redirectConfig points os.UserConfigDir() at a fresh temp dir so the
+// redirectConfig points paths.BaseDir() at a fresh temp dir so the
 // teamfile/projects + custompacks loaders see an empty user config.
-// On Windows that's APPDATA; on Unix it's XDG_CONFIG_HOME.
+// klim resolves its base dir from os.UserHomeDir, so set HOME on
+// Unix and USERPROFILE on Windows.
 func redirectConfig(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	if runtime.GOOS == "windows" {
-		t.Setenv("APPDATA", dir)
+		t.Setenv("USERPROFILE", dir)
 	} else {
-		t.Setenv("XDG_CONFIG_HOME", dir)
-		// macOS: os.UserConfigDir returns ~/Library/Application Support
-		// — override HOME too so we don't leak into the user's real config.
 		t.Setenv("HOME", dir)
 	}
 	return dir

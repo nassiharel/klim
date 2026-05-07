@@ -30,16 +30,9 @@ function loadGitHubInfo() {
     path.resolve(__dirname, '../../marketplace.yaml'),
   ];
 
-  // Local klim cache (user's machine)
-  if (process.platform === 'win32') {
-    const appdata = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
-    candidates.push(path.join(appdata, 'klim', 'marketplace', 'marketplace-cache.yaml'));
-  } else if (process.platform === 'darwin') {
-    candidates.push(path.join(os.homedir(), 'Library', 'Application Support', 'klim', 'marketplace', 'marketplace-cache.yaml'));
-  } else {
-    const configDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-    candidates.push(path.join(configDir, 'klim', 'marketplace', 'marketplace-cache.yaml'));
-  }
+  // Local klim cache (user's machine) — klim stores all config under
+  // ~/.klim regardless of platform.
+  candidates.push(path.join(os.homedir(), '.klim', 'marketplace', 'marketplace-cache.yaml'));
 
   for (const p of candidates) {
     if (fs.existsSync(p)) {

@@ -39,17 +39,17 @@ internal/
                  upgrade.go      `klim upgrade [tool...] [--pack ...]`
                  remove.go       `klim remove  [tool...] [--pack ...]` with klim self-protection
   config/      config.yaml: logging, marketplace URL, performance, UI prefs
-  custompacks/ User-created pack definitions → ~/.config/klim/marketplace/custom-packs.yaml
+  custompacks/ User-created pack definitions → ~/.klim/marketplace/custom-packs.yaml
   detector/    Fallback version detection (Go buildinfo, Windows PE resources)
-  favorites/   Favorites list persistence → ~/.config/klim/favorites/favorites.yaml
+  favorites/   Favorites list persistence → ~/.klim/favorites/favorites.yaml
   fileutil/    Shared file I/O: AtomicWrite, EnsureDir, ReadYAML, WriteYAML
   finder/      PATH scanning, install source detection (brew/winget/scoop/apt/manual)
   logging/     slog structured logging + lumberjack file rotation
   manifest/    YAML schema for export/import manifests + FromRegistryTool converter
-  paths/       Single source of truth for all ~/.config/klim/* paths
+  paths/       Single source of truth for all ~/.klim/* paths
   pkgmgr/      Package manager queries (installed + latest versions)
   registry/    Tool, Instance, PackageIDs, Pack structs; version comparison; SortByName, ToolMap, InstalledSet helpers
-  scancache/   Per-host scan cache: installed/not, paths, versions → ~/.config/klim/cache/scan-cache.yaml
+  scancache/   Per-host scan cache: installed/not, paths, versions → ~/.klim/cache/scan-cache.yaml
   selfupdate/  Self-update from GitHub Releases (download → extract → replace)
   service/     ToolService: composition root wiring catalog + finder + resolver
   share/       Compact token encode/decode for sharing tool lists
@@ -71,7 +71,7 @@ ToolService
 
 **CLI flow:** `svc.LoadAndResolve()` — single call, internal worker pool.
 
-**Marketplace:** individual tool/pack YAML files in `marketplace/` are assembled into a single `marketplace.yaml` by CI and published to the `marketplace` branch. The CLI fetches from `https://raw.githubusercontent.com/nassiharel/klim/marketplace/marketplace.yaml` and caches locally at `~/.config/klim/marketplace-cache.yaml`.
+**Marketplace:** individual tool/pack YAML files in `marketplace/` are assembled into a single `marketplace.yaml` by CI and published to the `marketplace` branch. The CLI fetches from `https://raw.githubusercontent.com/nassiharel/klim/marketplace/marketplace.yaml` and caches locally at `~/.klim/marketplace-cache.yaml`.
 
 ## TUI Tabs
 
@@ -169,7 +169,7 @@ go test -tags=integration -timeout=40m ./internal/marketplace/livecheck/...
 - **`marketplace/` is the single source of truth.** No tool definitions in Go code. Individual YAML files are assembled into `marketplace.yaml` by CI.
 - **Never edit root `marketplace.yaml` directly** — it's auto-generated. Edit files in `marketplace/tools/` and `marketplace/packs/` instead.
 - **Catalog is fetched at runtime**, not embedded. No network + no cache = catalog failure.
-- **Scan cache (`~/.config/klim/cache/scan-cache.yaml`) is user-controlled.** Written after every successful scan; loaded on startup to skip PATH scan + version resolution. Only installed tools are persisted (a missing entry means "not installed"). Invalidated by TUI `r` key or CLI `--refresh` flag. In the TUI, mutating actions (install/upgrade/remove) trigger `startScan` which rescans and rewrites the cache. In the CLI, `klim import` calls `svc.InvalidateScanCache()` after install attempts so later `klim list` / `klim export` runs rescan automatically.
+- **Scan cache (`~/.klim/cache/scan-cache.yaml`) is user-controlled.** Written after every successful scan; loaded on startup to skip PATH scan + version resolution. Only installed tools are persisted (a missing entry means "not installed"). Invalidated by TUI `r` key or CLI `--refresh` flag. In the TUI, mutating actions (install/upgrade/remove) trigger `startScan` which rescans and rewrites the cache. In the CLI, `klim import` calls `svc.InvalidateScanCache()` after install attempts so later `klim list` / `klim export` runs rescan automatically.
 - **`config.yaml` is optional.** `config.Load()` returns defaults if missing; writes defaults on first run.
 - **Version comparison stops at first non-numeric segment.** `"2.53.0.windows.1"` → `[2, 53, 0]`.
 - **`VersionsMatch` handles PE padding** (`1400` ≈ `14`), `CompareVersions` does not.
@@ -182,7 +182,7 @@ go test -tags=integration -timeout=40m ./internal/marketplace/livecheck/...
 
 ### `internal/paths` — All config/data file paths
 
-Single source for every `~/.config/klim/*` path. Never call `os.UserConfigDir()` directly.
+Single source for every `~/.klim/*` path. Never call `os.UserConfigDir()` directly.
 
 ```go
 paths.Config()       // config/config.yaml
@@ -220,7 +220,7 @@ manifest.FromRegistryTool(tool)  // registry.Tool → manifest.Tool (with versio
 
 ## Favorites Feature
 
-Favorites persist at `~/.config/klim/favorites/favorites.yaml` (simple list of tool names). The `internal/favorites` package provides `Load`, `Save`, `Add`, `Remove`, `Toggle`, `Contains`, `Set`.
+Favorites persist at `~/.klim/favorites/favorites.yaml` (simple list of tool names). The `internal/favorites` package provides `Load`, `Save`, `Add`, `Remove`, `Toggle`, `Contains`, `Set`.
 
 TUI integration:
 - `*` key toggles favorite on any tool-list tab (Installed, Favorites, Updates, Discover)

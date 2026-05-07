@@ -131,7 +131,7 @@ security:              # observational; never gates apply
    the report as `skipped` rather than failing.
 2. **Favorites** — additive merge; never removes existing favorites.
 3. **Custom packs** — additive; existing packs with the same name
-   are kept; to replace one, edit it out of `~/.config/klim/marketplace/custom-packs.yaml` (or use the TUI's My Packs tab to delete) and re-run apply.
+   are kept; to replace one, edit it out of `~/.klim/marketplace/custom-packs.yaml` (or use the TUI's My Packs tab to delete) and re-run apply.
 
 Cross-OS gaps surface as informational entries, never as errors.
 

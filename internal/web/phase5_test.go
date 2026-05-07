@@ -232,7 +232,7 @@ func TestPageForYou_EmptyWhenNothingInstalled(t *testing.T) {
 }
 
 func TestPageProjects_EmptyState(t *testing.T) {
-	// LoadProjects reads ~/.config/klim/projects.yaml. On a fresh test
+	// LoadProjects reads ~/.klim/projects.yaml. On a fresh test
 	// host that file shouldn't exist, but be tolerant: the page must
 	// render without erroring whether the registry is empty or has
 	// real entries.

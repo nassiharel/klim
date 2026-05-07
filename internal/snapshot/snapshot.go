@@ -1,6 +1,6 @@
 // Package snapshot manages environment snapshots and named profiles.
-// Snapshots are timestamped manifests stored under ~/.config/klim/snapshots/.
-// Profiles are named snapshots stored under ~/.config/klim/profiles/.
+// Snapshots are timestamped manifests stored under ~/.klim/snapshots/.
+// Profiles are named snapshots stored under ~/.klim/profiles/.
 package snapshot
 
 import (

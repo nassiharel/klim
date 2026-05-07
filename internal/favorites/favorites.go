@@ -1,5 +1,5 @@
 // Package favorites manages the user's favorites list stored
-// in ~/.config/klim/favorites/favorites.yaml. Each entry is a tool name.
+// in ~/.klim/favorites/favorites.yaml. Each entry is a tool name.
 package favorites
 
 import (

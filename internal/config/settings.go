@@ -194,7 +194,7 @@ func AllSettings() []Setting {
 		},
 		{
 			Label: "Log to File", Key: "log_file", Type: SettingBool,
-			Help:    "Write structured logs to ~/.config/klim/logs/klim.log.",
+			Help:    "Write structured logs to ~/.klim/logs/klim.log.",
 			GetBool: func(c *Config) bool { return c.Logging.File },
 			SetBool: func(c *Config, v bool) { c.Logging.File = v },
 		},

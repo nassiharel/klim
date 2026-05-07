@@ -13,7 +13,7 @@
 
 <section class="card">
   <h2>Save current toolchain</h2>
-  <p>Write your installed tools to <code>~/.config/klim/backups/&lt;name&gt;.yaml</code> for later restore.</p>
+  <p>Write your installed tools to <code>~/.klim/backups/&lt;name&gt;.yaml</code> for later restore.</p>
   <form method="POST" action="/backup/save" class="inline-form">
     <input type="text" name="name" placeholder="backup name (e.g. dev-laptop-2026-05)" pattern="[A-Za-z0-9][A-Za-z0-9._-]*" maxlength="64" required>
     <button class="btn-primary" type="submit">Save</button>
@@ -43,7 +43,7 @@
 {{if $d.Backups}}
 <section class="card">
   <h2>My Backups</h2>
-  <p class="muted">Saved backup files in <code>~/.config/klim/backups/</code>.</p>
+  <p class="muted">Saved backup files in <code>~/.klim/backups/</code>.</p>
   <table class="grid">
     <thead>
       <tr><th>File</th><th>Size</th><th>Modified</th><th>Actions</th></tr>

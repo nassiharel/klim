@@ -98,7 +98,7 @@ CLI commands call `svc.LoadAndResolve()` (or the cached variant) which handles e
 
 ### Shared Utilities
 
-**`internal/paths`** — Single source for all `~/.config/klim/*` paths:
+**`internal/paths`** — Single source for all `~/.klim/*` paths:
 ```go
 paths.Config()       // config/config.yaml
 paths.Favorites()    // favorites/favorites.yaml

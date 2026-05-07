@@ -11,9 +11,9 @@ import (
 func TestAddLoadDelete(t *testing.T) {
 	// Redirect storage to temp dir.
 	tmp := t.TempDir()
-	t.Setenv("AppData", tmp)         // Windows
-	t.Setenv("XDG_CONFIG_HOME", tmp) // Linux
-	t.Setenv("HOME", tmp)            // macOS fallback
+	t.Setenv("USERPROFILE", tmp) // Windows
+	t.Setenv("HOME", tmp)        // Linux
+	t.Setenv("HOME", tmp)        // macOS fallback
 
 	pack := registry.Pack{
 		Name:        "test-pack",
@@ -82,8 +82,8 @@ func TestAddLoadDelete(t *testing.T) {
 
 func TestExists(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("AppData", tmp)
-	t.Setenv("XDG_CONFIG_HOME", tmp)
+	t.Setenv("USERPROFILE", tmp)
+	t.Setenv("HOME", tmp)
 	t.Setenv("HOME", tmp)
 
 	exists, err := Exists("nope")
@@ -103,8 +103,8 @@ func TestExists(t *testing.T) {
 
 func TestLoadEmptyFile(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("AppData", tmp)
-	t.Setenv("XDG_CONFIG_HOME", tmp)
+	t.Setenv("USERPROFILE", tmp)
+	t.Setenv("HOME", tmp)
 	t.Setenv("HOME", tmp)
 
 	// No file → empty slice.
@@ -119,8 +119,8 @@ func TestLoadEmptyFile(t *testing.T) {
 
 func TestDisplayNameDefault(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("AppData", tmp)
-	t.Setenv("XDG_CONFIG_HOME", tmp)
+	t.Setenv("USERPROFILE", tmp)
+	t.Setenv("HOME", tmp)
 	t.Setenv("HOME", tmp)
 
 	_ = Add(registry.Pack{Name: "no-display", ToolNames: []string{"git"}})
@@ -132,8 +132,8 @@ func TestDisplayNameDefault(t *testing.T) {
 
 func TestStoragePath(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("AppData", tmp)
-	t.Setenv("XDG_CONFIG_HOME", tmp)
+	t.Setenv("USERPROFILE", tmp)
+	t.Setenv("HOME", tmp)
 	t.Setenv("HOME", tmp)
 
 	path, err := StoragePath()
@@ -147,8 +147,8 @@ func TestStoragePath(t *testing.T) {
 
 func TestDeleteNonExistent(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("AppData", tmp)
-	t.Setenv("XDG_CONFIG_HOME", tmp)
+	t.Setenv("USERPROFILE", tmp)
+	t.Setenv("HOME", tmp)
 	t.Setenv("HOME", tmp)
 
 	// Deleting a pack that doesn't exist should not error.

@@ -23,7 +23,7 @@ import (
 // every piece of state the TUI's Backup tab exposes today: a manifest
 // preview of the current toolchain, a share token, the file path the
 // manifest would be written to on disk, and the list of saved
-// backups under ~/.config/klim/backups/.
+// backups under ~/.klim/backups/.
 type backupView struct {
 	Tools      []manifest.Tool
 	Count      int
@@ -39,7 +39,7 @@ type backupView struct {
 	FlashMsg   string
 }
 
-// savedBackup describes one *.yaml file under ~/.config/klim/backups/.
+// savedBackup describes one *.yaml file under ~/.klim/backups/.
 // The web UI lets the user download any of them as a fresh manifest.
 type savedBackup struct {
 	Name        string // file name without path
@@ -75,7 +75,7 @@ func (s *Server) pageBackup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// loadSavedBackups lists *.yaml files under ~/.config/klim/backups/.
+// loadSavedBackups lists *.yaml files under ~/.klim/backups/.
 // Missing dir is fine — that's the empty case. We sort newest-first so
 // the most recent backup is at the top.
 func loadSavedBackups() ([]savedBackup, error) {
@@ -113,7 +113,7 @@ func loadSavedBackups() ([]savedBackup, error) {
 	return out, nil
 }
 
-// downloadSavedBackup serves the raw file under ~/.config/klim/backups/
+// downloadSavedBackup serves the raw file under ~/.klim/backups/
 // as a YAML attachment. Path-escapes are validated to prevent
 // directory traversal — only filenames matching the listing logic are
 // allowed through.

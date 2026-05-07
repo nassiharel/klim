@@ -9,9 +9,9 @@ import (
 func setup(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("APPDATA", dir)         // Windows
-	t.Setenv("XDG_CONFIG_HOME", dir) // Linux
-	t.Setenv("HOME", dir)            // macOS fallback
+	t.Setenv("USERPROFILE", dir) // Windows
+	t.Setenv("HOME", dir)        // Linux
+	t.Setenv("HOME", dir)        // macOS fallback
 }
 
 func TestLoadEmpty(t *testing.T) {

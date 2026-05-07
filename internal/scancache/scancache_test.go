@@ -17,9 +17,9 @@ func withTempCache(t *testing.T) {
 	tmp := t.TempDir()
 	switch {
 	case isWindows():
-		t.Setenv("APPDATA", tmp)
+		t.Setenv("USERPROFILE", tmp)
 	default:
-		t.Setenv("XDG_CONFIG_HOME", tmp)
+		t.Setenv("HOME", tmp)
 		t.Setenv("HOME", tmp)
 	}
 }
