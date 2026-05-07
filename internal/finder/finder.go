@@ -80,17 +80,23 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 		// any PATH dir and would otherwise be invisible in shells,
 		// services, or CI environments launching klim with a stripped
 		// PATH. We suppress ErrEmptyPATH only when Phase 5 actually
-		// resolved instances — service callers discard the tool slice
+		// added an instance — service callers discard the tool slice
 		// on error, so signalling "empty PATH" would lose those
-		// instances. When Phase 5 also turned up nothing, the empty-
-		// PATH error is the more useful signal.
-		scanExtraInstallRoots(ctx, tools)
-		for _, t := range tools {
-			if len(t.Instances) > 0 {
-				slog.Info("PATH was empty; Phase 5 fallback recovered installs",
-					"tools_total", len(tools))
-				return nil
-			}
+		// instances. We track the addition count rather than counting
+		// non-empty Instances so a caller that pre-populated the slice
+		// (e.g. tests, RefreshTool replays) doesn't accidentally
+		// suppress ErrEmptyPATH when Phase 5 found nothing new.
+		added := scanExtraInstallRoots(ctx, tools)
+		// Honour cancellation explicitly: it's strictly more
+		// informative than ErrEmptyPATH and matches the non-empty
+		// PATH branch's behaviour.
+		if ctx != nil && ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if added > 0 {
+			slog.Info("PATH was empty; Phase 5 fallback recovered installs",
+				"tools_total", len(tools), "added", added)
+			return nil
 		}
 		return ErrEmptyPATH
 	}
@@ -231,8 +237,9 @@ func (pf *PathFinder) FindAll(ctx context.Context, tools []registry.Tool) error 
 	// (Freelens, etc.) live under %LOCALAPPDATA%\Programs\<App>\<App>.exe
 	// and never expose a binary on PATH, so PATH scanning alone leaves
 	// them invisible to klim. extraInstallRoots() returns nothing on
-	// Linux/macOS, making this a no-op there.
-	scanExtraInstallRoots(ctx, tools)
+	// Linux/macOS, making this a no-op there. Returned count is ignored
+	// here because Phase 5 instances are surfaced via tools directly.
+	_ = scanExtraInstallRoots(ctx, tools)
 
 	found := 0
 	for _, t := range tools {
@@ -489,12 +496,22 @@ func detectSource(path string) registry.InstallSource {
 // by detectSource so the resolver picks the right package manager
 // (e.g. winget for paths under %LOCALAPPDATA%\Programs).
 //
+// Returns the number of instances Phase 5 appended so callers can
+// distinguish "Phase 5 found something" from "tools already had
+// instances from earlier phases".
+//
 // This is intentionally narrow:
 //   - only runs for tools the regular PATH/LookPath phases missed
 //   - only walks roots curated as "winget-user-scope friendly"
 //   - bails out cheaply when a root doesn't exist
-func scanExtraInstallRoots(ctx context.Context, tools []registry.Tool) {
-	scanExtraInstallRootsAt(ctx, tools, extraInstallRoots())
+// extraInstallRootsFn is the function Phase 5 calls to discover the
+// list of extra install roots. Production points at extraInstallRoots
+// (defined per-OS in path_*.go); tests swap it out to inject a fake
+// root so the FindAll empty-PATH branch can be exercised end-to-end.
+var extraInstallRootsFn = extraInstallRoots
+
+func scanExtraInstallRoots(ctx context.Context, tools []registry.Tool) int {
+	return scanExtraInstallRootsAt(ctx, tools, extraInstallRootsFn())
 }
 
 // onSubdirVisited is a test hook that fires for every subdir Phase 5
@@ -521,12 +538,12 @@ var onSubdirVisited func(string)
 // so the priority distinction is theoretical here, while reading every
 // root up-front purely to honour it would defeat the early-exit
 // guarantee callers (and reviewers) reasonably expect.
-func scanExtraInstallRootsAt(ctx context.Context, tools []registry.Tool, roots []string) {
+func scanExtraInstallRootsAt(ctx context.Context, tools []registry.Tool, roots []string) int {
 	if ctx != nil && ctx.Err() != nil {
-		return
+		return 0
 	}
 	if len(roots) == 0 {
-		return
+		return 0
 	}
 
 	pending := make([]int, 0, len(tools))
@@ -536,16 +553,17 @@ func scanExtraInstallRootsAt(ctx context.Context, tools []registry.Tool, roots [
 		}
 	}
 	if len(pending) == 0 {
-		return
+		return 0
 	}
 
+	added := 0
 walk:
 	for _, root := range roots {
 		if root == "" {
 			continue
 		}
 		if ctx != nil && ctx.Err() != nil {
-			return
+			return added
 		}
 		rootEntries, err := os.ReadDir(root)
 		if err != nil {
@@ -556,7 +574,7 @@ walk:
 				continue
 			}
 			if ctx != nil && ctx.Err() != nil {
-				return
+				return added
 			}
 			sub := filepath.Join(root, re.Name())
 			if onSubdirVisited != nil {
@@ -609,6 +627,7 @@ walk:
 							Source: detectSource(resolved),
 						})
 						matched = true
+						added++
 						break
 					}
 				}
@@ -623,4 +642,5 @@ walk:
 			}
 		}
 	}
+	return added
 }

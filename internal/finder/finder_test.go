@@ -314,14 +314,13 @@ func usrBinSource() registry.InstallSource {
 	return registry.SourceManual
 }
 
-// TestFindAll_EmptyPATHRunsPhase5 verifies that when PATH is empty but
-// extraInstallRoots still has Phase 5 hits (e.g. winget-installed GUI
-// apps under %LOCALAPPDATA%\Programs in CI/service environments), the
-// finder surfaces those instances rather than dropping them with a
-// hard ErrEmptyPATH. Tested by patching extraInstallRoots indirectly
-// through a temp directory injected via a hook.
+// TestFindAll_EmptyPATHRunsPhase5 verifies that when PATH is empty,
+// FindAll still runs Phase 5 — winget GUI apps under
+// %LOCALAPPDATA%\Programs (Freelens, etc.) must remain visible in
+// stripped-PATH environments (services, scheduled tasks, some CI).
+// We swap extraInstallRootsFn to inject a temp root so the test
+// works on every OS without depending on real install paths.
 func TestFindAll_EmptyPATHRunsPhase5(t *testing.T) {
-	// Set up a fake extra root and force it via the test hook.
 	root := t.TempDir()
 	dir := filepath.Join(root, "Freelens")
 	if err := os.Mkdir(dir, 0o755); err != nil {
@@ -331,16 +330,76 @@ func TestFindAll_EmptyPATHRunsPhase5(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	// Drive the empty-PATH branch by directly invoking the helper —
-	// FindAll's own logic on Windows would consult the registry too,
-	// which we cannot stub cleanly. The relevant guarantee is that
-	// scanExtraInstallRootsAt continues to find tools when given a
-	// valid root, which is exercised here under empty PATH.
+	prev := extraInstallRootsFn
+	extraInstallRootsFn = func() []string { return []string{root} }
+	t.Cleanup(func() { extraInstallRootsFn = prev })
+
+	// Empty PATH must not short-circuit Phase 5 entirely. On Windows
+	// the registry PATH may still feed pathDirectories(), so we can't
+	// assert a clean ErrEmptyPATH path universally — but we *can*
+	// assert that the freelens instance is recovered either way, which
+	// is the user-visible guarantee.
 	t.Setenv("PATH", "")
 	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
-	scanExtraInstallRootsAt(context.Background(), tools, []string{root})
+	pf := &PathFinder{}
+	err := pf.FindAll(context.Background(), tools)
+	if err != nil && err != ErrEmptyPATH {
+		t.Fatalf("FindAll returned unexpected error: %v", err)
+	}
 	if len(tools[0].Instances) != 1 {
-		t.Fatalf("Phase 5 must run under empty PATH; got instances=%v", tools[0].Instances)
+		t.Fatalf("Phase 5 must surface freelens under empty PATH; got instances=%v err=%v",
+			tools[0].Instances, err)
+	}
+}
+
+// TestFindAll_EmptyPATHReturnsCtxErr verifies that when PATH is empty
+// AND ctx has been cancelled, FindAll surfaces ctx.Err() rather than
+// masking cancellation with ErrEmptyPATH.
+func TestFindAll_EmptyPATHReturnsCtxErr(t *testing.T) {
+	prev := extraInstallRootsFn
+	extraInstallRootsFn = func() []string { return nil }
+	t.Cleanup(func() { extraInstallRootsFn = prev })
+
+	t.Setenv("PATH", "")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	err := (&PathFinder{}).FindAll(ctx, tools)
+	if runtime.GOOS == "windows" {
+		// Windows registry PATH may still populate pathDirectories,
+		// in which case the empty-PATH branch isn't hit. Skip the
+		// strict ctx assertion there — the non-empty branch already
+		// honours ctx via Phase 2/3's existing checks.
+		if err != nil && err != context.Canceled && err != ErrEmptyPATH {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		return
+	}
+	if err != context.Canceled {
+		t.Fatalf("expected ctx.Err()=context.Canceled, got %v", err)
+	}
+}
+
+// TestFindAll_EmptyPATHReturnsErrWhenNothingFound verifies that
+// ErrEmptyPATH still surfaces when PATH is empty AND Phase 5 finds
+// nothing — callers rely on the error to surface a misconfigured env.
+func TestFindAll_EmptyPATHReturnsErrWhenNothingFound(t *testing.T) {
+	prev := extraInstallRootsFn
+	extraInstallRootsFn = func() []string { return []string{t.TempDir()} } // empty dir
+	t.Cleanup(func() { extraInstallRootsFn = prev })
+
+	t.Setenv("PATH", "")
+	tools := []registry.Tool{{Name: "freelens", BinaryNames: []string{"freelens"}}}
+	err := (&PathFinder{}).FindAll(context.Background(), tools)
+	if runtime.GOOS == "windows" {
+		// Same caveat as above — we can't force the empty-PATH branch
+		// reliably on Windows because of registry PATH. Skip strict
+		// assertion there.
+		return
+	}
+	if err != ErrEmptyPATH {
+		t.Fatalf("expected ErrEmptyPATH, got %v", err)
 	}
 }
 
