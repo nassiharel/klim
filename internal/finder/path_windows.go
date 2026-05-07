@@ -2,6 +2,7 @@ package finder
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/sys/windows/registry"
@@ -33,4 +34,23 @@ func registryPATH() string {
 	}
 
 	return strings.Join(parts, string(os.PathListSeparator))
+}
+
+// extraInstallRoots returns Windows directories that commonly host
+// winget-managed GUI applications whose binaries are NOT placed on
+// PATH. These are scanned one level deep as a fallback so tools like
+// Freelens (installed at %LOCALAPPDATA%\Programs\Freelens\Freelens.exe)
+// are still detected.
+//
+// We deliberately exclude the global Program Files directories: they
+// host hundreds of unrelated apps and the false-positive risk is
+// material when a tool name like `bat` or `code` collides with a
+// random vendor binary. %LOCALAPPDATA%\Programs is the per-user
+// winget convention and far less crowded.
+func extraInstallRoots() []string {
+	var roots []string
+	if d := os.Getenv("LOCALAPPDATA"); d != "" {
+		roots = append(roots, filepath.Join(d, "Programs"))
+	}
+	return roots
 }
