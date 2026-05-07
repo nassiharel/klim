@@ -37,10 +37,32 @@
       <!-- Homebrew -->
       <div class="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50">
         <div class="border-b border-slate-800 px-6 py-3">
-          <h3 class="text-sm font-medium text-slate-300">Homebrew</h3>
+          <h3 class="text-sm font-medium text-slate-300">Homebrew (macOS / Linux)</h3>
         </div>
         <div class="p-6">
           <pre class="overflow-x-auto rounded-lg bg-slate-950 p-4 font-mono text-sm text-emerald-300"><code>brew install nassiharel/tap/klim</code></pre>
+        </div>
+      </div>
+
+      <!-- Scoop -->
+      <div class="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50">
+        <div class="border-b border-slate-800 px-6 py-3">
+          <h3 class="text-sm font-medium text-slate-300">Scoop (Windows)</h3>
+        </div>
+        <div class="p-6">
+          <pre class="overflow-x-auto rounded-lg bg-slate-950 p-4 font-mono text-sm text-emerald-300"><code>scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket
+scoop install klim</code></pre>
+        </div>
+      </div>
+
+      <!-- winget -->
+      <div class="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50">
+        <div class="border-b border-slate-800 px-6 py-3">
+          <h3 class="text-sm font-medium text-slate-300">winget (Windows)</h3>
+        </div>
+        <div class="p-6">
+          <pre class="overflow-x-auto rounded-lg bg-slate-950 p-4 font-mono text-sm text-emerald-300"><code>winget install nassiharel.klim</code></pre>
+          <p class="mt-3 text-xs text-slate-500">Each release auto-submits a PR to <code class="text-slate-300">microsoft/winget-pkgs</code>. Available system-wide once moderators merge it (usually within a day).</p>
         </div>
       </div>
 

@@ -9,13 +9,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nassiharel/klim/commits/main"><img src="https://img.shields.io/github/last-commit/nassiharel/klim?style=flat-square" alt="Last commit"></a>
-  <a href="https://github.com/nassiharel/klim/actions"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/klim/ci.yml?style=flat-square" alt="CI"></a>
+  <a href="https://github.com/nassiharel/klim/releases/latest"><img src="https://img.shields.io/github/v/release/nassiharel/klim?style=flat-square&color=brightgreen&label=release" alt="Release"></a>
+  <a href="https://github.com/nassiharel/klim/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/klim/ci.yml?style=flat-square&label=build" alt="CI"></a>
   <a href="https://github.com/nassiharel/klim/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/klim/codeql.yml?style=flat-square&label=CodeQL" alt="CodeQL"></a>
   <a href="https://goreportcard.com/report/github.com/nassiharel/klim"><img src="https://img.shields.io/badge/go%20report-A+-brightgreen?style=flat-square" alt="Go Report Card"></a>
   <a href="https://pkg.go.dev/github.com/nassiharel/klim"><img src="https://img.shields.io/badge/godoc-reference-blue?style=flat-square" alt="Go Reference"></a>
-  <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/nassiharel/klim?style=flat-square&label=go" alt="Go version"></a>
+  <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/nassiharel/klim?style=flat-square&label=go&logo=go&logoColor=white" alt="Go version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/nassiharel/klim?style=flat-square" alt="License"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/nassiharel/klim/stargazers"><img src="https://img.shields.io/github/stars/nassiharel/klim?style=flat-square&color=yellow&label=stars" alt="Stars"></a>
+  <a href="https://github.com/nassiharel/klim/releases"><img src="https://img.shields.io/github/downloads/nassiharel/klim/total?style=flat-square&color=brightgreen&label=downloads" alt="Downloads"></a>
+  <a href="https://github.com/nassiharel/klim/commits/main"><img src="https://img.shields.io/github/last-commit/nassiharel/klim?style=flat-square&label=last%20commit" alt="Last commit"></a>
+  <a href="https://github.com/nassiharel/klim/graphs/contributors"><img src="https://img.shields.io/github/contributors/nassiharel/klim?style=flat-square&color=blue" alt="Contributors"></a>
+  <a href="https://github.com/nassiharel/klim/issues"><img src="https://img.shields.io/github/issues/nassiharel/klim?style=flat-square" alt="Open issues"></a>
+  <a href="https://github.com/nassiharel/klim/blob/main/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs welcome"></a>
+  <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=flat-square" alt="Platforms">
+  <img src="https://img.shields.io/badge/TUI-Bubbletea-FFB6C1?style=flat-square" alt="Built with Bubbletea">
 </p>
 
 ---
@@ -29,14 +40,24 @@ Klim is a productivity booster for dev tools: a deterministic, cross-platform la
 ## Quick install
 
 ```bash
-# macOS / Linux
+# macOS / Linux — script
 curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
 
-# Windows PowerShell
+# Windows PowerShell — script
 irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 
-# Homebrew
+# Homebrew (macOS / Linux)
 brew install nassiharel/tap/klim
+
+# Scoop (Windows)
+scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket
+scoop install klim
+
+# winget (Windows — once the Microsoft moderators merge the auto-submitted PR)
+winget install nassiharel.klim
+
+# Go install (any OS with Go 1.25+)
+go install github.com/nassiharel/klim/cmd/klim@latest
 ```
 
 Launch the interactive TUI:
