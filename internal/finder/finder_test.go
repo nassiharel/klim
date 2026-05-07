@@ -324,10 +324,7 @@ func TestScanExtraInstallRoots(t *testing.T) {
 	if err := os.Mkdir(freelensDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	binName := "Freelens"
-	if runtime.GOOS == "windows" {
-		binName += ".exe"
-	}
+	binName := "freelens" + exeSuffix()
 	freelensBin := filepath.Join(freelensDir, binName)
 	if err := os.WriteFile(freelensBin, []byte("\x00"), 0o755); err != nil {
 		t.Fatalf("write bin: %v", err)
