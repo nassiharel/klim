@@ -184,6 +184,6 @@ release:
     **Scoop**: `scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket`, then `scoop install klim`
     **winget**: `winget install nassiharel.klim` (after Microsoft moderators merge the auto-submitted PR)
     **Go**: `go install github.com/nassiharel/klim/cmd/klim@v{{ .Version }}`
-    **Debian/Ubuntu**: `sudo dpkg -i klim_{{ .Version }}_linux_amd64.deb`
-    **RPM**: `sudo rpm -i klim_{{ .Version }}_linux_amd64.rpm`
+    **Debian/Ubuntu**: `sudo dpkg -i klim_{{ .Version }}_linux_<arch>.deb` (`<arch>` is `amd64` or `arm64`)
+    **RPM**: `sudo rpm -i klim_{{ .Version }}_linux_<arch>.rpm` (`<arch>` is `amd64` or `arm64`)
     **Binary**: Download from the assets below
