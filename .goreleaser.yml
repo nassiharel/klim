@@ -66,12 +66,71 @@ brews:
     directory: Formula
     homepage: https://github.com/nassiharel/klim
     description: >-
-      Deterministic developer toolchains across local machines, teams, CI, and agents.
+      Productivity booster for dev tools — discover, standardise, automate, audit toolchains.
     license: MIT
     install: |
       bin.install "klim"
     test: |
       system bin/"klim", "version"
+
+# Scoop bucket: Windows users add the bucket once and `scoop install klim`
+# from then on. Manifest is written to nassiharel/scoop-bucket on every
+# release; the SCOOP_TAP_TOKEN secret needs Contents: read & write on
+# that bucket repo.
+scoops:
+  - repository:
+      owner: nassiharel
+      name: scoop-bucket
+      token: "{{ .Env.SCOOP_TAP_TOKEN }}"
+    directory: bucket
+    homepage: https://github.com/nassiharel/klim
+    description: >-
+      Productivity booster for dev tools — discover, standardise, automate, audit toolchains.
+    license: MIT
+
+# winget-pkgs PR: GoReleaser pushes a feature branch to the personal
+# fork (nassiharel/winget-pkgs) and opens a PR back to
+# microsoft/winget-pkgs:master. The WINGET_PAT secret needs Contents +
+# Pull requests: read & write on the fork.
+winget:
+  - name: klim
+    publisher: nassiharel
+    publisher_url: https://github.com/nassiharel
+    publisher_support_url: https://github.com/nassiharel/klim/issues
+    package_identifier: nassiharel.klim
+    homepage: https://github.com/nassiharel/klim
+    short_description: >-
+      Productivity booster for dev tools — discover, standardise, automate, audit toolchains.
+    description: |
+      klim is a productivity booster for dev tools: a deterministic, cross-platform
+      layer for discovering, standardising, securing, and automating the tools every
+      project depends on. It keeps native package managers in charge of installation
+      while giving humans, teams, CI, and AI agents the same portable environment
+      contracts and predictable operations.
+    license: MIT
+    license_url: https://github.com/nassiharel/klim/blob/main/LICENSE
+    copyright: Copyright (c) 2026 Nassi Harel
+    release_notes_url: https://github.com/nassiharel/klim/releases/tag/v{{ .Version }}
+    tags:
+      - cli
+      - developer-tools
+      - package-manager
+      - devops
+      - productivity
+    repository:
+      owner: nassiharel
+      name: winget-pkgs
+      branch: "klim-{{ .Version }}"
+      token: "{{ .Env.WINGET_PAT }}"
+      git:
+        url: "https://x-access-token:{{ .Env.WINGET_PAT }}@github.com/nassiharel/winget-pkgs.git"
+      pull_request:
+        enabled: true
+        draft: false
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
 
 sboms:
   - artifacts: archive
