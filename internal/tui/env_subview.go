@@ -269,6 +269,18 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Refresh: rebuild the local profile (e.g. after install/
 		// upgrade outside the sub-view changed the toolset).
 		if m.envState == envViewIdle {
+			// Gate on phaseDone — buildEnvProfileCmd calls
+			// LoadAndResolveCached, which on a cold cache will
+			// kick off a second full PATH+version scan in
+			// parallel with the in-flight initial scan and make
+			// the UI feel stuck. The deferred-build path in
+			// switchToTabByNumber already auto-triggers the
+			// build when the initial scan finishes, so there's
+			// nothing for the user to do here except wait.
+			if m.phase < phaseDone {
+				m.statusMsg = "Still scanning — env profile will build when scan finishes"
+				return m, nil
+			}
 			m.envProfile = nil
 			m.envToken = ""
 			m.envError = ""

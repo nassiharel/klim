@@ -305,7 +305,9 @@ type Model struct {
 	myBackupsCursor  int
 	myBackupFiles    []backupFileInfo
 
-	// Env Profile state (Backup tab → Env Profile sub-view).
+	// Env Profile state (My Profile tab — formerly hosted under
+	// Backup as a sub-view; the apply pipeline still hands off to
+	// the Backup import progress UI for per-tool installs).
 	viewingEnv          bool            // true = env sub-view is active
 	envState            string          // envViewIdle / envViewInputOpen / ...
 	envProfile          *envid.Profile  // locally-built profile (nil during build)
