@@ -256,12 +256,32 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	case "d":
+		// Diff needs the local profile to compare against — block
+		// until phaseDone so we don't have to fail with "local
+		// profile not built yet" mid-flow, and so the comparison
+		// reflects the *complete* installed set rather than a
+		// partial one.
 		if m.envState == envViewIdle {
+			if m.phase < phaseDone {
+				m.statusMsg = "Still scanning — diff is available once scan finishes"
+				return m, nil
+			}
 			cmd := (&m).startEnvInput(envViewInputDiff)
 			return m, cmd
 		}
 	case "a":
+		// Apply ultimately runs buildEnvApplyPlanCmd → svc.ScanOnly,
+		// which would kick off a second PATH scan in parallel with
+		// the in-flight initial scan and produce the same "UI feels
+		// stuck" symptom the deferred-build path avoids. Block at
+		// idle until phaseDone so users can't accidentally trigger
+		// the parallel scan even by typing the verb during the
+		// initial load.
 		if m.envState == envViewIdle {
+			if m.phase < phaseDone {
+				m.statusMsg = "Still scanning — apply is available once scan finishes"
+				return m, nil
+			}
 			cmd := (&m).startEnvInput(envViewInputApply)
 			return m, cmd
 		}
