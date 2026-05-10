@@ -121,12 +121,71 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyEnvInput(msg)
 	}
 
+	// Quit shortcuts always take priority — the env sub-view is
+	// otherwise modal, and on the dedicated My Profile tab there is
+	// no parent menu to "Esc back to", so we'd lock the user in
+	// without these.
 	switch msg.String() {
-	case "esc", "q", "backspace":
+	case "ctrl+c":
+		mp := &m
+		mp.quitting = true
+		return *mp, tea.Quit
+	}
+
+	// Allow parent-tab switching keys to escape the env sub-view —
+	// the My Profile tab is dedicated to env, and the user must be
+	// able to leave it via number keys or Tab without first hitting
+	// Esc.
+	switch msg.String() {
+	case "1", "2", "3", "4", "5", "6", "7", "8":
+		mp := &m
+		// Leaving Profile — drop out of env sub-view.
+		if mp.activeTab == tabProfile {
+			mp.viewingEnv = false
+		}
+		if handled, cmd := mp.switchToTabByNumber(msg.String()); handled {
+			return *mp, cmd
+		}
+		return m, nil
+	case "tab", "right":
+		if m.activeTab == tabProfile {
+			m.viewingEnv = false
+		}
+		next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
+		return m.gotoParentTab(next)
+	case "shift+tab", "left":
+		if m.activeTab == tabProfile {
+			m.viewingEnv = false
+		}
+		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
+		return m.gotoParentTab(prev)
+	}
+
+	switch msg.String() {
+	case "q":
+		// On the dedicated Profile tab `q` should quit, matching
+		// the behaviour on every other tab. (Inside the Backup
+		// sub-view, `q` is treated as "back" because Backup hosts
+		// the env sub-view as a modal — but Profile *is* the env
+		// sub-view, so there's no "back" target.)
+		if m.activeTab == tabProfile && m.envState == envViewIdle {
+			m.quitting = true
+			return m, tea.Quit
+		}
+		// Fall through to the back-out handler below for the
+		// Backup-hosted case.
+		fallthrough
+	case "esc", "backspace":
 		// Layered back-out: result views go back to the landing
-		// page; the landing page closes the sub-view entirely.
+		// page; the landing page closes the sub-view entirely
+		// (or, on the dedicated Profile tab, stays put — there is
+		// no "back" target since Profile IS the env sub-view).
 		switch m.envState {
 		case envViewIdle:
+			if m.activeTab == tabProfile {
+				// No-op: Profile tab has no parent menu.
+				return m, nil
+			}
 			m.viewingEnv = false
 			m.envState = envViewIdle
 			m.statusMsg = ""

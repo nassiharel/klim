@@ -83,7 +83,7 @@ func (m Model) renderView() string {
 
 		footer := m.renderHelp()
 		footerRows := m.footerHeight()
-		const cfgHeaderRows = 4 // title + tabs + rule + blank
+		cfgHeaderRows := 4 + m.subtabRows() // title + tabs + rule + blank (+ subtab strip)
 		const cfgMinGap = 1
 		visibleRows := m.height - cfgHeaderRows - footerRows - cfgMinGap
 		if visibleRows < 5 {
@@ -121,7 +121,7 @@ func (m Model) renderView() string {
 		// footer, and 1-line gap between body and footer.
 		footer := m.renderHelp()
 		footerRows := m.footerHeight()
-		const headerRows = 4 // title + tabs + rule + blank
+		headerRows := 4 + m.subtabRows() // title + tabs + rule + blank (+ subtab strip)
 		const minGap = 1
 		visibleRows := m.height - headerRows - footerRows - minGap
 		if visibleRows < 5 {
@@ -159,7 +159,7 @@ func (m Model) renderView() string {
 
 		footer := m.renderHelp()
 		footerRows := m.footerHeight()
-		const headerRows = 4 // title + tabs + rule + blank
+		headerRows := 4 + m.subtabRows() // title + tabs + rule + blank (+ subtab strip)
 		const minGap = 1
 		visibleRows := m.height - headerRows - footerRows - minGap
 		if visibleRows < 5 {
@@ -186,6 +186,12 @@ func (m Model) renderView() string {
 			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
 		}
 		return m.layoutWithFooter(body.String(), footer)
+	}
+
+	// My Profile tab — render the env sub-view directly.
+	if m.activeTab == tabProfile {
+		body.WriteString(m.renderEnvSubview())
+		return m.layoutWithFooter(body.String(), m.renderHelp())
 	}
 
 	// Search bar.
@@ -219,7 +225,7 @@ func (m Model) renderView() string {
 	footer := m.renderHelp()
 	footerRows := m.footerHeight()
 	// Overhead: title(1) + tabs(1) + rule(1) + blank(1) + search(1) + blank(1) + gap(1) + footer.
-	overhead := 7 + footerRows
+	overhead := 7 + footerRows + m.subtabRows()
 	if m.activeTab == tabDiscover {
 		overhead += 2 // sub-tab bar + blank line
 	}
@@ -392,25 +398,43 @@ func (m Model) renderTitleBar() string {
 	return "  " + title + "  " + summaryStyle.Render(summary)
 }
 
+// subtabRows returns the number of additional header rows occupied by
+// the parent-tab subtab strip (0 when no subtab strip is shown for the
+// active parent). My Tools and My Profile each render a single-row
+// subtab strip beneath the main tab bar's rule.
+func (m Model) subtabRows() int {
+	if isMyToolsTab(m.activeTab) {
+		return 1
+	}
+	if m.activeTab == tabProfile {
+		return 1
+	}
+	return 0
+}
+
+// renderTabBar draws the parent tab labels. The three My Tools subtabs
+// (Installed, Updates, Favorites) collapse into a single "My Tools"
+// label; the active style is applied when any of them is the active
+// tab. A second strip below shows the active parent's subtabs (if any).
 func (m Model) renderTabBar() string {
-	tabs := []struct {
+	parents := []struct {
 		label string
-		idx   int
+		idx   int // representative tab constant
 	}{
-		{"Installed", tabInstalled},
-		{"Favorites", tabFavorites},
-		{"Updates", tabUpdates},
+		{"My Tools", tabInstalled},
 		{"Marketplace", tabDiscover},
-		{"Backup", tabBackup},
 		{"Project", tabProject},
 		{"Dashboard", tabDashboard},
-		{"Config", tabConfig},
+		{"My Profile", tabProfile},
 		{"Security", tabDoctor},
+		{"Backup", tabBackup},
+		{"Config", tabConfig},
 	}
 
+	curParent := parentIndex(m.activeTab)
 	var parts []string
-	for _, tab := range tabs {
-		if tab.idx == m.activeTab {
+	for i, tab := range parents {
+		if i == curParent {
 			parts = append(parts, activeTabStyle.Render(tab.label))
 		} else {
 			parts = append(parts, inactiveTabStyle.Render(tab.label))
@@ -422,7 +446,35 @@ func (m Model) renderTabBar() string {
 	if ruleLen < 1 {
 		ruleLen = 1
 	}
-	return tabLine + "\n  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
+	bar := tabLine + "\n  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
+
+	// My Tools subtab strip.
+	if isMyToolsTab(m.activeTab) {
+		subs := []struct {
+			label string
+			tab   int
+		}{
+			{"Installed", tabInstalled},
+			{"Updates", tabUpdates},
+			{"Favorites", tabFavorites},
+		}
+		var subParts []string
+		for _, s := range subs {
+			if s.tab == m.activeTab {
+				subParts = append(subParts, activeTabStyle.Render(s.label))
+			} else {
+				subParts = append(subParts, inactiveTabStyle.Render(s.label))
+			}
+		}
+		bar += "\n  " + strings.Join(subParts, "")
+	}
+
+	// My Profile subtab strip.
+	if m.activeTab == tabProfile {
+		bar += "\n  " + activeTabStyle.Render("Env Profile")
+	}
+
+	return bar
 }
 
 // --- Search Bar ---

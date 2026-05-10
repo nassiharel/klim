@@ -42,8 +42,69 @@ const (
 	tabDashboard
 	tabConfig
 	tabDoctor
+	tabProfile
 	tabCount // total number of tabs, used for modular cycling
 )
+
+// myToolsSubOrder lists the My Tools subtabs in display order (Installed,
+// Updates, Favorites). Left/Right arrow cycling within My Tools uses this
+// order.
+var myToolsSubOrder = []int{tabInstalled, tabUpdates, tabFavorites}
+
+// parentTabOrder lists the parent tabs in display order. Tab/Shift-Tab
+// cycle through these, not through every individual sub-tab. The first
+// entry of My Tools (tabInstalled) acts as the parent's default subtab.
+var parentTabOrder = []int{
+	tabInstalled, // My Tools (parent — default subtab)
+	tabDiscover,  // Marketplace
+	tabProject,
+	tabDashboard,
+	tabProfile, // My Profile
+	tabDoctor,  // Security
+	tabBackup,
+	tabConfig,
+}
+
+// parentIndex returns the index into parentTabOrder of the parent tab
+// the given tab belongs to. The three My Tools subtabs all map to the
+// same parent index.
+func parentIndex(tab int) int {
+	switch tab {
+	case tabInstalled, tabUpdates, tabFavorites:
+		return 0
+	case tabDiscover:
+		return 1
+	case tabProject:
+		return 2
+	case tabDashboard:
+		return 3
+	case tabProfile:
+		return 4
+	case tabDoctor:
+		return 5
+	case tabBackup:
+		return 6
+	case tabConfig:
+		return 7
+	}
+	return 0
+}
+
+// isMyToolsTab reports whether tab is one of the three My Tools subtabs.
+func isMyToolsTab(tab int) bool {
+	return tab == tabInstalled || tab == tabUpdates || tab == tabFavorites
+}
+
+// myToolsSubIndex returns the subtab index (0..2) for a My Tools subtab,
+// or -1 if tab is not a My Tools subtab.
+func myToolsSubIndex(tab int) int {
+	for i, t := range myToolsSubOrder {
+		if t == tab {
+			return i
+		}
+	}
+	return -1
+}
 
 // Marketplace sub-tabs.
 const (
@@ -61,18 +122,18 @@ const (
 	phaseDone      = 2 // all tools resolved
 )
 
-// Backup tab menu indices.
+// Backup tab menu indices. The Env Profile entry was moved out of the
+// Backup tab into the dedicated My Profile tab, so the indices skip it.
 const (
 	backupMenuExport     = 0
 	backupMenuImport     = 1
 	backupMenuShare      = 2
 	backupMenuOpenToken  = 3
-	backupMenuEnv        = 4
-	backupMenuTrail      = 5
-	backupMenuCreatePack = 6
-	backupMenuMyPacks    = 7
-	backupMenuMyBackups  = 8
-	backupMenuCount      = 9
+	backupMenuTrail      = 4
+	backupMenuCreatePack = 5
+	backupMenuMyPacks    = 6
+	backupMenuMyBackups  = 7
+	backupMenuCount      = 8
 )
 
 // Sentinel values.
@@ -411,11 +472,115 @@ func tabFromName(name string) int {
 		return tabDashboard
 	case "config":
 		return tabConfig
-	case "doctor":
+	case "doctor", "security":
 		return tabDoctor
+	case "profile", "my-profile", "myprofile":
+		return tabProfile
 	default:
 		return tabInstalled
 	}
+}
+
+// gotoParentTab is a tiny wrapper around switchToTabByNumber that maps a
+// parent-tab constant to its number key, so Tab/Shift-Tab can reuse the
+// same entry-side-effects (cursor reset, projectLoadListCmd, etc).
+func (m *Model) gotoParentTab(parent int) (tea.Model, tea.Cmd) {
+	switch parent {
+	case tabInstalled, tabUpdates, tabFavorites:
+		_, cmd := m.switchToTabByNumber("1")
+		return m, cmd
+	case tabDiscover:
+		_, cmd := m.switchToTabByNumber("2")
+		return m, cmd
+	case tabProject:
+		_, cmd := m.switchToTabByNumber("3")
+		return m, cmd
+	case tabDashboard:
+		_, cmd := m.switchToTabByNumber("4")
+		return m, cmd
+	case tabProfile:
+		_, cmd := m.switchToTabByNumber("5")
+		return m, cmd
+	case tabDoctor:
+		_, cmd := m.switchToTabByNumber("6")
+		return m, cmd
+	case tabBackup:
+		_, cmd := m.switchToTabByNumber("7")
+		return m, cmd
+	case tabConfig:
+		_, cmd := m.switchToTabByNumber("8")
+		return m, cmd
+	}
+	return m, nil
+}
+
+// switchToTabByNumber handles "1".."8" key presses by switching to the
+// corresponding parent tab. Returns (handled, cmd). If !handled the key
+// was not a recognised tab number.
+//
+// New mapping (1=My Tools, 2=Marketplace, 3=Project, 4=Dashboard,
+// 5=My Profile, 6=Security, 7=Backup, 8=Config).
+func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
+	switch key {
+	case "1":
+		m.activeTab = tabInstalled
+		m.cursor = 0
+		m.applyFilter()
+		return true, nil
+	case "2":
+		m.activeTab = tabDiscover
+		m.cursor = 0
+		m.discoverSubTab = discoverTools
+		m.applyFilter()
+		return true, nil
+	case "3":
+		m.activeTab = tabProject
+		m.cursor = 0
+		m.projectCursor = 0
+		m.projectScroll = 0
+		m.projectView = projectViewList
+		return true, projectLoadListCmd(m.tools)
+	case "4":
+		m.activeTab = tabDashboard
+		m.cursor = 0
+		m.dashboardScroll = 0
+		m.myBackupFiles = scanBackupsDir()
+		return true, nil
+	case "5":
+		m.activeTab = tabProfile
+		m.cursor = 0
+		// Defer env build until the initial scan finishes — the
+		// build calls into svc.LoadAndResolveCached which would
+		// trigger a second cold scan in parallel and make the UI
+		// feel stuck. Once phase reaches phaseDone the user can
+		// hit `r` (refresh) to build the profile.
+		if m.phase < phaseDone {
+			m.viewingEnv = true
+			m.envState = envViewIdle
+			m.envProfile = nil
+			m.envToken = ""
+			m.envError = ""
+			m.statusMsg = "Still scanning — env profile will build when scan finishes"
+			return true, nil
+		}
+		cmd := m.startEnvSubview()
+		return true, cmd
+	case "6":
+		m.activeTab = tabDoctor
+		m.cursor = 0
+		m.doctorScroll = 0
+		return true, nil
+	case "7":
+		m.activeTab = tabBackup
+		m.cursor = 0
+		return true, nil
+	case "8":
+		m.activeTab = tabConfig
+		m.cursor = 0
+		m.configScroll = 0
+		return true, nil
+	}
+	return false, nil
 }
 
 // Init starts the initial tool discovery process.
@@ -677,6 +842,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Check .klim.yaml now that versions are resolved.
 			m.detectTeamFile()
 			cmplCmd := m.runDoctor()
+			// If the user navigated to My Profile while the scan
+			// was still running, kick off the deferred env build
+			// now so the view stops showing "Building profile..."
+			// indefinitely.
+			if m.activeTab == tabProfile && m.viewingEnv && m.envProfile == nil {
+				envCmd := buildEnvProfileCmd(m.svc, m.cfg)
+				if cmplCmd == nil {
+					return m, envCmd
+				}
+				return m, tea.Batch(cmplCmd, envCmd)
+			}
 			return m, cmplCmd
 		}
 		return m, nil
@@ -1491,80 +1667,28 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.doctorScroll = 0
 				return m, nil
 			}
-			m.activeTab = (m.activeTab + 1) % tabCount
-			m.cursor = 0
+			next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
 			m.dashboardScroll = 0
 			m.doctorScroll = 0
 			m.doctorSubTab = doctorSubDoctor
 			m.discoverSubTab = discoverTools
-			m.applyFilter()
-			if m.activeTab == tabProject {
-				return m, projectLoadListCmd(m.tools)
-			}
-			return m, nil
+			return m.gotoParentTab(next)
 		case "left", "shift+tab":
 			if m.activeTab == tabDoctor && m.doctorSubTab > doctorSubDoctor {
 				m.doctorSubTab--
 				m.doctorScroll = 0
 				return m, nil
 			}
-			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
-			m.cursor = 0
+			prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 			m.dashboardScroll = 0
 			m.doctorScroll = 0
 			m.doctorSubTab = doctorSubDoctor
 			m.discoverSubTab = discoverTools
-			m.applyFilter()
-			if m.activeTab == tabProject {
-				return m, projectLoadListCmd(m.tools)
+			return m.gotoParentTab(prev)
+		case "1", "2", "3", "4", "5", "6", "7", "8":
+			if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
+				return m, cmd
 			}
-			return m, nil
-		case "1":
-			m.activeTab = tabInstalled
-			m.cursor = 0
-			m.applyFilter()
-			return m, nil
-		case "2":
-			m.activeTab = tabFavorites
-			m.cursor = 0
-			m.applyFilter()
-			return m, nil
-		case "3":
-			m.activeTab = tabUpdates
-			m.cursor = 0
-			m.applyFilter()
-			return m, nil
-		case "4":
-			m.activeTab = tabDiscover
-			m.cursor = 0
-			m.applyFilter()
-			return m, nil
-		case "5":
-			m.activeTab = tabBackup
-			m.cursor = 0
-			return m, nil
-		case "6":
-			m.activeTab = tabProject
-			m.cursor = 0
-			m.projectCursor = 0
-			m.projectScroll = 0
-			m.projectView = projectViewList
-			return m, projectLoadListCmd(m.tools)
-		case "7":
-			m.activeTab = tabDashboard
-			m.cursor = 0
-			m.dashboardScroll = 0
-			m.myBackupFiles = scanBackupsDir()
-			return m, nil
-		case "8":
-			m.activeTab = tabConfig
-			m.cursor = 0
-			m.configScroll = 0
-			return m, nil
-		case "9":
-			m.activeTab = tabDoctor
-			m.cursor = 0
-			m.doctorScroll = 0
 			return m, nil
 		case "r":
 			if m.activeBatch != nil && m.activeBatch.isRunning() {
@@ -1690,14 +1814,19 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		m.activeTab = (m.activeTab + 1) % tabCount
-		m.cursor = 0
-		m.discoverSubTab = discoverTools
-		m.applyFilter()
-		if m.activeTab == tabProject {
-			return m, projectLoadListCmd(m.tools)
+		// On My Tools, cycle subtabs (Installed → Updates → Favorites)
+		// before switching to the next parent tab.
+		if isMyToolsTab(m.activeTab) {
+			i := myToolsSubIndex(m.activeTab)
+			if i >= 0 && i < len(myToolsSubOrder)-1 {
+				m.activeTab = myToolsSubOrder[i+1]
+				m.cursor = 0
+				m.applyFilter()
+				return m, nil
+			}
 		}
-		return m, nil
+		next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
+		return m.gotoParentTab(next)
 	case "left", "shift+tab":
 		if m.activeTab == tabDiscover && m.discoverSubTab > discoverTools {
 			m.discoverSubTab--
@@ -1707,61 +1836,21 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		m.activeTab = (m.activeTab + tabCount - 1) % tabCount
-		m.cursor = 0
-		m.discoverSubTab = discoverTools
-		m.applyFilter()
-		if m.activeTab == tabProject {
-			return m, projectLoadListCmd(m.tools)
+		if isMyToolsTab(m.activeTab) {
+			i := myToolsSubIndex(m.activeTab)
+			if i > 0 {
+				m.activeTab = myToolsSubOrder[i-1]
+				m.cursor = 0
+				m.applyFilter()
+				return m, nil
+			}
 		}
-		return m, nil
-	case "1":
-		m.activeTab = tabInstalled
-		m.cursor = 0
-		m.applyFilter()
-		return m, nil
-	case "2":
-		m.activeTab = tabFavorites
-		m.cursor = 0
-		m.applyFilter()
-		return m, nil
-	case "3":
-		m.activeTab = tabUpdates
-		m.cursor = 0
-		m.applyFilter()
-		return m, nil
-	case "4":
-		m.activeTab = tabDiscover
-		m.cursor = 0
-		m.applyFilter()
-		return m, nil
-	case "5":
-		m.activeTab = tabBackup
-		m.cursor = 0
-		return m, nil
-	case "6":
-		m.activeTab = tabProject
-		m.cursor = 0
-		m.projectCursor = 0
-		m.projectScroll = 0
-		m.projectView = projectViewList
-		return m, projectLoadListCmd(m.tools)
-	case "7":
-		m.activeTab = tabDashboard
-		m.cursor = 0
-		m.dashboardScroll = 0
-		m.myBackupFiles = scanBackupsDir()
-		return m, nil
-	case "8":
-		m.activeTab = tabConfig
-		m.cursor = 0
-		m.configScroll = 0
-		return m, nil
-	case "9":
-		m.activeTab = tabDoctor
-		m.cursor = 0
-		m.doctorScroll = 0
-		return m, nil
+		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
+		return m.gotoParentTab(prev)
+	case "1", "2", "3", "4", "5", "6", "7", "8":
+		if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
+			return m, cmd
+		}
 	case "s":
 		// Skip current item during import.
 		if m.activeTab == tabBackup && m.isImportRunning() {
@@ -2058,16 +2147,6 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				m.enteringToken = true
 				return m, m.tokenInput.Focus()
-			case backupMenuEnv:
-				// Env Profile — open the sub-view that
-				// generates the local env token and offers
-				// open/diff/apply against pasted tokens.
-				if m.phase < phaseDone {
-					m.statusMsg = "Still scanning — please wait..."
-					return m, nil
-				}
-				cmd := m.startEnvSubview()
-				return m, cmd
 			case backupMenuTrail:
 				// Trail — open the toolchain history sub-view.
 				cmd := m.startTrailSubview()
