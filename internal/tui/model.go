@@ -306,18 +306,18 @@ type Model struct {
 	myBackupFiles    []backupFileInfo
 
 	// Env Profile state (Backup tab → Env Profile sub-view).
-	viewingEnv       bool            // true = env sub-view is active
-	envState         string          // envViewIdle / envViewInputOpen / ...
-	envProfile       *envid.Profile  // locally-built profile (nil during build)
-	envToken         string          // encoded local token
-	envTokenCopied   bool            // toggled to true after a successful clipboard copy
-	envError         string          // last error message to surface in the sub-view
-	envInput         textinput.Model // text-input for paste/file-path
-	envInputVerb     string          // which action the input is for (envViewInputOpen|Diff|Apply)
-	envRemoteProfile *envid.Profile  // last decoded remote profile
-	envShowText      string          // pre-rendered text for the Show view
-	envDiffText      string          // pre-rendered text for the Diff view
-	envApplyReport   string          // pre-rendered favorites/packs apply summary
+	viewingEnv          bool            // true = env sub-view is active
+	envState            string          // envViewIdle / envViewInputOpen / ...
+	envProfile          *envid.Profile  // locally-built profile (nil during build)
+	envToken            string          // encoded local token
+	envTokenCopied      bool            // toggled to true after a successful clipboard copy
+	envError            string          // last error message to surface in the sub-view
+	envInput            textinput.Model // text-input for paste/file-path
+	envInputVerb        string          // which action the input is for (envViewInputOpen|Diff|Apply)
+	envRemoteProfile    *envid.Profile  // last decoded remote profile
+	envShowText         string          // pre-rendered text for the Show view
+	envDiffText         string          // pre-rendered text for the Diff view
+	envApplyReport      string          // pre-rendered favorites/packs apply summary
 	envApplyPending     bool            // true once an env apply install plan is running
 	envApplyProfile     *envid.Profile  // captured when apply starts so we can merge favorites/packs after
 	envApplyFromProfile bool            // true when the apply was launched from the My Profile tab; controls return-to-Profile after the apply report
