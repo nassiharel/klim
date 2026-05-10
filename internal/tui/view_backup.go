@@ -25,11 +25,6 @@ func (m Model) renderBackupView() string {
 		return m.renderMyBackupsView()
 	}
 
-	// Env Profile sub-view.
-	if m.viewingEnv {
-		return m.renderEnvSubview()
-	}
-
 	// Trail History sub-view.
 	if m.viewingTrail {
 		return m.renderTrailSubview()
@@ -47,7 +42,6 @@ func (m Model) renderBackupView() string {
 			{"Import", "Reinstall tools from a manifest file"},
 			{"Share", "Generate a share token for chat/messaging"},
 			{"Open Token", "Install tools from a share token"},
-			{"Env Profile", "Generate / inspect / compare / apply an env profile"},
 			{"Trail", "Capture and review toolchain history snapshots"},
 			{"Create Pack", "Build a custom pack from marketplace tools"},
 			{"My Packs", "View and manage your custom packs"},

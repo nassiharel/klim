@@ -1,0 +1,9 @@
+name: modern-terminals
+display_name: Modern Terminals
+description: Modern terminal emulators and multiplexers for power users.
+tools:
+    - warp
+    - wezterm
+    - tmux
+    - zellij
+    - starship

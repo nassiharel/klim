@@ -1,0 +1,11 @@
+name: dev-productivity
+display_name: Developer Productivity
+description: Reproducible dev environments, dotfiles, and workflow automation.
+tools:
+    - chezmoi
+    - mise
+    - direnv
+    - devbox
+    - just
+    - pre-commit
+    - watchexec

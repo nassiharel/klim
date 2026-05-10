@@ -110,65 +110,19 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "right", "tab":
-		m.activeTab = (m.activeTab + 1) % tabCount
-		m.cursor = 0
+		next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
 		m.dashboardScroll = 0
 		m.discoverSubTab = discoverTools
-		m.applyFilter()
-		if m.activeTab == tabProject {
-			return m, projectLoadListCmd(m.tools)
-		}
-		return m, nil
+		return m.gotoParentTab(next)
 	case "left", "shift+tab":
-		m.activeTab = (m.activeTab + tabCount - 1) % tabCount
-		m.cursor = 0
+		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 		m.dashboardScroll = 0
 		m.discoverSubTab = discoverTools
-		m.applyFilter()
-		if m.activeTab == tabProject {
-			return m, projectLoadListCmd(m.tools)
+		return m.gotoParentTab(prev)
+	case "1", "2", "3", "4", "5", "6", "7", "8":
+		if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
+			return m, cmd
 		}
-		return m, nil
-	case "1":
-		m.activeTab = tabInstalled
-		m.cursor = 0
-		m.applyFilter()
-		return m, nil
-	case "2":
-		m.activeTab = tabFavorites
-		m.cursor = 0
-		m.applyFilter()
-		return m, nil
-	case "3":
-		m.activeTab = tabUpdates
-		m.cursor = 0
-		m.applyFilter()
-		return m, nil
-	case "4":
-		m.activeTab = tabDiscover
-		m.cursor = 0
-		m.applyFilter()
-		return m, nil
-	case "5":
-		m.activeTab = tabBackup
-		m.cursor = 0
-		return m, nil
-	case "6":
-		m.activeTab = tabProject
-		m.cursor = 0
-		m.projectCursor = 0
-		m.projectView = projectViewList
-		return m, projectLoadListCmd(m.tools)
-	case "7":
-		m.activeTab = tabDashboard
-		m.cursor = 0
-		m.dashboardScroll = 0
-		m.myBackupFiles = scanBackupsDir()
-		return m, nil
-	case "8":
-		m.activeTab = tabConfig
-		m.cursor = 0
-		return m, nil
 	}
 
 	// Config-specific keys.

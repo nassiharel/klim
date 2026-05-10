@@ -1,0 +1,16 @@
+name: mosh
+display_name: Mosh
+category: Network
+tags:
+    - networking
+    - remote-shell
+    - cli
+binary_names:
+    - mosh
+    - mosh-client
+    - mosh-server
+packages:
+    choco: mosh
+    brew: mosh
+    apt: mosh
+github: mobile-shell/mosh

@@ -1,0 +1,15 @@
+name: wezterm
+display_name: WezTerm
+category: Shell
+tags:
+    - terminal
+    - gui
+    - cross-platform
+binary_names:
+    - wezterm
+packages:
+    winget: wez.wezterm
+    scoop: wezterm
+    choco: wezterm
+    brew: wezterm
+github: wez/wezterm

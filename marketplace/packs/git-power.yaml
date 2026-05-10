@@ -7,3 +7,4 @@ tools:
     - lazygit
     - delta
     - tig
+    - pre-commit

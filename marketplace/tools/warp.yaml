@@ -1,0 +1,14 @@
+name: warp
+display_name: Warp
+category: Shell
+tags:
+    - terminal
+    - ai
+    - gui
+binary_names:
+    - warp
+    - warp-terminal
+packages:
+    winget: Warp.Warp
+    brew: warp
+github: warpdotdev/Warp

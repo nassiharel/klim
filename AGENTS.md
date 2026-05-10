@@ -75,15 +75,18 @@ ToolService
 
 ## TUI Tabs
 
-| Tab | Key | Content |
-|---|---|---|
-| Installed | 1 | All detected tools with version status (✓ / ⬆). Press `*` to favorite. |
-| ★ Favorites | 2 | Favorited tools. `e` export, `s` share, `x` clear all, `*` unfavorite. |
-| Updates | 3 | Tools with available upgrades; batch upgrade support |
-| Discover | 4 | Sub-tabs: **Tools** (marketplace), **Packs** (curated bundles), **For You** (smart recommendations) |
-| Backup | 5 | Export/import toolchain; share tokens; My Packs; My Backups |
-| Dashboard | 6 | Aggregate stats, gauges, category/tag/platform breakdowns |
-| Config | 7 | View/edit config.yaml settings |
+Number keys 1-8 jump straight to a parent tab. Tab/Shift-Tab and Left/Right arrows step through subtabs first (when the parent has any) and advance to the next/previous parent only at the strip's edge — e.g. on Marketplace, Right cycles Tools → Packs → For You → Onboard before moving to Project; on My Tools, Right cycles Installed → Updates → Favorites before moving to Marketplace.
+
+| Tab | Key | Subtabs | Content |
+|---|---|---|---|
+| My Tools   | 1 | Installed, Updates, Favorites | All detected tools, available upgrades, and favorites. `*` toggle favorite. |
+| Marketplace| 2 | Tools, Packs, For You, Onboard | Browse catalog, curated packs, recommendations, role-based onboarding. |
+| Project    | 3 | — | Per-project tool checks. |
+| Dashboard  | 4 | — | Aggregate stats, gauges, category/tag/platform breakdowns. |
+| My Profile | 5 | Env Profile | Generate / inspect / compare / apply env profile. |
+| Security   | 6 | Doctor, Audit, Compliance | Health checks, vulnerability scans, compliance policies. |
+| Backup     | 7 | — | Export/import toolchain; share tokens; Trail; My Packs; My Backups. |
+| Config     | 8 | — | View/edit config.yaml settings. |
 
 **Filter sidebar:** Category / Platform / Tag filters with counters. Configurable left/right position (`config.yaml → ui.sidebar_right`).
 

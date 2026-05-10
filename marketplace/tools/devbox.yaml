@@ -1,0 +1,12 @@
+name: devbox
+display_name: Devbox
+category: PkgMgr
+tags:
+    - dev-workflow
+    - package-manager
+    - configuration-management
+binary_names:
+    - devbox
+packages:
+    brew: jetify-com/devbox/devbox
+github: jetify-com/devbox
