@@ -114,32 +114,23 @@ func (m *Model) startEnvInput(verb string) tea.Cmd {
 // there and nothing more — no global "every key works everywhere"
 // trap that would let a stray "a" trigger Apply during Show output.
 func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Text-input states intercept all keys so the user can paste a
-	// token (which may legitimately contain `:`, base64 chars, etc.)
-	// without one of them being eaten as a hotkey.
-	if m.envState == envViewInputOpen || m.envState == envViewInputDiff || m.envState == envViewInputApply {
-		return m.handleKeyEnvInput(msg)
-	}
-
-	// Quit shortcuts always take priority — the env sub-view is
-	// otherwise modal, and on the dedicated My Profile tab there is
-	// no parent menu to "Esc back to", so we'd lock the user in
-	// without these.
+	// Quit and parent-tab switching keys take priority over every
+	// other env state (including text-input states) so the user is
+	// never trapped inside the modal sub-view. Without this, a
+	// half-typed paste would swallow ctrl+c, q, 1..8, Tab, and
+	// arrow-key tab cycling.
 	switch msg.String() {
 	case "ctrl+c":
-		mp := &m
-		mp.quitting = true
-		return *mp, tea.Quit
-	}
-
-	// Allow parent-tab switching keys to escape the env sub-view —
-	// the My Profile tab is dedicated to env, and the user must be
-	// able to leave it via number keys or Tab without first hitting
-	// Esc.
-	switch msg.String() {
+		m.quitting = true
+		return m, tea.Quit
 	case "1", "2", "3", "4", "5", "6", "7", "8":
 		mp := &m
-		// Leaving Profile — drop out of env sub-view.
+		// Cancel any in-flight text input so we don't carry stale
+		// state to the destination tab.
+		if mp.envState == envViewInputOpen || mp.envState == envViewInputDiff || mp.envState == envViewInputApply {
+			mp.envState = envViewIdle
+			mp.envInputVerb = ""
+		}
 		if mp.activeTab == tabProfile {
 			mp.viewingEnv = false
 		}
@@ -148,17 +139,32 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "tab", "right":
+		if m.envState == envViewInputOpen || m.envState == envViewInputDiff || m.envState == envViewInputApply {
+			m.envState = envViewIdle
+			m.envInputVerb = ""
+		}
 		if m.activeTab == tabProfile {
 			m.viewingEnv = false
 		}
 		next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
 		return m.gotoParentTab(next)
 	case "shift+tab", "left":
+		if m.envState == envViewInputOpen || m.envState == envViewInputDiff || m.envState == envViewInputApply {
+			m.envState = envViewIdle
+			m.envInputVerb = ""
+		}
 		if m.activeTab == tabProfile {
 			m.viewingEnv = false
 		}
 		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 		return m.gotoParentTab(prev)
+	}
+
+	// Text-input states intercept all remaining keys so the user can
+	// paste a token (which may legitimately contain `:`, base64
+	// chars, etc.) without one of them being eaten as a hotkey.
+	if m.envState == envViewInputOpen || m.envState == envViewInputDiff || m.envState == envViewInputApply {
+		return m.handleKeyEnvInput(msg)
 	}
 
 	switch msg.String() {
@@ -341,7 +347,15 @@ func (m Model) renderEnvIdleView() string {
 	b.WriteString("    " + dimVersion.Render("d") + "  Compare another env against this one\n")
 	b.WriteString("    " + dimVersion.Render("a") + "  Apply another env (install missing + favorites + packs)\n")
 	b.WriteString("    " + dimVersion.Render("r") + "  Rebuild this env profile\n")
-	b.WriteString("    " + dimVersion.Render("Esc") + "  Back to Backup menu\n")
+	if m.activeTab == tabProfile {
+		// Profile tab — Esc is a no-op here; show the actual
+		// escape hatches instead so the on-screen hint matches
+		// real behaviour.
+		b.WriteString("    " + dimVersion.Render("←→") + "  Switch tab   " +
+			dimVersion.Render("q") + "  Quit\n")
+	} else {
+		b.WriteString("    " + dimVersion.Render("Esc") + "  Back to Backup menu\n")
+	}
 
 	visibleRows := m.height - 22 - m.footerHeight()
 	for range max(visibleRows, 0) {

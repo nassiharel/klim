@@ -272,12 +272,15 @@ func (m Model) handleKeyProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case "right", "tab":
-			m.activeTab = (m.activeTab + 1) % tabCount
-			m.cursor = 0
-			return m, nil
+			next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
+			return m.gotoParentTab(next)
 		case "left", "shift+tab":
-			m.activeTab = (m.activeTab + tabCount - 1) % tabCount
-			m.cursor = 0
+			prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
+			return m.gotoParentTab(prev)
+		case "1", "2", "3", "4", "5", "6", "7", "8":
+			if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
+				return m, cmd
+			}
 			return m, nil
 		default:
 			// Any other key — trigger load, don't consume.
@@ -291,18 +294,19 @@ func (m Model) handleKeyProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "right", "tab":
-		m.activeTab = (m.activeTab + 1) % tabCount
-		m.cursor = 0
+		next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
 		m.dashboardScroll = 0
 		m.discoverSubTab = discoverTools
-		m.applyFilter()
-		return m, nil
+		return m.gotoParentTab(next)
 	case "left", "shift+tab":
-		m.activeTab = (m.activeTab + tabCount - 1) % tabCount
-		m.cursor = 0
+		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 		m.dashboardScroll = 0
 		m.discoverSubTab = discoverTools
-		m.applyFilter()
+		return m.gotoParentTab(prev)
+	case "1", "2", "3", "4", "5", "6", "7", "8":
+		if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
+			return m, cmd
+		}
 		return m, nil
 	}
 

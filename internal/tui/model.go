@@ -43,7 +43,11 @@ const (
 	tabConfig
 	tabDoctor
 	tabProfile
-	tabCount // total number of tabs, used for modular cycling
+	tabCount // sentinel: total number of tab constants. Cycling is
+	// driven by parentTabOrder/parentIndex below — do not use
+	// tabCount for `(activeTab+1)%tabCount` cycling, since that
+	// would treat each My Tools subtab as a peer of every other
+	// parent tab and skip parent entry side-effects.
 )
 
 // myToolsSubOrder lists the My Tools subtabs in display order (Installed,
