@@ -1,0 +1,8 @@
+name: remote-networking
+display_name: Remote & Networking
+description: Connect, tunnel, and sync across machines and networks.
+tools:
+    - tailscale
+    - mosh
+    - ngrok
+    - rclone

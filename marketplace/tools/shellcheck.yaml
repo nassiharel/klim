@@ -1,0 +1,17 @@
+name: shellcheck
+display_name: ShellCheck
+category: CLI
+tags:
+    - linter
+    - static-analysis
+    - code-quality
+binary_names:
+    - shellcheck
+packages:
+    winget: koalaman.shellcheck
+    scoop: shellcheck
+    choco: shellcheck
+    brew: shellcheck
+    apt: shellcheck
+    snap: shellcheck
+github: koalaman/shellcheck

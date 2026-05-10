@@ -21,29 +21,6 @@ func (m Model) renderHelp() string {
 	switch m.activeTab {
 	case tabBackup:
 		switch {
-		case m.viewingEnv:
-			// Env sub-view has its own keybinding set so the
-			// generic Backup keys would mislead users here.
-			switch m.envState {
-			case envViewIdle:
-				parts = []string{
-					dimVersion.Render("c") + " copy",
-					dimVersion.Render("o") + " open",
-					dimVersion.Render("d") + " diff",
-					dimVersion.Render("a") + " apply",
-					dimVersion.Render("r") + " refresh",
-					dimVersion.Render("Esc") + " back",
-				}
-			case envViewInputOpen, envViewInputDiff, envViewInputApply:
-				parts = []string{
-					dimVersion.Render("Enter") + " submit",
-					dimVersion.Render("Esc") + " cancel",
-				}
-			default:
-				parts = []string{
-					dimVersion.Render("Esc") + " back",
-				}
-			}
 		case m.viewingTrail:
 			switch m.trailState {
 			case trailViewLabelInput:
@@ -146,6 +123,36 @@ func (m Model) renderHelp() string {
 			dimVersion.Render("←→") + " tab",
 			dimVersion.Render("r") + " refresh",
 			dimVersion.Render("q") + " quit",
+		}
+	case tabProfile:
+		// My Profile tab — env sub-view keybindings.
+		switch m.envState {
+		case envViewIdle:
+			parts = []string{
+				dimVersion.Render("c") + " copy",
+				dimVersion.Render("o") + " open",
+				dimVersion.Render("d") + " diff",
+				dimVersion.Render("a") + " apply",
+				dimVersion.Render("r") + " refresh",
+				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("q") + " quit",
+			}
+		case envViewInputOpen, envViewInputDiff, envViewInputApply:
+			parts = []string{
+				dimVersion.Render("Enter") + " submit",
+				dimVersion.Render("Esc") + " cancel",
+			}
+		default:
+			// Show / Diff / ApplyReport states: Esc returns to
+			// idle (NOT to a parent menu, since Profile owns
+			// the env sub-view directly). q falls through to
+			// the same back-out, so don't advertise it as quit
+			// here — that's misleading. ctrl+c always quits.
+			parts = []string{
+				dimVersion.Render("Esc") + " back",
+				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("ctrl+c") + " quit",
+			}
 		}
 	case tabDoctor:
 		parts = []string{

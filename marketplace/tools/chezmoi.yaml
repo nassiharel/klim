@@ -1,0 +1,16 @@
+name: chezmoi
+display_name: chezmoi
+category: CLI
+tags:
+    - configuration-management
+    - dev-workflow
+    - sync
+binary_names:
+    - chezmoi
+packages:
+    winget: twpayne.chezmoi
+    scoop: chezmoi
+    choco: chezmoi
+    brew: chezmoi
+    snap: chezmoi
+github: twpayne/chezmoi

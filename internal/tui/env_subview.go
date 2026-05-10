@@ -62,10 +62,12 @@ type envApplyResultMsg struct {
 	err            error
 }
 
-// startEnvSubview enters the env landing state and kicks off a fresh
-// profile build. The build runs asynchronously so the TUI doesn't block
-// on PM availability checks (collectTools may probe `where`/`which`).
-func (m *Model) startEnvSubview() tea.Cmd {
+// resetEnvSubviewState clears every transient env sub-view field back
+// to its zero value. Used by both startEnvSubview (which then kicks
+// off a build) and the deferred-build path that opens the Profile tab
+// during an in-flight scan, so stale "✓ Copied" / old diff / report
+// content can't leak across navigations.
+func (m *Model) resetEnvSubviewState() {
 	m.viewingEnv = true
 	m.envState = envViewIdle
 	m.envProfile = nil
@@ -76,6 +78,16 @@ func (m *Model) startEnvSubview() tea.Cmd {
 	m.envDiffText = ""
 	m.envShowText = ""
 	m.envApplyReport = ""
+	m.envApplyPending = false
+	m.envApplyProfile = nil
+	m.envApplyFromProfile = false
+}
+
+// startEnvSubview enters the env landing state and kicks off a fresh
+// profile build. The build runs asynchronously so the TUI doesn't block
+// on PM availability checks (collectTools may probe `where`/`which`).
+func (m *Model) startEnvSubview() tea.Cmd {
+	m.resetEnvSubviewState()
 	return buildEnvProfileCmd(m.svc, m.cfg)
 }
 
@@ -114,19 +126,105 @@ func (m *Model) startEnvInput(verb string) tea.Cmd {
 // there and nothing more — no global "every key works everywhere"
 // trap that would let a stray "a" trigger Apply during Show output.
 func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Text-input states intercept all keys so the user can paste a
-	// token (which may legitimately contain `:`, base64 chars, etc.)
-	// without one of them being eaten as a hotkey.
-	if m.envState == envViewInputOpen || m.envState == envViewInputDiff || m.envState == envViewInputApply {
+	inInput := m.envState == envViewInputOpen ||
+		m.envState == envViewInputDiff ||
+		m.envState == envViewInputApply
+
+	// Quit and parent-tab switching keys take priority over every
+	// other env state (including text-input states) so the user is
+	// never trapped inside the modal sub-view. In input states we
+	// deliberately *exclude* plain Left/Right so the textinput can
+	// still move its cursor through pasted tokens — Tab/Shift-Tab
+	// remain the input-mode escape hatches.
+	switch msg.String() {
+	case "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	case "1", "2", "3", "4", "5", "6", "7", "8":
+		mp := &m
+		// Cancel any in-flight text input so we don't carry stale
+		// state to the destination tab.
+		if inInput {
+			mp.envState = envViewIdle
+			mp.envInputVerb = ""
+		}
+		if mp.activeTab == tabProfile {
+			mp.viewingEnv = false
+		}
+		if handled, cmd := mp.switchToTabByNumber(msg.String()); handled {
+			return *mp, cmd
+		}
+		return m, nil
+	case "tab":
+		if inInput {
+			m.envState = envViewIdle
+			m.envInputVerb = ""
+		}
+		if m.activeTab == tabProfile {
+			m.viewingEnv = false
+		}
+		next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
+		return m.gotoParentTab(next)
+	case "shift+tab":
+		if inInput {
+			m.envState = envViewIdle
+			m.envInputVerb = ""
+		}
+		if m.activeTab == tabProfile {
+			m.viewingEnv = false
+		}
+		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
+		return m.gotoParentTab(prev)
+	case "right":
+		if !inInput {
+			if m.activeTab == tabProfile {
+				m.viewingEnv = false
+			}
+			next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
+			return m.gotoParentTab(next)
+		}
+	case "left":
+		if !inInput {
+			if m.activeTab == tabProfile {
+				m.viewingEnv = false
+			}
+			prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
+			return m.gotoParentTab(prev)
+		}
+	}
+
+	// Text-input states intercept all remaining keys so the user can
+	// paste a token (which may legitimately contain `:`, base64
+	// chars, etc.) without one of them being eaten as a hotkey.
+	if inInput {
 		return m.handleKeyEnvInput(msg)
 	}
 
 	switch msg.String() {
-	case "esc", "q", "backspace":
+	case "q":
+		// On the dedicated Profile tab `q` should quit, matching
+		// the behaviour on every other tab. (Inside the Backup
+		// sub-view, `q` is treated as "back" because Backup hosts
+		// the env sub-view as a modal — but Profile *is* the env
+		// sub-view, so there's no "back" target.)
+		if m.activeTab == tabProfile && m.envState == envViewIdle {
+			m.quitting = true
+			return m, tea.Quit
+		}
+		// Fall through to the back-out handler below for the
+		// Backup-hosted case.
+		fallthrough
+	case "esc", "backspace":
 		// Layered back-out: result views go back to the landing
-		// page; the landing page closes the sub-view entirely.
+		// page; the landing page closes the sub-view entirely
+		// (or, on the dedicated Profile tab, stays put — there is
+		// no "back" target since Profile IS the env sub-view).
 		switch m.envState {
 		case envViewIdle:
+			if m.activeTab == tabProfile {
+				// No-op: Profile tab has no parent menu.
+				return m, nil
+			}
 			m.viewingEnv = false
 			m.envState = envViewIdle
 			m.statusMsg = ""
@@ -158,12 +256,32 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	case "d":
+		// Diff needs the local profile to compare against — block
+		// until phaseDone so we don't have to fail with "local
+		// profile not built yet" mid-flow, and so the comparison
+		// reflects the *complete* installed set rather than a
+		// partial one.
 		if m.envState == envViewIdle {
+			if m.phase < phaseDone {
+				m.statusMsg = "Still scanning — diff is available once scan finishes"
+				return m, nil
+			}
 			cmd := (&m).startEnvInput(envViewInputDiff)
 			return m, cmd
 		}
 	case "a":
+		// Apply ultimately runs buildEnvApplyPlanCmd → svc.ScanOnly,
+		// which would kick off a second PATH scan in parallel with
+		// the in-flight initial scan and produce the same "UI feels
+		// stuck" symptom the deferred-build path avoids. Block at
+		// idle until phaseDone so users can't accidentally trigger
+		// the parallel scan even by typing the verb during the
+		// initial load.
 		if m.envState == envViewIdle {
+			if m.phase < phaseDone {
+				m.statusMsg = "Still scanning — apply is available once scan finishes"
+				return m, nil
+			}
 			cmd := (&m).startEnvInput(envViewInputApply)
 			return m, cmd
 		}
@@ -171,6 +289,18 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Refresh: rebuild the local profile (e.g. after install/
 		// upgrade outside the sub-view changed the toolset).
 		if m.envState == envViewIdle {
+			// Gate on phaseDone — buildEnvProfileCmd calls
+			// LoadAndResolveCached, which on a cold cache will
+			// kick off a second full PATH+version scan in
+			// parallel with the in-flight initial scan and make
+			// the UI feel stuck. The deferred-build path in
+			// switchToTabByNumber already auto-triggers the
+			// build when the initial scan finishes, so there's
+			// nothing for the user to do here except wait.
+			if m.phase < phaseDone {
+				m.statusMsg = "Still scanning — env profile will build when scan finishes"
+				return m, nil
+			}
 			m.envProfile = nil
 			m.envToken = ""
 			m.envError = ""
@@ -282,7 +412,15 @@ func (m Model) renderEnvIdleView() string {
 	b.WriteString("    " + dimVersion.Render("d") + "  Compare another env against this one\n")
 	b.WriteString("    " + dimVersion.Render("a") + "  Apply another env (install missing + favorites + packs)\n")
 	b.WriteString("    " + dimVersion.Render("r") + "  Rebuild this env profile\n")
-	b.WriteString("    " + dimVersion.Render("Esc") + "  Back to Backup menu\n")
+	if m.activeTab == tabProfile {
+		// Profile tab — Esc is a no-op here; show the actual
+		// escape hatches instead so the on-screen hint matches
+		// real behaviour.
+		b.WriteString("    " + dimVersion.Render("←→") + "  Switch tab   " +
+			dimVersion.Render("q") + "  Quit\n")
+	} else {
+		b.WriteString("    " + dimVersion.Render("Esc") + "  Back to Backup menu\n")
+	}
 
 	visibleRows := m.height - 22 - m.footerHeight()
 	for range max(visibleRows, 0) {

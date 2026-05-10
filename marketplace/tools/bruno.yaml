@@ -1,0 +1,17 @@
+name: bruno
+display_name: Bruno
+category: Testing
+tags:
+    - api
+    - http-client
+    - gui
+binary_names:
+    - bruno
+    - bru
+packages:
+    winget: Bruno.Bruno
+    scoop: bruno
+    choco: bruno
+    brew: bruno
+    npm: "@usebruno/cli"
+github: usebruno/bruno

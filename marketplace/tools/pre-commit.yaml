@@ -1,0 +1,14 @@
+name: pre-commit
+display_name: pre-commit
+category: VCS
+tags:
+    - git
+    - code-quality
+    - automation
+binary_names:
+    - pre-commit
+packages:
+    brew: pre-commit
+    apt: pre-commit
+    snap: pre-commit
+github: pre-commit/pre-commit
