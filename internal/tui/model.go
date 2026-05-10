@@ -314,8 +314,9 @@ type Model struct {
 	envShowText      string          // pre-rendered text for the Show view
 	envDiffText      string          // pre-rendered text for the Diff view
 	envApplyReport   string          // pre-rendered favorites/packs apply summary
-	envApplyPending  bool            // true once an env apply install plan is running
-	envApplyProfile  *envid.Profile  // captured when apply starts so we can merge favorites/packs after
+	envApplyPending     bool            // true once an env apply install plan is running
+	envApplyProfile     *envid.Profile  // captured when apply starts so we can merge favorites/packs after
+	envApplyFromProfile bool            // true when the apply was launched from the My Profile tab; controls return-to-Profile after the apply report
 
 	// Trail History state (Backup tab → Trail History sub-view).
 	viewingTrail    bool            // true = trail sub-view is active
@@ -966,10 +967,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "apply":
 			// Hand off to the existing import/install pipeline.
 			// The plan is built async so users see progress.
+			//
+			// Switch to the Backup tab for the duration of the
+			// install so the existing per-tool progress UI,
+			// skip/cancel keys, and tabBackup help footer all
+			// take effect. envApplyResultMsg flips us back to
+			// Profile so the apply report renders there.
 			m.statusMsg = "Building apply plan..."
 			m.envApplyPending = true
 			m.envApplyProfile = msg.profile
 			m.viewingEnv = false // hide the sub-view so the import progress UI shows through
+			m.envApplyFromProfile = m.activeTab == tabProfile
+			if m.envApplyFromProfile {
+				m.activeTab = tabBackup
+			}
 			m.backupMode = backupModeImport
 			return m, buildEnvApplyPlanCmd(m.svc, msg.profile)
 		}
@@ -991,6 +1002,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.envState = envViewApplyReport
 		m.viewingEnv = true
 		m.statusMsg = "✓ Env applied"
+		// Restore the Profile tab if the apply was launched from
+		// there, so the user sees the env-apply report on the
+		// same tab they kicked the apply off from.
+		if m.envApplyFromProfile {
+			m.activeTab = tabProfile
+			m.envApplyFromProfile = false
+		}
 		// Refresh favorites set so the * badge in the tool list
 		// reflects the new entries without requiring a manual
 		// rescan.
