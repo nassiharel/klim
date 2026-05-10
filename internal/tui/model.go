@@ -566,11 +566,10 @@ func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 		// feel stuck. Once phase reaches phaseDone the user can
 		// hit `r` (refresh) to build the profile.
 		if m.phase < phaseDone {
-			m.viewingEnv = true
-			m.envState = envViewIdle
-			m.envProfile = nil
-			m.envToken = ""
-			m.envError = ""
+			// Reset every env sub-view field so a previous
+			// session's "✓ Copied" / old diff / report can't
+			// leak into the deferred-build view.
+			m.resetEnvSubviewState()
 			m.statusMsg = "Still scanning — env profile will build when scan finishes"
 			return true, nil
 		}

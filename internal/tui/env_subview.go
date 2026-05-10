@@ -62,10 +62,12 @@ type envApplyResultMsg struct {
 	err            error
 }
 
-// startEnvSubview enters the env landing state and kicks off a fresh
-// profile build. The build runs asynchronously so the TUI doesn't block
-// on PM availability checks (collectTools may probe `where`/`which`).
-func (m *Model) startEnvSubview() tea.Cmd {
+// resetEnvSubviewState clears every transient env sub-view field back
+// to its zero value. Used by both startEnvSubview (which then kicks
+// off a build) and the deferred-build path that opens the Profile tab
+// during an in-flight scan, so stale "✓ Copied" / old diff / report
+// content can't leak across navigations.
+func (m *Model) resetEnvSubviewState() {
 	m.viewingEnv = true
 	m.envState = envViewIdle
 	m.envProfile = nil
@@ -76,6 +78,16 @@ func (m *Model) startEnvSubview() tea.Cmd {
 	m.envDiffText = ""
 	m.envShowText = ""
 	m.envApplyReport = ""
+	m.envApplyPending = false
+	m.envApplyProfile = nil
+	m.envApplyFromProfile = false
+}
+
+// startEnvSubview enters the env landing state and kicks off a fresh
+// profile build. The build runs asynchronously so the TUI doesn't block
+// on PM availability checks (collectTools may probe `where`/`which`).
+func (m *Model) startEnvSubview() tea.Cmd {
+	m.resetEnvSubviewState()
 	return buildEnvProfileCmd(m.svc, m.cfg)
 }
 
