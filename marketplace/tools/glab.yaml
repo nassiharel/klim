@@ -1,0 +1,15 @@
+name: glab
+display_name: GitLab CLI
+category: VCS
+tags:
+    - gitlab
+    - vcs
+    - cli
+binary_names:
+    - glab
+packages:
+    winget: gitlab.glab
+    scoop: glab
+    choco: glab
+    brew: glab
+github: profclems/glab

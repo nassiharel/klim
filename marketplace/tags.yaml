@@ -40,6 +40,7 @@ tags:
   - wasm
 
   # --- Function ---
+  - ai
   - auth
   - automation
   - benchmarking
@@ -55,7 +56,9 @@ tags:
   - disk-usage
   - docs
   - encryption
+  - file-manager
   - file-transfer
+  - formatter
   - http-client
   - image-builder
   - image-processing
@@ -67,14 +70,17 @@ tags:
   - package-manager
   - process-monitoring
   - provisioning
+  - remote-shell
   - scanner
   - search
   - secrets
   - static-analysis
   - sync
   - task-runner
+  - terminal
   - tunneling
   - version-manager
+  - vpn
 
   # --- UX ---
   - cli
@@ -93,6 +99,7 @@ tags:
   - anthropic
   - charm
   - github
+  - gitlab
   - google
   - hashicorp
   - microsoft

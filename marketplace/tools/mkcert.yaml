@@ -1,0 +1,16 @@
+name: mkcert
+display_name: mkcert
+category: Security
+tags:
+    - security
+    - encryption
+    - dev-workflow
+binary_names:
+    - mkcert
+packages:
+    winget: FiloSottile.mkcert
+    scoop: mkcert
+    choco: mkcert
+    brew: mkcert
+    apt: mkcert
+github: FiloSottile/mkcert

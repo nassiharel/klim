@@ -1,0 +1,14 @@
+name: yazi
+display_name: Yazi
+category: CLI
+tags:
+    - file-manager
+    - tui
+binary_names:
+    - yazi
+    - ya
+packages:
+    winget: sxyazi.yazi
+    scoop: yazi
+    brew: yazi
+github: sxyazi/yazi

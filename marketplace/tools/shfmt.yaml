@@ -1,0 +1,16 @@
+name: shfmt
+display_name: shfmt
+category: CLI
+tags:
+    - formatter
+    - code-quality
+    - cli
+binary_names:
+    - shfmt
+packages:
+    winget: mvdan.shfmt
+    scoop: shfmt
+    choco: shfmt
+    brew: shfmt
+    snap: shfmt
+github: mvdan/sh

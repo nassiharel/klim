@@ -1,0 +1,16 @@
+name: tailscale
+display_name: Tailscale
+category: Network
+tags:
+    - vpn
+    - networking
+    - tunneling
+binary_names:
+    - tailscale
+packages:
+    winget: tailscale.tailscale
+    scoop: tailscale
+    choco: tailscale
+    brew: tailscale
+    apt: tailscale
+github: tailscale/tailscale
