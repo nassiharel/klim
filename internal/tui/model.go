@@ -489,34 +489,40 @@ func tabFromName(name string) int {
 // gotoParentTab is a tiny wrapper around switchToTabByNumber that maps a
 // parent-tab constant to its number key, so Tab/Shift-Tab can reuse the
 // same entry-side-effects (cursor reset, projectLoadListCmd, etc).
+//
+// Returns a Model *value* (not the pointer receiver) so the concrete
+// tea.Model type returned by every TUI key handler stays Model — type
+// assertions against Model in tests don't need to special-case this
+// helper, and we avoid the heap escape that returning the pointer
+// receiver would force.
 func (m *Model) gotoParentTab(parent int) (tea.Model, tea.Cmd) {
 	switch parent {
 	case tabInstalled, tabUpdates, tabFavorites:
 		_, cmd := m.switchToTabByNumber("1")
-		return m, cmd
+		return *m, cmd
 	case tabDiscover:
 		_, cmd := m.switchToTabByNumber("2")
-		return m, cmd
+		return *m, cmd
 	case tabProject:
 		_, cmd := m.switchToTabByNumber("3")
-		return m, cmd
+		return *m, cmd
 	case tabDashboard:
 		_, cmd := m.switchToTabByNumber("4")
-		return m, cmd
+		return *m, cmd
 	case tabProfile:
 		_, cmd := m.switchToTabByNumber("5")
-		return m, cmd
+		return *m, cmd
 	case tabDoctor:
 		_, cmd := m.switchToTabByNumber("6")
-		return m, cmd
+		return *m, cmd
 	case tabBackup:
 		_, cmd := m.switchToTabByNumber("7")
-		return m, cmd
+		return *m, cmd
 	case tabConfig:
 		_, cmd := m.switchToTabByNumber("8")
-		return m, cmd
+		return *m, cmd
 	}
-	return m, nil
+	return *m, nil
 }
 
 // switchToTabByNumber handles "1".."8" key presses by switching to the

@@ -169,12 +169,34 @@ func (m Model) handleKeyFavorites(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "end", "G":
 		m.cursor = max(0, m.rowCount()-1)
 
-	// Tab switching.
+	// Tab switching. Favorites is a My Tools subtab, so left/right
+	// must cycle the My Tools subtab strip (Installed ↔ Updates ↔
+	// Favorites) before stepping to the next/previous parent. This
+	// mirrors the handleKeyDefault behaviour and prevents Favorites
+	// from skipping straight to Marketplace/Config on arrow keys.
 	case "right", "tab":
+		if isMyToolsTab(m.activeTab) {
+			i := myToolsSubIndex(m.activeTab)
+			if i >= 0 && i < len(myToolsSubOrder)-1 {
+				m.activeTab = myToolsSubOrder[i+1]
+				m.cursor = 0
+				m.applyFilter()
+				return m, nil
+			}
+		}
 		next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
 		m.discoverSubTab = discoverTools
 		return m.gotoParentTab(next)
 	case "left", "shift+tab":
+		if isMyToolsTab(m.activeTab) {
+			i := myToolsSubIndex(m.activeTab)
+			if i > 0 {
+				m.activeTab = myToolsSubOrder[i-1]
+				m.cursor = 0
+				m.applyFilter()
+				return m, nil
+			}
+		}
 		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 		m.discoverSubTab = discoverTools
 		return m.gotoParentTab(prev)

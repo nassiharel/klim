@@ -114,11 +114,16 @@ func (m *Model) startEnvInput(verb string) tea.Cmd {
 // there and nothing more — no global "every key works everywhere"
 // trap that would let a stray "a" trigger Apply during Show output.
 func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	inInput := m.envState == envViewInputOpen ||
+		m.envState == envViewInputDiff ||
+		m.envState == envViewInputApply
+
 	// Quit and parent-tab switching keys take priority over every
 	// other env state (including text-input states) so the user is
-	// never trapped inside the modal sub-view. Without this, a
-	// half-typed paste would swallow ctrl+c, q, 1..8, Tab, and
-	// arrow-key tab cycling.
+	// never trapped inside the modal sub-view. In input states we
+	// deliberately *exclude* plain Left/Right so the textinput can
+	// still move its cursor through pasted tokens — Tab/Shift-Tab
+	// remain the input-mode escape hatches.
 	switch msg.String() {
 	case "ctrl+c":
 		m.quitting = true
@@ -127,7 +132,7 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		mp := &m
 		// Cancel any in-flight text input so we don't carry stale
 		// state to the destination tab.
-		if mp.envState == envViewInputOpen || mp.envState == envViewInputDiff || mp.envState == envViewInputApply {
+		if inInput {
 			mp.envState = envViewIdle
 			mp.envInputVerb = ""
 		}
@@ -138,8 +143,8 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return *mp, cmd
 		}
 		return m, nil
-	case "tab", "right":
-		if m.envState == envViewInputOpen || m.envState == envViewInputDiff || m.envState == envViewInputApply {
+	case "tab":
+		if inInput {
 			m.envState = envViewIdle
 			m.envInputVerb = ""
 		}
@@ -148,8 +153,8 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
 		return m.gotoParentTab(next)
-	case "shift+tab", "left":
-		if m.envState == envViewInputOpen || m.envState == envViewInputDiff || m.envState == envViewInputApply {
+	case "shift+tab":
+		if inInput {
 			m.envState = envViewIdle
 			m.envInputVerb = ""
 		}
@@ -158,12 +163,28 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 		return m.gotoParentTab(prev)
+	case "right":
+		if !inInput {
+			if m.activeTab == tabProfile {
+				m.viewingEnv = false
+			}
+			next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
+			return m.gotoParentTab(next)
+		}
+	case "left":
+		if !inInput {
+			if m.activeTab == tabProfile {
+				m.viewingEnv = false
+			}
+			prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
+			return m.gotoParentTab(prev)
+		}
 	}
 
 	// Text-input states intercept all remaining keys so the user can
 	// paste a token (which may legitimately contain `:`, base64
 	// chars, etc.) without one of them being eaten as a hotkey.
-	if m.envState == envViewInputOpen || m.envState == envViewInputDiff || m.envState == envViewInputApply {
+	if inInput {
 		return m.handleKeyEnvInput(msg)
 	}
 

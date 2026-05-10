@@ -143,9 +143,15 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("Esc") + " cancel",
 			}
 		default:
+			// Show / Diff / ApplyReport states: Esc returns to
+			// idle (NOT to a parent menu, since Profile owns
+			// the env sub-view directly). q falls through to
+			// the same back-out, so don't advertise it as quit
+			// here — that's misleading. ctrl+c always quits.
 			parts = []string{
 				dimVersion.Render("Esc") + " back",
-				dimVersion.Render("q") + " quit",
+				dimVersion.Render("←→") + " tab",
+				dimVersion.Render("ctrl+c") + " quit",
 			}
 		}
 	case tabDoctor:
