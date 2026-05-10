@@ -75,7 +75,7 @@ ToolService
 
 ## TUI Tabs
 
-Top-level (parent) tabs are switched with number keys 1-8 or Tab/Shift-Tab. My Tools and My Profile expose subtabs via Left/Right arrows.
+Number keys 1-8 jump straight to a parent tab. Tab/Shift-Tab and Left/Right arrows step through subtabs first (when the parent has any) and advance to the next/previous parent only at the strip's edge — e.g. on Marketplace, Right cycles Tools → Packs → For You → Onboard before moving to Project; on My Tools, Right cycles Installed → Updates → Favorites before moving to Marketplace.
 
 | Tab | Key | Subtabs | Content |
 |---|---|---|---|

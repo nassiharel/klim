@@ -117,8 +117,11 @@ func (m Model) renderView() string {
 		content := m.renderDashboardView()
 		lines := strings.Split(content, "\n")
 
-		// Compute available visible rows: total height minus tab bar (2 lines),
-		// footer, and 1-line gap between body and footer.
+		// Compute available visible rows: total height minus the
+		// header (title + tab bar + rule + blank, with an extra
+		// row when the active parent has a subtab strip — see
+		// subtabRows()), footer, and a 1-line gap between body
+		// and footer.
 		footer := m.renderHelp()
 		footerRows := m.footerHeight()
 		headerRows := 4 + m.subtabRows() // title + tabs + rule + blank (+ subtab strip)

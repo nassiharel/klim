@@ -55,8 +55,12 @@ const (
 // order.
 var myToolsSubOrder = []int{tabInstalled, tabUpdates, tabFavorites}
 
-// parentTabOrder lists the parent tabs in display order. Tab/Shift-Tab
-// cycle through these, not through every individual sub-tab. The first
+// parentTabOrder lists the parent tabs in display order. Tab and the
+// right arrow advance through this slice, but the key handlers cycle
+// the *current parent's* subtab strip first when one exists (Marketplace
+// sub-tabs, Security/Doctor sub-tabs, My Tools subtabs) and only step
+// to the next entry of parentTabOrder once the active subtab is at the
+// strip's edge. Shift-Tab / left mirror this in reverse. The first
 // entry of My Tools (tabInstalled) acts as the parent's default subtab.
 var parentTabOrder = []int{
 	tabInstalled, // My Tools (parent — default subtab)
