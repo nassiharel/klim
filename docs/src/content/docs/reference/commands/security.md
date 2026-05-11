@@ -1,38 +1,29 @@
 ---
 title: klim security
-description: Umbrella for klim's security commands — health checks, audit, vulnerability scan, and compliance.
+description: Umbrella for klim's security commands — audit, vulnerability scan, and compliance.
 ---
 
 `klim security` groups every command that helps you reason about the
 safety of your toolchain. With no arguments it prints a summary across
 all subcommands; otherwise, dispatch to a specific check.
 
+Environment health (PATH conflicts, multi-installs, missing PMs,
+stale caches) lives under the top-level [`klim health`](./health.md)
+command — it's a separate concern from supply-chain security.
+
 ## Synopsis
 
 ```
 klim security                       # aggregated summary
-klim security health                # PATH integrity / shadowing / multi-install / cache
 klim security audit                 # archived/stale/license findings
 klim security vuln                  # CVE/GHSA scan via OSV.dev
 klim security compliance            # validate against a policy
 ```
 
-`klim audit`, `klim doctor`, and `klim compliance` are **not**
-top-level commands. Use the `klim security <sub>` form.
+`klim audit` and `klim compliance` are **not** top-level commands.
+Use the `klim security <sub>` form.
 
 ## Subcommands
-
-### `klim security health`
-
-Environment diagnostics. Detects duplicate or broken PATH entries,
-PATH-shadowing where a user-writable directory shadows a system tool,
-multiple installations of the same tool across different sources,
-unresolved versions, and stale local caches.
-
-(Network reachability and shell-hook diagnostics are planned but not
-yet implemented; the current check set is local-only.)
-
-Flags: `--output {text,json}` (default text).
 
 ### `klim security audit`
 
@@ -74,6 +65,8 @@ and machine-readable payloads (`--output json`) to stdout. See
 
 ## Related
 
+- [`klim health`](./health.md) — environment health & PATH diagnostics
 - [`klim security vuln`](./vuln.md) — vulnerability scan reference
 - [`klim score`](./score.md) — composite security score per tool
 - [`klim trail`](./trail.md) — change history (every install/upgrade)
+

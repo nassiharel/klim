@@ -9,19 +9,19 @@ The Klim TUI is an interactive interface for your developer environment. Launch 
 
 ## Tabs
 
-The TUI has 9 tabs, accessible via arrow keys or number keys:
+The TUI has 9 parent tabs, accessible via arrow keys or number keys:
 
 | Tab | Key | Purpose |
 |-----|-----|---------|
-| **Installed** | 1 | All detected tools with version status |
-| **★ Favorites** | 2 | Your favorited tools |
-| **Updates** | 3 | Tools with available upgrades |
-| **Marketplace** | 4 | Browse and install (sub-tabs: Tools, Packs, For You, Onboard) |
-| **Backup** | 5 | Export, import, share, custom packs, saved backups |
-| **Project** | 6 | Multi-project `.klim.yaml` management |
-| **Dashboard** | 7 | Stats, gauges, category breakdowns |
-| **Config** | 8 | View and edit settings |
-| **Security** | 9 | Environment diagnostics, security audit, and compliance (sub-tabs: Health / Audit / Compliance) |
+| **My Tools** | 1 | All detected tools with version status (sub-tabs: Installed, Updates, Favorites) |
+| **Marketplace** | 2 | Browse and install (sub-tabs: Tools, Packs, For You, Onboard) |
+| **Project** | 3 | Multi-project `.klim.yaml` management |
+| **Dashboard** | 4 | Stats, gauges, category breakdowns |
+| **My Profile** | 5 | Generate / inspect / compare / apply env profile |
+| **Health** | 6 | Environment diagnostics and visual PATH-conflict explorer (sub-tabs: Issues, PATH) |
+| **Security** | 7 | Security audit and policy compliance (sub-tabs: Audit, Compliance) |
+| **Backup** | 8 | Export, import, share, custom packs, saved backups |
+| **Config** | 9 | View and edit settings |
 
 ### Marketplace
 
@@ -43,9 +43,20 @@ A single page with environment score, tool coverage, attention items, GitHub hig
 
 ### Security
 
-Health diagnostics, security audit, and policy compliance grouped under one tab.
+Security audit and policy compliance grouped under one tab. Environment
+health diagnostics now live in their own [Health](#health) tab.
 
 ![klim TUI Security tab on the Compliance sub-tab listing policy violations](../../../assets/examples/klim-security-compliance-tui.png)
+
+### Health
+
+Environment diagnostics and a visual PATH-conflict explorer. The
+**Issues** sub-tab is the full diagnostic list (PATH problems,
+multi-installs, missing PMs, stale cache). The **PATH** sub-tab
+visualises which binary wins, which copies are shadowed, and where
+versions diverge across copies — switch between *By tool* and
+*By PATH dir* with `t`, and press `u` on a shadowed row to uninstall
+that specific copy through its detected package manager.
 
 ## Global Keybindings
 

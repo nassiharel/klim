@@ -41,9 +41,10 @@ const (
 	tabProject
 	tabDashboard
 	tabConfig
-	tabDoctor
+	tabDoctor // Security parent (Audit + Compliance)
 	tabProfile
-	tabCount // sentinel: total number of tab constants. Cycling is
+	tabHealth // Environment Health parent (Issues + PATH)
+	tabCount  // sentinel: total number of tab constants. Cycling is
 	// driven by parentTabOrder/parentIndex below — do not use
 	// tabCount for `(activeTab+1)%tabCount` cycling, since that
 	// would treat each My Tools subtab as a peer of every other
@@ -68,7 +69,8 @@ var parentTabOrder = []int{
 	tabProject,
 	tabDashboard,
 	tabProfile, // My Profile
-	tabDoctor,  // Security
+	tabHealth,  // Health (Issues + PATH)
+	tabDoctor,  // Security (Audit + Compliance)
 	tabBackup,
 	tabConfig,
 }
@@ -88,12 +90,14 @@ func parentIndex(tab int) int {
 		return 3
 	case tabProfile:
 		return 4
-	case tabDoctor:
+	case tabHealth:
 		return 5
-	case tabBackup:
+	case tabDoctor:
 		return 6
-	case tabConfig:
+	case tabBackup:
 		return 7
+	case tabConfig:
+		return 8
 	}
 	return 0
 }
@@ -350,7 +354,7 @@ type Model struct {
 	configEditInput textinput.Model // text input for string/int/duration settings
 	configScroll    int             // scroll offset for config tab
 
-	// Doctor tab state (includes audit + compliance findings).
+	// Security tab state (audit + compliance findings).
 	doctorIssues     []doctor.Issue     // diagnostic results (nil = not yet checked)
 	auditFindings    []audit.Finding    // security audit findings
 	auditLicenses    map[string]int     // license counts
@@ -359,9 +363,21 @@ type Model struct {
 	complianceError  string             // non-empty when policy failed to load
 	cachedScore      score.Result       // computed once in runDoctor
 	lastScanMeta     doctor.ScanMeta    // remembered so post-action recompute keeps FromCache provenance
-	doctorScroll     int                // scroll offset for doctor tab
+	doctorScroll     int                // scroll offset for Security tab
 	doctorChecked    bool               // true after first doctor check completed
-	doctorSubTab     int                // 0=doctor, 1=audit, 2=compliance
+	doctorSubTab     int                // Security: 0=audit, 1=compliance
+
+	// Health tab state (separate from Security: PATH conflicts +
+	// the legacy "Issues" view; sub-tab cycling lives in its own
+	// scroll/state slot so cycling between Health and Security
+	// keeps each tab's last view).
+	healthSubTab        int    // 0=Issues, 1=PATH
+	healthScroll        int    // scroll offset for Health tab
+	healthPathView      int    // 0=By tool, 1=By PATH dir
+	healthPathToolIdx   int    // selected row in By-tool view
+	healthPathShadowIdx int    // selected shadowed copy under that tool
+	healthPathDirIdx    int    // selected row in By-PATH-dir view
+	healthPathStatus    string // transient banner: last uninstall result
 
 	// Onboard state (Discover → Onboard sub-tab).
 	onboardRole  int              // selected role index (0 = first role)
@@ -485,6 +501,8 @@ func tabFromName(name string) int {
 		return tabConfig
 	case "doctor", "security":
 		return tabDoctor
+	case "health":
+		return tabHealth
 	case "profile", "my-profile", "myprofile":
 		return tabProfile
 	default:
@@ -518,25 +536,28 @@ func (m *Model) gotoParentTab(parent int) (tea.Model, tea.Cmd) {
 	case tabProfile:
 		_, cmd := m.switchToTabByNumber("5")
 		return *m, cmd
-	case tabDoctor:
+	case tabHealth:
 		_, cmd := m.switchToTabByNumber("6")
 		return *m, cmd
-	case tabBackup:
+	case tabDoctor:
 		_, cmd := m.switchToTabByNumber("7")
 		return *m, cmd
-	case tabConfig:
+	case tabBackup:
 		_, cmd := m.switchToTabByNumber("8")
+		return *m, cmd
+	case tabConfig:
+		_, cmd := m.switchToTabByNumber("9")
 		return *m, cmd
 	}
 	return *m, nil
 }
 
-// switchToTabByNumber handles "1".."8" key presses by switching to the
+// switchToTabByNumber handles "1".."9" key presses by switching to the
 // corresponding parent tab. Returns (handled, cmd). If !handled the key
 // was not a recognised tab number.
 //
 // New mapping (1=My Tools, 2=Marketplace, 3=Project, 4=Dashboard,
-// 5=My Profile, 6=Security, 7=Backup, 8=Config).
+// 5=My Profile, 6=Health, 7=Security, 8=Backup, 9=Config).
 func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 	switch key {
 	case "1":
@@ -582,15 +603,20 @@ func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 		cmd := m.startEnvSubview()
 		return true, cmd
 	case "6":
+		m.activeTab = tabHealth
+		m.cursor = 0
+		m.healthScroll = 0
+		return true, nil
+	case "7":
 		m.activeTab = tabDoctor
 		m.cursor = 0
 		m.doctorScroll = 0
 		return true, nil
-	case "7":
+	case "8":
 		m.activeTab = tabBackup
 		m.cursor = 0
 		return true, nil
-	case "8":
+	case "9":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0
@@ -640,7 +666,14 @@ func (m *Model) startScan() tea.Cmd {
 	m.complianceError = ""
 	m.doctorChecked = false
 	m.doctorScroll = 0
-	m.doctorSubTab = doctorSubDoctor
+	m.doctorSubTab = doctorSubAudit
+	m.healthSubTab = healthSubIssues
+	m.healthScroll = 0
+	m.healthPathView = healthPathByTool
+	m.healthPathToolIdx = 0
+	m.healthPathShadowIdx = 0
+	m.healthPathDirIdx = 0
+	m.healthPathStatus = ""
 	m.onboardTools = nil // indices tied to old tools slice
 	return tea.Batch(
 		m.spinner.Tick,
@@ -1663,7 +1696,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyProject(msg)
 	}
 
-	// Dashboard and Doctor tabs use static/scroll-only key handling.
+	// Health tab — interactive, has its own key handler.
+	if m.activeTab == tabHealth {
+		return m.handleKeyHealth(msg)
+	}
+
+	// Dashboard and Security (Doctor) tabs use static/scroll-only key handling.
 	if m.activeTab == tabDashboard || m.activeTab == tabDoctor {
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -1694,7 +1732,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "right", "tab":
-			// On Doctor tab, cycle sub-tabs before switching main tabs.
+			// On Security tab, cycle sub-tabs before switching main tabs.
 			if m.activeTab == tabDoctor && m.doctorSubTab < doctorSubCompliance {
 				m.doctorSubTab++
 				m.doctorScroll = 0
@@ -1703,11 +1741,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
 			m.dashboardScroll = 0
 			m.doctorScroll = 0
-			m.doctorSubTab = doctorSubDoctor
+			m.doctorSubTab = doctorSubAudit
 			m.discoverSubTab = discoverTools
 			return m.gotoParentTab(next)
 		case "left", "shift+tab":
-			if m.activeTab == tabDoctor && m.doctorSubTab > doctorSubDoctor {
+			if m.activeTab == tabDoctor && m.doctorSubTab > doctorSubAudit {
 				m.doctorSubTab--
 				m.doctorScroll = 0
 				return m, nil
@@ -1715,10 +1753,10 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 			m.dashboardScroll = 0
 			m.doctorScroll = 0
-			m.doctorSubTab = doctorSubDoctor
+			m.doctorSubTab = doctorSubAudit
 			m.discoverSubTab = discoverTools
 			return m.gotoParentTab(prev)
-		case "1", "2", "3", "4", "5", "6", "7", "8":
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 			if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
 				return m, cmd
 			}
@@ -1733,8 +1771,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// `i` initialises a sample compliance policy when the user
 			// is on the Compliance sub-tab and no policy is configured
 			// yet. We deliberately gate on activeTab+sub-tab+result==nil
-			// so the key is a no-op everywhere else (Health / Audit /
-			// after the policy already loaded).
+			// so the key is a no-op everywhere else (Audit / after the
+			// policy already loaded).
 			if m.activeTab == tabDoctor && m.doctorSubTab == doctorSubCompliance && m.complianceResult == nil && m.complianceError == "" {
 				m.runComplianceInit()
 			}
@@ -1742,9 +1780,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "v":
 			// Force a vulnerability scan from the Audit sub-tab.
 			// Only on Audit because the scan refreshes the cache
-			// the Audit view reads — running it from Health or
-			// Compliance would be confusing without visible
-			// feedback in those panels.
+			// the Audit view reads — running it from Compliance
+			// would be confusing without visible feedback there.
 			if m.activeTab == tabDoctor && m.doctorSubTab == doctorSubAudit {
 				m.statusMsg = "Scanning vulnerabilities..."
 				return m, scanVulnsCmd(m.tools, m.cfg)
@@ -1880,7 +1917,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 		return m.gotoParentTab(prev)
-	case "1", "2", "3", "4", "5", "6", "7", "8":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
 			return m, cmd
 		}

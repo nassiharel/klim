@@ -17,11 +17,23 @@ import (
 	"github.com/nassiharel/klim/internal/vuln"
 )
 
-// Doctor sub-tab indices.
+// Security sub-tab indices. Health used to live here as a third
+// sub-tab; it now has its own top-level tab (see health_tab.go).
 const (
-	doctorSubDoctor     = 0
-	doctorSubAudit      = 1
-	doctorSubCompliance = 2
+	doctorSubAudit      = 0
+	doctorSubCompliance = 1
+)
+
+// Health (top-level) sub-tab indices.
+const (
+	healthSubIssues = 0
+	healthSubPath   = 1
+)
+
+// Health → PATH sub-views.
+const (
+	healthPathByTool = 0
+	healthPathByDir  = 1
 )
 
 // Doctor view color palette.
@@ -34,7 +46,9 @@ var (
 	doctorOK      = lipgloss.NewStyle().Foreground(successColor).Bold(true)   // mint green
 )
 
-// renderDoctorView renders the Doctor tab content with sub-tabs.
+// renderDoctorView renders the Security tab content with sub-tabs.
+// The "Health" sub-tab that used to live here has been promoted to its
+// own top-level tab — see health_tab.go.
 func (m Model) renderDoctorView() string {
 	var b strings.Builder
 
@@ -43,7 +57,6 @@ func (m Model) renderDoctorView() string {
 		text string
 		idx  int
 	}{
-		{"Health", doctorSubDoctor},
 		{"Audit", doctorSubAudit},
 		{"Compliance", doctorSubCompliance},
 	}
@@ -63,12 +76,10 @@ func (m Model) renderDoctorView() string {
 	}
 
 	switch m.doctorSubTab {
-	case doctorSubAudit:
-		b.WriteString(m.renderAuditView())
 	case doctorSubCompliance:
 		b.WriteString(m.renderComplianceView())
 	default:
-		b.WriteString(m.renderDoctorIssuesView())
+		b.WriteString(m.renderAuditView())
 	}
 
 	return b.String()

@@ -176,6 +176,28 @@ func (m Model) renderHelp() string {
 			}
 		}
 		parts = append(parts, dimVersion.Render("q")+" quit")
+	case tabHealth:
+		switch m.healthSubTab {
+		case healthSubPath:
+			parts = []string{
+				dimVersion.Render("↑↓") + " navigate",
+				dimVersion.Render("t") + " switch view",
+				dimVersion.Render("c") + " copy path",
+				dimVersion.Render("o") + " open location",
+				dimVersion.Render("u") + " uninstall shadowed",
+				dimVersion.Render("←→") + " sub-tab / tab",
+				dimVersion.Render("r") + " refresh",
+				dimVersion.Render("q") + " quit",
+			}
+		default:
+			parts = []string{
+				dimVersion.Render("↑↓") + " scroll",
+				dimVersion.Render("Home") + " top",
+				dimVersion.Render("←→") + " sub-tab / tab",
+				dimVersion.Render("r") + " refresh",
+				dimVersion.Render("q") + " quit",
+			}
+		}
 	case tabFavorites:
 		switch {
 		case m.favClearConfirm:

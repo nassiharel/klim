@@ -140,7 +140,7 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
-	case "1", "2", "3", "4", "5", "6", "7", "8":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		mp := &m
 		// Cancel any in-flight text input so we don't carry stale
 		// state to the destination tab.

@@ -155,6 +155,42 @@ func (m Model) renderView() string {
 		return m.layoutWithFooter(body.String(), footer)
 	}
 
+	// Health tab — scrollable like dashboard, plus its own PATH sub-view.
+	if m.activeTab == tabHealth {
+		content := m.renderHealthView()
+		lines := strings.Split(content, "\n")
+
+		footer := m.renderHelp()
+		footerRows := m.footerHeight()
+		headerRows := 4 + m.subtabRows()
+		const minGap = 1
+		visibleRows := m.height - headerRows - footerRows - minGap
+		if visibleRows < 5 {
+			visibleRows = 5
+		}
+
+		maxScroll := len(lines) - visibleRows
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		scroll := m.healthScroll
+		if scroll > maxScroll {
+			scroll = maxScroll
+		}
+
+		if scroll > 0 && scroll < len(lines) {
+			lines = lines[scroll:]
+		}
+
+		body.WriteString(strings.Join(lines, "\n"))
+		if scroll > 0 {
+			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
+		} else if len(strings.Split(content, "\n")) > visibleRows {
+			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
+		}
+		return m.layoutWithFooter(body.String(), footer)
+	}
+
 	// Doctor tab — scrollable like dashboard.
 	if m.activeTab == tabDoctor {
 		content := m.renderDoctorView()
@@ -416,6 +452,9 @@ func (m Model) subtabRows() int {
 	if m.activeTab == tabProfile {
 		return 1
 	}
+	if m.activeTab == tabHealth {
+		return 1
+	}
 	return 0
 }
 
@@ -433,6 +472,7 @@ func (m Model) renderTabBar() string {
 		{"Project", tabProject},
 		{"Dashboard", tabDashboard},
 		{"My Profile", tabProfile},
+		{"Health", tabHealth},
 		{"Security", tabDoctor},
 		{"Backup", tabBackup},
 		{"Config", tabConfig},
@@ -479,6 +519,26 @@ func (m Model) renderTabBar() string {
 	// My Profile subtab strip.
 	if m.activeTab == tabProfile {
 		bar += "\n  " + activeTabStyle.Render("Env Profile")
+	}
+
+	// Health subtab strip (Issues / PATH).
+	if m.activeTab == tabHealth {
+		subs := []struct {
+			label string
+			idx   int
+		}{
+			{"Issues", healthSubIssues},
+			{"PATH", healthSubPath},
+		}
+		var subParts []string
+		for _, s := range subs {
+			if s.idx == m.healthSubTab {
+				subParts = append(subParts, activeTabStyle.Render(s.label))
+			} else {
+				subParts = append(subParts, inactiveTabStyle.Render(s.label))
+			}
+		}
+		bar += "\n  " + strings.Join(subParts, "")
 	}
 
 	return bar

@@ -75,7 +75,7 @@ ToolService
 
 ## TUI Tabs
 
-Number keys 1-8 jump straight to a parent tab. Tab/Shift-Tab and Left/Right arrows step through subtabs first (when the parent has any) and advance to the next/previous parent only at the strip's edge — e.g. on Marketplace, Right cycles Tools → Packs → For You → Onboard before moving to Project; on My Tools, Right cycles Installed → Updates → Favorites before moving to Marketplace.
+Number keys 1-9 jump straight to a parent tab. Tab/Shift-Tab and Left/Right arrows step through subtabs first (when the parent has any) and advance to the next/previous parent only at the strip's edge — e.g. on Marketplace, Right cycles Tools → Packs → For You → Onboard before moving to Project; on My Tools, Right cycles Installed → Updates → Favorites before moving to Marketplace.
 
 | Tab | Key | Subtabs | Content |
 |---|---|---|---|
@@ -84,9 +84,10 @@ Number keys 1-8 jump straight to a parent tab. Tab/Shift-Tab and Left/Right arro
 | Project    | 3 | — | Per-project tool checks. |
 | Dashboard  | 4 | — | Aggregate stats, gauges, category/tag/platform breakdowns. |
 | My Profile | 5 | Env Profile | Generate / inspect / compare / apply env profile. |
-| Security   | 6 | Doctor, Audit, Compliance | Health checks, vulnerability scans, compliance policies. |
-| Backup     | 7 | — | Export/import toolchain; share tokens; Trail; My Packs; My Backups. |
-| Config     | 8 | — | View/edit config.yaml settings. |
+| Health     | 6 | Issues, PATH | Environment diagnostics (PATH problems, multi-installs, missing PMs, stale cache) and a visual PATH conflict explorer (Active vs Shadowed, By tool / By PATH dir, `t` to switch view, `u` to uninstall a shadowed copy through its PM). |
+| Security   | 7 | Audit, Compliance | Vulnerability scans and compliance policies. |
+| Backup     | 8 | — | Export/import toolchain; share tokens; Trail; My Packs; My Backups. |
+| Config     | 9 | — | View/edit config.yaml settings. |
 
 **Filter sidebar:** Category / Platform / Tag filters with counters. Configurable left/right position (`config.yaml → ui.sidebar_right`).
 
