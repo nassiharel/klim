@@ -435,114 +435,115 @@ func (m Model) handleKeyHealthFixModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// renderFixModal returns the full-screen modal body. Layout:
-//
-//	┌─────────────────────────────────────────────┐
-//	│ Fix: <issue title>                           │
-//	│ <severity> · <category>                      │
-//	│                                              │
-//	│ <issue detail>                               │
-//	│                                              │
-//	│ Command:                                     │
-//	│   $ <command line 1>                         │
-//	│   $ <command line 2>                         │
-//	│                                              │
-//	│ ▶ Run command       Execute it here          │
-//	│   Copy to clipboard Paste manually           │
-//	│   Cancel            Dismiss                  │
-//	└─────────────────────────────────────────────┘
-//	  ↑↓ select   Enter run   Esc cancel
-//
-// When State == fixModalRunning it replaces the option list with a
-// "Running…" spinner+banner and shows the rolling output. When
-// fixModalDone it shows ✓/✗ plus the full output and a single
-// "Press any key" hint.
+// renderFixModal returns the full-screen modal body. It is rendered
+// as a centred, rounded box. The body inside the box has three
+// state-specific layouts (Idle / Running / Done); each takes care to
+// soft-wrap commands at word boundaries with a hanging indent so
+// long PowerShell snippets don't overflow the box border.
 func (m Model) renderFixModal() string {
-	box := lipgloss.NewStyle().
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(primaryColor)
-
+	// Modal width: prefer a comfortable reading width, never wider
+	// than the terminal minus a small margin.
 	width := m.width - 6
-	if width < 50 {
-		width = 50
+	if width < 60 {
+		width = 60
 	}
 	if width > 100 {
 		width = 100
 	}
-	box = box.Width(width)
+	innerWidth := width - 4 // accounts for box padding(1,2)
+
+	box := lipgloss.NewStyle().
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(primaryColor).
+		Width(width)
+
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(highlightColor)
 
 	var b strings.Builder
 
 	// Header.
-	title := m.fixModal.Issue.Title
-	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(highlightColor).Render("Fix: "+title) + "\n")
-	sev := severityStyle(m.fixModal.Issue.Severity)
-	b.WriteString(sev + "  " + healthDim.Render(m.fixModal.Issue.Category) + "\n")
+	b.WriteString(titleStyle.Render("Fix: "+m.fixModal.Issue.Title) + "\n")
+	b.WriteString(severityStyle(m.fixModal.Issue.Severity) + "  " +
+		healthDim.Render(m.fixModal.Issue.Category) + "\n")
 	if m.fixModal.Issue.Detail != "" {
 		b.WriteString("\n")
 		for _, line := range strings.Split(m.fixModal.Issue.Detail, "\n") {
 			if line == "" {
 				continue
 			}
-			b.WriteString(healthDim.Render(line) + "\n")
+			b.WriteString(softWrap(line, innerWidth, "  ", healthDim.Render) + "\n")
 		}
 	}
 
 	switch m.fixModal.State {
 	case fixModalIdle:
-		b.WriteString(renderFixCommandBlock(m.fixModal.Issue))
+		b.WriteString(renderFixCommandBlock(m.fixModal.Issue, innerWidth))
 		if m.fixModal.Issue.Action.TouchesPATH {
-			b.WriteString("\n" + healthAccent.Render("💾 A PATH backup will be created before this runs.") + "\n")
-			b.WriteString("  " + healthDim.Render("(in ~/.klim/backups/path/, restorable from the next dialog)") + "\n")
+			b.WriteString("\n" + healthAccent.Render("💾 A PATH backup will be saved before this runs") + "\n")
+			b.WriteString(healthDim.Render("   to ~/.klim/backups/path/ — restorable from the next dialog.") + "\n")
 		}
 		b.WriteString("\n")
 		for i, opt := range m.fixModal.Options {
-			b.WriteString(renderFixOption(opt, i, i == m.fixModal.Cursor))
+			b.WriteString(renderFixOption(opt, i, i == m.fixModal.Cursor, innerWidth))
 		}
-		b.WriteString("\n" + healthDim.Render("↑↓ select   Enter run   1-9 quick pick   Esc cancel"))
+		b.WriteString("\n" + healthDim.Render("↑↓ select · Enter run · 1-9 quick · Esc cancel"))
+
 	case fixModalRunning:
-		b.WriteString(renderFixCommandBlock(m.fixModal.Issue))
-		b.WriteString("\n" + healthAccent.Render("● Running...") + " " + healthDim.Render("(Esc to detach)") + "\n")
+		b.WriteString(renderFixCommandBlock(m.fixModal.Issue, innerWidth))
+		b.WriteString("\n" + healthAccent.Render("● Running…") + "  " +
+			healthDim.Render("(Esc to detach — the command keeps running)"))
+
 	case fixModalDone:
 		b.WriteString("\n")
 		switch {
 		case m.fixModal.IsRestore && m.fixModal.Err == nil:
-			b.WriteString(healthOK.Render("↶ PATH restored from backup") + "\n")
+			b.WriteString(healthOK.Render("↶ PATH restored from backup"))
 		case m.fixModal.Err != nil:
-			b.WriteString(healthBad.Render("✗ Fix failed") + "\n\n")
-			b.WriteString(healthDim.Render("Error: "+m.fixModal.Err.Error()) + "\n")
+			b.WriteString(healthBad.Render("✗ Fix failed"))
 		default:
-			b.WriteString(healthOK.Render("✓ Fix applied") + "\n")
+			b.WriteString(healthOK.Render("✓ Fix applied"))
+		}
+		b.WriteString("\n")
+		if m.fixModal.Err != nil {
+			b.WriteString("\n" + softWrap("Error: "+m.fixModal.Err.Error(), innerWidth, "  ", healthBad.Render) + "\n")
 		}
 		if m.fixModal.BackupPath != "" && !m.fixModal.IsRestore {
 			b.WriteString("\n" + healthAccent.Render("💾 PATH backup saved") + "\n")
-			b.WriteString("  " + healthDim.Render(m.fixModal.BackupPath) + "\n")
+			b.WriteString("   " + healthDim.Render(truncateMiddle(m.fixModal.BackupPath, innerWidth-3)) + "\n")
 		}
-		if m.fixModal.Output != "" {
-			b.WriteString("\n" + healthDim.Render("Output:") + "\n")
-			b.WriteString(renderCodeBlock(m.fixModal.Output, width-6))
+		if trimmed := strings.TrimSpace(m.fixModal.Output); trimmed != "" {
+			b.WriteString("\n" + healthDim.Render("Output") + "\n")
+			b.WriteString(renderCodeBlock(trimmed, innerWidth, 8))
 		}
 		b.WriteString("\n")
 		for i, opt := range m.fixModalDoneOptions() {
-			b.WriteString(renderFixOption(opt, i, i == m.fixModal.Cursor))
+			b.WriteString(renderFixOption(opt, i, i == m.fixModal.Cursor, innerWidth))
 		}
-		b.WriteString("\n" + healthDim.Render("↑↓ select   Enter / 1-9 confirm   q/Esc close"))
+		b.WriteString("\n" + healthDim.Render("↑↓ select · Enter confirm · q/Esc close"))
 	}
 
 	rendered := box.Render(b.String())
 
-	// Center the modal vertically and pad with blank lines so the
-	// surrounding TUI chrome doesn't bleed through visibly.
+	// Vertical placement: center when there's room, otherwise pin to
+	// the top so the modal never overflows the bottom of the
+	// terminal. visualRows handles wrapping inside the box.
 	totalRows := visualRows(rendered, m.width)
 	padTop := (m.height - totalRows) / 2
 	if padTop < 1 {
 		padTop = 1
 	}
+	if padTop+totalRows >= m.height {
+		padTop = 0
+	}
 	return strings.Repeat("\n", padTop) + rendered
 }
 
-func renderFixCommandBlock(issue doctor.Issue) string {
+// renderFixCommandBlock returns the "what will run" preview for the
+// idle / running states. For non-command actions (jump / rescan) it
+// emits a one-liner "Action: …" describing what the confirm button
+// will do.
+func renderFixCommandBlock(issue doctor.Issue, width int) string {
 	if issue.Action.Kind != doctor.ActionCopyCommand {
 		var label string
 		switch issue.Action.Kind {
@@ -558,49 +559,162 @@ func renderFixCommandBlock(issue doctor.Issue) string {
 		if label == "" {
 			return ""
 		}
-		return "\n" + healthDim.Render("Action:") + " " + label + "\n"
+		return "\n" + healthDim.Render("Action") + "\n" +
+			softWrap(label, width, "  ", lipgloss.NewStyle().Foreground(highlightColor).Render) + "\n"
 	}
 	var b strings.Builder
-	b.WriteString("\n" + healthDim.Render("Command:") + "\n")
-	b.WriteString(renderCodeBlock(issue.Action.Command, 0))
+	b.WriteString("\n" + healthDim.Render("Command") + "\n")
+	b.WriteString(renderCodeBlock(issue.Action.Command, width, 0))
 	return b.String()
 }
 
-// renderFixOption renders one row of the modal's option strip. The
-// active row is highlighted; row index 1-N is shown as a quick-pick
-// hint for keyboard accelerators.
-func renderFixOption(opt fixModalOption, idx int, selected bool) string {
-	marker := "  "
-	label := fmt.Sprintf("%d. %-20s", idx+1, opt.Label)
-	desc := healthDim.Render(opt.Desc)
+// renderFixOption renders one row of the modal's option strip.
+//
+// Layout for an unselected row:
+//
+//	  N. Label                Short description
+//
+// For the selected row the line is reverse-video and the description
+// is dropped to its own indented line so the highlight stays compact
+// instead of bleeding the description across the whole width.
+func renderFixOption(opt fixModalOption, idx int, selected bool, width int) string {
+	label := fmt.Sprintf("%d. %s", idx+1, opt.Label)
 	if selected {
-		marker = "▶ "
-		return healthSelected.Render(marker+label+"  "+opt.Desc) + "\n"
+		row := lipgloss.NewStyle().
+			Foreground(highlightColor).
+			Background(lipgloss.Color("237")).
+			Bold(true).
+			Padding(0, 1).
+			Render("▶ " + label)
+		return row + "\n" + softWrap(opt.Desc, width, "     ", healthDim.Render) + "\n"
 	}
-	return "  " + marker + label + "  " + desc + "\n"
+	// Unselected: keep things subtle. Description goes on the same line
+	// when there's room, otherwise it spills onto its own indented line.
+	headWidth := lipgloss.Width(label) + 4
+	descWidth := width - headWidth
+	if descWidth >= 20 {
+		desc := opt.Desc
+		if lipgloss.Width(desc) > descWidth {
+			desc = truncateANSI(desc, descWidth-1) + "…"
+		}
+		return "  " + label + "  " + healthDim.Render(desc) + "\n"
+	}
+	return "  " + label + "\n" + softWrap(opt.Desc, width, "     ", healthDim.Render) + "\n"
 }
 
-// renderCodeBlock wraps text in a soft-bordered, dim-bg block so the
-// command lines look like an embedded code snippet. width=0 means "no
-// explicit width — let lipgloss size to the content".
-func renderCodeBlock(content string, width int) string {
+// renderCodeBlock renders a fenced code-style block with a thin
+// border. Logical lines are prefixed with `$ ` (no prefix on visible
+// wrap-continuation lines). When maxLines > 0 the body is truncated
+// from the bottom and a "(+N more)" marker is appended so the modal
+// never gets dominated by command output.
+func renderCodeBlock(content string, width, maxLines int) string {
+	innerWidth := width - 4 // account for border + padding
+	if innerWidth < 20 {
+		innerWidth = 20
+	}
+
+	var b strings.Builder
+	totalLines := 0
+	logicalLines := strings.Split(content, "\n")
+	for li, line := range logicalLines {
+		if maxLines > 0 && totalLines >= maxLines {
+			b.WriteString(healthDim.Render(fmt.Sprintf("  …(+%d more lines)", len(logicalLines)-li)))
+			break
+		}
+		if strings.TrimSpace(line) == "" {
+			b.WriteString("\n")
+			totalLines++
+			continue
+		}
+		// First visible row gets `$ `; continuation rows get the
+		// matching 2-space indent so the snippet still looks like
+		// a shell session.
+		head := "$ "
+		cont := "  "
+		wrapped := softWrap(line, innerWidth-2, "", func(parts ...string) string { return strings.Join(parts, "") })
+		for i, ln := range strings.Split(wrapped, "\n") {
+			if i == 0 {
+				b.WriteString(head + ln + "\n")
+			} else {
+				b.WriteString(cont + ln + "\n")
+			}
+			totalLines++
+			if maxLines > 0 && totalLines >= maxLines {
+				break
+			}
+		}
+	}
+
 	style := lipgloss.NewStyle().
 		Padding(0, 1).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(subtleColor).
-		Foreground(highlightColor)
-	if width > 0 {
-		style = style.Width(width)
+		Foreground(highlightColor).
+		Width(width - 2)
+
+	return style.Render(strings.TrimRight(b.String(), "\n"))
+}
+
+// softWrap breaks s into rune-safe lines of at most width visible
+// columns, applying styleFn to each emitted line and prefixing every
+// line (including the first) with indent. Wrap points prefer
+// whitespace; falls back to a hard break when a single token exceeds
+// the width.
+func softWrap(s string, width int, indent string, styleFn func(...string) string) string {
+	if width <= 0 {
+		return styleFn(indent + s)
 	}
-	// Prefix non-empty lines with `$ ` so multi-line PowerShell
-	// snippets still read like shell commands.
-	var b strings.Builder
-	for _, line := range strings.Split(content, "\n") {
-		if strings.TrimSpace(line) == "" {
-			b.WriteString("\n")
+	if styleFn == nil {
+		styleFn = func(parts ...string) string { return strings.Join(parts, "") }
+	}
+	effective := width - lipgloss.Width(indent)
+	if effective < 10 {
+		effective = 10
+	}
+	var out []string
+	for _, paragraph := range strings.Split(s, "\n") {
+		words := strings.Fields(paragraph)
+		if len(words) == 0 {
+			out = append(out, styleFn(indent))
 			continue
 		}
-		b.WriteString("$ " + line + "\n")
+		line := ""
+		for _, w := range words {
+			switch {
+			case line == "":
+				line = w
+			case lipgloss.Width(line+" "+w) <= effective:
+				line += " " + w
+			default:
+				out = append(out, styleFn(indent+line))
+				line = w
+			}
+			// Hard-break a word that exceeds the line width on
+			// its own (e.g. a long unquoted PowerShell expression).
+			for lipgloss.Width(line) > effective {
+				cut := effective
+				if cut > len(line) {
+					cut = len(line)
+				}
+				out = append(out, styleFn(indent+line[:cut]))
+				line = line[cut:]
+			}
+		}
+		if line != "" {
+			out = append(out, styleFn(indent+line))
+		}
 	}
-	return style.Render(strings.TrimRight(b.String(), "\n"))
+	return strings.Join(out, "\n")
+}
+
+// truncateMiddle shortens a path-like string to fit width by replacing
+// the middle with "…". Filenames stay visible at the end so the user
+// can still recognise the backup. width <= 4 returns the input unchanged.
+func truncateMiddle(s string, width int) string {
+	if width <= 4 || lipgloss.Width(s) <= width {
+		return s
+	}
+	keepRight := (width - 1) / 2
+	keepLeft := width - 1 - keepRight
+	return s[:keepLeft] + "…" + s[len(s)-keepRight:]
 }

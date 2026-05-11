@@ -43,12 +43,24 @@ func TestBuildFixOptions_NoneReturnsNothing(t *testing.T) {
 	}
 }
 
-func TestRenderCodeBlock_PrefixesEveryLineWithDollar(t *testing.T) {
-	out := renderCodeBlock("line one\nline two", 0)
-	if !strings.Contains(out, "$ line one") {
-		t.Errorf("missing $ prefix on first line: %q", out)
+func TestSoftWrap_WrapsLongLineAtWhitespace(t *testing.T) {
+	in := "this is a fairly long sentence that should wrap across several lines"
+	out := softWrap(in, 20, "  ", nil)
+	for _, line := range strings.Split(out, "\n") {
+		if len(line) > 24 { // 20 + a bit of slack for the indent
+			t.Errorf("line exceeds width: %q", line)
+		}
 	}
-	if !strings.Contains(out, "$ line two") {
-		t.Errorf("missing $ prefix on second line: %q", out)
+	if !strings.HasPrefix(out, "  this") {
+		t.Errorf("indent not applied to first line: %q", out)
+	}
+}
+
+func TestSoftWrap_HardBreaksOverlongToken(t *testing.T) {
+	in := strings.Repeat("x", 30)
+	out := softWrap(in, 10, "", nil)
+	parts := strings.Split(out, "\n")
+	if len(parts) < 3 {
+		t.Errorf("long token should hard-break into multiple lines, got %d", len(parts))
 	}
 }
