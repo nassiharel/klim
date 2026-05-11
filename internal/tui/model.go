@@ -373,6 +373,7 @@ type Model struct {
 	// keeps each tab's last view).
 	healthSubTab        int    // 0=Issues, 1=PATH
 	healthScroll        int    // scroll offset for Health tab
+	healthIssueCursor   int    // selected issue row (flat index across all categories)
 	healthPathView      int    // 0=By tool, 1=By PATH dir
 	healthPathToolIdx   int    // selected row in By-tool view
 	healthPathShadowIdx int    // selected shadowed copy under that tool
@@ -669,6 +670,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.doctorSubTab = doctorSubAudit
 	m.healthSubTab = healthSubIssues
 	m.healthScroll = 0
+	m.healthIssueCursor = 0
 	m.healthPathView = healthPathByTool
 	m.healthPathToolIdx = 0
 	m.healthPathShadowIdx = 0

@@ -191,8 +191,8 @@ func (m Model) renderHelp() string {
 			}
 		default:
 			parts = []string{
-				dimVersion.Render("↑↓") + " scroll",
-				dimVersion.Render("Home") + " top",
+				dimVersion.Render("↑↓") + " select issue",
+				dimVersion.Render("f/Enter") + " fix",
 				dimVersion.Render("←→") + " sub-tab / tab",
 				dimVersion.Render("r") + " refresh",
 				dimVersion.Render("q") + " quit",

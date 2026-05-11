@@ -73,7 +73,10 @@ func (m Model) renderHealthView() string {
 
 // renderHealthIssuesView is the long-form diagnostics list (formerly
 // the Security → Health sub-tab). The text and severity classification
-// come from internal/doctor.
+// come from internal/doctor. Each issue is selectable: ↑/↓ moves the
+// cursor, `f`/Enter invokes the issue's structured Action — copy a
+// PATH-cleanup command, jump to the PATH view focused on the offender,
+// trigger a rescan, or jump to Updates.
 func (m Model) renderHealthIssuesView() string {
 	var b strings.Builder
 
@@ -85,7 +88,6 @@ func (m Model) renderHealthIssuesView() string {
 	}
 
 	errs, warns, infos := doctor.CountBySeverity(m.doctorIssues)
-
 	var summary []string
 	if errs > 0 {
 		summary = append(summary, healthBad.Render(fmt.Sprintf("%d error(s)", errs)))
@@ -98,32 +100,94 @@ func (m Model) renderHealthIssuesView() string {
 	}
 	b.WriteString("  " + strings.Join(summary, "  ") + "\n\n")
 
+	flat := flatIssueOrder(m.doctorIssues)
+	cursor := clampCursor(m.healthIssueCursor, len(flat))
+
+	// Group for display while remembering the flat-index of each row
+	// so the cursor lights up the right entry across category headers.
+	currentCat := ""
+	for i, issue := range flat {
+		if issue.Category != currentCat {
+			if currentCat != "" {
+				b.WriteString("\n")
+			}
+			b.WriteString("  " + healthHeader.Render(issue.Category) + "\n")
+			currentCat = issue.Category
+		}
+		selected := i == cursor
+		row := severityStyle(issue.Severity) + " " + issue.Title
+		if selected {
+			b.WriteString("  " + healthSelected.Render("▶ "+row) + "\n")
+		} else {
+			b.WriteString("    " + row + "\n")
+		}
+		if issue.Detail != "" {
+			for _, line := range strings.Split(issue.Detail, "\n") {
+				if line != "" {
+					b.WriteString("      " + dashDim.Render(line) + "\n")
+				}
+			}
+		}
+		if issue.Fix != "" {
+			b.WriteString("      " + healthDim.Render("→ "+issue.Fix) + "\n")
+		}
+		// Action hint for the selected row only — we don't want the
+		// list to balloon vertically when nothing's focused.
+		if selected && issue.Action.Kind != doctor.ActionNone {
+			actionHint := issue.Action.Label
+			if actionHint == "" {
+				actionHint = "Apply suggested fix"
+			}
+			b.WriteString("      " + healthAccent.Render("f: "+actionHint) + "\n")
+			if issue.Action.Kind == doctor.ActionCopyCommand && issue.Action.Command != "" {
+				// Show the literal command (truncated when long)
+				// so the user knows what `f` will copy.
+				cmd := issue.Action.Command
+				if firstLine, _, ok := strings.Cut(cmd, "\n"); ok {
+					cmd = firstLine + " …"
+				}
+				if len(cmd) > 120 {
+					cmd = cmd[:117] + "…"
+				}
+				b.WriteString("      " + healthDim.Render("  $ "+cmd) + "\n")
+			}
+		}
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// flatIssueOrder returns the doctor issues in the order they should be
+// rendered (category-grouped, preserving first-seen category order).
+// This is the same order the cursor walks with ↑/↓, so applyIssueAction
+// can dispatch on the cursor index unambiguously.
+func flatIssueOrder(issues []doctor.Issue) []doctor.Issue {
 	grouped := make(map[string][]doctor.Issue)
 	var order []string
-	for _, issue := range m.doctorIssues {
+	for _, issue := range issues {
 		if _, ok := grouped[issue.Category]; !ok {
 			order = append(order, issue.Category)
 		}
 		grouped[issue.Category] = append(grouped[issue.Category], issue)
 	}
+	flat := make([]doctor.Issue, 0, len(issues))
 	for _, cat := range order {
-		b.WriteString("  " + healthHeader.Render(cat) + "\n")
-		for _, issue := range grouped[cat] {
-			b.WriteString("    " + severityStyle(issue.Severity) + " " + issue.Title + "\n")
-			if issue.Detail != "" {
-				for _, line := range strings.Split(issue.Detail, "\n") {
-					if line != "" {
-						b.WriteString("      " + dashDim.Render(line) + "\n")
-					}
-				}
-			}
-			if issue.Fix != "" {
-				b.WriteString("      " + healthDim.Render("→ "+issue.Fix) + "\n")
-			}
-		}
-		b.WriteString("\n")
+		flat = append(flat, grouped[cat]...)
 	}
-	return b.String()
+	return flat
+}
+
+func clampCursor(c, n int) int {
+	if n == 0 {
+		return 0
+	}
+	if c < 0 {
+		return 0
+	}
+	if c >= n {
+		return n - 1
+	}
+	return c
 }
 
 // renderHealthPathView shows either the by-tool or by-PATH-dir
@@ -339,20 +403,98 @@ func (m Model) handleKeyHealth(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Sub-tab-specific keys.
 	switch m.healthSubTab {
 	case healthSubIssues:
-		// Scroll-only.
+		flat := flatIssueOrder(m.doctorIssues)
 		switch msg.String() {
 		case "up", "k":
-			if m.healthScroll > 0 {
+			if len(flat) == 0 {
+				return m, nil
+			}
+			if m.healthIssueCursor > 0 {
+				m.healthIssueCursor--
+			} else if m.healthScroll > 0 {
 				m.healthScroll--
 			}
 		case "down", "j":
-			m.healthScroll++
+			if len(flat) == 0 {
+				return m, nil
+			}
+			if m.healthIssueCursor < len(flat)-1 {
+				m.healthIssueCursor++
+			} else {
+				m.healthScroll++
+			}
+		case "f", "enter":
+			if len(flat) == 0 {
+				return m, nil
+			}
+			cursor := clampCursor(m.healthIssueCursor, len(flat))
+			return m.applyIssueAction(flat[cursor])
 		}
 		return m, nil
 
 	case healthSubPath:
 		return m.handleKeyHealthPath(msg, report)
 	}
+	return m, nil
+}
+
+// applyIssueAction dispatches on the selected issue's Action.Kind:
+//   - CopyCommand: copies Action.Command to the clipboard.
+//   - JumpPathView: switches to Health → PATH, By tool, focused on
+//     Action.Target.
+//   - Rescan: kicks off m.startScan().
+//   - JumpUpdates: switches to My Tools → Updates.
+//
+// Unknown / None: surface "no automated fix" in the status banner so
+// the user knows nothing happened (vs. assuming `f` is broken).
+func (m Model) applyIssueAction(issue doctor.Issue) (tea.Model, tea.Cmd) {
+	switch issue.Action.Kind {
+	case doctor.ActionCopyCommand:
+		if issue.Action.Command == "" {
+			m.healthPathStatus = "⚠ no command available for this issue"
+			return m, nil
+		}
+		if err := m.clip.WriteAll(issue.Action.Command); err != nil {
+			m.healthPathStatus = "⚠ clipboard: " + err.Error()
+			return m, nil
+		}
+		label := issue.Action.Label
+		if label == "" {
+			label = "fix command"
+		}
+		m.healthPathStatus = "✓ Copied " + label + " — paste into your shell"
+		return m, nil
+
+	case doctor.ActionJumpPathView:
+		m.healthSubTab = healthSubPath
+		m.healthPathView = healthPathByTool
+		m.healthPathShadowIdx = 0
+		m.healthScroll = 0
+		// Find the offending tool in the analyzer report and put
+		// the cursor on it. Falls back to row 0 if the tool isn't
+		// in the report (e.g. it disappeared between diagnose and
+		// jump — rare but possible after a rescan).
+		report := pathconflict.Analyze(m.tools)
+		for i, tv := range report.ByTool {
+			if tv.Name == issue.Action.Target {
+				m.healthPathToolIdx = i
+				break
+			}
+		}
+		m.healthPathStatus = "→ Opened PATH view focused on " + issue.Action.Target
+		return m, nil
+
+	case doctor.ActionRescan:
+		m.healthPathStatus = "Rescanning..."
+		return m, m.startScan()
+
+	case doctor.ActionJumpUpdates:
+		m.activeTab = tabUpdates
+		m.cursor = 0
+		m.applyFilter()
+		return m, nil
+	}
+	m.healthPathStatus = "⚠ no automated fix for this issue"
 	return m, nil
 }
 
