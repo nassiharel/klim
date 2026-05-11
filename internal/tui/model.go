@@ -342,6 +342,11 @@ type Model struct {
 
 	// Dashboard scroll offset.
 	dashboardScroll int
+	// profileScroll is the scroll offset for the My Profile tab.
+	// Added so the My Score + Env Profile sections (which can
+	// exceed the viewport on small terminals) get the same
+	// scroll-and-pin-footer behaviour as Dashboard / Health.
+	profileScroll int
 
 	// Favorites state.
 	favoriteNames   map[string]bool // in-memory lookup set, loaded at init

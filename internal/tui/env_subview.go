@@ -307,6 +307,37 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "Rebuilding env profile..."
 			return m, buildEnvProfileCmd(m.svc, m.cfg)
 		}
+	case "up", "k":
+		// Scroll the body up. Only meaningful on the idle landing
+		// page where the My Score + Env Profile content may exceed
+		// the viewport on small terminals.
+		if m.envState == envViewIdle && m.profileScroll > 0 {
+			m.profileScroll--
+		}
+		return m, nil
+	case "down", "j":
+		if m.envState == envViewIdle {
+			m.profileScroll++
+		}
+		return m, nil
+	case "home", "g":
+		if m.envState == envViewIdle {
+			m.profileScroll = 0
+		}
+		return m, nil
+	case "pgup":
+		if m.envState == envViewIdle {
+			m.profileScroll -= 5
+			if m.profileScroll < 0 {
+				m.profileScroll = 0
+			}
+		}
+		return m, nil
+	case "pgdown", " ":
+		if m.envState == envViewIdle {
+			m.profileScroll += 5
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -434,22 +465,10 @@ func (m Model) renderEnvIdleView() string {
 		b.WriteString("    " + dimVersion.Render("Esc") + "  Back to Backup menu\n")
 	}
 
-	// Pad the body to fill the viewport so layoutWithFooter pins
-	// the footer to the actual bottom of the terminal. Without
-	// this fill the rendered body is much shorter than the screen,
-	// layoutWithFooter inserts a single rule + the footer right
-	// after the body, and the user sees the footer "floating" mid-
-	// screen with no content beneath it.
-	//
-	// The constant 6 accounts for the parent renderView header:
-	// title (1) + tab strip (1) + rule (1) + blank (1) + the
-	// trailing newline we emit + a 1-row safety margin.
-	const profileHeaderRows = 6
-	visibleRows := m.height - profileHeaderRows - m.footerHeight()
-	bodyRows := strings.Count(b.String(), "\n")
-	for i := bodyRows; i < visibleRows; i++ {
-		b.WriteString("\n")
-	}
+	// No manual padding — view.go's fitToVisibleRows pads or
+	// slices the rendered body to exactly fill the available
+	// viewport, which is the universal pattern (same one My Tools
+	// has used since day one).
 	return b.String()
 }
 
