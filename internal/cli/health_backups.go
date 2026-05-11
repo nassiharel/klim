@@ -68,7 +68,7 @@ command first, then paste it into your shell, or pipe it through
 }
 
 func init() {
-	healthPathBackupsOutput = addOutputFlag(healthPathBackupsCmd, OutputText, OutputJSON)
+	healthPathBackupsOutput = addPersistentOutputFlag(healthPathBackupsCmd, OutputText, OutputJSON)
 	healthPathBackupsCmd.AddCommand(healthPathBackupsListCmd)
 	healthPathBackupsCmd.AddCommand(healthPathBackupsShowCmd)
 	healthPathBackupsCmd.AddCommand(healthPathBackupsRestoreCmdCmd)

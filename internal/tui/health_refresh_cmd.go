@@ -68,13 +68,17 @@ func refreshAfterPathFixCmd(svc *service.ToolService, tools []registry.Tool) tea
 // so subsequent PATH-walks and diagnostics reflect the fix the user
 // just applied.
 //
-// On Windows the Effective process PATH at launch was the
+// On Windows the effective process PATH at launch was the
 // concatenation of the Machine and User PATH registry values. The
 // PATH-fix commands klim emits write to the User PATH key. To pick
 // up the change without restarting we read both keys back through
-// PowerShell, concatenate them, and call os.Setenv. Errors are
-// silent — the worst case is the next diagnostic still sees the
-// stale PATH, which is no worse than before this refresh existed.
+// PowerShell, concatenate them, and call os.Setenv — but only when
+// BOTH reads succeed, otherwise we'd overwrite the live PATH with
+// an incomplete value (which is strictly worse than the original
+// stale PATH the refresh was meant to fix). Errors are silent; on
+// any failure the existing process PATH stays intact and the
+// returned string reflects what the caller is actually working
+// with.
 //
 // On POSIX the snippet runs in a `sh -c` child and only changes
 // that child's PATH; persisting requires editing the user's shell
@@ -84,10 +88,18 @@ func refreshProcessPATH() string {
 	if runtime.GOOS != "windows" {
 		return os.Getenv("PATH")
 	}
-	machine, _ := readEnvScope("Machine")
-	user, _ := readEnvScope("User")
-	newPATH := strings.TrimSpace(machine)
-	if user = strings.TrimSpace(user); user != "" {
+	machine, mErr := readEnvScope("Machine")
+	user, uErr := readEnvScope("User")
+	// Refuse to overwrite on partial-read failure: an incomplete
+	// PATH (missing either Machine or User) would be worse than
+	// the original.
+	if mErr != nil || uErr != nil {
+		return os.Getenv("PATH")
+	}
+	machine = strings.TrimSpace(machine)
+	user = strings.TrimSpace(user)
+	newPATH := machine
+	if user != "" {
 		if newPATH != "" && !strings.HasSuffix(newPATH, ";") {
 			newPATH += ";"
 		}

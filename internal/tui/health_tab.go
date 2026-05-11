@@ -117,7 +117,7 @@ func (m Model) renderHealthIssuesView() string {
 		}
 		// Action hint for the selected row only — we don't want the
 		// list to balloon vertically when nothing's focused.
-		if selected && issue.Action.Kind != doctor.ActionNone {
+		if selected && issue.Action != nil && issue.Action.Kind != doctor.ActionNone {
 			actionHint := issue.Action.Label
 			if actionHint == "" {
 				actionHint = "Apply suggested fix"
@@ -535,7 +535,7 @@ func clampScrollToCursor(scroll int, flat []doctor.Issue, cursor, visibleRows in
 // Unknown / None: surface "no automated fix" in the status banner so
 // the user knows nothing happened (vs. assuming `f` is broken).
 func (m Model) applyIssueAction(issue doctor.Issue) (tea.Model, tea.Cmd) {
-	if issue.Action.Kind == doctor.ActionNone {
+	if issue.Action == nil || issue.Action.Kind == doctor.ActionNone {
 		m.healthPathStatus = "⚠ no automated fix for this issue"
 		return m, nil
 	}

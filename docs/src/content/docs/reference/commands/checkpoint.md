@@ -27,7 +27,7 @@ Each checkpoint is stored at `~/.klim/checkpoints/<name>.yaml` as human-readable
 | `created_at` | UTC timestamp. |
 | `goos` | OS at capture time — used by the rollback command builder. |
 | `tools` | Every installed tool with `version`, `source`, and `path`. Only installed tools are recorded. |
-| `path` | The `$PATH` value at capture time, so a rollback can also restore PATH ordering. |
+| `path` | The `$PATH` value at capture time. Stored for audit / inspection only — `klim rollback` does **not** currently replay it; tool-version restoration is the only diff applied today. |
 
 ## Flags
 

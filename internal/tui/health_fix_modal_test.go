@@ -9,7 +9,7 @@ import (
 
 func TestBuildFixOptions_CopyCommandHasRunAndCopy(t *testing.T) {
 	issue := doctor.Issue{
-		Action: doctor.Action{
+		Action: &doctor.Action{
 			Kind:    doctor.ActionCopyCommand,
 			Command: "echo hi",
 			Label:   "Test",
@@ -26,7 +26,7 @@ func TestBuildFixOptions_CopyCommandHasRunAndCopy(t *testing.T) {
 
 func TestBuildFixOptions_JumpKindsSingleConfirmPlusCancel(t *testing.T) {
 	for _, kind := range []doctor.ActionKind{doctor.ActionJumpPathView, doctor.ActionRescan, doctor.ActionJumpUpdates} {
-		opts := buildFixOptions(doctor.Issue{Action: doctor.Action{Kind: kind, Target: "node"}})
+		opts := buildFixOptions(doctor.Issue{Action: &doctor.Action{Kind: kind, Target: "node"}})
 		if len(opts) != 2 {
 			t.Fatalf("kind %q: want 2 options, got %d", kind, len(opts))
 		}

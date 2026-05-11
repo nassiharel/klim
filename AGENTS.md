@@ -54,7 +54,7 @@ internal/
   logging/     slog structured logging + lumberjack file rotation
   manifest/    YAML schema for export/import manifests + FromRegistryTool converter
   pathbackup/  Captures $PATH (+ Windows User PATH from registry) before any Health-tab fix touches it → ~/.klim/backups/path/path-<UTC>.yaml; generates platform-specific restore commands
-  pathconflict/ Pure analyzer for `klim health path` and the TUI Health → PATH view; Report{ByTool, ByDir} with version-conflict + privilege-risk flags
+  pathconflict/ Read-only analyzer powering `klim health path` and the TUI Health → PATH view; produces Report{ByTool, ByDir} with version-conflict + privilege-risk flags. Reads $PATH and does best-effort os.Stat on entries; no scanning, no version resolution.
   paths/       Single source of truth for all ~/.klim/* paths (BackupsDir, PathBackupsDir, CheckpointsDir, …)
   pkgmgr/      Package manager queries (installed + latest versions)
   plan/        `klim plan` engine: Build/Render/AnalyseRisks/computeConfidence. Confidence factors include semver delta, tool-specific fragility, plugin ecosystem detection, foundational-runtime size.

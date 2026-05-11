@@ -83,8 +83,11 @@ func (r *PackageManagerResolver) ResolveVersions(ctx context.Context, tools []re
 	// Build a per-call batch cache by running one bulk command per
 	// package manager. The cache lookup later avoids the N×2
 	// per-tool subprocess fan-out that used to dominate scan time
-	// on machines with lots of installed tools.
+	// on machines with lots of installed tools. Reset on every
+	// invocation AND cleared after the wait group completes so a
+	// later ResolveOne / RefreshTool call can't see stale data.
 	r.batch = newBatchCache()
+	defer func() { r.batch = nil }()
 	r.batch.prewarm(ctx, tools, timeout)
 
 	sem := make(chan struct{}, concurrency)

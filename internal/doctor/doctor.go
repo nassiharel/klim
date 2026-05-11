@@ -47,7 +47,11 @@ type Issue struct {
 	// fixes (copy PATH-cleanup command, jump to PATH view, trigger
 	// rescan, etc.). CLI output only renders the legacy `Fix`
 	// summary, so Action stays purely additive.
-	Action Action `json:"action,omitempty"`
+	//
+	// Pointer rather than embedded struct so JSON `omitempty` can
+	// actually drop the field — encoding/json doesn't treat
+	// zero-value structs as empty.
+	Action *Action `json:"action,omitempty"`
 }
 
 // ScanMeta provides context about the resolved tool data.
@@ -122,7 +126,7 @@ func checkDuplicatePATH() []Issue {
 				Title:    "Duplicate PATH entry",
 				Detail:   detail,
 				Fix:      "Remove the duplicate entry from your PATH",
-				Action: Action{
+				Action: &Action{
 					Kind:        ActionCopyCommand,
 					Label:       "Copy command to remove duplicate from PATH",
 					Command:     removePathEntryCommand(dir),
@@ -166,7 +170,7 @@ func checkBrokenPATH() []Issue {
 				Title:    "Missing PATH directory",
 				Detail:   fmt.Sprintf("%q does not exist", dir),
 				Fix:      "Remove this entry from your PATH",
-				Action: Action{
+				Action: &Action{
 					Kind:        ActionCopyCommand,
 					Label:       "Copy command to remove missing dir from PATH",
 					Command:     removePathEntryCommand(dir),
@@ -181,7 +185,7 @@ func checkBrokenPATH() []Issue {
 				Title:    "Inaccessible PATH directory",
 				Detail:   fmt.Sprintf("%q exists but permission denied", dir),
 				Fix:      "Fix permissions or remove from PATH",
-				Action: Action{
+				Action: &Action{
 					Kind:        ActionCopyCommand,
 					Label:       "Copy command to remove inaccessible dir from PATH",
 					Command:     removePathEntryCommand(dir),
@@ -196,7 +200,7 @@ func checkBrokenPATH() []Issue {
 				Title:    "Non-directory in PATH",
 				Detail:   fmt.Sprintf("%q is a file, not a directory", dir),
 				Fix:      "Remove this entry from your PATH",
-				Action: Action{
+				Action: &Action{
 					Kind:        ActionCopyCommand,
 					Label:       "Copy command to remove non-directory from PATH",
 					Command:     removePathEntryCommand(dir),
@@ -255,7 +259,7 @@ func checkMultipleInstallations(tools []registry.Tool) []Issue {
 			Title:    fmt.Sprintf("%s has %d installations with different versions", t.DisplayName, len(t.Instances)),
 			Detail:   strings.Join(parts, "\n"),
 			Fix:      fix,
-			Action: Action{
+			Action: &Action{
 				Kind:   ActionJumpPathView,
 				Label:  "Open PATH view to inspect & uninstall a copy",
 				Target: t.Name,
@@ -312,7 +316,7 @@ func checkMissingPMs(tools []registry.Tool) []Issue {
 			Fix:      fmt.Sprintf("Install %s to get version tracking and updates for these tools", pm),
 		}
 		if cmd := installPMCommand(pm); cmd != "" {
-			issue.Action = Action{
+			issue.Action = &Action{
 				Kind:    ActionCopyCommand,
 				Label:   fmt.Sprintf("Copy %s install command", pm),
 				Command: cmd,
@@ -345,7 +349,7 @@ func checkStaleCache() []Issue {
 		Title:    "Scan cache is stale",
 		Detail:   fmt.Sprintf("Last scan was %d days ago", days),
 		Fix:      "Run klim with --refresh or press r in the TUI to rescan",
-		Action: Action{
+		Action: &Action{
 			Kind:  ActionRescan,
 			Label: "Rescan now",
 		},
@@ -381,7 +385,7 @@ func checkUnresolvedVersions(tools []registry.Tool) []Issue {
 		Title:    fmt.Sprintf("%d installed tool(s) with unknown version", len(unresolved)),
 		Detail:   detail,
 		Fix:      "Try running with --refresh for a fresh version scan",
-		Action: Action{
+		Action: &Action{
 			Kind:  ActionRescan,
 			Label: "Rescan now",
 		},
@@ -409,7 +413,7 @@ func checkOutdatedSummary(tools []registry.Tool, meta ScanMeta) []Issue {
 		Title:    fmt.Sprintf("%d update(s) available", outdated),
 		Detail:   detail,
 		Fix:      "Switch to the Updates tab or run klim list to see details",
-		Action: Action{
+		Action: &Action{
 			Kind:  ActionJumpUpdates,
 			Label: "Jump to Updates tab",
 		},
@@ -455,7 +459,7 @@ func checkPATHShadowing(tools []registry.Tool) []Issue {
 			Title:    label + " shadowed on PATH",
 			Detail:   fmt.Sprintf("Active: %s\nShadowed: %s", winner, strings.Join(shadowed, ", ")),
 			Fix:      "Reorder your PATH so the trusted location comes first, or remove duplicate copies",
-			Action: Action{
+			Action: &Action{
 				Kind:   ActionJumpPathView,
 				Label:  "Open PATH view focused on " + label,
 				Target: t.Name,
@@ -510,7 +514,7 @@ func checkUserWritablePathOrder() []Issue {
 				Detail: fmt.Sprintf("System dir: %s\nUser-writable dirs ahead of it: %s",
 					dir, strings.Join(seenUserWritable, ", ")),
 				Fix: "Move user-writable bin dirs after system dirs to avoid shadowing trusted binaries",
-				Action: Action{
+				Action: &Action{
 					Kind:        ActionCopyCommand,
 					Label:       "Copy command to reorder PATH (system dirs first)",
 					Command:     reorderPathCommand(),

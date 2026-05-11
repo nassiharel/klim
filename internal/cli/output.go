@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
 )
 
@@ -40,7 +41,29 @@ type outputFlagState struct {
 // Default format is OutputText. If the user passes both --json and
 // --output=text, --json wins (the deprecated alias is treated as an
 // explicit opt-in to JSON).
+// addOutputFlag registers the canonical `--output {text,json,yaml}`
+// flag on cmd plus the deprecated `--json` alias when JSON is a
+// supported format. The flag is registered on cmd.Flags() (i.e.
+// NOT persistent) so each command opts in explicitly; for parent
+// commands whose subcommands also need access to the flag, use
+// addPersistentOutputFlag below.
+//
+// Default format is OutputText. If the user passes both --json and
+// --output=text, --json wins (the deprecated alias is treated as an
+// explicit opt-in to JSON).
 func addOutputFlag(cmd *cobra.Command, supported ...OutputFormat) func() (OutputFormat, error) {
+	return addOutputFlagOn(cmd.Flags(), cmd, supported...)
+}
+
+// addPersistentOutputFlag is the variant for parent commands whose
+// subcommands need to see the same --output flag. It registers the
+// flag on cmd.PersistentFlags() so `klim parent sub --output=json`
+// works as users expect (vs. requiring `klim parent --output=json sub`).
+func addPersistentOutputFlag(cmd *cobra.Command, supported ...OutputFormat) func() (OutputFormat, error) {
+	return addOutputFlagOn(cmd.PersistentFlags(), cmd, supported...)
+}
+
+func addOutputFlagOn(flags *pflag.FlagSet, cmd *cobra.Command, supported ...OutputFormat) func() (OutputFormat, error) {
 	if len(supported) == 0 {
 		supported = []OutputFormat{OutputText, OutputJSON}
 	}
@@ -51,13 +74,14 @@ func addOutputFlag(cmd *cobra.Command, supported ...OutputFormat) func() (Output
 		names[i] = string(s)
 	}
 	supportedList := strings.Join(names, "|")
-	cmd.Flags().StringVar(&state.output, "output", string(OutputText),
+	flags.StringVar(&state.output, "output", string(OutputText),
 		"output format: "+supportedList)
 
 	if containsFormat(supported, OutputJSON) {
-		cmd.Flags().BoolVar(&state.json, "json", false, "output results as JSON (deprecated)")
-		_ = cmd.Flags().MarkDeprecated("json", "use --output=json instead")
+		flags.BoolVar(&state.json, "json", false, "output results as JSON (deprecated)")
+		_ = flags.MarkDeprecated("json", "use --output=json instead")
 	}
+	_ = cmd // retained for future hooks (e.g. cmd-scoped logging)
 
 	return func() (OutputFormat, error) {
 		if state.json {

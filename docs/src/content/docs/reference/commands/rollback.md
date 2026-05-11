@@ -40,16 +40,15 @@ Rollback plan to checkpoint "before-k8s-upgrade" (captured 2026-05-11 16:35)
 Planned changes:
 
   brew:
-    kubectl 1.32.0 -> 1.31.0    (confidence: 78%)
+    kubectl 1.32.0 -> 1.31.0    (confidence: 72%)
 
 Upgrade confidence:
-  kubectl upgrade confidence: 78%
+  kubectl upgrade confidence: 72%
     -8  1.32.0 → 1.31.0 adds new features that may shift defaults
     -20 kubectl ±1 minor version of the API server is supported; further skew breaks features
-    +6  reverting to a known-good version captured 0h ago
 
 Risk analysis:
-  ⚠ kubectl: downgrades through brew may require `brew install kubectl@1.31` for an exact pin
+  ⚠ kubectl: confirm your cluster's API server version supports 1.31
 
 Disk impact:
   +50MB cache
@@ -60,6 +59,13 @@ Estimated time:
 Review the plan above, then apply the suggested commands manually
 (or run `klim apply` for upgrade-only rollbacks).
 ```
+
+Note: a rollback that downgrades a tool reuses the same upgrade-confidence
+formula — there is **no** rollback-specific "+N for reverting to a known
+state" boost today. The captured PATH lives in the checkpoint file for
+audit / manual inspection but is not yet replayed by `klim rollback`;
+the rollback plan only addresses tool versions. Restoring PATH itself is
+on the roadmap.
 
 ## Related
 

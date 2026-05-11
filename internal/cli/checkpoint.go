@@ -62,7 +62,7 @@ var checkpointDeleteCmd = &cobra.Command{
 }
 
 func init() {
-	checkpointOutput = addOutputFlag(checkpointCmd, OutputText, OutputJSON)
+	checkpointOutput = addPersistentOutputFlag(checkpointCmd, OutputText, OutputJSON)
 	checkpointCmd.Flags().StringVarP(&checkpointDescriptionFlag, "description", "d", "", "Free-text description stored with the snapshot")
 
 	checkpointCmd.AddCommand(checkpointListCmd)

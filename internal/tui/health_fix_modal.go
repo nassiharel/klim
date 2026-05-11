@@ -92,6 +92,9 @@ func (m *Model) openHealthFixModal(issue doctor.Issue) {
 // buildFixOptions translates a doctor.Issue into the actionable buttons
 // the modal exposes.
 func buildFixOptions(issue doctor.Issue) []fixModalOption {
+	if issue.Action == nil {
+		return nil
+	}
 	switch issue.Action.Kind {
 	case doctor.ActionCopyCommand:
 		cmd := issue.Action.Command
@@ -238,7 +241,7 @@ func (m Model) closeFixModalAfterDoneCmd() (Model, tea.Cmd) {
 	didSucceed := m.fixModal.Err == nil
 	backup := m.fixModal.BackupPath
 	wasRestore := m.fixModal.IsRestore
-	touchedPATH := m.fixModal.Issue.Action.TouchesPATH || wasRestore
+	touchedPATH := (m.fixModal.Issue.Action != nil && m.fixModal.Issue.Action.TouchesPATH) || wasRestore
 	m.fixModal = fixModal{}
 
 	switch {
@@ -296,7 +299,7 @@ func (m Model) startFixModalRestore() (Model, tea.Cmd) {
 	m.fixModal.Output = ""
 	// Replace the displayed command so the running view shows the
 	// restore command (not the original fix that was just applied).
-	m.fixModal.Issue.Action = doctor.Action{
+	m.fixModal.Issue.Action = &doctor.Action{
 		Kind:    doctor.ActionCopyCommand,
 		Label:   "Restore PATH from backup " + filepath.Base(m.fixModal.BackupPath),
 		Command: cmd,
@@ -326,7 +329,7 @@ func (m Model) applyJumpPathFromIssue(issue doctor.Issue) Model {
 	m.healthPathView = healthPathByTool
 	m.healthPathShadowIdx = 0
 	m.healthScroll = 0
-	if issue.Action.Target != "" {
+	if issue.Action != nil && issue.Action.Target != "" {
 		report := pathconflict.Analyze(m.tools)
 		for i, tv := range report.ByTool {
 			if tv.Name == issue.Action.Target {
@@ -498,7 +501,7 @@ func (m Model) renderFixModal() string {
 	switch m.fixModal.State {
 	case fixModalIdle:
 		b.WriteString(renderFixCommandBlock(m.fixModal.Issue, innerWidth))
-		if m.fixModal.Issue.Action.TouchesPATH {
+		if m.fixModal.Issue.Action != nil && m.fixModal.Issue.Action.TouchesPATH {
 			b.WriteString("\n" + healthAccent.Render("💾 A PATH backup will be saved before this runs") + "\n")
 			b.WriteString(healthDim.Render("   to ~/.klim/backups/path/ — restorable from the next dialog.") + "\n")
 		}
@@ -563,6 +566,9 @@ func (m Model) renderFixModal() string {
 // emits a one-liner "Action: …" describing what the confirm button
 // will do.
 func renderFixCommandBlock(issue doctor.Issue, width int) string {
+	if issue.Action == nil {
+		return ""
+	}
 	if issue.Action.Kind != doctor.ActionCopyCommand {
 		var label string
 		switch issue.Action.Kind {

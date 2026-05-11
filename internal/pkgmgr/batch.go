@@ -146,14 +146,24 @@ func pmBinaryAvailable(src registry.InstallSource) bool {
 // versions for every package, and `winget upgrade` once to learn
 // which packages have a newer version. Both commands accept source
 // agreements non-interactively so they don't block on the prompt.
+//
+// hasLatest flips to true ONLY when the upgrade command succeeded
+// (non-empty output OR the parser populated at least one entry).
+// If only the list call worked, latestVersion() must fall back to
+// per-tool queries rather than silently treating every missing entry
+// as "up-to-date" — that would mask real upgrades.
 func wingetBulkFetch(ctx context.Context, b *pmBatch) {
 	if out := runCmd(ctx, "winget", "list", "--accept-source-agreements"); out != "" {
 		parseWingetTable(cleanWingetOutput(out), b.installed)
 	}
 	if out := runCmd(ctx, "winget", "upgrade", "--include-unknown", "--accept-source-agreements"); out != "" {
 		parseWingetUpgradeTable(cleanWingetOutput(out), b.latest)
+		// Even an empty parse result is acceptable here as long as
+		// the upgrade command itself produced output — that means
+		// the bulk query succeeded and "missing from upgrades" can
+		// safely be interpreted as "up-to-date".
+		b.hasLatest = true
 	}
-	b.hasLatest = true
 }
 
 // parseWingetTable parses `winget list` output. The table is
@@ -277,6 +287,10 @@ func safeSlice(s string, start, end int) string {
 // ...]" lines for every installed formula; we take the first
 // version. `brew outdated --json=v2` gives us reliable structured
 // data about available upgrades.
+//
+// hasLatest flips to true ONLY when the outdated query produced
+// output; an empty/failed outdated result leaves it false so
+// latestVersion() falls back to per-tool queries.
 func brewBulkFetch(ctx context.Context, b *pmBatch) {
 	if out := runCmd(ctx, "brew", "list", "--versions"); out != "" {
 		for _, line := range strings.Split(out, "\n") {
@@ -286,14 +300,10 @@ func brewBulkFetch(ctx context.Context, b *pmBatch) {
 			}
 		}
 	}
-	// brew outdated --json=v2 returns {"formulae":[{name,current_version,installed_versions:[...]},...]}
-	// We use simple string scanning instead of full JSON parsing
-	// because the output schema is shallow and we only need two
-	// fields. Falling back to per-tool when this fails is fine.
 	if out := runCmd(ctx, "brew", "outdated", "--json=v2"); out != "" {
 		parseBrewOutdated(out, b.latest)
+		b.hasLatest = true
 	}
-	b.hasLatest = true
 }
 
 // parseBrewOutdated extracts {name -> current_version} pairs from
@@ -343,6 +353,10 @@ func parseBrewOutdated(out string, into map[string]string) {
 // scoopBulkFetch runs `scoop list` once. Scoop has no JSON output;
 // we reuse parseScoopList's table semantics across every line. For
 // latest we run `scoop status` which lists outdated packages.
+//
+// hasLatest flips to true ONLY when the scoop status query produced
+// output; an empty/failed result leaves it false so latestVersion()
+// falls back to per-tool queries.
 func scoopBulkFetch(ctx context.Context, b *pmBatch) {
 	if out := runCmd(ctx, "scoop", "list"); out != "" {
 		for _, line := range strings.Split(stripANSI(out), "\n") {
@@ -364,8 +378,8 @@ func scoopBulkFetch(ctx context.Context, b *pmBatch) {
 				b.latest[fields[0]] = fields[2]
 			}
 		}
+		b.hasLatest = true
 	}
-	b.hasLatest = true
 }
 
 // --- choco bulk ------------------------------------------------------
@@ -374,6 +388,10 @@ func scoopBulkFetch(ctx context.Context, b *pmBatch) {
 // `choco outdated --limit-output`. The --limit-output flag emits one
 // pipe-separated record per line; both commands have stable output
 // formats so we can parse without JSON.
+//
+// hasLatest flips to true ONLY when the choco outdated query
+// produced output; an empty/failed result leaves it false so
+// latestVersion() falls back to per-tool queries.
 func chocoBulkFetch(ctx context.Context, b *pmBatch) {
 	if out := runCmd(ctx, "choco", "list", "--local-only", "--limit-output"); out != "" {
 		for _, line := range strings.Split(out, "\n") {
@@ -391,6 +409,6 @@ func chocoBulkFetch(ctx context.Context, b *pmBatch) {
 				b.latest[parts[0]] = parts[2]
 			}
 		}
+		b.hasLatest = true
 	}
-	b.hasLatest = true
 }
