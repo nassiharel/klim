@@ -367,6 +367,18 @@ func (m Model) renderEnvSubview() string {
 func (m Model) renderEnvIdleView() string {
 	var b strings.Builder
 	b.WriteString("\n")
+
+	// My Score lands at the top — it's the answer to "how is this
+	// developer environment doing?", which is the question the
+	// profile token also addresses (from a portability angle).
+	// Showing the breakdown first gives the user the headline grade
+	// before the slower-to-scan fingerprint section.
+	if m.doctorChecked {
+		if section := renderMyScoreSection(m.cachedScore, m.width); section != "" {
+			b.WriteString(section + "\n")
+		}
+	}
+
 	b.WriteString("  " + detailTitleStyle.Render("Env Profile") + "  " +
 		dimVersion.Render("portable fingerprint of this environment") + "\n\n")
 
@@ -407,16 +419,6 @@ func (m Model) renderEnvIdleView() string {
 		}
 	}
 
-	// My Score — full breakdown of the environment health score.
-	// Lives on the My Profile tab because it answers "how healthy
-	// is this developer environment?" which is the same question
-	// the profile token answers from a portability angle.
-	if m.doctorChecked {
-		if section := renderMyScoreSection(m.cachedScore, m.width); section != "" {
-			b.WriteString(section + "\n")
-		}
-	}
-
 	b.WriteString("  " + detailLabelStyle.Render("Actions") + "\n")
 	b.WriteString("    " + dimVersion.Render("o") + "  Open another env (paste a token to inspect)\n")
 	b.WriteString("    " + dimVersion.Render("d") + "  Compare another env against this one\n")
@@ -432,8 +434,22 @@ func (m Model) renderEnvIdleView() string {
 		b.WriteString("    " + dimVersion.Render("Esc") + "  Back to Backup menu\n")
 	}
 
-	// layoutWithFooter handles bottom alignment now — no manual
-	// padding fill needed.
+	// Pad the body to fill the viewport so layoutWithFooter pins
+	// the footer to the actual bottom of the terminal. Without
+	// this fill the rendered body is much shorter than the screen,
+	// layoutWithFooter inserts a single rule + the footer right
+	// after the body, and the user sees the footer "floating" mid-
+	// screen with no content beneath it.
+	//
+	// The constant 6 accounts for the parent renderView header:
+	// title (1) + tab strip (1) + rule (1) + blank (1) + the
+	// trailing newline we emit + a 1-row safety margin.
+	const profileHeaderRows = 6
+	visibleRows := m.height - profileHeaderRows - m.footerHeight()
+	bodyRows := strings.Count(b.String(), "\n")
+	for i := bodyRows; i < visibleRows; i++ {
+		b.WriteString("\n")
+	}
 	return b.String()
 }
 

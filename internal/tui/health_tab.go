@@ -395,18 +395,50 @@ func (m Model) handleKeyHealth(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			if m.healthIssueCursor > 0 {
 				m.healthIssueCursor--
-			} else if m.healthScroll > 0 {
-				m.healthScroll--
 			}
+			m.healthScroll = clampScrollToCursor(m.healthScroll, flat, m.healthIssueCursor, m.visibleHealthRows())
 		case "down", "j":
 			if len(flat) == 0 {
 				return m, nil
 			}
 			if m.healthIssueCursor < len(flat)-1 {
 				m.healthIssueCursor++
-			} else {
-				m.healthScroll++
 			}
+			m.healthScroll = clampScrollToCursor(m.healthScroll, flat, m.healthIssueCursor, m.visibleHealthRows())
+		case "home", "g":
+			m.healthIssueCursor = 0
+			m.healthScroll = 0
+		case "end", "G":
+			if len(flat) > 0 {
+				m.healthIssueCursor = len(flat) - 1
+				m.healthScroll = clampScrollToCursor(m.healthScroll, flat, m.healthIssueCursor, m.visibleHealthRows())
+			}
+		case "pgup":
+			if len(flat) == 0 {
+				return m, nil
+			}
+			step := m.visibleHealthRows() / 6
+			if step < 1 {
+				step = 1
+			}
+			m.healthIssueCursor -= step
+			if m.healthIssueCursor < 0 {
+				m.healthIssueCursor = 0
+			}
+			m.healthScroll = clampScrollToCursor(m.healthScroll, flat, m.healthIssueCursor, m.visibleHealthRows())
+		case "pgdown", " ":
+			if len(flat) == 0 {
+				return m, nil
+			}
+			step := m.visibleHealthRows() / 6
+			if step < 1 {
+				step = 1
+			}
+			m.healthIssueCursor += step
+			if m.healthIssueCursor >= len(flat) {
+				m.healthIssueCursor = len(flat) - 1
+			}
+			m.healthScroll = clampScrollToCursor(m.healthScroll, flat, m.healthIssueCursor, m.visibleHealthRows())
 		case "f", "enter":
 			if len(flat) == 0 {
 				return m, nil
@@ -420,6 +452,74 @@ func (m Model) handleKeyHealth(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyHealthPath(msg, report)
 	}
 	return m, nil
+}
+
+// visibleHealthRows returns the row count available for the Issues
+// body (everything between the parent tab bar and the help footer).
+// Mirrors the math used in renderView when slicing the Health body.
+func (m Model) visibleHealthRows() int {
+	const headerRows = 4 // title + tab bar + rule + blank
+	v := m.height - headerRows - m.subtabRows() - m.footerHeight() - 1
+	if v < 5 {
+		v = 5
+	}
+	return v
+}
+
+// issueLineOffset returns the rendered line index of the issue at the
+// given cursor position. Used to keep the cursor inside the visible
+// window when the user navigates through a long issue list. The
+// counts here must mirror renderHealthIssuesView exactly; that's the
+// price of the cursor-follow feature, but the formatting is stable
+// enough that it's a worthwhile trade.
+func issueLineOffset(flat []doctor.Issue, idx int) int {
+	// Header: summary line + blank.
+	line := 2
+	currentCat := ""
+	for i, issue := range flat {
+		if issue.Category != currentCat {
+			if currentCat != "" {
+				line++ // blank line between previous category and next
+			}
+			line++ // category header row
+			currentCat = issue.Category
+		}
+		if i == idx {
+			return line
+		}
+		line++ // title row (▶ or plain)
+		if issue.Detail != "" {
+			for _, ln := range strings.Split(issue.Detail, "\n") {
+				if ln != "" {
+					line++
+				}
+			}
+		}
+		if issue.Fix != "" {
+			line++
+		}
+	}
+	return line
+}
+
+// clampScrollToCursor keeps the cursor's rendered line inside the
+// visible window. Scrolls up when the cursor would otherwise be
+// above the viewport, scrolls down when it would be below.
+func clampScrollToCursor(scroll int, flat []doctor.Issue, cursor, visibleRows int) int {
+	if len(flat) == 0 {
+		return 0
+	}
+	cursorLine := issueLineOffset(flat, cursor)
+	switch {
+	case cursorLine < scroll:
+		// Land the cursor one row into the viewport so the user
+		// sees a hint of context above it.
+		return max(cursorLine-1, 0)
+	case cursorLine >= scroll+visibleRows-2:
+		// Keep two rows of context below the cursor.
+		return cursorLine - visibleRows + 3
+	}
+	return scroll
 }
 
 // applyIssueAction dispatches on the selected issue's Action.Kind by
