@@ -93,7 +93,48 @@ $ klim health path
   ...
 ```
 
+## Interactive fixes (TUI)
+
+The TUI's Health → Issues sub-tab makes every diagnostic interactive: `↑/↓` selects an issue, `f` (or Enter) opens a fix wizard. The wizard:
+
+1. Shows the issue summary plus the proposed command in a bordered code block.
+2. Offers labelled buttons depending on the action kind:
+   - `CopyCommand` — Run command · Copy to clipboard · Cancel
+   - `JumpPathView` — Open PATH view · Cancel
+   - `Rescan` — Rescan now · Cancel
+   - `JumpUpdates` — Open Updates tab · Cancel
+3. On Run, spawns `powershell -NoProfile -Command` (Windows) or `sh -c` (POSIX), streams output, transitions to a Done state with ✓/✗.
+4. After success, dismisses and runs a **PATH-only refresh** (re-walks PATH + re-diagnoses; no version resolution) so the issue list reflects the fix in milliseconds, not seconds.
+
+### PATH backups
+
+Every fix that touches `$PATH` (duplicate-removal, missing-dir cleanup, reorder) writes a backup of the current PATH to `~/.klim/backups/path/path-<UTC>.yaml` **before** the command runs. On Windows the persistent User PATH from the registry is captured too. The Done state shows the saved file path and exposes a **Restore previous PATH** button that runs the platform-specific restore command (also through the same modal so you see what's about to happen).
+
+#### CLI access
+
+```
+klim health path-backups list                    # browse every backup
+klim health path-backups show <name>             # inspect one backup
+klim health path-backups restore-cmd <name>      # print the restore command
+```
+
+The `<name>` argument accepts the bare filename, the full file path, or an unambiguous prefix. `restore-cmd` emits the restore command to stdout (so it can be piped) and a reminder to stderr — review the command before pasting it into your shell.
+
+The backup files are plain YAML and can also be opened with any text editor. Format:
+
+```yaml
+timestamp: 2026-05-11T16:35:12Z
+trigger: doctor.fix
+issue: Duplicate PATH entry
+goos: windows
+path: "C:\\Windows;..."
+user_path: "C:\\Users\\..."   # Windows only
+command: "$new = ..."          # the command that was about to run
+```
+
 ## Related
 
 - [`klim security`](./security.md) — supply-chain checks (vuln, audit, compliance)
 - [`klim score`](./score.md) — composite per-tool security score
+- [`klim plan`](./plan.md) — preview pending changes with confidence scoring
+- [`klim apply`](./apply.md) — execute changes with auto-checkpoint and postcheck

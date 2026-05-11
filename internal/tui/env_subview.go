@@ -407,6 +407,16 @@ func (m Model) renderEnvIdleView() string {
 		}
 	}
 
+	// My Score — full breakdown of the environment health score.
+	// Lives on the My Profile tab because it answers "how healthy
+	// is this developer environment?" which is the same question
+	// the profile token answers from a portability angle.
+	if m.doctorChecked {
+		if section := renderMyScoreSection(m.cachedScore, m.width); section != "" {
+			b.WriteString(section + "\n")
+		}
+	}
+
 	b.WriteString("  " + detailLabelStyle.Render("Actions") + "\n")
 	b.WriteString("    " + dimVersion.Render("o") + "  Open another env (paste a token to inspect)\n")
 	b.WriteString("    " + dimVersion.Render("d") + "  Compare another env against this one\n")
@@ -422,10 +432,8 @@ func (m Model) renderEnvIdleView() string {
 		b.WriteString("    " + dimVersion.Render("Esc") + "  Back to Backup menu\n")
 	}
 
-	visibleRows := m.height - 22 - m.footerHeight()
-	for range max(visibleRows, 0) {
-		b.WriteString("\n")
-	}
+	// layoutWithFooter handles bottom alignment now — no manual
+	// padding fill needed.
 	return b.String()
 }
 

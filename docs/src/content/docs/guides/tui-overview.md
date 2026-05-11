@@ -17,7 +17,7 @@ The TUI has 9 parent tabs, accessible via arrow keys or number keys:
 | **Marketplace** | 2 | Browse and install (sub-tabs: Tools, Packs, For You, Onboard) |
 | **Project** | 3 | Multi-project `.klim.yaml` management |
 | **Dashboard** | 4 | Stats, gauges, category breakdowns |
-| **My Profile** | 5 | Generate / inspect / compare / apply env profile |
+| **My Profile** | 5 | Generate / inspect / compare / apply env profile + the **My Score** breakdown (formerly Dashboard's Environment Score) |
 | **Health** | 6 | Environment diagnostics and visual PATH-conflict explorer (sub-tabs: Issues, PATH) |
 | **Security** | 7 | Security audit and policy compliance (sub-tabs: Audit, Compliance) |
 | **Backup** | 8 | Export, import, share, custom packs, saved backups |
@@ -37,7 +37,7 @@ Auto-detect required tools from `.github/`, `go.mod`, `package.json`, and friend
 
 ### Dashboard
 
-A single page with environment score, tool coverage, attention items, GitHub highlights, top picks, package-manager mix, and category breakdown.
+A single page with tool coverage, attention items, GitHub highlights, top picks, package-manager mix, and category breakdown. (The environment score has moved to **My Profile → My Score**, which exposes the full per-category breakdown.)
 
 ![klim TUI Dashboard tab with environment score, coverage gauges, and category histograms](../../../assets/examples/klim-dashboard-tui.png)
 
@@ -64,10 +64,19 @@ These work on every tab:
 
 | Key | Action |
 |-----|--------|
-| `←` / `→` or `Tab` / `Shift+Tab` | Switch tabs (and sub-tabs on Discover/Doctor) |
+| `←` / `→` or `Tab` / `Shift+Tab` | Switch tabs (and sub-tabs on Marketplace / Health / Security / My Tools) |
 | `1`–`9` | Jump to specific tab |
 | `r` | Refresh — rescan tools |
 | `q` or `Ctrl+C` | Quit |
+
+## Plan / apply / rollback workflow (CLI today)
+
+`klim plan`, `klim apply`, `klim checkpoint`, and `klim rollback` form the Terraform-style preview-then-execute workflow. They are **CLI-only today** — interactive TUI integration is on the roadmap. Meanwhile the CLI commands work identically on every platform and emit JSON suitable for CI / agents. See the reference pages:
+
+- [`klim plan`](../reference/commands/plan.md) — preview pending changes with 0-100% upgrade confidence per change
+- [`klim apply`](../reference/commands/apply.md) — execute, auto-checkpointed, post-validated
+- [`klim checkpoint`](../reference/commands/checkpoint.md) — capture / list / show / delete named snapshots
+- [`klim rollback`](../reference/commands/rollback.md) — produce a restore plan from a checkpoint
 
 ## Tool List Navigation
 
