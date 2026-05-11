@@ -928,6 +928,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.fixModal.Err = msg.Err
 		return m, nil
 
+	case healthPathRefreshedMsg:
+		// Lightweight post-PATH-fix refresh. We dropped the catalog
+		// reload AND every PM version-query subprocess because
+		// neither could be affected by a PATH-only fix. The cost is
+		// milliseconds (a single PATH walk + a doctor.Diagnose pass)
+		// vs. several seconds for a full startScan().
+		if msg.Err != nil {
+			m.statusMsg = "⚠ PATH refresh failed: " + msg.Err.Error()
+			return m, nil
+		}
+		m.tools = msg.Tools
+		registry.SortByName(m.tools)
+		m.applyFilter()
+		m.recomputeComplianceDerivedState()
+		if m.scanOK {
+			_ = m.svc.SaveScanCache(m.tools)
+		}
+		// Reset the issue cursor so it points at a valid row in
+		// the refreshed list — the old index might have addressed
+		// an issue that just disappeared.
+		m.healthIssueCursor = 0
+		took := msg.Took.Round(time.Millisecond)
+		m.statusMsg = "✓ Diagnostics refreshed in " + took.String() + " (PATH-only)"
+		return m, nil
+
 	case execFinishedMsg:
 		if msg.err != nil {
 			m.statusMsg = fmt.Sprintf("✗ %s failed: %s", msg.action, msg.err)

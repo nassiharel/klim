@@ -224,26 +224,40 @@ func (m Model) closeFixModalAfterDone() Model {
 }
 
 // closeFixModalAfterDoneCmd dismisses the Done modal and triggers a
-// rescan when the fix succeeded so the resolved issue disappears
-// from the list.
+// lightweight post-PATH-fix refresh when the fix succeeded so the
+// resolved issue disappears from the list. We deliberately use a
+// fast path-only refresh (refreshAfterPathFixCmd) instead of the
+// full startScan(): a PATH fix can't change any tool's installed
+// version or its marketplace metadata, so re-querying every package
+// manager would be pure waste — milliseconds vs. seconds, and no
+// information loss.
 func (m Model) closeFixModalAfterDoneCmd() (Model, tea.Cmd) {
 	didSucceed := m.fixModal.Err == nil
 	backup := m.fixModal.BackupPath
 	wasRestore := m.fixModal.IsRestore
+	touchedPATH := m.fixModal.Issue.Action.TouchesPATH || wasRestore
 	m.fixModal = fixModal{}
+
 	switch {
 	case wasRestore && didSucceed:
-		m.healthPathStatus = "↶ PATH restored — rescanning..."
-		return m, m.startScan()
+		m.healthPathStatus = "↶ PATH restored — refreshing diagnostics..."
+	case didSucceed && backup != "":
+		m.healthPathStatus = "✓ Fix applied (backup at " + backup + ") — refreshing diagnostics..."
 	case didSucceed:
-		if backup != "" {
-			m.healthPathStatus = "✓ Fix applied (backup at " + backup + ") — rescanning..."
-		} else {
-			m.healthPathStatus = "✓ Fix applied — rescanning to confirm..."
-		}
-		return m, m.startScan()
+		m.healthPathStatus = "✓ Fix applied — refreshing diagnostics..."
+	default:
+		return m, nil
 	}
-	return m, nil
+
+	// Path-only fast refresh when the fix touched PATH. For non-PATH
+	// actions (none currently emit a TouchesPATH = false success
+	// path, but the helper stays defensive) fall back to the full
+	// rescan — that's the only way to pick up changes a non-PATH
+	// fix might have introduced.
+	if touchedPATH {
+		return m, refreshAfterPathFixCmd(m.svc, m.tools)
+	}
+	return m, m.startScan()
 }
 
 // startFixModalRestore runs the saved restore command for the current

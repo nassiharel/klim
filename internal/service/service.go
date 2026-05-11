@@ -165,6 +165,19 @@ func (s *ToolService) LoadAndResolveCached(ctx context.Context, force bool) ([]r
 	return tools, info, &ScanInfo{Source: ScanSourceFresh}, resolveErr
 }
 
+// RewalkPath re-runs only the PATH-walk phase on an already-loaded
+// tool list, mutating tools[i].Instances in place. Skips catalog
+// loading and version resolution, so it's measured in milliseconds —
+// the right thing to call after the user applies a PATH-only fix
+// (duplicate-removal, reorder, etc.) instead of a multi-second full
+// rescan that re-queries every package manager.
+func (s *ToolService) RewalkPath(ctx context.Context, tools []registry.Tool) error {
+	if s.Finder == nil {
+		return errors.New("service: no finder configured")
+	}
+	return s.Finder.FindAll(ctx, tools)
+}
+
 // ScanOnly loads the catalog and scans PATH without resolving versions.
 // Used by `klim import`, `klim open`, and the TUI import plan builder
 // where only installed/not-installed status is needed.
