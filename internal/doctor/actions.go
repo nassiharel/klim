@@ -77,7 +77,7 @@ func removePathEntryCommand(entry string) string {
 	// POSIX shells. awk + RS=: keeps ordering stable and tolerates
 	// duplicates (every matching entry is dropped).
 	esc := strings.ReplaceAll(entry, `"`, `\"`)
-	return fmt.Sprintf(`export PATH="$(printf '%%s' "$PATH" | awk -v RS=: -v ORS=: '$0 != "%s"' | sed 's/:$//')"`, esc)
+	return fmt.Sprintf(`export PATH="$(printf '%%s' "$PATH" | awk -v RS=: -v ORS=: '$0 != %q' | sed 's/:$//')"`, esc)
 }
 
 // reorderPathCommand returns a shell snippet that re-emits PATH with
@@ -115,7 +115,8 @@ echo "$PATH"`
 // installPMCommand returns a copy-pasteable command to install the
 // given package manager, or "" when there's no sensible automated
 // install (winget on non-Windows, apt on macOS, etc.).
-func installPMCommand(pm registry.InstallSource) string {	switch pm {
+func installPMCommand(pm registry.InstallSource) string {
+	switch pm {
 	case registry.SourceBrew:
 		if runtime.GOOS == "windows" {
 			return ""

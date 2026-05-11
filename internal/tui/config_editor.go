@@ -145,6 +145,7 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			// At bottom of settings — allow scrolling past.
 			m.configScroll++
+			m.clampScrollOffsets()
 		}
 		m.autoScrollConfig(settings)
 	case "pgup":

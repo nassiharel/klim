@@ -126,16 +126,16 @@ func splitVersionNumeric(s string) []int {
 	s = strings.TrimPrefix(strings.TrimSpace(s), "v")
 	var out []int
 	cur := 0
-	any := false
+	seenDigit := false
 	for _, r := range s {
 		switch {
 		case r >= '0' && r <= '9':
 			cur = cur*10 + int(r-'0')
-			any = true
-		case any:
+			seenDigit = true
+		case seenDigit:
 			out = append(out, cur)
 			cur = 0
-			any = false
+			seenDigit = false
 			if r != '.' {
 				// Stop at the first non-numeric, non-dot
 				// boundary so "1.8.0-beta" splits to [1, 8, 0].
@@ -143,7 +143,7 @@ func splitVersionNumeric(s string) []int {
 			}
 		}
 	}
-	if any {
+	if seenDigit {
 		out = append(out, cur)
 	}
 	return out

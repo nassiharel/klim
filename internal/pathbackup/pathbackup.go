@@ -26,12 +26,12 @@ import (
 // triggered the capture.
 type Backup struct {
 	Timestamp time.Time `yaml:"timestamp"`
-	Trigger   string    `yaml:"trigger"`           // e.g. "doctor.fix"
-	Issue     string    `yaml:"issue,omitempty"`   // human title of the issue that prompted the backup
-	GOOS      string    `yaml:"goos"`              // runtime.GOOS at capture time — restore commands depend on this
-	PATH      string    `yaml:"path"`              // the contents of $PATH (or %PATH%) at capture time
+	Trigger   string    `yaml:"trigger"`             // e.g. "doctor.fix"
+	Issue     string    `yaml:"issue,omitempty"`     // human title of the issue that prompted the backup
+	GOOS      string    `yaml:"goos"`                // runtime.GOOS at capture time — restore commands depend on this
+	PATH      string    `yaml:"path"`                // the contents of $PATH (or %PATH%) at capture time
 	UserPATH  string    `yaml:"user_path,omitempty"` // Windows-only: persistent User PATH registry value
-	Command   string    `yaml:"command,omitempty"` // the command that was about to be run (for audit)
+	Command   string    `yaml:"command,omitempty"`   // the command that was about to be run (for audit)
 	// File is filled in by Save (and List) — it's the absolute path
 	// of the YAML file on disk. Not serialized.
 	File string `yaml:"-"`
@@ -72,7 +72,8 @@ func Save(b Backup) (string, error) {
 		path = filepath.Join(dir, fmt.Sprintf("path-%s-%d.yaml", stamp, i))
 	}
 	header := "# klim PATH backup — created before applying a Health fix.\n" +
-		"# Restore with: klim health path-backups restore " + filepath.Base(path) + "\n"
+		"# Show:   klim health path-backups show " + strings.TrimSuffix(filepath.Base(path), ".yaml") + "\n" +
+		"# Restore: klim health path-backups restore-cmd " + strings.TrimSuffix(filepath.Base(path), ".yaml") + "\n"
 	if err := fileutil.WriteYAML(path, &b, header); err != nil {
 		return "", err
 	}
@@ -121,20 +122,53 @@ func List() ([]Backup, error) {
 // the right command if someone reviews it on Linux. The command is
 // what gets *displayed* and *executed*; the user always sees what's
 // about to run before it does.
+// RestoreCommand returns a shell-specific command that, when executed
+// in the user's interactive shell, sets PATH back to the captured
+// value. On Windows the User PATH registry entry is also restored
+// when it was captured.
+//
+// The function is platform-agnostic in that it inspects b.GOOS rather
+// than runtime.GOOS — so a backup captured on Windows still produces
+// the right command if someone reviews it on Linux. The command is
+// what gets *displayed* and *executed*; the user always sees what's
+// about to run before it does.
+//
+// Quoting strategy:
+//
+//   - Windows: PowerShell single-quoted strings; embedded single
+//     quotes are doubled (PowerShell's escape rule).
+//   - POSIX:   Bourne single-quoted strings; embedded single quotes
+//     are closed/escaped/reopened (`'` → `'\”`). This is the only
+//     fully-safe approach because POSIX shells perform parameter and
+//     command expansion inside double quotes, and a PATH value
+//     containing `$(...)` or backticks would otherwise be interpreted
+//     as a command substitution.
 func RestoreCommand(b Backup) string {
 	switch b.GOOS {
 	case "windows":
-		esc := strings.ReplaceAll(b.PATH, "'", "''")
-		cmd := fmt.Sprintf(`$env:PATH = '%s'`, esc)
+		cmd := fmt.Sprintf(`$env:PATH = '%s'`, psSingleQuote(b.PATH))
 		if b.UserPATH != "" {
-			escUser := strings.ReplaceAll(b.UserPATH, "'", "''")
-			cmd += fmt.Sprintf(`; [Environment]::SetEnvironmentVariable('PATH', '%s', 'User')`, escUser)
+			cmd += fmt.Sprintf(`; [Environment]::SetEnvironmentVariable('PATH', '%s', 'User')`, psSingleQuote(b.UserPATH))
 		}
 		return cmd
 	default:
-		esc := strings.ReplaceAll(b.PATH, `"`, `\"`)
-		return fmt.Sprintf(`export PATH="%s"`, esc)
+		return `export PATH=` + shSingleQuote(b.PATH)
 	}
+}
+
+// shSingleQuote wraps s in Bourne-shell single quotes, escaping any
+// embedded single quotes with the canonical `'\”` sequence. The
+// result is safe to paste into bash / zsh / sh without any
+// interpretation of $, backticks, etc.
+func shSingleQuote(s string) string {
+	return `'` + strings.ReplaceAll(s, `'`, `'\''`) + `'`
+}
+
+// psSingleQuote wraps s in PowerShell single quotes, escaping
+// embedded single quotes by doubling them — PowerShell's literal
+// string rule.
+func psSingleQuote(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }
 
 func fileExists(path string) bool {

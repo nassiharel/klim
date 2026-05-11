@@ -318,6 +318,7 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		if m.envState == envViewIdle {
 			m.profileScroll++
+			m.clampScrollOffsets()
 		}
 		return m, nil
 	case "home", "g":
@@ -336,6 +337,7 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "pgdown", " ":
 		if m.envState == envViewIdle {
 			m.profileScroll += 5
+			m.clampScrollOffsets()
 		}
 		return m, nil
 	}

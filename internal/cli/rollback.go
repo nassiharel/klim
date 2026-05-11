@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	rollbackRefreshFlag  bool
+	rollbackRefreshFlag       bool
 	rollbackIncludeRemoveFlag bool
-	rollbackOutput       func() (OutputFormat, error)
+	rollbackOutput            func() (OutputFormat, error)
 )
 
 // rollbackCmd renders a plan that, when applied, would bring the
@@ -27,7 +27,7 @@ var rollbackCmd = &cobra.Command{
 	Short: "Produce a plan that rolls back to a saved checkpoint",
 	Long: `Compare the current toolchain to a saved checkpoint and emit a
 plan that would restore it. Read-only by default — review the diff
-first, then run the commands the plan recommends (or `+"`klim apply`"+`
+first, then run the commands the plan recommends (or ` + "`klim apply`" + `
 when applicable).
 
 Sections shown are the same as klim plan: planned changes, upgrade
@@ -107,9 +107,9 @@ func runRollback(cmd *cobra.Command, args []string) error {
 		}{Checkpoint: cp.Name, Plan: p})
 	}
 
-	fmt.Fprintf(os.Stdout, "Rollback plan to checkpoint %q (captured %s)\n\n",
+	_, _ = fmt.Fprintf(os.Stdout, "Rollback plan to checkpoint %q (captured %s)\n\n",
 		cp.Name, cp.CreatedAt.Local().Format("2006-01-02 15:04"))
-	fmt.Fprint(os.Stdout, plan.RenderText(p))
+	_, _ = fmt.Fprint(os.Stdout, plan.RenderText(p))
 	if len(p.Changes) > 0 {
 		fmt.Fprintln(os.Stderr, "\nReview the plan above, then apply the suggested commands manually")
 		fmt.Fprintln(os.Stderr, "(or run `klim apply` for upgrade-only rollbacks).")

@@ -51,6 +51,8 @@ import (
 // Status enumerates per-check outcomes. Stable JSON identifiers.
 type Status string
 
+// Severity levels — pass/warn/fail/skip. Mirrors the doctor package
+// conventions so UIs can reuse the same colour palette.
 const (
 	StatusPass Status = "pass"
 	StatusWarn Status = "warn" // surfaced to the user but does not trip auto-rollback
@@ -458,10 +460,12 @@ func checkBinaryValidation(ctx context.Context, after []registry.Tool, before ma
 }
 
 // probeStat is retained as a fast-path "does this file plausibly
-// exist as an executable" check. Still used by external callers /
-// future checks; binary validation itself now re-probes to avoid
-// the false-regression case where probeStat returns true for a
-// file that has never actually run cleanly.
+// exist as an executable" check. Kept available for future checks
+// even though binary validation now re-probes — having a cheap
+// stat-only check on the package surface saves callers from
+// reinventing it.
+//
+//nolint:unused // public-shaped helper kept for future check plug-ins
 func probeStat(path string) bool {
 	if path == "" {
 		return false
@@ -512,8 +516,9 @@ func probeBinary(parent context.Context, path string, timeout time.Duration) str
 		}
 		// "exec format error" or "permission denied" surface
 		// through err — those are real breakage signals.
-		if e, ok := err.(*exec.Error); ok && e.Err != nil {
-			if errors.Is(e.Err, exec.ErrNotFound) {
+		var execErr *exec.Error
+		if errors.As(err, &execErr) && execErr.Err != nil {
+			if errors.Is(execErr.Err, exec.ErrNotFound) {
 				return "binary not found"
 			}
 		}
@@ -551,7 +556,7 @@ func checkPATHConsistency(_ context.Context, _ []registry.Tool, _ map[string]reg
 			continue
 		}
 		seen[norm] = i
-		info, err := os.Stat(clean)
+		info, err := os.Stat(clean) //nolint:gosec // G304/G703: clean originates from $PATH; auditing PATH is the point of this check.
 		switch {
 		case os.IsNotExist(err):
 			issues = append(issues, "missing directory: "+clean)

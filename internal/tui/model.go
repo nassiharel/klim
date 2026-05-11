@@ -1648,6 +1648,51 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// clampScrollOffsets recomputes the maximum scroll for each scrollable
+// tab body and clamps the live scroll fields so they can't drift past
+// the end of the rendered content. Called from key handlers after
+// any scroll increment so the in-memory state stays consistent with
+// the rendered viewport — important because renderView's value
+// receiver means it can't write the clamped values back itself.
+//
+// Cheap in practice: each renderXxxView call is local string-building;
+// no IO, no version-resolution. Worst case is the Dashboard renderer
+// which still completes in microseconds.
+func (m *Model) clampScrollOffsets() {
+	headerRows := 4 + m.subtabRows()
+	footer := m.footerHeight()
+	visible := m.height - headerRows - footer - 1
+	if visible < 5 {
+		visible = 5
+	}
+	clamp := func(scroll *int, total int) {
+		maxScroll := total - visible
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		if *scroll > maxScroll {
+			*scroll = maxScroll
+		}
+		if *scroll < 0 {
+			*scroll = 0
+		}
+	}
+	switch m.activeTab {
+	case tabConfig:
+		clamp(&m.configScroll, strings.Count(m.renderConfigView(), "\n")+1)
+	case tabDashboard:
+		clamp(&m.dashboardScroll, strings.Count(m.renderDashboardView(), "\n")+1)
+	case tabHealth:
+		clamp(&m.healthScroll, strings.Count(m.renderHealthView(), "\n")+1)
+	case tabDoctor:
+		clamp(&m.doctorScroll, strings.Count(m.renderDoctorView(), "\n")+1)
+	case tabProfile:
+		if m.viewingEnv {
+			clamp(&m.profileScroll, strings.Count(m.renderEnvSubview(), "\n")+1)
+		}
+	}
+}
+
 // View renders the current UI state.
 func (m Model) View() tea.View {
 	v := tea.NewView(m.renderView())
@@ -1774,6 +1819,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.activeTab == tabDoctor {
 				m.doctorScroll++
 			}
+			m.clampScrollOffsets()
 			return m, nil
 		case "home", "g":
 			if m.activeTab == tabDashboard {

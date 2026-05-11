@@ -132,9 +132,13 @@ func (m Model) renderView() string {
 		if visibleRows < 5 {
 			visibleRows = 5
 		}
-
+		// fitToVisibleRows clamps the scroll internally and returns
+		// the body sized to exactly visibleRows. The receiver here
+		// is a value receiver (bubbletea's View() requires it), so
+		// the clamped scroll can't be written back to the model
+		// from this path — key handlers in Update() do that work
+		// to keep the canonical state authoritative.
 		fitted, scroll, total := fitToVisibleRows(m.renderConfigView(), m.configScroll, visibleRows)
-		m.configScroll = scroll
 		body.WriteString(fitted)
 		if scroll > 0 {
 			footer = "  " + dimVersion.Render("↑/↓ scroll") + "    " + footer
@@ -155,7 +159,6 @@ func (m Model) renderView() string {
 			visibleRows = 5
 		}
 		fitted, scroll, total := fitToVisibleRows(m.renderDashboardView(), m.dashboardScroll, visibleRows)
-		m.dashboardScroll = scroll
 		body.WriteString(fitted)
 		if scroll > 0 {
 			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
@@ -176,7 +179,6 @@ func (m Model) renderView() string {
 			visibleRows = 5
 		}
 		fitted, scroll, total := fitToVisibleRows(m.renderHealthView(), m.healthScroll, visibleRows)
-		m.healthScroll = scroll
 		body.WriteString(fitted)
 		if scroll > 0 {
 			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
@@ -197,7 +199,6 @@ func (m Model) renderView() string {
 			visibleRows = 5
 		}
 		fitted, scroll, total := fitToVisibleRows(m.renderDoctorView(), m.doctorScroll, visibleRows)
-		m.doctorScroll = scroll
 		body.WriteString(fitted)
 		if scroll > 0 {
 			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
@@ -220,7 +221,6 @@ func (m Model) renderView() string {
 			visibleRows = 5
 		}
 		fitted, scroll, total := fitToVisibleRows(m.renderEnvSubview(), m.profileScroll, visibleRows)
-		m.profileScroll = scroll
 		body.WriteString(fitted)
 		if scroll > 0 {
 			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer

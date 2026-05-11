@@ -41,7 +41,6 @@ var (
 	doctorError   = lipgloss.NewStyle().Foreground(lipgloss.Color("167"))     // soft rose-red — readable without bold
 	doctorWarning = lipgloss.NewStyle().Foreground(warningColor)              // warm gold
 	doctorInfo    = lipgloss.NewStyle().Foreground(primaryColor)              // teal
-	doctorFix     = lipgloss.NewStyle().Foreground(subtleColor)               // gray
 	doctorSection = lipgloss.NewStyle().Bold(true).Foreground(highlightColor) // white bold
 	doctorOK      = lipgloss.NewStyle().Foreground(successColor).Bold(true)   // mint green
 )
@@ -80,62 +79,6 @@ func (m Model) renderDoctorView() string {
 		b.WriteString(m.renderComplianceView())
 	default:
 		b.WriteString(m.renderAuditView())
-	}
-
-	return b.String()
-}
-
-// renderDoctorIssuesView renders the doctor diagnostics sub-view.
-func (m Model) renderDoctorIssuesView() string {
-	var b strings.Builder
-
-	if len(m.doctorIssues) == 0 {
-		b.WriteString("  " + doctorOK.Render("✓ No issues found — your environment looks healthy!") + "\n\n")
-		b.WriteString("  " + dashDim.Render("All PATH entries are valid, no version conflicts detected,") + "\n")
-		b.WriteString("  " + dashDim.Render("and your package managers are working correctly.") + "\n")
-		return b.String()
-	}
-
-	errs, warns, infos := doctor.CountBySeverity(m.doctorIssues)
-
-	var summaryParts []string
-	if errs > 0 {
-		summaryParts = append(summaryParts, doctorError.Render(fmt.Sprintf("%d error(s)", errs)))
-	}
-	if warns > 0 {
-		summaryParts = append(summaryParts, doctorWarning.Render(fmt.Sprintf("%d warning(s)", warns)))
-	}
-	if infos > 0 {
-		summaryParts = append(summaryParts, doctorInfo.Render(fmt.Sprintf("%d info(s)", infos)))
-	}
-	b.WriteString("  " + strings.Join(summaryParts, "  ") + "\n\n")
-
-	grouped := make(map[string][]doctor.Issue)
-	var categoryOrder []string
-	for _, issue := range m.doctorIssues {
-		if _, ok := grouped[issue.Category]; !ok {
-			categoryOrder = append(categoryOrder, issue.Category)
-		}
-		grouped[issue.Category] = append(grouped[issue.Category], issue)
-	}
-
-	for _, cat := range categoryOrder {
-		b.WriteString("  " + doctorSection.Render(cat) + "\n")
-		for _, issue := range grouped[cat] {
-			icon := severityStyle(issue.Severity)
-			b.WriteString("    " + icon + " " + issue.Title + "\n")
-			if issue.Detail != "" {
-				for _, line := range strings.Split(issue.Detail, "\n") {
-					if line != "" {
-						b.WriteString("      " + dashDim.Render(line) + "\n")
-					}
-				}
-			}
-			if issue.Fix != "" {
-				b.WriteString("      " + doctorFix.Render("→ "+issue.Fix) + "\n")
-			}
-		}
-		b.WriteString("\n")
 	}
 
 	return b.String()

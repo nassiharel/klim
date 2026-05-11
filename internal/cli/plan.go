@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	planRefreshFlag     bool
-	planFileFlag        string
+	planRefreshFlag      bool
+	planFileFlag         string
 	planDetailedExitFlag bool
-	planOutput          func() (OutputFormat, error)
+	planOutput           func() (OutputFormat, error)
 )
 
 // planCmd computes a Terraform-plan-style preview of the changes klim
@@ -96,7 +96,7 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		return planExitCode(p)
 	}
 
-	fmt.Fprint(os.Stdout, plan.RenderText(p))
+	_, _ = fmt.Fprint(os.Stdout, plan.RenderText(p))
 	return planExitCode(p)
 }
 

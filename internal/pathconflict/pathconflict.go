@@ -1,16 +1,21 @@
 // Package pathconflict derives a structured view of PATH-shadowing and
 // version-conflict situations from an already-scanned tool slice.
 //
-// All inputs come from registry.Tool.Instances, which the finder
-// populates in PATH precedence order (first instance wins). This
-// package is a pure transform; it never touches the filesystem or the
-// PATH variable itself. That makes it cheap to call from both the TUI
-// and the CLI and trivial to unit test.
+// Inputs come from registry.Tool.Instances, which the finder
+// populates in PATH precedence order (first instance wins). The
+// analyzer reads os.Getenv("PATH") and does best-effort os.Stat
+// calls on PATH entries to flag missing / duplicate / user-writable
+// directories — i.e. it is NOT a fully-pure transform; it touches
+// the filesystem (read-only) and the process environment. The
+// IO is bounded by the size of $PATH and never writes; failures
+// degrade gracefully (a stat error just means the entry isn't
+// flagged as user-writable).
 //
-// The companion `doctor` package keeps emitting text Issue records for
-// PATH shadowing — those are good for the long-form Issues list. This
-// package returns the underlying structured model so a visualization
-// can render it richly (tables, two-pane layouts, version diffs).
+// The companion `doctor` package keeps emitting text Issue records
+// for PATH shadowing — those are good for the long-form Issues
+// list. This package returns the underlying structured model so a
+// visualization can render it richly (tables, two-pane layouts,
+// version diffs).
 package pathconflict
 
 import (
@@ -62,15 +67,15 @@ type InstanceView struct {
 // tool may appear in multiple DirViews, marked Active in the
 // first-occurrence dir and Shadowed everywhere else.
 type DirView struct {
-	Dir        string      `json:"dir"`
-	Order      int         `json:"order"` // 1-based PATH position
-	Exists     bool        `json:"exists"`
-	IsDir      bool        `json:"is_dir"`
-	Tools      []ToolEntry `json:"tools"`
-	UserWrite  bool        `json:"user_writable"`
-	SystemDir  bool        `json:"system_dir"`
-	Duplicate  bool        `json:"duplicate"` // duplicates a previous PATH entry
-	DuplicateOf string     `json:"duplicate_of,omitempty"`
+	Dir         string      `json:"dir"`
+	Order       int         `json:"order"` // 1-based PATH position
+	Exists      bool        `json:"exists"`
+	IsDir       bool        `json:"is_dir"`
+	Tools       []ToolEntry `json:"tools"`
+	UserWrite   bool        `json:"user_writable"`
+	SystemDir   bool        `json:"system_dir"`
+	Duplicate   bool        `json:"duplicate"` // duplicates a previous PATH entry
+	DuplicateOf string      `json:"duplicate_of,omitempty"`
 }
 
 // ToolEntry is one (tool, instance-in-this-dir) pairing inside a DirView.
@@ -170,7 +175,7 @@ func analyzeByDir(tools []registry.Tool) []DirView {
 			UserWrite: isUserWritableDir(dir),
 			SystemDir: isSystemDir(dir),
 		}
-		if info, err := os.Stat(dir); err == nil {
+		if info, err := os.Stat(dir); err == nil { //nolint:gosec // G703: dir originates from $PATH; auditing PATH is the point.
 			dv.Exists = true
 			dv.IsDir = info.IsDir()
 		}

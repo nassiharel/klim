@@ -8,8 +8,8 @@ import (
 	"runtime"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/klim/internal/doctor"
 	"github.com/nassiharel/klim/internal/pathconflict"
@@ -277,13 +277,16 @@ func (m Model) renderHealthPathByDir(report pathconflict.Report) string {
 		if d.Duplicate {
 			annotations = append(annotations, healthWarn.Render("duplicate"))
 		}
-		if d.UserWrite && d.SystemDir {
+		switch {
+		case d.UserWrite && d.SystemDir:
 			// Both flagged is unusual; show both verbatim.
+			annotations = append(annotations,
+				healthWarn.Render("user-writable"),
+				healthDim.Render("system"),
+			)
+		case d.UserWrite:
 			annotations = append(annotations, healthWarn.Render("user-writable"))
-			annotations = append(annotations, healthDim.Render("system"))
-		} else if d.UserWrite {
-			annotations = append(annotations, healthWarn.Render("user-writable"))
-		} else if d.SystemDir {
+		case d.SystemDir:
 			annotations = append(annotations, healthDim.Render("system"))
 		}
 		ann := ""
@@ -381,7 +384,8 @@ func (m Model) handleKeyHealth(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.healthPathStatus = ""
-		return m, m.startScan()
+		scan := m.startScan()
+		return m, scan
 	}
 
 	// Sub-tab-specific keys.
@@ -595,6 +599,7 @@ func (m Model) handleKeyHealthPath(msg tea.KeyMsg, report pathconflict.Report) (
 				}
 			}
 			m.healthScroll++
+			m.clampScrollOffsets()
 			return m, nil
 		}
 		if m.healthPathDirIdx < len(report.ByDir)-1 {
@@ -602,6 +607,7 @@ func (m Model) handleKeyHealthPath(msg tea.KeyMsg, report pathconflict.Report) (
 			return m, nil
 		}
 		m.healthScroll++
+		m.clampScrollOffsets()
 		return m, nil
 
 	case "u":

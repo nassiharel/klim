@@ -93,10 +93,10 @@ type Risk struct {
 // Totals carry the aggregated values rendered at the bottom of the
 // plan output.
 type Totals struct {
-	ChangeCount      int           `json:"change_count"`
-	EstimatedTime    time.Duration `json:"estimated_time_ns"`
-	DiskAddedMB      int           `json:"disk_added_mb"`
-	DiskReclaimableMB int          `json:"disk_reclaimable_mb"`
+	ChangeCount       int           `json:"change_count"`
+	EstimatedTime     time.Duration `json:"estimated_time_ns"`
+	DiskAddedMB       int           `json:"disk_added_mb"`
+	DiskReclaimableMB int           `json:"disk_reclaimable_mb"`
 }
 
 // Plan is the full "what would happen" model returned by Build.

@@ -44,7 +44,7 @@ func RenderText(p Plan) string {
 			if c.Kind != ChangeUpgrade {
 				continue
 			}
-			b.WriteString(fmt.Sprintf("  %s upgrade confidence: %d%%\n", c.DisplayName, c.Confidence))
+			fmt.Fprintf(&b, "  %s upgrade confidence: %d%%\n", c.DisplayName, c.Confidence)
 			for _, f := range c.ConfidenceFactors {
 				if f.Delta == 0 {
 					continue
@@ -56,7 +56,7 @@ func RenderText(p Plan) string {
 				} else {
 					delta = -delta
 				}
-				b.WriteString(fmt.Sprintf("    %s%d  %s\n", sign, delta, f.Reason))
+				fmt.Fprintf(&b, "    %s%d  %s\n", sign, delta, f.Reason)
 			}
 		}
 		b.WriteString("\n")
@@ -84,10 +84,10 @@ func RenderText(p Plan) string {
 	if p.Totals.DiskAddedMB > 0 || p.Totals.DiskReclaimableMB > 0 {
 		b.WriteString("Disk impact:\n")
 		if p.Totals.DiskAddedMB > 0 {
-			b.WriteString(fmt.Sprintf("  +%s cache\n", formatMB(p.Totals.DiskAddedMB)))
+			fmt.Fprintf(&b, "  +%s cache\n", formatMB(p.Totals.DiskAddedMB))
 		}
 		if p.Totals.DiskReclaimableMB > 0 {
-			b.WriteString(fmt.Sprintf("  -%s old runtimes removable\n", formatMB(p.Totals.DiskReclaimableMB)))
+			fmt.Fprintf(&b, "  -%s old runtimes removable\n", formatMB(p.Totals.DiskReclaimableMB))
 		}
 		b.WriteString("\n")
 	}

@@ -96,10 +96,10 @@ func runHealthPathBackupsList(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "FILE\tCAPTURED\tTRIGGER\tISSUE")
+	_, _ = fmt.Fprintln(tw, "FILE\tCAPTURED\tTRIGGER\tISSUE")
 	for _, b := range backups {
 		file := truncateBackupFile(b.File)
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
 			file,
 			b.Timestamp.Local().Format("2006-01-02 15:04:05"),
 			defaultString(b.Trigger, "—"),
@@ -123,23 +123,23 @@ func runHealthPathBackupsShow(cmd *cobra.Command, args []string) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(b)
 	}
-	fmt.Fprintf(os.Stdout, "Backup:   %s\n", b.File)
-	fmt.Fprintf(os.Stdout, "Captured: %s\n", b.Timestamp.Local().Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(os.Stdout, "Trigger:  %s\n", defaultString(b.Trigger, "—"))
-	fmt.Fprintf(os.Stdout, "Issue:    %s\n", defaultString(b.Issue, "—"))
-	fmt.Fprintf(os.Stdout, "Platform: %s\n", b.GOOS)
+	_, _ = fmt.Fprintf(os.Stdout, "Backup:   %s\n", b.File)
+	_, _ = fmt.Fprintf(os.Stdout, "Captured: %s\n", b.Timestamp.Local().Format("2006-01-02 15:04:05"))
+	_, _ = fmt.Fprintf(os.Stdout, "Trigger:  %s\n", defaultString(b.Trigger, "—"))
+	_, _ = fmt.Fprintf(os.Stdout, "Issue:    %s\n", defaultString(b.Issue, "—"))
+	_, _ = fmt.Fprintf(os.Stdout, "Platform: %s\n", b.GOOS)
 	if b.Command != "" {
-		fmt.Fprintln(os.Stdout, "\nCommand that was about to run:")
-		fmt.Fprintln(os.Stdout, "  "+b.Command)
+		_, _ = fmt.Fprintln(os.Stdout, "\nCommand that was about to run:")
+		_, _ = fmt.Fprintln(os.Stdout, "  "+b.Command)
 	}
-	fmt.Fprintln(os.Stdout, "\nCaptured $PATH:")
-	fmt.Fprintln(os.Stdout, "  "+b.PATH)
+	_, _ = fmt.Fprintln(os.Stdout, "\nCaptured $PATH:")
+	_, _ = fmt.Fprintln(os.Stdout, "  "+b.PATH)
 	if b.UserPATH != "" {
-		fmt.Fprintln(os.Stdout, "\nCaptured Windows User PATH (registry):")
-		fmt.Fprintln(os.Stdout, "  "+b.UserPATH)
+		_, _ = fmt.Fprintln(os.Stdout, "\nCaptured Windows User PATH (registry):")
+		_, _ = fmt.Fprintln(os.Stdout, "  "+b.UserPATH)
 	}
-	fmt.Fprintln(os.Stdout, "\nTo print the restore command:")
-	fmt.Fprintln(os.Stdout, "  klim health path-backups restore-cmd "+args[0])
+	_, _ = fmt.Fprintln(os.Stdout, "\nTo print the restore command:")
+	_, _ = fmt.Fprintln(os.Stdout, "  klim health path-backups restore-cmd "+args[0])
 	return nil
 }
 
@@ -153,7 +153,7 @@ func runHealthPathBackupsRestoreCmd(cmd *cobra.Command, args []string) error {
 	fmt.Fprintln(os.Stderr, "Restore command for "+b.File+":")
 	fmt.Fprintln(os.Stderr, "(review carefully, then paste into your shell)")
 	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stdout, pathbackup.RestoreCommand(b))
+	_, _ = fmt.Fprintln(os.Stdout, pathbackup.RestoreCommand(b))
 	return nil
 }
 
@@ -199,11 +199,11 @@ func startsWith(s, prefix string) bool {
 }
 
 func truncateBackupFile(path string) string {
-	const max = 60
-	if len(path) <= max {
+	const maxLen = 60
+	if len(path) <= maxLen {
 		return path
 	}
-	return "…" + path[len(path)-max+1:]
+	return "…" + path[len(path)-maxLen+1:]
 }
 
 func defaultString(s, fallback string) string {

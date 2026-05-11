@@ -9,14 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/klim/internal/registry"
-	"github.com/nassiharel/klim/internal/score"
 )
-
-// computeScore returns the cached environment health score.
-// Computed once in runDoctor(), not per render.
-func (m Model) computeScore() score.Result {
-	return m.cachedScore
-}
 
 // Dashboard color palette — aligned with main palette.
 var (

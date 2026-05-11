@@ -25,7 +25,7 @@ var checkpointCmd = &cobra.Command{
 	Use:   "checkpoint",
 	Short: "Save / list / show / delete named toolchain snapshots",
 	Long: `Capture the currently installed tool versions (and PATH) under a
-named checkpoint so a future `+"`klim rollback <name>`"+` can restore them.
+named checkpoint so a future ` + "`klim rollback <name>`" + ` can restore them.
 
 Usage:
   klim checkpoint <name>             Capture a new checkpoint.
@@ -134,13 +134,13 @@ func runCheckpointList(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tCREATED\tTOOLS\tDESCRIPTION")
+	_, _ = fmt.Fprintln(tw, "NAME\tCREATED\tTOOLS\tDESCRIPTION")
 	for _, c := range list {
 		desc := c.Description
 		if desc == "" {
 			desc = "—"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n",
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n",
 			c.Name,
 			c.CreatedAt.Local().Format("2006-01-02 15:04"),
 			len(c.Tools),
@@ -164,15 +164,15 @@ func runCheckpointShow(cmd *cobra.Command, args []string) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(c)
 	}
-	fmt.Fprintf(os.Stdout, "Checkpoint: %s\n", c.Name)
+	_, _ = fmt.Fprintf(os.Stdout, "Checkpoint: %s\n", c.Name)
 	if c.Description != "" {
-		fmt.Fprintf(os.Stdout, "Description: %s\n", c.Description)
+		_, _ = fmt.Fprintf(os.Stdout, "Description: %s\n", c.Description)
 	}
-	fmt.Fprintf(os.Stdout, "Created:     %s\n", c.CreatedAt.Local().Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(os.Stdout, "Platform:    %s\n", c.GOOS)
-	fmt.Fprintf(os.Stdout, "Tools:       %d\n\n", len(c.Tools))
+	_, _ = fmt.Fprintf(os.Stdout, "Created:     %s\n", c.CreatedAt.Local().Format("2006-01-02 15:04:05"))
+	_, _ = fmt.Fprintf(os.Stdout, "Platform:    %s\n", c.GOOS)
+	_, _ = fmt.Fprintf(os.Stdout, "Tools:       %d\n\n", len(c.Tools))
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "TOOL\tVERSION\tSOURCE")
+	_, _ = fmt.Fprintln(tw, "TOOL\tVERSION\tSOURCE")
 	for _, t := range c.Tools {
 		v := t.Version
 		if v == "" {
@@ -182,18 +182,18 @@ func runCheckpointShow(cmd *cobra.Command, args []string) error {
 		if s == "" {
 			s = "—"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", t.Name, v, s)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", t.Name, v, s)
 	}
 	if err := tw.Flush(); err != nil {
 		return err
 	}
 	if c.PATH != "" {
-		fmt.Fprintln(os.Stdout, "\nCaptured PATH (truncated to first 200 chars):")
+		_, _ = fmt.Fprintln(os.Stdout, "\nCaptured PATH (truncated to first 200 chars):")
 		path := c.PATH
 		if len(path) > 200 {
 			path = path[:200] + "…"
 		}
-		fmt.Fprintln(os.Stdout, "  "+path)
+		_, _ = fmt.Fprintln(os.Stdout, "  "+path)
 	}
 	return nil
 }

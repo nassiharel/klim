@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/klim/internal/doctor"
 	"github.com/nassiharel/klim/internal/pathbackup"
@@ -97,47 +97,49 @@ func buildFixOptions(issue doctor.Issue) []fixModalOption {
 		cmd := issue.Action.Command
 		opts := []fixModalOption{}
 		if cmd != "" {
-			opts = append(opts, fixModalOption{
-				Key:   "run",
-				Label: "Run command",
-				Desc:  "Execute the suggested command for you and stream output here.",
-				Run: func(m Model) (Model, tea.Cmd) {
-					// Capture a PATH backup BEFORE the command
-					// runs so the user can roll back from the
-					// Done state. Backup failures are
-					// non-fatal — we log them through the
-					// modal output and continue, because
-					// blocking a fix on a backup write would
-					// be more annoying than helpful.
-					if issue.Action.TouchesPATH {
-						snap := pathbackup.Capture("doctor.fix", issue.Title, cmd)
-						if path, err := pathbackup.Save(snap); err == nil {
-							m.fixModal.BackupPath = path
-						} else {
-							m.fixModal.Output = "[backup warning: " + err.Error() + "]\n"
+			opts = append(opts,
+				fixModalOption{
+					Key:   "run",
+					Label: "Run command",
+					Desc:  "Execute the suggested command for you and stream output here.",
+					Run: func(m Model) (Model, tea.Cmd) {
+						// Capture a PATH backup BEFORE the command
+						// runs so the user can roll back from the
+						// Done state. Backup failures are
+						// non-fatal — we log them through the
+						// modal output and continue, because
+						// blocking a fix on a backup write would
+						// be more annoying than helpful.
+						if issue.Action.TouchesPATH {
+							snap := pathbackup.Capture("doctor.fix", issue.Title, cmd)
+							if path, err := pathbackup.Save(snap); err == nil {
+								m.fixModal.BackupPath = path
+							} else {
+								m.fixModal.Output = "[backup warning: " + err.Error() + "]\n"
+							}
 						}
-					}
-					m.fixModal.State = fixModalRunning
-					m.fixModal.Err = nil
-					return m, runHealthFixCmd(cmd)
+						m.fixModal.State = fixModalRunning
+						m.fixModal.Err = nil
+						return m, runHealthFixCmd(cmd)
+					},
 				},
-			})
-			opts = append(opts, fixModalOption{
-				Key:   "copy",
-				Label: "Copy to clipboard",
-				Desc:  "Copy the command — paste it into your shell when you're ready.",
-				Run: func(m Model) (Model, tea.Cmd) {
-					if err := m.clip.WriteAll(cmd); err != nil {
+				fixModalOption{
+					Key:   "copy",
+					Label: "Copy to clipboard",
+					Desc:  "Copy the command — paste it into your shell when you're ready.",
+					Run: func(m Model) (Model, tea.Cmd) {
+						if err := m.clip.WriteAll(cmd); err != nil {
+							m.fixModal.State = fixModalDone
+							m.fixModal.Err = err
+							m.fixModal.Output = "Clipboard error: " + err.Error()
+							return m, nil
+						}
 						m.fixModal.State = fixModalDone
-						m.fixModal.Err = err
-						m.fixModal.Output = "Clipboard error: " + err.Error()
+						m.fixModal.Output = "Command copied to clipboard. Paste it into your shell to apply."
 						return m, nil
-					}
-					m.fixModal.State = fixModalDone
-					m.fixModal.Output = "Command copied to clipboard. Paste it into your shell to apply."
-					return m, nil
+					},
 				},
-			})
+			)
 		}
 		opts = append(opts, fixModalOptionCancel())
 		return opts
@@ -165,7 +167,8 @@ func buildFixOptions(issue doctor.Issue) []fixModalOption {
 				Run: func(m Model) (Model, tea.Cmd) {
 					m.fixModal = fixModal{}
 					m.healthPathStatus = "Rescanning..."
-					return m, m.startScan()
+					scan := m.startScan()
+					return m, scan
 				},
 			},
 			fixModalOptionCancel(),
@@ -257,7 +260,8 @@ func (m Model) closeFixModalAfterDoneCmd() (Model, tea.Cmd) {
 	if touchedPATH {
 		return m, refreshAfterPathFixCmd(m.svc, m.tools)
 	}
-	return m, m.startScan()
+	scan := m.startScan()
+	return m, scan
 }
 
 // startFixModalRestore runs the saved restore command for the current
@@ -297,7 +301,8 @@ func (m Model) startFixModalRestore() (Model, tea.Cmd) {
 		Label:   "Restore PATH from backup " + filepath.Base(m.fixModal.BackupPath),
 		Command: cmd,
 	}
-	return m, runHealthFixCmd(cmd)
+	restoreCmd := runHealthFixCmd(cmd)
+	return m, restoreCmd
 }
 
 func fixModalOptionCancel() fixModalOption {
@@ -386,7 +391,7 @@ func (m Model) handleKeyHealthFixModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			newM, cmd := opt.Run(m)
 			return newM, cmd
 		case "1", "2", "3":
-			idx := int(msg.String()[0]-'1') //nolint:gosec
+			idx := int(msg.String()[0] - '1') //nolint:gosec
 			if idx >= 0 && idx < len(m.fixModal.Options) {
 				m.fixModal.Cursor = idx
 				opt := m.fixModal.Options[idx]
@@ -437,7 +442,7 @@ func (m Model) handleKeyHealthFixModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return doneOpts[m.fixModal.Cursor].Run(m)
 		case "1", "2", "3":
-			idx := int(msg.String()[0]-'1') //nolint:gosec
+			idx := int(msg.String()[0] - '1') //nolint:gosec
 			doneOpts := m.fixModalDoneOptions()
 			if idx >= 0 && idx < len(doneOpts) {
 				m.fixModal.Cursor = idx
@@ -586,7 +591,7 @@ func renderFixCommandBlock(issue doctor.Issue, width int) string {
 //
 // Layout for an unselected row:
 //
-//	  N. Label                Short description
+//	N. Label                Short description
 //
 // For the selected row the line is reverse-video and the description
 // is dropped to its own indented line so the highlight stays compact

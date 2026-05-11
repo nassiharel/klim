@@ -200,7 +200,7 @@ func validateName(name string) error {
 		return errors.New("checkpoint name is required")
 	}
 	if name == "." || name == ".." {
-		return errors.New("checkpoint name must not be . or ..")
+		return errors.New("checkpoint name must not be \".\" or \"..\"")
 	}
 	if !nameRegex.MatchString(name) {
 		return fmt.Errorf("checkpoint name %q is invalid: use letters, digits, dots, dashes, underscores (max 128 chars, must start with alphanumeric)", name)

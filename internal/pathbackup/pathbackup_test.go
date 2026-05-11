@@ -52,8 +52,34 @@ func TestSaveAndList_RoundTrips(t *testing.T) {
 func TestRestoreCommand_POSIX(t *testing.T) {
 	b := Backup{GOOS: "linux", PATH: `/usr/bin:/bin`}
 	got := RestoreCommand(b)
-	if got != `export PATH="/usr/bin:/bin"` {
+	if got != `export PATH='/usr/bin:/bin'` {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestRestoreCommand_POSIXResistsShellExpansion(t *testing.T) {
+	// PATH containing characters that double quotes would interpret
+	// must NOT expand when the command is pasted into a shell. The
+	// single-quote wrapping is the only safe choice — confirm the
+	// generated command contains the dangerous sequence verbatim.
+	b := Backup{GOOS: "linux", PATH: `/tmp:$(rm -rf /):${HOME}`}
+	got := RestoreCommand(b)
+	if !strings.Contains(got, `$(rm -rf /)`) || !strings.Contains(got, `${HOME}`) {
+		t.Errorf("dangerous sequences should appear literally inside single quotes: %q", got)
+	}
+	// And the outer wrapping must be single quotes, not double.
+	if !strings.HasPrefix(got, `export PATH='`) {
+		t.Errorf("POSIX restore must single-quote, got %q", got)
+	}
+}
+
+func TestRestoreCommand_POSIXEscapesSingleQuote(t *testing.T) {
+	b := Backup{GOOS: "linux", PATH: `/it's/a/path`}
+	got := RestoreCommand(b)
+	// Embedded single quote must close the literal, escape with a
+	// backslash, then reopen the literal.
+	if !strings.Contains(got, `'\''`) {
+		t.Errorf("single quote not escaped via close/escape/reopen: %q", got)
 	}
 }
 

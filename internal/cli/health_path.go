@@ -67,16 +67,16 @@ func runHealthPath(cmd *cobra.Command, _ []string) error {
 		if err := enc.Encode(report); err != nil {
 			return err
 		}
-		if report.HasConflicts() {
-			return fmt.Errorf("%d tool(s) have differing versions across PATH copies", countVersionConflicts(report))
+		if n := countVersionConflicts(report); n > 0 {
+			return fmt.Errorf("%d tool(s) have differing versions across PATH copies", n)
 		}
 		return nil
 	}
 
 	printHealthPathText(report)
 
-	if report.HasConflicts() {
-		return fmt.Errorf("%d tool(s) have differing versions across PATH copies", countVersionConflicts(report))
+	if n := countVersionConflicts(report); n > 0 {
+		return fmt.Errorf("%d tool(s) have differing versions across PATH copies", n)
 	}
 	return nil
 }
