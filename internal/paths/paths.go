@@ -74,6 +74,12 @@ func PathBackupsDir() (string, error) {
 	return Join("backups", "path")
 }
 
+// CheckpointsDir returns the directory where named "snapshot" files
+// from `klim checkpoint` are stored, one per checkpoint.
+func CheckpointsDir() (string, error) {
+	return Join("checkpoints")
+}
+
 // LogFile returns the path to the log file.
 func LogFile() (string, error) {
 	return Join("logs", "klim.log")
