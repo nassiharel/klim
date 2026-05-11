@@ -526,11 +526,20 @@ func probeBinary(parent context.Context, path string, timeout time.Duration) str
 	return "binary did not respond to --version/-V/version/-v/--help"
 }
 
-// checkPATHConsistency: PATH entries all exist as directories, no
-// new duplicates. We deliberately report this as Warn rather than
-// Fail unless the apply itself introduced a NEW broken entry — most
-// users already have one stale PATH entry and we shouldn't trip
-// auto-rollback on it.
+// checkPATHConsistency: $PATH entries all exist as directories, no
+// duplicates. This is a snapshot of the post-apply PATH state — we
+// do NOT diff against a pre-apply baseline. Most users have one or
+// two stale PATH entries permanently, and tripping auto-rollback on
+// those would punish the user for the state of their machine rather
+// than the apply itself. The check therefore reports issues as
+// StatusWarn (visible, but doesn't flip Result.Failed).
+//
+// A future iteration could accept pre/post PATH snapshots and
+// promote NEW issues to StatusFail, but doing so would require
+// threading the env state through Run; today's contract is "warn-
+// only". The signature still takes `before` for API symmetry with
+// the other check functions but the parameter is intentionally
+// unused.
 func checkPATHConsistency(_ context.Context, _ []registry.Tool, _ map[string]registry.Tool, _ Options) Check {
 	start := time.Now()
 	check := Check{Name: "PATH consistency"}

@@ -2,7 +2,6 @@ package doctor
 
 import (
 	"fmt"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -75,9 +74,25 @@ func removePathEntryCommand(entry string) string {
 		return fmt.Sprintf(`$new = ($env:PATH -split ';' | Where-Object { $_ -ne '%s' }) -join ';'; $env:PATH = $new; [Environment]::SetEnvironmentVariable('PATH', $new, 'User')`, esc)
 	}
 	// POSIX shells. awk + RS=: keeps ordering stable and tolerates
-	// duplicates (every matching entry is dropped).
-	esc := strings.ReplaceAll(entry, `"`, `\"`)
-	return fmt.Sprintf(`export PATH="$(printf '%%s' "$PATH" | awk -v RS=: -v ORS=: '$0 != %q' | sed 's/:$//')"`, esc)
+	// duplicates (every matching entry is dropped). The entry is
+	// inlined as a quoted awk string literal — both backslashes and
+	// double quotes must be escaped for awk's parser. The
+	// surrounding awk program is single-quoted, so the shell passes
+	// the awk literal through verbatim.
+	return fmt.Sprintf(
+		`export PATH="$(printf '%%s' "$PATH" | awk -v RS=: -v ORS=: '$0 != %s' | sed 's/:$//')"`,
+		awkStringLiteral(entry),
+	)
+}
+
+// awkStringLiteral wraps s in double quotes for an awk program,
+// escaping backslashes and double quotes per awk's literal grammar.
+// Caller must place the result inside a single-quoted shell-level
+// awk program so the shell doesn't re-interpret the escapes.
+func awkStringLiteral(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return `"` + s + `"`
 }
 
 // reorderPathCommand returns a shell snippet that re-emits PATH with
@@ -148,10 +163,3 @@ func installPMCommand(pm registry.InstallSource) string {
 	}
 	return ""
 }
-
-// extractPATHEntry is unused — Action.Target carries the entry
-// directly. Kept here as a private helper note for future consumers
-// that consume serialized Issues (e.g. a web UI) and only have the
-// rendered detail text. Defined as a no-op to document intent
-// without paying the unused-symbol cost.
-var _ = filepath.Clean // keep filepath imported for potential future helpers

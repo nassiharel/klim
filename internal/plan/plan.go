@@ -154,7 +154,14 @@ func Build(tools []registry.Tool, opts Options) Plan {
 		if !ok {
 			continue
 		}
-		change.Confidence, change.ConfidenceFactors = computeConfidence(change, tools)
+		// Confidence is meaningful only for upgrades — there's no
+		// "from" version to score against for installs or removes.
+		// Leaving the fields zero for non-upgrades plays correctly
+		// with the JSON `omitempty` tag so consumers don't see a
+		// misleading "confidence: 100" on every install.
+		if change.Kind == ChangeUpgrade {
+			change.Confidence, change.ConfidenceFactors = computeConfidence(change, tools)
+		}
 		changes = append(changes, change)
 	}
 

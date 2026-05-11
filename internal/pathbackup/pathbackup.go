@@ -122,27 +122,19 @@ func List() ([]Backup, error) {
 // the right command if someone reviews it on Linux. The command is
 // what gets *displayed* and *executed*; the user always sees what's
 // about to run before it does.
-// RestoreCommand returns a shell-specific command that, when executed
-// in the user's interactive shell, sets PATH back to the captured
-// value. On Windows the User PATH registry entry is also restored
-// when it was captured.
-//
-// The function is platform-agnostic in that it inspects b.GOOS rather
-// than runtime.GOOS — so a backup captured on Windows still produces
-// the right command if someone reviews it on Linux. The command is
-// what gets *displayed* and *executed*; the user always sees what's
-// about to run before it does.
 //
 // Quoting strategy:
 //
 //   - Windows: PowerShell single-quoted strings; embedded single
-//     quotes are doubled (PowerShell's escape rule).
+//     quotes are doubled (PowerShell's literal-string escape rule).
 //   - POSIX:   Bourne single-quoted strings; embedded single quotes
-//     are closed/escaped/reopened (`'` → `'\”`). This is the only
-//     fully-safe approach because POSIX shells perform parameter and
-//     command expansion inside double quotes, and a PATH value
-//     containing `$(...)` or backticks would otherwise be interpreted
-//     as a command substitution.
+//     use the canonical close-escape-reopen sequence — i.e. a literal
+//     single quote is rendered as four characters: end-quote, a
+//     backslash-escaped single quote, then re-open-quote
+//     ('\”). This is the only fully-safe approach because POSIX
+//     shells perform parameter and command expansion inside double
+//     quotes, and a PATH value containing `$(...)` or backticks would
+//     otherwise be interpreted as a command substitution.
 func RestoreCommand(b Backup) string {
 	switch b.GOOS {
 	case "windows":
@@ -156,10 +148,12 @@ func RestoreCommand(b Backup) string {
 	}
 }
 
-// shSingleQuote wraps s in Bourne-shell single quotes, escaping any
-// embedded single quotes with the canonical `'\”` sequence. The
-// result is safe to paste into bash / zsh / sh without any
-// interpretation of $, backticks, etc.
+// shSingleQuote wraps s in Bourne-shell single quotes. Embedded
+// single quotes use the canonical close-escape-reopen sequence
+// (an inner single quote becomes the four characters
+// end-quote / backslash / single-quote / re-open-quote). The result
+// is safe to paste into bash / zsh / sh without any interpretation
+// of $, backticks, or other shell metacharacters.
 func shSingleQuote(s string) string {
 	return `'` + strings.ReplaceAll(s, `'`, `'\''`) + `'`
 }
