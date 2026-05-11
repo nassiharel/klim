@@ -380,6 +380,10 @@ type Model struct {
 	healthPathDirIdx    int    // selected row in By-PATH-dir view
 	healthPathStatus    string // transient banner: last uninstall result
 
+	// Health → Issues "fix wizard" modal. Zero value means closed.
+	// See health_fix_modal.go for the rendering + key handling.
+	fixModal fixModal
+
 	// Onboard state (Discover → Onboard sub-tab).
 	onboardRole  int              // selected role index (0 = first role)
 	onboardTools []recommendation // role-scored tools for current role
@@ -906,6 +910,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, cmplCmd
 		}
+		return m, nil
+
+	case healthFixResultMsg:
+		// Result of runHealthFixCmd. If the modal was closed in the
+		// meantime (user pressed Esc to detach), drop the result on
+		// the floor — keeping the modal in fixModalRunning forever
+		// would be worse than silently dropping output.
+		if !m.fixModal.Open {
+			return m, nil
+		}
+		m.fixModal.State = fixModalDone
+		m.fixModal.Output = strings.TrimRight(msg.Output, "\n")
+		m.fixModal.Err = msg.Err
 		return m, nil
 
 	case execFinishedMsg:

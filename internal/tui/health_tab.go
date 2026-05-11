@@ -438,63 +438,20 @@ func (m Model) handleKeyHealth(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// applyIssueAction dispatches on the selected issue's Action.Kind:
-//   - CopyCommand: copies Action.Command to the clipboard.
-//   - JumpPathView: switches to Health → PATH, By tool, focused on
-//     Action.Target.
-//   - Rescan: kicks off m.startScan().
-//   - JumpUpdates: switches to My Tools → Updates.
+// applyIssueAction dispatches on the selected issue's Action.Kind by
+// opening the fix wizard modal. The modal handles the actual run /
+// copy / jump steps and exposes them as labelled buttons so users can
+// see the proposed command, choose to either run it for them or copy
+// it for manual review, and watch the result.
 //
 // Unknown / None: surface "no automated fix" in the status banner so
 // the user knows nothing happened (vs. assuming `f` is broken).
 func (m Model) applyIssueAction(issue doctor.Issue) (tea.Model, tea.Cmd) {
-	switch issue.Action.Kind {
-	case doctor.ActionCopyCommand:
-		if issue.Action.Command == "" {
-			m.healthPathStatus = "⚠ no command available for this issue"
-			return m, nil
-		}
-		if err := m.clip.WriteAll(issue.Action.Command); err != nil {
-			m.healthPathStatus = "⚠ clipboard: " + err.Error()
-			return m, nil
-		}
-		label := issue.Action.Label
-		if label == "" {
-			label = "fix command"
-		}
-		m.healthPathStatus = "✓ Copied " + label + " — paste into your shell"
-		return m, nil
-
-	case doctor.ActionJumpPathView:
-		m.healthSubTab = healthSubPath
-		m.healthPathView = healthPathByTool
-		m.healthPathShadowIdx = 0
-		m.healthScroll = 0
-		// Find the offending tool in the analyzer report and put
-		// the cursor on it. Falls back to row 0 if the tool isn't
-		// in the report (e.g. it disappeared between diagnose and
-		// jump — rare but possible after a rescan).
-		report := pathconflict.Analyze(m.tools)
-		for i, tv := range report.ByTool {
-			if tv.Name == issue.Action.Target {
-				m.healthPathToolIdx = i
-				break
-			}
-		}
-		m.healthPathStatus = "→ Opened PATH view focused on " + issue.Action.Target
-		return m, nil
-
-	case doctor.ActionRescan:
-		m.healthPathStatus = "Rescanning..."
-		return m, m.startScan()
-
-	case doctor.ActionJumpUpdates:
-		m.activeTab = tabUpdates
-		m.cursor = 0
-		m.applyFilter()
+	if issue.Action.Kind == doctor.ActionNone {
+		m.healthPathStatus = "⚠ no automated fix for this issue"
 		return m, nil
 	}
-	m.healthPathStatus = "⚠ no automated fix for this issue"
+	m.openHealthFixModal(issue)
 	return m, nil
 }
 

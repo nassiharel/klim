@@ -31,6 +31,11 @@ func (m Model) renderView() string {
 		return ""
 	}
 
+	// Health fix modal — full-screen overlay; takes priority over everything.
+	if m.fixModal.Open {
+		return m.renderFixModal()
+	}
+
 	// Detail view.
 	if m.showDetail && m.detailIdx >= 0 && m.detailIdx < len(m.tools) {
 		return m.renderDetailView(m.tools[m.detailIdx])
