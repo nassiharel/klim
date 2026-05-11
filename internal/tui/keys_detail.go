@@ -12,7 +12,11 @@ import (
 // handleKeyDetail handles navigation in the tool detail/action menu view.
 //
 // Key bindings:
-//   - up/k, down/j   — move the action-menu selection
+//   - up/k, down/j   — scroll body first; once at the top/bottom of the
+//     body they move the action-menu selection, then the related-tools
+//     cursor. This lets ↑/↓ behave like ordinary reading keys on long
+//     tool pages instead of silently moving a menu cursor that's off
+//     screen below the fold.
 //   - PgUp/PgDn      — scroll the detail body by one page
 //   - Home/End       — jump to top/bottom of the detail body
 //   - Enter          — run the selected action
@@ -28,8 +32,13 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.detailRelated = nil
 		return m, nil
 	case "up", "k":
-		// Navigate: related tools → action menu → scroll.
+		// Priority: scroll body up → move action menu up → exit related list.
+		// We scroll first when the user is partway down the page so ↑/↓ feel
+		// like ordinary reading keys; only at the top of the body do they
+		// re-take responsibility for the menu / related-tools cursors.
 		switch {
+		case m.detailScroll > 0:
+			m.detailScroll--
 		case m.detailRelCursor > 0:
 			m.detailRelCursor--
 		case m.detailRelCursor == 0:
@@ -40,25 +49,24 @@ func (m Model) handleKeyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case m.toolMenu > 0:
 			m.toolMenu--
-		case m.detailScroll > 0:
-			m.detailScroll--
 		}
 	case "down", "j":
-		// Navigate: scroll → action menu → related tools.
+		// Priority: scroll body down → action menu → related tools. ↓ on a
+		// freshly-opened long page now actually scrolls the page instead of
+		// silently moving a cursor that's off-screen below the fold.
 		switch {
-		case m.detailRelCursor >= 0:
-			// In related list.
-			if m.detailRelCursor < len(m.detailRelated)-1 {
-				m.detailRelCursor++
-			}
+		case m.detailScroll < m.detailMaxScroll:
+			m.detailScroll++
 		case m.toolMenu < len(m.toolMenuItems)-1:
 			m.toolMenu++
 		case len(m.detailRelated) > 0 && m.detailRelCursor == -1:
 			// Move from action menu to related list.
 			m.detailRelCursor = 0
-			m.toolMenu = len(m.toolMenuItems) - 1 // keep menu at last item visually
-		default:
-			m.detailScroll++
+			if len(m.toolMenuItems) > 0 {
+				m.toolMenu = len(m.toolMenuItems) - 1
+			}
+		case m.detailRelCursor >= 0 && m.detailRelCursor < len(m.detailRelated)-1:
+			m.detailRelCursor++
 		}
 		m.clampDetailScroll()
 	case "pgup":

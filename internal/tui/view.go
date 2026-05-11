@@ -383,7 +383,12 @@ func (m Model) layoutWithFooter(body, footer string) string {
 		ruleLen = 1
 	}
 	rule := "  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
-	return body + strings.Repeat("\n", max(gap-1, 0)) + rule + "\n" + footer
+	// Layout: body (bodyRows) + gap blank rows + rule (1 row, counted in footerRows)
+	// + footer (footerRows-1 rows). Total = m.height. Using `gap` (not gap-1) here
+	// is the fix for the off-by-one that left the bottom row of the terminal blank
+	// and made footers look "floating" on tabs whose body is shorter than the
+	// viewport.
+	return body + strings.Repeat("\n", gap) + rule + "\n" + footer
 }
 
 // visualRows returns the number of terminal rows occupied by s when rendered
