@@ -230,6 +230,16 @@ func (m Model) renderView() string {
 		return m.layoutWithFooter(body.String(), footer)
 	}
 
+	// My Profile tab — render the env sub-view directly. We gate
+	// on m.viewingEnv so transient flows that intentionally drop
+	// out of the env sub-view (e.g. the apply pipeline that hands
+	// off to the import progress UI) can take over the screen
+	// without this tab swallowing them.
+	if m.activeTab == tabProfile && m.viewingEnv {
+		body.WriteString(m.renderEnvSubview())
+		return m.layoutWithFooter(body.String(), m.renderHelp())
+	}
+
 	// Search bar.
 	body.WriteString(m.renderSearchBar() + "\n\n")
 
