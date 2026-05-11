@@ -29,8 +29,22 @@ type VersionResolver interface {
 // PackageManagerResolver is the default VersionResolver that queries
 // native package managers (winget, brew, apt, choco, snap, npm) and
 // falls back to binary detection (Go buildinfo, PE version resources).
+//
+// On every ResolveVersions call the resolver builds a per-call batch
+// cache by running one bulk-list and one bulk-outdated command per
+// package manager (e.g. `winget list` + `winget upgrade`). Subsequent
+// per-tool lookups consult the cache before spawning their own
+// subprocess, which collapses N×2 PM invocations into a constant
+// number per PM. Bulk-fetch failures degrade gracefully — the
+// resolver falls back to the per-tool query path so a flaky PM
+// doesn't break version resolution outright.
 type PackageManagerResolver struct {
 	Timeout time.Duration // timeout per subprocess call; 0 = defaultCmdTimeout
+
+	// batch holds the per-call bulk cache. Reset at the start of
+	// every ResolveVersions invocation so versions can never go
+	// stale across install/upgrade/remove.
+	batch *batchCache
 }
 
 // cmdTimeout returns the effective per-command timeout.
@@ -65,6 +79,14 @@ func (r *PackageManagerResolver) ResolveVersions(ctx context.Context, tools []re
 	}
 
 	timeout := r.cmdTimeout()
+
+	// Build a per-call batch cache by running one bulk command per
+	// package manager. The cache lookup later avoids the N×2
+	// per-tool subprocess fan-out that used to dominate scan time
+	// on machines with lots of installed tools.
+	r.batch = newBatchCache()
+	r.batch.prewarm(ctx, tools, timeout)
+
 	sem := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 
@@ -79,7 +101,7 @@ func (r *PackageManagerResolver) ResolveVersions(ctx context.Context, tools []re
 			defer func() { <-sem }()
 			toolCtx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
-			resolveOne(toolCtx, t)
+			r.resolveOne(toolCtx, t)
 			detector.EnrichOne(t)
 		}(&tools[i])
 	}
@@ -95,14 +117,20 @@ func ResolveOne(ctx context.Context, tool *registry.Tool) {
 func (r *PackageManagerResolver) ResolveOne(ctx context.Context, tool *registry.Tool) {
 	ctx, cancel := context.WithTimeout(ctx, r.cmdTimeout())
 	defer cancel()
-	resolveOne(ctx, tool)
+	r.resolveOne(ctx, tool)
 	detector.EnrichOne(tool)
 }
 
-func resolveOne(ctx context.Context, tool *registry.Tool) {
+// resolveOne is the receiver-bound resolver used by both
+// ResolveVersions (which seeds the batch cache once and reuses it
+// across every tool) and ResolveOne (which runs against whichever
+// cache the resolver happens to have — empty when ResolveOne was
+// called as a one-off, in which case every lookup falls through to
+// the per-tool subprocess path).
+func (r *PackageManagerResolver) resolveOne(ctx context.Context, tool *registry.Tool) {
 	for j := range tool.Instances {
 		inst := &tool.Instances[j]
-		inst.Version = installedVersion(ctx, inst.Source, tool.Packages)
+		inst.Version = r.installedVersion(ctx, inst.Source, tool.Packages)
 	}
 
 	// Use a fresh timeout for latest version — installed version checks
@@ -110,10 +138,65 @@ func resolveOne(ctx context.Context, tool *registry.Tool) {
 	latestCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if primary := tool.PrimaryInstance(); primary != nil {
-		latest, from := latestVersion(latestCtx, primary.Source, tool.Packages)
+		latest, from := r.latestVersion(latestCtx, primary.Source, tool.Packages)
 		tool.Latest = latest
 		tool.LatestFrom = from
 	}
+}
+
+// resolveOne (package-level) was the historical pre-batch entry
+// point. Kept as a thin wrapper so older callers compile, but the
+// receiver-bound version is the one ResolveVersions and ResolveOne
+// actually use today.
+//
+//nolint:unused // retained for symmetry with the legacy free-function naming
+func resolveOne(ctx context.Context, tool *registry.Tool) {
+	(&PackageManagerResolver{}).resolveOne(ctx, tool)
+}
+
+// installedVersion looks up the version via the per-call batch cache
+// first (one map lookup, no subprocess), then falls back to the
+// legacy per-tool query if the cache reports a miss. The receiver-
+// bound version is the path used by ResolveVersions; the free
+// function below preserves the original behaviour for legacy callers.
+func (r *PackageManagerResolver) installedVersion(ctx context.Context, source registry.InstallSource, pkgs registry.PackageIDs) string {
+	if r.batch != nil {
+		if b, ok := r.batch.get(source); ok {
+			if id := pkgs.PkgID(source); id != "" {
+				if v, present := b.installed[id]; present {
+					return v
+				}
+			}
+		}
+	}
+	return installedVersion(ctx, source, pkgs)
+}
+
+// latestVersion: cache-first then per-tool fallback. The batch
+// caches' latest map is populated from PM-specific outdated/upgrade
+// commands and ONLY contains tools that have a newer version
+// available. When a tool isn't in the latest map but IS in the
+// installed map, that means the installed version IS the latest —
+// we surface it as such instead of falling back to a per-tool
+// query.
+func (r *PackageManagerResolver) latestVersion(ctx context.Context, source registry.InstallSource, pkgs registry.PackageIDs) (version string, from string) {
+	if r.batch != nil {
+		if b, ok := r.batch.get(source); ok {
+			if id := pkgs.PkgID(source); id != "" {
+				if v, present := b.latest[id]; present {
+					return v, string(source)
+				}
+				// Cache says installed but not in upgrades →
+				// the installed version IS the latest.
+				if b.hasLatest {
+					if v, present := b.installed[id]; present {
+						return v, string(source)
+					}
+				}
+			}
+		}
+	}
+	return latestVersion(ctx, source, pkgs)
 }
 
 func installedVersion(ctx context.Context, source registry.InstallSource, pkgs registry.PackageIDs) string {
