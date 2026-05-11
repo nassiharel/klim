@@ -32,26 +32,10 @@ var (
 
 // renderHealthView routes to the active Health sub-tab. Both views
 // require the initial scan to have completed (so tools[] is populated).
+// The Issues/PATH sub-tab strip is rendered by renderTabBar above the
+// rule line — we deliberately do NOT repeat it inside the body.
 func (m Model) renderHealthView() string {
 	var b strings.Builder
-
-	// Sub-tab bar
-	labels := []struct {
-		text string
-		idx  int
-	}{
-		{"Issues", healthSubIssues},
-		{"PATH", healthSubPath},
-	}
-	var tabs []string
-	for _, l := range labels {
-		if m.healthSubTab == l.idx {
-			tabs = append(tabs, activeTabStyle.Render(l.text))
-		} else {
-			tabs = append(tabs, inactiveTabStyle.Render(l.text))
-		}
-	}
-	b.WriteString("  " + strings.Join(tabs, " ") + "\n\n")
 
 	if m.healthPathStatus != "" {
 		b.WriteString("  " + healthAccent.Render(m.healthPathStatus) + "\n\n")

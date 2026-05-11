@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nassiharel/klim/internal/doctor"
+	"github.com/nassiharel/klim/internal/pathbackup"
 	"github.com/nassiharel/klim/internal/pathconflict"
 )
 
@@ -36,6 +38,15 @@ type fixModal struct {
 	Output   string // captured stdout+stderr of the run
 	Err      error  // run error, if any
 	Resolved bool   // post-run: did the issue disappear from the diagnostic set?
+	// BackupPath is the path of the PATH-backup file written just
+	// before a PATH-modifying command was executed. Empty when no
+	// backup was taken (non-PATH action, or backup write failed).
+	BackupPath string
+	// IsRestore distinguishes a "rolling back a previous fix" run
+	// from a normal first-time fix run. When true the Done view
+	// uses different copy and skips offering yet another Restore
+	// button (no infinite undo of the undo).
+	IsRestore bool
 }
 
 // fixModalOption is one button in the modal's choice strip. `action` is
@@ -91,8 +102,22 @@ func buildFixOptions(issue doctor.Issue) []fixModalOption {
 				Label: "Run command",
 				Desc:  "Execute the suggested command for you and stream output here.",
 				Run: func(m Model) (Model, tea.Cmd) {
+					// Capture a PATH backup BEFORE the command
+					// runs so the user can roll back from the
+					// Done state. Backup failures are
+					// non-fatal — we log them through the
+					// modal output and continue, because
+					// blocking a fix on a backup write would
+					// be more annoying than helpful.
+					if issue.Action.TouchesPATH {
+						snap := pathbackup.Capture("doctor.fix", issue.Title, cmd)
+						if path, err := pathbackup.Save(snap); err == nil {
+							m.fixModal.BackupPath = path
+						} else {
+							m.fixModal.Output = "[backup warning: " + err.Error() + "]\n"
+						}
+					}
 					m.fixModal.State = fixModalRunning
-					m.fixModal.Output = ""
 					m.fixModal.Err = nil
 					return m, runHealthFixCmd(cmd)
 				},
@@ -164,6 +189,101 @@ func buildFixOptions(issue doctor.Issue) []fixModalOption {
 		}
 	}
 	return nil
+}
+
+// fixModalDoneOptions returns the labelled buttons shown in the Done
+// state. Order: Close (always) → Restore PATH (only when a backup
+// exists and this run wasn't itself a restore — no infinite undo).
+func (m Model) fixModalDoneOptions() []fixModalOption {
+	opts := []fixModalOption{{
+		Key:   "close",
+		Label: "Close",
+		Desc:  "Dismiss this dialog. Successful fixes trigger a rescan automatically.",
+		Run: func(m Model) (Model, tea.Cmd) {
+			return m.closeFixModalAfterDoneCmd()
+		},
+	}}
+	if !m.fixModal.IsRestore && m.fixModal.BackupPath != "" && m.fixModal.Err == nil {
+		opts = append(opts, fixModalOption{
+			Key:   "restore",
+			Label: "Restore previous PATH",
+			Desc:  "Roll back to the PATH that was captured just before this fix ran.",
+			Run: func(m Model) (Model, tea.Cmd) {
+				return m.startFixModalRestore()
+			},
+		})
+	}
+	return opts
+}
+
+// closeFixModalAfterDone is the no-cmd variant used by raw key paths
+// (q / esc) where we only need the new model back.
+func (m Model) closeFixModalAfterDone() Model {
+	newM, _ := m.closeFixModalAfterDoneCmd()
+	return newM
+}
+
+// closeFixModalAfterDoneCmd dismisses the Done modal and triggers a
+// rescan when the fix succeeded so the resolved issue disappears
+// from the list.
+func (m Model) closeFixModalAfterDoneCmd() (Model, tea.Cmd) {
+	didSucceed := m.fixModal.Err == nil
+	backup := m.fixModal.BackupPath
+	wasRestore := m.fixModal.IsRestore
+	m.fixModal = fixModal{}
+	switch {
+	case wasRestore && didSucceed:
+		m.healthPathStatus = "↶ PATH restored — rescanning..."
+		return m, m.startScan()
+	case didSucceed:
+		if backup != "" {
+			m.healthPathStatus = "✓ Fix applied (backup at " + backup + ") — rescanning..."
+		} else {
+			m.healthPathStatus = "✓ Fix applied — rescanning to confirm..."
+		}
+		return m, m.startScan()
+	}
+	return m, nil
+}
+
+// startFixModalRestore runs the saved restore command for the current
+// backup file. The modal stays open and transitions into a fresh
+// Running → Done cycle; IsRestore tells the Done renderer to use
+// rollback copy ("PATH restored" instead of "Fix applied") and to
+// hide a second Restore button.
+func (m Model) startFixModalRestore() (Model, tea.Cmd) {
+	backups, err := pathbackup.List()
+	if err != nil {
+		m.fixModal.State = fixModalDone
+		m.fixModal.Err = err
+		m.fixModal.Output = "Could not read backup directory: " + err.Error()
+		return m, nil
+	}
+	var target *pathbackup.Backup
+	for i := range backups {
+		if backups[i].File == m.fixModal.BackupPath {
+			target = &backups[i]
+			break
+		}
+	}
+	if target == nil {
+		m.fixModal.State = fixModalDone
+		m.fixModal.Err = fmt.Errorf("backup file not found: %s", m.fixModal.BackupPath)
+		return m, nil
+	}
+	cmd := pathbackup.RestoreCommand(*target)
+	m.fixModal.State = fixModalRunning
+	m.fixModal.IsRestore = true
+	m.fixModal.Err = nil
+	m.fixModal.Output = ""
+	// Replace the displayed command so the running view shows the
+	// restore command (not the original fix that was just applied).
+	m.fixModal.Issue.Action = doctor.Action{
+		Kind:    doctor.ActionCopyCommand,
+		Label:   "Restore PATH from backup " + filepath.Base(m.fixModal.BackupPath),
+		Command: cmd,
+	}
+	return m, runHealthFixCmd(cmd)
 }
 
 func fixModalOptionCancel() fixModalOption {
@@ -274,18 +394,41 @@ func (m Model) handleKeyHealthFixModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case fixModalDone:
-		// ctrl+c always quits; q/Esc/Enter/any-other-key dismisses
-		// the result panel and (on success) triggers a rescan so
-		// the issue list reflects the fix.
-		if msg.String() == "ctrl+c" {
+		// ctrl+c always quits. Up/down navigates the post-run
+		// option strip (Close / Restore PATH); Enter activates the
+		// selection. q/Esc map to Close.
+		switch msg.String() {
+		case "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
-		}
-		didSucceed := m.fixModal.Err == nil
-		m.fixModal = fixModal{}
-		if didSucceed {
-			m.healthPathStatus = "✓ Fix applied — rescanning to confirm..."
-			return m, m.startScan()
+		case "q", "esc":
+			return m.closeFixModalAfterDone(), nil
+		case "up", "k":
+			doneOpts := m.fixModalDoneOptions()
+			if m.fixModal.Cursor > 0 {
+				m.fixModal.Cursor--
+				_ = doneOpts
+			}
+			return m, nil
+		case "down", "j":
+			doneOpts := m.fixModalDoneOptions()
+			if m.fixModal.Cursor < len(doneOpts)-1 {
+				m.fixModal.Cursor++
+			}
+			return m, nil
+		case "enter", " ":
+			doneOpts := m.fixModalDoneOptions()
+			if m.fixModal.Cursor < 0 || m.fixModal.Cursor >= len(doneOpts) {
+				return m.closeFixModalAfterDone(), nil
+			}
+			return doneOpts[m.fixModal.Cursor].Run(m)
+		case "1", "2", "3":
+			idx := int(msg.String()[0]-'1') //nolint:gosec
+			doneOpts := m.fixModalDoneOptions()
+			if idx >= 0 && idx < len(doneOpts) {
+				m.fixModal.Cursor = idx
+				return doneOpts[idx].Run(m)
+			}
 		}
 		return m, nil
 	}
@@ -349,6 +492,10 @@ func (m Model) renderFixModal() string {
 	switch m.fixModal.State {
 	case fixModalIdle:
 		b.WriteString(renderFixCommandBlock(m.fixModal.Issue))
+		if m.fixModal.Issue.Action.TouchesPATH {
+			b.WriteString("\n" + healthAccent.Render("💾 A PATH backup will be created before this runs.") + "\n")
+			b.WriteString("  " + healthDim.Render("(in ~/.klim/backups/path/, restorable from the next dialog)") + "\n")
+		}
 		b.WriteString("\n")
 		for i, opt := range m.fixModal.Options {
 			b.WriteString(renderFixOption(opt, i, i == m.fixModal.Cursor))
@@ -359,17 +506,28 @@ func (m Model) renderFixModal() string {
 		b.WriteString("\n" + healthAccent.Render("● Running...") + " " + healthDim.Render("(Esc to detach)") + "\n")
 	case fixModalDone:
 		b.WriteString("\n")
-		if m.fixModal.Err != nil {
+		switch {
+		case m.fixModal.IsRestore && m.fixModal.Err == nil:
+			b.WriteString(healthOK.Render("↶ PATH restored from backup") + "\n")
+		case m.fixModal.Err != nil:
 			b.WriteString(healthBad.Render("✗ Fix failed") + "\n\n")
 			b.WriteString(healthDim.Render("Error: "+m.fixModal.Err.Error()) + "\n")
-		} else {
+		default:
 			b.WriteString(healthOK.Render("✓ Fix applied") + "\n")
+		}
+		if m.fixModal.BackupPath != "" && !m.fixModal.IsRestore {
+			b.WriteString("\n" + healthAccent.Render("💾 PATH backup saved") + "\n")
+			b.WriteString("  " + healthDim.Render(m.fixModal.BackupPath) + "\n")
 		}
 		if m.fixModal.Output != "" {
 			b.WriteString("\n" + healthDim.Render("Output:") + "\n")
 			b.WriteString(renderCodeBlock(m.fixModal.Output, width-6))
 		}
-		b.WriteString("\n" + healthDim.Render("Press any key to close. The issue list will refresh."))
+		b.WriteString("\n")
+		for i, opt := range m.fixModalDoneOptions() {
+			b.WriteString(renderFixOption(opt, i, i == m.fixModal.Cursor))
+		}
+		b.WriteString("\n" + healthDim.Render("↑↓ select   Enter / 1-9 confirm   q/Esc close"))
 	}
 
 	rendered := box.Render(b.String())

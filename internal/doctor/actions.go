@@ -46,6 +46,12 @@ type Action struct {
 	// ActionJumpPathView, a PATH entry for ActionCopyCommand on a
 	// PATH issue, etc.
 	Target string `json:"target,omitempty"`
+	// TouchesPATH is true when running this action will modify the
+	// user's $PATH (or the persistent Windows User PATH). The TUI
+	// uses it to snapshot the current PATH to ~/.klim/backups/path/
+	// just before exec so the user can roll back from inside the
+	// fix modal.
+	TouchesPATH bool `json:"touches_path,omitempty"`
 }
 
 // removePathEntryCommand returns a shell snippet that removes a single

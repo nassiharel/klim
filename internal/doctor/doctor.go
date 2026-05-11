@@ -123,10 +123,11 @@ func checkDuplicatePATH() []Issue {
 				Detail:   detail,
 				Fix:      "Remove the duplicate entry from your PATH",
 				Action: Action{
-					Kind:    ActionCopyCommand,
-					Label:   "Copy command to remove duplicate from PATH",
-					Command: removePathEntryCommand(dir),
-					Target:  dir,
+					Kind:        ActionCopyCommand,
+					Label:       "Copy command to remove duplicate from PATH",
+					Command:     removePathEntryCommand(dir),
+					Target:      dir,
+					TouchesPATH: true,
 				},
 			})
 		} else {
@@ -166,10 +167,11 @@ func checkBrokenPATH() []Issue {
 				Detail:   fmt.Sprintf("%q does not exist", dir),
 				Fix:      "Remove this entry from your PATH",
 				Action: Action{
-					Kind:    ActionCopyCommand,
-					Label:   "Copy command to remove missing dir from PATH",
-					Command: removePathEntryCommand(dir),
-					Target:  dir,
+					Kind:        ActionCopyCommand,
+					Label:       "Copy command to remove missing dir from PATH",
+					Command:     removePathEntryCommand(dir),
+					Target:      dir,
+					TouchesPATH: true,
 				},
 			})
 		case os.IsPermission(err):
@@ -180,10 +182,11 @@ func checkBrokenPATH() []Issue {
 				Detail:   fmt.Sprintf("%q exists but permission denied", dir),
 				Fix:      "Fix permissions or remove from PATH",
 				Action: Action{
-					Kind:    ActionCopyCommand,
-					Label:   "Copy command to remove inaccessible dir from PATH",
-					Command: removePathEntryCommand(dir),
-					Target:  dir,
+					Kind:        ActionCopyCommand,
+					Label:       "Copy command to remove inaccessible dir from PATH",
+					Command:     removePathEntryCommand(dir),
+					Target:      dir,
+					TouchesPATH: true,
 				},
 			})
 		case err == nil && !info.IsDir():
@@ -194,10 +197,11 @@ func checkBrokenPATH() []Issue {
 				Detail:   fmt.Sprintf("%q is a file, not a directory", dir),
 				Fix:      "Remove this entry from your PATH",
 				Action: Action{
-					Kind:    ActionCopyCommand,
-					Label:   "Copy command to remove non-directory from PATH",
-					Command: removePathEntryCommand(dir),
-					Target:  dir,
+					Kind:        ActionCopyCommand,
+					Label:       "Copy command to remove non-directory from PATH",
+					Command:     removePathEntryCommand(dir),
+					Target:      dir,
+					TouchesPATH: true,
 				},
 			})
 		}
@@ -507,9 +511,10 @@ func checkUserWritablePathOrder() []Issue {
 					dir, strings.Join(seenUserWritable, ", ")),
 				Fix: "Move user-writable bin dirs after system dirs to avoid shadowing trusted binaries",
 				Action: Action{
-					Kind:    ActionCopyCommand,
-					Label:   "Copy command to reorder PATH (system dirs first)",
-					Command: reorderPathCommand(),
+					Kind:        ActionCopyCommand,
+					Label:       "Copy command to reorder PATH (system dirs first)",
+					Command:     reorderPathCommand(),
+					TouchesPATH: true,
 				},
 			})
 			// Only report the first system dir; one warning per

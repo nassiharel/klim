@@ -921,7 +921,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.fixModal.State = fixModalDone
-		m.fixModal.Output = strings.TrimRight(msg.Output, "\n")
+		m.fixModal.Cursor = 0
+		// Preserve any pre-run "[backup warning: …]" text that the
+		// Run handler stashed into Output before exec.
+		m.fixModal.Output = strings.TrimRight(m.fixModal.Output+msg.Output, "\n")
 		m.fixModal.Err = msg.Err
 		return m, nil
 
