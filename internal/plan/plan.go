@@ -147,7 +147,9 @@ func Build(tools []registry.Tool, opts Options) Plan {
 	}
 	var changes []Change
 	var missingSourceRisks []Risk
+	seenInTools := make(map[string]bool, len(tools))
 	for _, t := range tools {
+		seenInTools[t.Name] = true
 		if opts.OnlyTools != nil && !opts.OnlyTools[t.Name] {
 			continue
 		}
@@ -194,6 +196,27 @@ func Build(tools []registry.Tool, opts Options) Plan {
 			change.Confidence, change.ConfidenceFactors = computeConfidence(change, tools)
 		}
 		changes = append(changes, change)
+	}
+
+	// Tools referenced by opts.Desired but absent from the
+	// catalog can't be planned. Sort the names for deterministic
+	// output and emit one risk each so a stray .klim.yaml entry
+	// or a typo doesn't silently disappear from the plan.
+	if len(opts.Desired) > 0 {
+		var missingNames []string
+		for name := range opts.Desired {
+			if !seenInTools[name] {
+				missingNames = append(missingNames, name)
+			}
+		}
+		sort.Strings(missingNames)
+		for _, name := range missingNames {
+			missingSourceRisks = append(missingSourceRisks, Risk{
+				Severity: SeverityError,
+				Tool:     name,
+				Message:  "not in the catalog — add a marketplace entry for this tool or remove it from your desired list",
+			})
+		}
 	}
 
 	// Sort by source then tool name so users always see PMs grouped

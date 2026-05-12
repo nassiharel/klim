@@ -92,6 +92,38 @@ func TestBuild_DesiredInstallEmitsInstallChange(t *testing.T) {
 	}
 }
 
+// TestBuild_DesiredToolMissingFromCatalogEmitsRisk locks in that a
+// desired tool which isn't present in the catalog produces an
+// explicit risk instead of being silently ignored (so users can spot
+// stray .klim.yaml entries / typos).
+func TestBuild_DesiredToolMissingFromCatalogEmitsRisk(t *testing.T) {
+	tools := []registry.Tool{{
+		Name:     "existing",
+		Packages: registry.PackageIDs{NPM: "existing"},
+		Latest:   "1.0.0",
+	}}
+	p := Build(tools, Options{
+		IncludeInstalls: true,
+		Desired: map[string]DesiredState{
+			"existing":    {},
+			"phantom":     {},
+			"alsoMissing": {},
+		},
+	})
+	missing := map[string]bool{}
+	for _, r := range p.Risks {
+		if strings.Contains(r.Message, "not in the catalog") {
+			missing[r.Tool] = true
+		}
+	}
+	if !missing["phantom"] || !missing["alsoMissing"] {
+		t.Errorf("want missing-catalog risks for phantom + alsoMissing, got %+v", p.Risks)
+	}
+	if missing["existing"] {
+		t.Errorf("existing tool should not get a missing-catalog risk")
+	}
+}
+
 // TestBuild_DesiredInstallWithoutSourceEmitsRisk verifies that asking
 // to install a tool that has no OS-relevant package ID produces a
 // risk (so the user sees why it was dropped) rather than silently

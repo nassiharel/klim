@@ -169,7 +169,16 @@ func analyzeByDir(tools []registry.Tool) []DirView {
 	}
 
 	views := make([]DirView, 0, len(parts))
-	seenDir := make(map[string]int) // normalised dir → first DirView.Order
+	// Map normalised dir → the displayed Dir of the first DirView
+	// that contained it. We track the displayed form (not the raw
+	// PATH slice element) so DuplicateOf matches Dir consistently
+	// — same trimming, same empty→"." translation for POSIX
+	// implicit CWD entries.
+	type seenEntry struct {
+		dir   string
+		order int
+	}
+	seenDir := make(map[string]seenEntry)
 	for i, raw := range parts {
 		dir := strings.TrimSpace(raw)
 		implicitCwd := false
@@ -200,9 +209,9 @@ func analyzeByDir(tools []registry.Tool) []DirView {
 		norm := normalizeDir(dir)
 		if prior, ok := seenDir[norm]; ok {
 			dv.Duplicate = true
-			dv.DuplicateOf = parts[prior-1]
+			dv.DuplicateOf = prior.dir
 		} else {
-			seenDir[norm] = i + 1
+			seenDir[norm] = seenEntry{dir: dir, order: i + 1}
 		}
 		for _, ent := range dirIndex[norm] {
 			dv.Tools = append(dv.Tools, ToolEntry{

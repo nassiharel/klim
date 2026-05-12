@@ -204,7 +204,7 @@ func runCheckpointDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	name := strings.TrimSpace(args[0])
-	if err := checkpoint.Delete(args[0]); err != nil {
+	if err := checkpoint.Delete(name); err != nil {
 		return err
 	}
 	if out == OutputJSON {

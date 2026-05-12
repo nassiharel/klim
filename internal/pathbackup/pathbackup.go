@@ -126,11 +126,12 @@ func List() ([]Backup, error) {
 //     quotes are doubled (PowerShell's literal-string escape rule).
 //   - POSIX:   Bourne single-quoted strings; embedded single quotes
 //     use the canonical close-escape-reopen sequence — i.e. a literal
-//     single quote is rendered as four characters: end-quote, a
-//     backslash-escaped single quote, then re-open-quote
-//     ('\”). This is the only fully-safe approach because POSIX
-//     shells perform parameter and command expansion inside double
-//     quotes, and a PATH value containing `$(...)` or backticks would
+//     single quote is rendered as four characters: end-quote,
+//     backslash, single-quote, re-open-quote. Written literally,
+//     that's: '\”  (apostrophe, backslash, apostrophe, apostrophe).
+//     This is the only fully-safe approach because POSIX shells
+//     perform parameter and command expansion inside double quotes,
+//     and a PATH value containing `$(...)` or backticks would
 //     otherwise be interpreted as a command substitution.
 func RestoreCommand(b Backup) string {
 	switch b.GOOS {
