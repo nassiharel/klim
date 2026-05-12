@@ -53,11 +53,17 @@ type Action struct {
 	TouchesPATH bool `json:"touches_path,omitempty"`
 }
 
-// removePathEntryCommand returns a shell snippet that removes a single
-// directory from $PATH for the current shell session. Persisting the
-// change is intentionally left to the user — we don't know which
-// startup file owns their PATH and silently editing ~/.bashrc /
-// ~/.zshrc / the Windows registry would be a footgun.
+// removePathEntryCommand returns a shell snippet that removes every
+// occurrence of a single directory from $PATH for the current shell
+// session. Persisting the change is intentionally left to the user —
+// we don't know which startup file owns their PATH and silently
+// editing ~/.bashrc / ~/.zshrc / the Windows registry would be a
+// footgun.
+//
+// Use this for the "missing dir" / "non-directory in PATH" /
+// "inaccessible dir" issues, where every occurrence is bad. For
+// "Duplicate PATH entry" use dedupePathEntryCommand instead — that
+// keeps the first occurrence and drops only later duplicates.
 //
 // On Windows the snippet additionally calls [Environment]::
 // SetEnvironmentVariable so the change survives across sessions —
@@ -85,6 +91,29 @@ func removePathEntryCommand(entry string) string {
 	)
 }
 
+// dedupePathEntryCommand returns a shell snippet that keeps the
+// FIRST occurrence of entry in $PATH and removes every later one.
+// Used by the "Duplicate PATH entry" issue so the resolution order
+// for tools that rely on that directory is preserved.
+func dedupePathEntryCommand(entry string) string {
+	if entry == "" {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		esc := strings.ReplaceAll(entry, "'", "''")
+		// Single pass over the split PATH: emit each entry once,
+		// only suppressing later duplicates of $target.
+		return fmt.Sprintf(`$target = '%s'; $seen = $false; $new = (@($env:PATH -split ';' | ForEach-Object { if ($_ -eq $target) { if (-not $seen) { $seen = $true; $_ } } else { $_ } })) -join ';'; $env:PATH = $new; [Environment]::SetEnvironmentVariable('PATH', $new, 'User')`, esc)
+	}
+	// POSIX awk: print the target on first match, suppress on
+	// subsequent matches; pass non-matching entries through
+	// unchanged.
+	return fmt.Sprintf(
+		`export PATH="$(printf '%%s' "$PATH" | awk -v RS=: -v ORS=: -v t=%s 'BEGIN{seen=0} { if ($0 == t) { if (!seen) { seen=1; print } } else { print } }' | sed 's/:$//')"`,
+		awkStringLiteral(entry),
+	)
+}
+
 // awkStringLiteral wraps s in double quotes for an awk program,
 // escaping backslashes and double quotes per awk's literal grammar.
 // Caller must place the result inside a single-quoted shell-level
@@ -102,11 +131,24 @@ func awkStringLiteral(s string) string {
 // the result is consistent with the warning.
 func reorderPathCommand() string {
 	if runtime.GOOS == "windows" {
+		// The StartsWith check appends a backslash to the system
+		// dir before comparing, so look-alike siblings like
+		// C:\WindowsApps or C:\Windows.old are NOT classified as
+		// system dirs. An exact-equality check covers the case
+		// where the entry IS one of the system dirs itself.
 		return `# Reorder Windows User PATH so system dirs precede user-writable dirs.
 $systemDirs = @('C:\Windows', 'C:\Windows\System32', 'C:\Windows\SysWow64', 'C:\Program Files', 'C:\Program Files (x86)')
+function Test-IsSystemDir([string]$d) {
+  $dl = $d.ToLower()
+  foreach ($s in $systemDirs) {
+    $sl = $s.ToLower()
+    if ($dl -eq $sl -or $dl.StartsWith($sl + '\')) { return $true }
+  }
+  return $false
+}
 $entries = $env:PATH -split ';' | Where-Object { $_ -ne '' }
-$systemFirst = @($entries | Where-Object { $d = $_; ($systemDirs | Where-Object { $d.ToLower().StartsWith($_.ToLower()) }).Count -gt 0 })
-$userLast    = @($entries | Where-Object { $d = $_; ($systemDirs | Where-Object { $d.ToLower().StartsWith($_.ToLower()) }).Count -eq 0 })
+$systemFirst = @($entries | Where-Object { Test-IsSystemDir $_ })
+$userLast    = @($entries | Where-Object { -not (Test-IsSystemDir $_) })
 $new = ($systemFirst + $userLast) -join ';'
 $env:PATH = $new
 [Environment]::SetEnvironmentVariable('PATH', $new, 'User')`

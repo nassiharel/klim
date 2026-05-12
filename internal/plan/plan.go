@@ -153,10 +153,11 @@ func Build(tools []registry.Tool, opts Options) Plan {
 		}
 		change, ok := changeFor(t, opts)
 		if !ok {
-			// Tools the user asked to install but for which we
-			// can't synthesize a command (no OS-relevant
-			// package ID, or no PM at all) need an explicit
-			// risk so the plan doesn't silently drop them.
+			// Tools the user asked to install / remove / upgrade
+			// but for which we can't synthesize a command (no
+			// OS-relevant package ID, manual install, etc.)
+			// need an explicit risk so the plan doesn't
+			// silently drop them.
 			if opts.IncludeInstalls && !t.IsInstalled() {
 				if d, want := opts.Desired[t.Name]; want && !d.Remove {
 					missingSourceRisks = append(missingSourceRisks, Risk{
@@ -165,6 +166,22 @@ func Build(tools []registry.Tool, opts Options) Plan {
 						Message:  "no install source available on this OS — define a package ID (winget/brew/apt/…) or install a supported package manager",
 					})
 				}
+			}
+			if opts.IncludeRemoves && t.IsInstalled() {
+				if d, want := opts.Desired[t.Name]; want && d.Remove {
+					missingSourceRisks = append(missingSourceRisks, Risk{
+						Severity: SeverityWarning,
+						Tool:     t.Name,
+						Message:  "can't remove automatically — manual install or no package ID for the detected source; remove by hand",
+					})
+				}
+			}
+			if opts.IncludeUpgrades && t.IsInstalled() && upgradeWasDesired(t, opts) {
+				missingSourceRisks = append(missingSourceRisks, Risk{
+					Severity: SeverityWarning,
+					Tool:     t.Name,
+					Message:  "can't upgrade automatically — manual install or no package ID for the detected source; upgrade by hand",
+				})
 			}
 			continue
 		}
@@ -194,6 +211,36 @@ func Build(tools []registry.Tool, opts Options) Plan {
 	return Plan{Changes: changes, Risks: risks, Totals: totals}
 }
 
+// upgradeWasDesired reports whether the upgrade path would have been
+// considered for this tool — i.e. it's installed, has a current
+// version, and either Latest exceeds it or a different version is
+// desired. Used to avoid emitting "can't upgrade" risks for tools
+// that simply have nothing to upgrade.
+func upgradeWasDesired(t registry.Tool, opts Options) bool {
+	if !t.IsInstalled() {
+		return false
+	}
+	current := t.InstalledVersion()
+	if current == "" {
+		return false
+	}
+	desired, hasDesired := opts.Desired[t.Name]
+	target := t.Latest
+	if hasDesired && desired.Version != "" && !desired.Remove {
+		target = desired.Version
+	}
+	if target == "" {
+		return false
+	}
+	if registry.VersionsMatch(current, target) {
+		return false
+	}
+	if !hasDesired && registry.CompareVersions(target, current) <= 0 {
+		return false
+	}
+	return true
+}
+
 // changeFor decides what Change (if any) applies to a single tool.
 func changeFor(t registry.Tool, opts Options) (Change, bool) {
 	source := t.Packages.BestInstallSource()
@@ -205,13 +252,20 @@ func changeFor(t registry.Tool, opts Options) (Change, bool) {
 
 	// Remove path: explicit Desired.Remove.
 	if opts.IncludeRemoves && hasDesired && desired.Remove && t.IsInstalled() {
+		cmd := t.Packages.RemoveCmd(source)
+		if source == "" || cmd == "" {
+			// Manual installs or tools without a package ID
+			// for the detected source can't be auto-removed.
+			// Skip and let Build emit an explicit risk.
+			return Change{}, false
+		}
 		return Change{
 			Tool:            t.Name,
 			DisplayName:     fallbackName(t),
 			Source:          source,
 			Kind:            ChangeRemove,
 			FromVersion:     t.InstalledVersion(),
-			Command:         t.Packages.RemoveCmd(source),
+			Command:         cmd,
 			EstimatedTime:   timeFor(ChangeRemove, source),
 			EstimatedDiskMB: -diskFor(ChangeRemove, source),
 		}, true
@@ -267,6 +321,13 @@ func changeFor(t registry.Tool, opts Options) (Change, bool) {
 		if !hasDesired && registry.CompareVersions(target, current) <= 0 {
 			return Change{}, false
 		}
+		cmd := t.Packages.UpgradeCmd(source)
+		if source == "" || cmd == "" {
+			// Manual installs or sources without an upgrade
+			// command for this tool can't be auto-upgraded.
+			// Skip and let Build emit an explicit risk.
+			return Change{}, false
+		}
 		return Change{
 			Tool:            t.Name,
 			DisplayName:     fallbackName(t),
@@ -274,7 +335,7 @@ func changeFor(t registry.Tool, opts Options) (Change, bool) {
 			Kind:            ChangeUpgrade,
 			FromVersion:     current,
 			ToVersion:       target,
-			Command:         t.Packages.UpgradeCmd(source),
+			Command:         cmd,
 			EstimatedTime:   timeFor(ChangeUpgrade, source),
 			EstimatedDiskMB: diskFor(ChangeUpgrade, source),
 		}, true

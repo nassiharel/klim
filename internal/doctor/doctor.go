@@ -129,7 +129,7 @@ func checkDuplicatePATH() []Issue {
 				Action: &Action{
 					Kind:        ActionCopyCommand,
 					Label:       "Copy command to remove duplicate from PATH",
-					Command:     removePathEntryCommand(dir),
+					Command:     dedupePathEntryCommand(dir),
 					Target:      dir,
 					TouchesPATH: true,
 				},

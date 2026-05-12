@@ -81,3 +81,27 @@ func TestRemovePathEntryCommand_includesEntry(t *testing.T) {
 		t.Errorf("command should reference the bad entry: %q", cmd)
 	}
 }
+
+// TestDedupePathEntryCommand_preservesFirstOccurrence guards against
+// the previous "Duplicate PATH entry" fix that removed *every*
+// occurrence — which would also drop the one the user meant to keep.
+func TestDedupePathEntryCommand_preservesFirstOccurrence(t *testing.T) {
+	cmd := dedupePathEntryCommand("/tmp/dup")
+	if cmd == "" {
+		t.Fatalf("expected a non-empty command")
+	}
+	if !strings.Contains(cmd, "/tmp/dup") {
+		t.Errorf("command should reference the duplicated entry: %q", cmd)
+	}
+	if runtime.GOOS == "windows" {
+		if !strings.Contains(cmd, "seen") {
+			t.Errorf("Windows dedupe should track first-seen state: %q", cmd)
+		}
+	} else {
+		// awk script must track seen=0/1 to keep the first
+		// occurrence and drop the rest.
+		if !strings.Contains(cmd, "seen") {
+			t.Errorf("POSIX dedupe should track first-seen state: %q", cmd)
+		}
+	}
+}

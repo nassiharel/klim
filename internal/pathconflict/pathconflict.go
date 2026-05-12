@@ -76,6 +76,12 @@ type DirView struct {
 	SystemDir   bool        `json:"system_dir"`
 	Duplicate   bool        `json:"duplicate"` // duplicates a previous PATH entry
 	DuplicateOf string      `json:"duplicate_of,omitempty"`
+	// ImplicitCwd is true on POSIX when this entry represents an
+	// empty PATH component (which the OS expands to "." / the
+	// current working directory). Surfacing it lets callers flag
+	// a known privilege-escalation pattern instead of silently
+	// dropping the entry.
+	ImplicitCwd bool `json:"implicit_cwd,omitempty"`
 }
 
 // ToolEntry is one (tool, instance-in-this-dir) pairing inside a DirView.
@@ -166,14 +172,26 @@ func analyzeByDir(tools []registry.Tool) []DirView {
 	seenDir := make(map[string]int) // normalised dir → first DirView.Order
 	for i, raw := range parts {
 		dir := strings.TrimSpace(raw)
+		implicitCwd := false
 		if dir == "" {
-			continue
+			if runtime.GOOS == "windows" {
+				// Windows PATH parser doesn't treat empty
+				// entries as cwd, just noise. Skip.
+				continue
+			}
+			// POSIX: an empty PATH component is interpreted by
+			// the OS as the current working directory. Surface
+			// it as "." so the user sees it (and the
+			// user-writable / privilege checks flag it).
+			dir = "."
+			implicitCwd = true
 		}
 		dv := DirView{
-			Dir:       dir,
-			Order:     i + 1,
-			UserWrite: isUserWritableDir(dir),
-			SystemDir: isSystemDir(dir),
+			Dir:         dir,
+			Order:       i + 1,
+			UserWrite:   isUserWritableDir(dir),
+			SystemDir:   isSystemDir(dir),
+			ImplicitCwd: implicitCwd,
 		}
 		if info, err := os.Stat(dir); err == nil { //nolint:gosec // G703: dir originates from $PATH; auditing PATH is the point.
 			dv.Exists = true
