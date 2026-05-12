@@ -148,7 +148,11 @@ func runApplyWithSafety(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr, "Restore the pre-apply state with:")
 		fmt.Fprintln(os.Stderr, "  klim rollback "+cpName)
 	}
-	return &PartialFailureError{Op: "apply postcheck", Succeeded: 0, Failed: countFailedChecks(result)}
+	return &PartialFailureError{
+		Op:        "apply postcheck",
+		Succeeded: countCheckStatus(result, postcheck.StatusPass),
+		Failed:    countFailedChecks(result),
+	}
 }
 
 func scanForApply(cmd *cobra.Command, refresh bool) ([]registry.Tool, error) {
@@ -194,9 +198,13 @@ func renderPostcheck(r postcheck.Result) {
 }
 
 func countFailedChecks(r postcheck.Result) int {
+	return countCheckStatus(r, postcheck.StatusFail)
+}
+
+func countCheckStatus(r postcheck.Result, want postcheck.Status) int {
 	n := 0
 	for _, c := range r.Checks {
-		if c.Status == postcheck.StatusFail {
+		if c.Status == want {
 			n++
 		}
 	}

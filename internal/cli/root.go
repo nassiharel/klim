@@ -187,6 +187,10 @@ func Run() int {
 	if errors.As(err, &pf) {
 		return ExitPartialFailure
 	}
+	var pce *PendingChangesError
+	if errors.As(err, &pce) {
+		return ExitPartialFailure
+	}
 	if isCobraUsageError(err) {
 		return ExitUsage
 	}

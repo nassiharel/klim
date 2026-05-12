@@ -104,12 +104,13 @@ func runPlan(cmd *cobra.Command, args []string) error {
 // plan's outcome. Default behaviour is exit 0 regardless of pending
 // changes — CI consumers that want to gate on the diff opt in via
 // `--detailed-exitcode`, in which case a non-empty plan exits 3
-// (PartialFailureError).
+// (PendingChangesError — keeps the "N changes pending" framing
+// distinct from PartialFailureError's "X succeeded, Y failed").
 func planExitCode(p plan.Plan) error {
 	if !planDetailedExitFlag || len(p.Changes) == 0 {
 		return nil
 	}
-	return &PartialFailureError{Op: "plan", Succeeded: 0, Failed: len(p.Changes)}
+	return &PendingChangesError{Op: "plan", Pending: len(p.Changes)}
 }
 
 // loadDesiredFromTeamFile turns a .klim.yaml's required + optional
