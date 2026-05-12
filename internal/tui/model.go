@@ -18,6 +18,7 @@ import (
 
 	"github.com/nassiharel/klim/internal/audit"
 	"github.com/nassiharel/klim/internal/catalog"
+	"github.com/nassiharel/klim/internal/checkpoint"
 	"github.com/nassiharel/klim/internal/compliance"
 	"github.com/nassiharel/klim/internal/config"
 	"github.com/nassiharel/klim/internal/custompacks"
@@ -25,6 +26,7 @@ import (
 	"github.com/nassiharel/klim/internal/envid"
 	"github.com/nassiharel/klim/internal/favorites"
 	"github.com/nassiharel/klim/internal/onboard"
+	"github.com/nassiharel/klim/internal/plan"
 	"github.com/nassiharel/klim/internal/registry"
 	"github.com/nassiharel/klim/internal/score"
 	"github.com/nassiharel/klim/internal/service"
@@ -388,6 +390,26 @@ type Model struct {
 	// Health → Issues "fix wizard" modal. Zero value means closed.
 	// See health_fix_modal.go for the rendering + key handling.
 	fixModal fixModal
+
+	// Plan / apply / checkpoint / rollback modal stack. Zero values
+	// mean the modal is closed; see plan_view.go for the renderers
+	// and the key dispatcher. Both viewingPlan and viewingCheckpoints
+	// can be open simultaneously (the checkpoint browser is a child
+	// of the plan view) but only the innermost active modal receives
+	// keys, via the key router in keys.go.
+	viewingPlan            bool
+	planResult             *plan.Plan
+	planScroll             int
+	planMode               string // "forward" | "rollback"
+	planRollbackTarget     string
+	planStatus             string // transient banner under the title
+	applyConfirm           bool   // y/n confirm before exec
+	enteringCheckpointName bool
+	checkpointNameInput    textinput.Model
+
+	viewingCheckpoints bool
+	checkpointsList    []checkpoint.Checkpoint
+	checkpointCursor   int
 
 	// Onboard state (Discover → Onboard sub-tab).
 	onboardRole  int              // selected role index (0 = first role)
@@ -932,6 +954,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.fixModal.Output = strings.TrimRight(m.fixModal.Output+msg.Output, "\n")
 		m.fixModal.Err = msg.Err
 		return m, nil
+
+	case planLoadedMsg:
+		// Plan modal might have been closed before build finished.
+		if !m.viewingPlan {
+			return m, nil
+		}
+		m.planResult = msg.plan
+		m.planMode = msg.mode
+		m.planRollbackTarget = msg.target
+		m.planScroll = 0
+		m.planStatus = ""
+		return m, nil
+
+	case checkpointsLoadedMsg:
+		m.checkpointsList = msg.list
+		if msg.err != nil {
+			m.planStatus = "⚠ " + msg.err.Error()
+		}
+		if m.checkpointCursor >= len(m.checkpointsList) {
+			m.checkpointCursor = 0
+		}
+		return m, nil
+
+	case applyFinishedMsg:
+		// klim apply returned control. Status banner + trigger a
+		// rescan so the plan list reflects the new state.
+		if msg.err != nil {
+			m.planStatus = "✗ klim apply failed: " + msg.err.Error()
+		} else {
+			m.planStatus = "✓ klim apply succeeded — rebuilding plan"
+		}
+		// Trigger a fresh scan + rebuild the plan once tools refresh.
+		return m, tea.Batch(m.startScan(), buildPlanCmd(m.tools))
 
 	case healthPathRefreshedMsg:
 		// Lightweight post-PATH-fix refresh. We dropped the catalog
@@ -1786,6 +1841,15 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// when no tools are loaded (e.g. catalog fetch failure).
 	if len(m.tools) > 0 {
 		m.statusMsg = ""
+	}
+
+	// Global `P` opens the Plan modal from any tab. Routed here
+	// before the tab-specific dispatchers so the shortcut is
+	// uniform across the whole UI.
+	if msg.String() == "P" && !m.viewingPlan && !m.fixModal.Open && !m.showDetail {
+		mp := &m
+		cmd := mp.openPlanView()
+		return *mp, cmd
 	}
 
 	// Project tab has its own key handler.

@@ -72,7 +72,16 @@ func (m Model) renderView() string {
 		return ""
 	}
 
-	// Health fix modal — full-screen overlay; takes priority over everything.
+	// Plan / checkpoint browser modal — full-screen overlay. Takes
+	// priority over every other view including the health fix modal.
+	if m.viewingPlan {
+		if m.viewingCheckpoints {
+			return m.renderCheckpointBrowser()
+		}
+		return m.renderPlanView()
+	}
+
+	// Health fix modal — full-screen overlay; takes priority over everything else.
 	if m.fixModal.Open {
 		return m.renderFixModal()
 	}

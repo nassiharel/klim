@@ -70,6 +70,9 @@ internal/
                  favorites (favorites.go), styles, my_score.go (My Profile → My Score panel),
                  health_tab.go (Health Issues + PATH views), health_fix_modal.go (interactive
                  fix wizard with PATH backups + restore), health_refresh_cmd.go (fast
+                 path-only refresh after a PATH fix), plan_view.go (Plan modal opened with
+                 `P` from any tab — preview pending changes, apply through `klim apply`,
+                 capture / restore checkpoints).
                  path-only refresh after a PATH fix)
 ```
 

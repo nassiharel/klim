@@ -66,12 +66,24 @@ These work on every tab:
 |-----|--------|
 | `←` / `→` or `Tab` / `Shift+Tab` | Switch tabs (and sub-tabs on Marketplace / Health / Security / My Tools) |
 | `1`–`9` | Jump to specific tab |
+| `P` | Open the Plan modal (preview pending changes, apply, capture / restore checkpoints) |
 | `r` | Refresh — rescan tools |
 | `q` or `Ctrl+C` | Quit |
 
-## Plan / apply / rollback workflow (CLI today)
+## Plan / apply / rollback workflow
 
-`klim plan`, `klim apply`, `klim checkpoint`, and `klim rollback` form the Terraform-style preview-then-execute workflow. They are **CLI-only today** — interactive TUI integration is on the roadmap. Meanwhile the CLI commands work identically on every platform and emit JSON suitable for CI / agents. See the reference pages:
+Press `P` from any tab to open the Plan modal — the same preview `klim plan` emits, rendered inline. Available actions inside the modal:
+
+| Key | Action |
+|-----|--------|
+| `a` | Apply the plan (shells out to `klim apply --yes` so the full checkpoint + postcheck wrapper still runs). |
+| `c` | Capture a named checkpoint of the current toolchain. |
+| `b` | Open the checkpoint browser. `↑↓` navigate, `Enter` previews the rollback plan, `d` deletes, `Esc` returns. |
+| `r` | Rebuild the plan. |
+| `↑↓ / PgUp / PgDn / Home` | Scroll. |
+| `Esc / q` | Close. |
+
+The full CLI surface (`klim plan`, `klim apply`, `klim checkpoint`, `klim rollback`) still works identically and remains the reference for CI / agent integration. See the reference pages:
 
 - [`klim plan`](../reference/commands/plan.md) — preview pending changes with 0-100% upgrade confidence per change
 - [`klim apply`](../reference/commands/apply.md) — execute, auto-checkpointed, post-validated
