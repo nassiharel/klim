@@ -88,8 +88,13 @@ func refreshProcessPATH() string {
 	if runtime.GOOS != "windows" {
 		return os.Getenv("PATH")
 	}
-	machine, mErr := readEnvScope("Machine")
-	user, uErr := readEnvScope("User")
+	// Both reads share one short context so a hung PowerShell can't
+	// stall the TUI refresh indefinitely (broken profiles, AppLocker
+	// or execution-policy prompts have all been seen in the wild).
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	machine, mErr := readEnvScope(ctx, "Machine")
+	user, uErr := readEnvScope(ctx, "User")
 	// Refuse to overwrite on partial-read failure: an incomplete
 	// PATH (missing either Machine or User) would be worse than
 	// the original.
@@ -112,8 +117,9 @@ func refreshProcessPATH() string {
 	return newPATH
 }
 
-func readEnvScope(scope string) (string, error) {
-	out, err := exec.Command(
+func readEnvScope(ctx context.Context, scope string) (string, error) {
+	out, err := exec.CommandContext(
+		ctx,
 		"powershell", "-NoProfile", "-NonInteractive", "-Command",
 		"[Environment]::GetEnvironmentVariable('PATH', '"+scope+"')",
 	).Output()
