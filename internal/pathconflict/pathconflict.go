@@ -320,12 +320,15 @@ func isSystemDir(dir string) bool {
 	dir = filepath.Clean(strings.TrimSpace(dir))
 	switch runtime.GOOS {
 	case "windows":
-		dl := strings.ToLower(dir)
+		// Use hasPathPrefix (which goes through filepath.Rel) so
+		// that look-alike siblings like C:\WindowsApps and
+		// C:\Windows.old are NOT classified as system dirs even
+		// though they share the "c:\windows" string prefix.
 		for _, sys := range []string{
 			`c:\windows`, `c:\windows\system32`, `c:\windows\syswow64`,
 			`c:\program files`, `c:\program files (x86)`,
 		} {
-			if strings.HasPrefix(dl, sys) {
+			if hasPathPrefix(dir, sys) {
 				return true
 			}
 		}

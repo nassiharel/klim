@@ -167,3 +167,38 @@ func TestAnalyzeByDir_OrdersPATHAndFlagsDuplicates(t *testing.T) {
 		t.Errorf("second dir should provide demo but mark it shadowed (Active=false)")
 	}
 }
+
+// TestIsSystemDir_WindowsLookAlikePrefixes guards against the
+// path-prefix bug where strings.HasPrefix would classify siblings
+// like C:\WindowsApps or C:\Windows.old as Windows system dirs
+// purely because the lowercased path starts with "c:\windows".
+func TestIsSystemDir_WindowsLookAlikePrefixes(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows-only system dir heuristic")
+	}
+	cases := []struct {
+		dir  string
+		want bool
+	}{
+		{`C:\Windows`, true},
+		{`C:\Windows\System32`, true},
+		{`C:\Windows\system32`, true},
+		{`C:\WINDOWS\SYSTEM32`, true},
+		{`C:\Program Files`, true},
+		{`C:\Program Files (x86)`, true},
+		{`C:\Program Files\Git\bin`, true},
+		// Look-alike siblings — must NOT be classified as system.
+		{`C:\WindowsApps`, false},
+		{`C:\Windows.old`, false},
+		{`C:\Windows.bak`, false},
+		{`C:\Program Files Custom`, false},
+		// Unrelated user dirs.
+		{`C:\Users\demo\bin`, false},
+		{`D:\Tools`, false},
+	}
+	for _, c := range cases {
+		if got := isSystemDir(c.dir); got != c.want {
+			t.Errorf("isSystemDir(%q) = %v, want %v", c.dir, got, c.want)
+		}
+	}
+}

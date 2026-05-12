@@ -66,8 +66,12 @@ func TestBuild_NoChangesYieldsEmptyPlan(t *testing.T) {
 
 func TestBuild_DesiredInstallEmitsInstallChange(t *testing.T) {
 	tools := []registry.Tool{{
-		Name:     "new-tool",
-		Packages: registry.PackageIDs{Brew: "new-tool"},
+		Name: "new-tool",
+		// NPM is part of sourcePriority on every supported OS, so
+		// this test exercises the install path uniformly on
+		// Linux / darwin / Windows. Brew alone would silently
+		// produce an empty-command change on Windows.
+		Packages: registry.PackageIDs{NPM: "new-tool", Brew: "new-tool"},
 		Latest:   "0.5.0",
 	}}
 	p := Build(tools, Options{
@@ -82,6 +86,38 @@ func TestBuild_DesiredInstallEmitsInstallChange(t *testing.T) {
 	}
 	if p.Changes[0].ToVersion != "0.5.0" {
 		t.Errorf("ToVersion = %q, want 0.5.0", p.Changes[0].ToVersion)
+	}
+	if p.Changes[0].Command == "" {
+		t.Errorf("install change must carry a non-empty Command")
+	}
+}
+
+// TestBuild_DesiredInstallWithoutSourceEmitsRisk verifies that asking
+// to install a tool that has no OS-relevant package ID produces a
+// risk (so the user sees why it was dropped) rather than silently
+// emitting a change with an empty Command.
+func TestBuild_DesiredInstallWithoutSourceEmitsRisk(t *testing.T) {
+	tools := []registry.Tool{{
+		Name:     "mystery",
+		Packages: registry.PackageIDs{}, // no IDs at all
+		Latest:   "1.0.0",
+	}}
+	p := Build(tools, Options{
+		IncludeInstalls: true,
+		Desired:         map[string]DesiredState{"mystery": {}},
+	})
+	if len(p.Changes) != 0 {
+		t.Errorf("want no changes for sourceless install, got %d", len(p.Changes))
+	}
+	var found bool
+	for _, r := range p.Risks {
+		if r.Tool == "mystery" && r.Severity == SeverityError {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("want missing-source risk for 'mystery', risks=%+v", p.Risks)
 	}
 }
 

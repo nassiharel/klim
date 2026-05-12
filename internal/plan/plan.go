@@ -146,12 +146,26 @@ func Build(tools []registry.Tool, opts Options) Plan {
 		opts.IncludeUpgrades = true
 	}
 	var changes []Change
+	var missingSourceRisks []Risk
 	for _, t := range tools {
 		if opts.OnlyTools != nil && !opts.OnlyTools[t.Name] {
 			continue
 		}
 		change, ok := changeFor(t, opts)
 		if !ok {
+			// Tools the user asked to install but for which we
+			// can't synthesize a command (no OS-relevant
+			// package ID, or no PM at all) need an explicit
+			// risk so the plan doesn't silently drop them.
+			if opts.IncludeInstalls && !t.IsInstalled() {
+				if d, want := opts.Desired[t.Name]; want && !d.Remove {
+					missingSourceRisks = append(missingSourceRisks, Risk{
+						Severity: SeverityError,
+						Tool:     t.Name,
+						Message:  "no install source available on this OS — define a package ID (winget/brew/apt/…) or install a supported package manager",
+					})
+				}
+			}
 			continue
 		}
 		// Confidence is meaningful only for upgrades — there's no
@@ -175,6 +189,7 @@ func Build(tools []registry.Tool, opts Options) Plan {
 	})
 
 	risks := AnalyseRisks(changes, tools)
+	risks = append(risks, missingSourceRisks...)
 	totals := computeTotals(changes, tools)
 	return Plan{Changes: changes, Risks: risks, Totals: totals}
 }
@@ -204,6 +219,20 @@ func changeFor(t registry.Tool, opts Options) (Change, bool) {
 
 	// Install path: desired-but-not-installed.
 	if opts.IncludeInstalls && hasDesired && !desired.Remove && !t.IsInstalled() {
+		// Fall back to the first OS-relevant package source when
+		// no PM is currently installed: we still want to emit a
+		// usable change for the user, and the apply path will
+		// surface a "PM missing" error at that point.
+		if source == "" {
+			source = t.Packages.FirstPackageSource()
+		}
+		cmd := t.Packages.InstallCmd(source)
+		if source == "" || cmd == "" {
+			// No install source is defined for this tool on
+			// this OS; the install can't be planned. Skip and
+			// let Build's risk analysis flag it explicitly.
+			return Change{}, false
+		}
 		target := desired.Version
 		if target == "" {
 			target = t.Latest
@@ -214,7 +243,7 @@ func changeFor(t registry.Tool, opts Options) (Change, bool) {
 			Source:          source,
 			Kind:            ChangeInstall,
 			ToVersion:       target,
-			Command:         t.Packages.InstallCmd(source),
+			Command:         cmd,
 			EstimatedTime:   timeFor(ChangeInstall, source),
 			EstimatedDiskMB: diskFor(ChangeInstall, source),
 		}, true

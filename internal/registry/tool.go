@@ -318,6 +318,20 @@ func (p PackageIDs) HasAnyPackageForOS() bool {
 	return false
 }
 
+// FirstPackageSource returns the highest-priority install source for the
+// current OS that has a package ID defined — regardless of whether the
+// package manager is currently installed. Returns "" when no OS-relevant
+// package ID exists. Useful as a fallback when BestInstallSource returns
+// "" because none of the PMs that would work are present on PATH.
+func (p PackageIDs) FirstPackageSource() InstallSource {
+	for _, src := range sourcePriority() {
+		if p.pkgID(src) != "" {
+			return src
+		}
+	}
+	return ""
+}
+
 // sourcePriority returns the preferred package manager order for the current OS.
 func sourcePriority() []InstallSource {
 	switch runtime.GOOS {
