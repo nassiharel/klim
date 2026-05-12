@@ -7,6 +7,76 @@ import (
 	"github.com/nassiharel/klim/internal/registry"
 )
 
+func TestFormatChangeLine_EmptyVersionRendersPlaceholder(t *testing.T) {
+	cases := []struct {
+		name string
+		c    Change
+		want string
+	}{
+		{"install with empty ToVersion", Change{Tool: "x", DisplayName: "x", Kind: ChangeInstall}, "x install -> ?"},
+		{"remove with empty FromVersion", Change{Tool: "x", DisplayName: "x", Kind: ChangeRemove}, "x remove (was ?)"},
+		{"upgrade with both empty", Change{Tool: "x", DisplayName: "x", Kind: ChangeUpgrade}, "x ? -> ?"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := formatChangeLine(tc.c); got != tc.want {
+				t.Errorf("formatChangeLine = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRisksFor_DowngradeWording verifies that a rollback (upgrade
+// change with ToVersion < FromVersion) renders downgrade-specific
+// language instead of the standard "before upgrading" copy.
+func TestRisksFor_DowngradeWording(t *testing.T) {
+	c := Change{
+		Tool:        "node",
+		DisplayName: "Node.js",
+		Kind:        ChangeUpgrade,
+		FromVersion: "20.0.0",
+		ToVersion:   "18.0.0",
+	}
+	risks := risksFor(c, nil)
+	var parts []string
+	for _, r := range risks {
+		parts = append(parts, r.Message)
+	}
+	joined := strings.Join(parts, "\n")
+	if !strings.Contains(joined, "downgrading") && !strings.Contains(joined, "rollback") {
+		t.Errorf("downgrade risks should use rollback/downgrade language, got:\n%s", joined)
+	}
+	if strings.Contains(joined, "before upgrading") {
+		t.Errorf("downgrade risks should NOT say 'before upgrading', got:\n%s", joined)
+	}
+}
+
+// TestComputeConfidence_DowngradeFactorReasons verifies that the
+// confidence-factor breakdown uses neutral/rollback wording when the
+// change is actually a downgrade.
+func TestComputeConfidence_DowngradeFactorReasons(t *testing.T) {
+	c := Change{
+		Tool:        "python",
+		DisplayName: "Python",
+		Kind:        ChangeUpgrade,
+		FromVersion: "3.12.0",
+		ToVersion:   "3.11.0",
+	}
+	_, factors := computeConfidence(c, nil)
+	found := false
+	for _, f := range factors {
+		if strings.Contains(f.Reason, "rollback") || strings.Contains(f.Reason, "drops features") {
+			found = true
+		}
+		if strings.Contains(f.Reason, "Python upgrade") {
+			t.Errorf("downgrade should not say 'Python upgrade', factor=%+v", f)
+		}
+	}
+	if !found {
+		t.Errorf("expected at least one factor to reference rollback/dropped features, got %+v", factors)
+	}
+}
+
 func TestBuild_UpgradesOutdatedTools(t *testing.T) {
 	tools := []registry.Tool{
 		{

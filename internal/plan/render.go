@@ -103,24 +103,40 @@ func RenderText(p Plan) string {
 //	terraform 1.8.0 -> 1.9.0    (confidence: 92%)
 //	new-tool install -> 0.5.0
 //	stale remove (was 1.0.0)
+//
+// Empty version strings (e.g. installed-but-unresolved, or Latest
+// unknown for a desired install) render as "?" so the output never
+// has dangling "install -> " / "remove (was )" trailers.
 func formatChangeLine(c Change) string {
 	display := c.DisplayName
 	if display == "" {
 		display = c.Tool
 	}
+	from := nonEmptyVersion(c.FromVersion)
+	to := nonEmptyVersion(c.ToVersion)
 	switch c.Kind {
 	case ChangeUpgrade:
-		s := fmt.Sprintf("%s %s -> %s", display, c.FromVersion, c.ToVersion)
+		s := fmt.Sprintf("%s %s -> %s", display, from, to)
 		if c.Confidence > 0 {
 			s += fmt.Sprintf("    (confidence: %d%%)", c.Confidence)
 		}
 		return s
 	case ChangeInstall:
-		return fmt.Sprintf("%s install -> %s", display, c.ToVersion)
+		return fmt.Sprintf("%s install -> %s", display, to)
 	case ChangeRemove:
-		return fmt.Sprintf("%s remove (was %s)", display, c.FromVersion)
+		return fmt.Sprintf("%s remove (was %s)", display, from)
 	}
 	return display
+}
+
+// nonEmptyVersion returns "?" when v is empty / whitespace, so plan
+// output never includes dangling "(was )" or "-> " trailers when a
+// version couldn't be resolved.
+func nonEmptyVersion(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "?"
+	}
+	return v
 }
 
 func groupBySource(changes []Change) map[registry.InstallSource][]Change {

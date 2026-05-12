@@ -43,43 +43,79 @@ func computeConfidence(c Change, tools []registry.Tool) (int, []ConfidenceFactor
 		factors = append(factors, ConfidenceFactor{Name: name, Delta: delta, Reason: reason})
 	}
 
+	// Detect downgrade up front so semver / fragility factors can
+	// pick neutral or rollback-specific wording. Rollback plans
+	// surface as ChangeUpgrade with ToVersion < FromVersion.
+	isDowngrade := c.FromVersion != "" && c.ToVersion != "" &&
+		registry.CompareVersions(c.ToVersion, c.FromVersion) < 0
+
 	// 1. Semantic version delta.
 	switch versionBumpKind(c.FromVersion, c.ToVersion) {
 	case bumpMajor:
-		apply("semver: major bump", -25,
-			fmt.Sprintf("%s → %s crosses a major boundary — breaking changes are likely", c.FromVersion, c.ToVersion))
+		reason := fmt.Sprintf("%s → %s crosses a major boundary — breaking changes are likely", c.FromVersion, c.ToVersion)
+		if isDowngrade {
+			reason = fmt.Sprintf("%s → %s crosses a major boundary — state / config written by the newer major may not load", c.FromVersion, c.ToVersion)
+		}
+		apply("semver: major change", -25, reason)
 	case bumpMinor:
-		apply("semver: minor bump", -8,
-			fmt.Sprintf("%s → %s adds new features that may shift defaults", c.FromVersion, c.ToVersion))
+		reason := fmt.Sprintf("%s → %s adds new features that may shift defaults", c.FromVersion, c.ToVersion)
+		if isDowngrade {
+			reason = fmt.Sprintf("%s → %s drops features added in the newer minor — review usage", c.FromVersion, c.ToVersion)
+		}
+		apply("semver: minor change", -8, reason)
 	case bumpPatch:
-		apply("semver: patch bump", -2,
-			fmt.Sprintf("%s → %s is a patch release — typically safe", c.FromVersion, c.ToVersion))
+		reason := fmt.Sprintf("%s → %s is a patch release — typically safe", c.FromVersion, c.ToVersion)
+		if isDowngrade {
+			reason = fmt.Sprintf("%s → %s is a patch-level rollback — typically safe but may reintroduce a fixed bug", c.FromVersion, c.ToVersion)
+		}
+		apply("semver: patch change", -2, reason)
 	}
 
 	// 2. Tool-specific fragility.
 	tool := strings.ToLower(c.Tool)
 	switch tool {
 	case "kubectl":
-		apply("kubectl: client-server skew", -20,
-			"kubectl ±1 minor version of the API server is supported; further skew breaks features")
+		reason := "kubectl ±1 minor version of the API server is supported; further skew breaks features"
+		if isDowngrade {
+			reason = "kubectl rollback can land outside the supported ±1 minor skew with the API server; verify before applying"
+		}
+		apply("kubectl: client-server skew", -20, reason)
 	case "node", "nodejs":
-		apply("node: native modules", -15,
-			"native modules built against the previous Node ABI need rebuild after the upgrade")
+		reason := "native modules built against the previous Node ABI need rebuild after the upgrade"
+		if isDowngrade {
+			reason = "native modules built against the newer Node ABI need rebuild after the rollback"
+		}
+		apply("node: native modules", -15, reason)
 	case "python", "python3":
-		apply("python: virtualenv coupling", -15,
-			"existing venvs hard-link to the interpreter and become orphaned after a Python upgrade")
+		reason := "existing venvs hard-link to the interpreter and become orphaned after a Python upgrade"
+		if isDowngrade {
+			reason = "existing venvs hard-link to the interpreter and become orphaned after a Python rollback"
+		}
+		apply("python: virtualenv coupling", -15, reason)
 	case "docker", "docker-desktop", "podman":
-		apply("docker: engine restart", -10,
-			"engine upgrade can require container restarts and re-pulling base images")
+		reason := "engine upgrade can require container restarts and re-pulling base images"
+		if isDowngrade {
+			reason = "engine rollback can require container restarts; images built against the newer engine may need rebuilding"
+		}
+		apply("docker: engine restart", -10, reason)
 	case "terraform", "tofu":
-		apply("terraform: provider lockfile", -8,
-			"provider lockfile pinned to the old binary may require `terraform init -upgrade`")
+		reason := "provider lockfile pinned to the old binary may require `terraform init -upgrade`"
+		if isDowngrade {
+			reason = "state files written by the newer version may not load; back up state before the rollback"
+		}
+		apply("terraform: provider lockfile", -8, reason)
 	case "go":
-		apply("go: build cache invalidation", -5,
-			"build cache becomes invalid; first build after upgrade is full-fresh")
+		reason := "build cache becomes invalid; first build after upgrade is full-fresh"
+		if isDowngrade {
+			reason = "build cache becomes invalid; first build after rollback is full-fresh"
+		}
+		apply("go: build cache invalidation", -5, reason)
 	case "rust", "rustc", "cargo":
-		apply("rust: target rebuild", -5,
-			"all target crates rebuild on the new toolchain")
+		reason := "all target crates rebuild on the new toolchain"
+		if isDowngrade {
+			reason = "all target crates rebuild on the rolled-back toolchain"
+		}
+		apply("rust: target rebuild", -5, reason)
 	}
 
 	// 3. Plugin / ecosystem coupling — only deducts when actual

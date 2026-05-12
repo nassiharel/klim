@@ -87,7 +87,7 @@ func init() {
 func runApplyWithSafety(cmd *cobra.Command, args []string) error {
 	// 1. Pre-apply scan + checkpoint. Single scan, used both
 	//    on disk and for postcheck's regression detection.
-	preTools, scanErr := scanForApply(cmd)
+	preTools, scanErr := scanForApply(cmd, applyFlags.refresh)
 	if scanErr != nil {
 		fmt.Fprintln(os.Stderr, "⚠ Could not scan before apply:", scanErr)
 	}
@@ -151,8 +151,13 @@ func runApplyWithSafety(cmd *cobra.Command, args []string) error {
 	return &PartialFailureError{Op: "apply postcheck", Succeeded: 0, Failed: countFailedChecks(result)}
 }
 
-func scanForApply(cmd *cobra.Command) ([]registry.Tool, error) {
-	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), false)
+func scanForApply(cmd *cobra.Command, refresh bool) ([]registry.Tool, error) {
+	// refresh comes from the shared --refresh action flag. When the
+	// user asks for a fresh scan we must honour it for the pre-apply
+	// snapshot too — otherwise the postcheck regression comparison
+	// and the auto-checkpoint would be anchored to stale cached
+	// state while the upgrade phase ran fresh.
+	tools, _, _, err := svcFrom(cmd).LoadAndResolveCached(cmd.Context(), refresh)
 	if err != nil {
 		return nil, err
 	}
