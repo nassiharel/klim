@@ -487,6 +487,11 @@ func (m Model) renderEnvInputView() string {
 
 // renderEnvShowView pretty-prints a remote profile (no side effects).
 // Output mirrors `klim env show` so users get parity with the CLI.
+//
+// We intentionally do NOT emit an in-body "Esc back" hint — the same
+// hint is in renderHelp for envViewShowResult, where it stays pinned
+// to the actual bottom of the terminal regardless of how far the
+// user has scrolled.
 func (m Model) renderEnvShowView() string {
 	var b strings.Builder
 	b.WriteString("\n")
@@ -498,12 +503,12 @@ func (m Model) renderEnvShowView() string {
 			b.WriteString("  " + line + "\n")
 		}
 	}
-	b.WriteString("\n  " + dimVersion.Render("Esc") + "  back\n")
 	return b.String()
 }
 
 // renderEnvDiffView prints the diff between the local and the supplied
-// remote profile.
+// remote profile. The "Esc back" hint lives in renderHelp for
+// envViewDiffResult, same reason as renderEnvShowView.
 func (m Model) renderEnvDiffView() string {
 	var b strings.Builder
 	b.WriteString("\n")
@@ -515,7 +520,6 @@ func (m Model) renderEnvDiffView() string {
 			b.WriteString("  " + line + "\n")
 		}
 	}
-	b.WriteString("\n  " + dimVersion.Render("Esc") + "  back\n")
 	return b.String()
 }
 
@@ -523,6 +527,10 @@ func (m Model) renderEnvDiffView() string {
 // Apply runs. Tool installs already render through the existing
 // backupItems progress bar; this view summarises the favorites and
 // packs side-effects which don't go through that flow.
+//
+// As with renderEnvShowView / renderEnvDiffView, the "Esc back" hint
+// is in renderHelp (envViewApplyReport state) so it stays pinned
+// when the report is long.
 func (m Model) renderEnvApplyReportView() string {
 	var b strings.Builder
 	b.WriteString("\n")
@@ -534,7 +542,6 @@ func (m Model) renderEnvApplyReportView() string {
 			b.WriteString("  " + line + "\n")
 		}
 	}
-	b.WriteString("\n  " + dimVersion.Render("Esc") + "  back\n")
 	return b.String()
 }
 
