@@ -56,14 +56,14 @@ irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 ```
 
 ```powershell
-# Scoop bucket
-scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket
-scoop install klim
+# winget
+winget install nassiharel.klim
 ```
 
 ```powershell
-# winget (after Microsoft moderators merge the auto-submitted PR)
-winget install nassiharel.klim
+# Scoop bucket
+scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket
+scoop install klim
 ```
 
 ### Any OS with Go 1.25+
@@ -125,10 +125,10 @@ irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 # go install — version suffix
 go install github.com/nassiharel/klim/cmd/klim@v0.1.2
 
-# brew / scoop / winget — pin via the package manager itself
+# brew / winget / scoop — pin via the package manager itself
 brew install nassiharel/tap/klim@0.1.2
-scoop install klim@0.1.2
 winget install nassiharel.klim --version 0.1.2
+scoop install klim@0.1.2
 ```
 
 Or download the matching archive from the [tagged release page](https://github.com/nassiharel/klim/releases) directly.
@@ -229,20 +229,22 @@ AI agents are good at translating intent. Klim is the stable local primitive the
 | Standardize a project | `klim init`, `klim check`, `klim generate github-action` |
 | Reproduce an environment | `klim export`, `klim import`, `klim env show`, `klim env apply` |
 | Compare machines | `klim diff baseline.yaml`, `klim trail capture`, `klim trail diff` |
-| Audit and score | `klim security health`, `klim security audit`, `klim score`, `klim security vuln` |
+| Audit and score | `klim health`, `klim health path`, `klim security audit`, `klim score`, `klim security vuln` |
+| Preview and apply | `klim plan`, `klim apply`, `klim checkpoint <name>`, `klim rollback <name>` |
 | Automate installs | `klim install jq`, `klim upgrade --pack go-developer`, `klim remove jq`, `klim watch` |
 | Agent-safe execution | `klim check --output json`, `klim install --dry-run --output json` |
 
 ## Feature map
 
-- **Interactive TUI**: Installed, Favorites, Updates, Marketplace, Backup, Project, Dashboard, Config, and Security views.
+- **Interactive TUI**: My Tools, Marketplace, Project, Dashboard, My Profile (with My Score breakdown), Health (PATH conflict explorer + interactive fix wizard), Security, Backup, and Config views.
+- **Plan / apply / rollback**: Terraform-style preview (`klim plan`) with confidence scoring, auto-checkpointed execution (`klim apply`) with shell-resolution + binary-validation + PATH-consistency + manager-integrity postcheck, and named snapshot management (`klim checkpoint`, `klim rollback`).
 - **Marketplace and packs**: Browse 110+ curated developer tools, install bundles, and create custom packs.
 - **Team manifests**: Versioned `.klim.yaml` contracts for local checks, CI, generated workflows, Dockerfiles, and devcontainers.
 - **Environment tokens**: `klim env` captures tools, favorites, custom packs, package managers, Klim version, OS, and security state into a privacy-safe token.
-- **Backup and sharing**: Manifest exports, share tokens, saved backups, cross-machine imports, and OS-aware package-manager mapping.
+- **Backup and sharing**: Manifest exports, share tokens, saved backups, cross-machine imports, OS-aware package-manager mapping, and **PATH backups** captured before any Health-tab PATH fix runs.
 - **Toolchain history**: `klim trail` captures content-addressed snapshots that can be labeled, diffed, pruned, and compared over time.
 - **Environment diff**: Compare local tools against manifests or tokens and see matches, version differences, local-only tools, and remote-only tools.
-- **Security and compliance**: Health checks, audits, vulnerability lookup through OSV.dev, license inventory, policy enforcement, and SBOM output.
+- **Security and compliance**: Health checks with interactive remediation, audits, vulnerability lookup through OSV.dev, license inventory, policy enforcement, and SBOM output.
 - **Shell integration**: Native completions and hooks that automatically run `.klim.yaml` checks when you enter a project.
 - **Auto-install shims**: `klim proxy` creates lightweight shims that install missing tools on first use through the best available package manager.
 - **Onboarding and discovery**: Role-based recommendations, related-tool suggestions, `klim why`, and `klim try` for temporary installs.

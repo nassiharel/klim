@@ -35,7 +35,23 @@ const pillars = [
 const capabilities = [
   {
     title: 'Interactive TUI',
-    description: 'Nine tabs covering Installed, Favorites, Updates, Discover, Backup, Project, Dashboard, Config, and Security.',
+    description: 'Nine tabs covering My Tools, Marketplace, Project, Dashboard, My Profile (with My Score breakdown), Health (PATH explorer + interactive fix wizard), Security, Backup, and Config.',
+  },
+  {
+    title: 'klim plan',
+    description: 'Terraform-plan-style preview of pending changes — grouped by package manager, with 0-100% upgrade confidence per change, risk analysis, disk impact, and time estimate.',
+  },
+  {
+    title: 'klim apply',
+    description: 'Run pending changes with an auto-checkpoint, then four-check postcheck (shell resolution, binary validation, PATH consistency, manager integrity) that flags real regressions and prints the rollback command.',
+  },
+  {
+    title: 'klim checkpoint + rollback',
+    description: 'Named YAML snapshots of versions, sources, and PATH stored under ~/.klim/checkpoints/. klim rollback produces a restore plan; klim apply auto-captures pre-apply-<UTC> before every run.',
+  },
+  {
+    title: 'klim health',
+    description: 'Top-level health command with a PATH conflict explorer (klim health path), interactive fix wizard in the TUI, and an auto-PATH-backup written before any fix touches your $PATH.',
   },
   {
     title: 'Manifests (.klim.yaml)',
@@ -43,7 +59,7 @@ const capabilities = [
   },
   {
     title: 'klim check / klim score',
-    description: 'CI-friendly validation of project requirements plus a 0–100 environment health grade with shields.io badges.',
+    description: 'CI-friendly validation of project requirements plus a 0–100 environment health grade (My Score) with full per-category breakdown and shields.io badges.',
   },
   {
     title: 'klim trail',

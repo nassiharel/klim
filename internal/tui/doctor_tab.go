@@ -17,11 +17,23 @@ import (
 	"github.com/nassiharel/klim/internal/vuln"
 )
 
-// Doctor sub-tab indices.
+// Security sub-tab indices. Health used to live here as a third
+// sub-tab; it now has its own top-level tab (see health_tab.go).
 const (
-	doctorSubDoctor     = 0
-	doctorSubAudit      = 1
-	doctorSubCompliance = 2
+	doctorSubAudit      = 0
+	doctorSubCompliance = 1
+)
+
+// Health (top-level) sub-tab indices.
+const (
+	healthSubIssues = 0
+	healthSubPath   = 1
+)
+
+// Health → PATH sub-views.
+const (
+	healthPathByTool = 0
+	healthPathByDir  = 1
 )
 
 // Doctor view color palette.
@@ -29,12 +41,13 @@ var (
 	doctorError   = lipgloss.NewStyle().Foreground(lipgloss.Color("167"))     // soft rose-red — readable without bold
 	doctorWarning = lipgloss.NewStyle().Foreground(warningColor)              // warm gold
 	doctorInfo    = lipgloss.NewStyle().Foreground(primaryColor)              // teal
-	doctorFix     = lipgloss.NewStyle().Foreground(subtleColor)               // gray
 	doctorSection = lipgloss.NewStyle().Bold(true).Foreground(highlightColor) // white bold
 	doctorOK      = lipgloss.NewStyle().Foreground(successColor).Bold(true)   // mint green
 )
 
-// renderDoctorView renders the Doctor tab content with sub-tabs.
+// renderDoctorView renders the Security tab content with sub-tabs.
+// The "Health" sub-tab that used to live here has been promoted to its
+// own top-level tab — see health_tab.go.
 func (m Model) renderDoctorView() string {
 	var b strings.Builder
 
@@ -43,7 +56,6 @@ func (m Model) renderDoctorView() string {
 		text string
 		idx  int
 	}{
-		{"Health", doctorSubDoctor},
 		{"Audit", doctorSubAudit},
 		{"Compliance", doctorSubCompliance},
 	}
@@ -63,68 +75,10 @@ func (m Model) renderDoctorView() string {
 	}
 
 	switch m.doctorSubTab {
-	case doctorSubAudit:
-		b.WriteString(m.renderAuditView())
 	case doctorSubCompliance:
 		b.WriteString(m.renderComplianceView())
 	default:
-		b.WriteString(m.renderDoctorIssuesView())
-	}
-
-	return b.String()
-}
-
-// renderDoctorIssuesView renders the doctor diagnostics sub-view.
-func (m Model) renderDoctorIssuesView() string {
-	var b strings.Builder
-
-	if len(m.doctorIssues) == 0 {
-		b.WriteString("  " + doctorOK.Render("✓ No issues found — your environment looks healthy!") + "\n\n")
-		b.WriteString("  " + dashDim.Render("All PATH entries are valid, no version conflicts detected,") + "\n")
-		b.WriteString("  " + dashDim.Render("and your package managers are working correctly.") + "\n")
-		return b.String()
-	}
-
-	errs, warns, infos := doctor.CountBySeverity(m.doctorIssues)
-
-	var summaryParts []string
-	if errs > 0 {
-		summaryParts = append(summaryParts, doctorError.Render(fmt.Sprintf("%d error(s)", errs)))
-	}
-	if warns > 0 {
-		summaryParts = append(summaryParts, doctorWarning.Render(fmt.Sprintf("%d warning(s)", warns)))
-	}
-	if infos > 0 {
-		summaryParts = append(summaryParts, doctorInfo.Render(fmt.Sprintf("%d info(s)", infos)))
-	}
-	b.WriteString("  " + strings.Join(summaryParts, "  ") + "\n\n")
-
-	grouped := make(map[string][]doctor.Issue)
-	var categoryOrder []string
-	for _, issue := range m.doctorIssues {
-		if _, ok := grouped[issue.Category]; !ok {
-			categoryOrder = append(categoryOrder, issue.Category)
-		}
-		grouped[issue.Category] = append(grouped[issue.Category], issue)
-	}
-
-	for _, cat := range categoryOrder {
-		b.WriteString("  " + doctorSection.Render(cat) + "\n")
-		for _, issue := range grouped[cat] {
-			icon := severityStyle(issue.Severity)
-			b.WriteString("    " + icon + " " + issue.Title + "\n")
-			if issue.Detail != "" {
-				for _, line := range strings.Split(issue.Detail, "\n") {
-					if line != "" {
-						b.WriteString("      " + dashDim.Render(line) + "\n")
-					}
-				}
-			}
-			if issue.Fix != "" {
-				b.WriteString("      " + doctorFix.Render("→ "+issue.Fix) + "\n")
-			}
-		}
-		b.WriteString("\n")
+		b.WriteString(m.renderAuditView())
 	}
 
 	return b.String()

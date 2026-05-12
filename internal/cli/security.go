@@ -36,26 +36,27 @@ func ResolveVulnSourceKey() string {
 // Layout:
 //
 //	klim security             — quick aggregate summary (audit + vuln)
-//	klim security health      — environment health (PATH, multi-installs, …)
 //	klim security audit       — audit installed tools (archived/stale/license)
 //	klim security vuln        — CVE/GHSA lookup against installed tools
 //	klim security compliance  — validate against policy
 //
-// Top-level `klim audit`, `klim doctor`, `klim compliance` no longer
-// exist — klim is a fresh tool and avoids back-compat clutter.
+// Environment health (PATH conflicts, multi-installs, etc.) lives under
+// the top-level `klim health` command, not here.
 var securityCmd = &cobra.Command{
 	Use:   "security",
-	Short: "Security checks: health, audit, vulnerabilities, compliance",
+	Short: "Security checks: audit, vulnerabilities, compliance",
 	Long: `klim security is the umbrella for every security-related
 check klim performs. Run with no arguments to print a quick summary
 across the cheap subset (audit + vuln); for full output of any one
 check, run the matching subcommand directly.
 
 Subcommands:
-  health      Environment health (PATH issues, multi-installs, missing PMs)
   audit       Audit installed tools (archived upstream, stale, license)
   vuln        Look up known CVEs/GHSAs against installed versions
   compliance  Validate installed tools against a compliance policy
+
+For environment health (PATH issues, multi-installs, missing PMs)
+use the top-level 'klim health' command.
 
 Exit codes (bare 'klim security'):
   0  No audit warnings, no vulns
@@ -66,12 +67,9 @@ Exit codes (bare 'klim security'):
 }
 
 func init() {
-	// Re-parent the existing subcommand definitions instead of
-	// duplicating their flag wiring. Each child still defines its
-	// own Use/Short/Long/RunE — `klim security audit` and
-	// `klim audit` would behave identically (but only the umbrella
-	// path is registered now).
-	securityCmd.AddCommand(doctorCmd) // Use: "health"
+	// `klim security health` is gone — Health is now a top-level
+	// command (see health.go / root.go). Audit, vuln, and compliance
+	// stay under security where they belong.
 	securityCmd.AddCommand(auditCmd)
 	securityCmd.AddCommand(vulnCmd)
 	securityCmd.AddCommand(complianceCmd)

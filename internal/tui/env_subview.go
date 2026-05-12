@@ -140,7 +140,7 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
-	case "1", "2", "3", "4", "5", "6", "7", "8":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		mp := &m
 		// Cancel any in-flight text input so we don't carry stale
 		// state to the destination tab.
@@ -307,6 +307,39 @@ func (m Model) handleKeyEnv(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "Rebuilding env profile..."
 			return m, buildEnvProfileCmd(m.svc, m.cfg)
 		}
+	case "up", "k":
+		// Scroll the body up. Only meaningful on the idle landing
+		// page where the My Score + Env Profile content may exceed
+		// the viewport on small terminals.
+		if m.envState == envViewIdle && m.profileScroll > 0 {
+			m.profileScroll--
+		}
+		return m, nil
+	case "down", "j":
+		if m.envState == envViewIdle {
+			m.profileScroll++
+			m.clampScrollOffsets()
+		}
+		return m, nil
+	case "home", "g":
+		if m.envState == envViewIdle {
+			m.profileScroll = 0
+		}
+		return m, nil
+	case "pgup":
+		if m.envState == envViewIdle {
+			m.profileScroll -= 5
+			if m.profileScroll < 0 {
+				m.profileScroll = 0
+			}
+		}
+		return m, nil
+	case "pgdown", " ":
+		if m.envState == envViewIdle {
+			m.profileScroll += 5
+			m.clampScrollOffsets()
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -367,6 +400,18 @@ func (m Model) renderEnvSubview() string {
 func (m Model) renderEnvIdleView() string {
 	var b strings.Builder
 	b.WriteString("\n")
+
+	// My Score lands at the top — it's the answer to "how is this
+	// developer environment doing?", which is the question the
+	// profile token also addresses (from a portability angle).
+	// Showing the breakdown first gives the user the headline grade
+	// before the slower-to-scan fingerprint section.
+	if m.doctorChecked {
+		if section := renderMyScoreSection(m.cachedScore, m.width); section != "" {
+			b.WriteString(section + "\n")
+		}
+	}
+
 	b.WriteString("  " + detailTitleStyle.Render("Env Profile") + "  " +
 		dimVersion.Render("portable fingerprint of this environment") + "\n\n")
 
@@ -407,25 +452,14 @@ func (m Model) renderEnvIdleView() string {
 		}
 	}
 
-	b.WriteString("  " + detailLabelStyle.Render("Actions") + "\n")
-	b.WriteString("    " + dimVersion.Render("o") + "  Open another env (paste a token to inspect)\n")
-	b.WriteString("    " + dimVersion.Render("d") + "  Compare another env against this one\n")
-	b.WriteString("    " + dimVersion.Render("a") + "  Apply another env (install missing + favorites + packs)\n")
-	b.WriteString("    " + dimVersion.Render("r") + "  Rebuild this env profile\n")
-	if m.activeTab == tabProfile {
-		// Profile tab — Esc is a no-op here; show the actual
-		// escape hatches instead so the on-screen hint matches
-		// real behaviour.
-		b.WriteString("    " + dimVersion.Render("←→") + "  Switch tab   " +
-			dimVersion.Render("q") + "  Quit\n")
-	} else {
-		b.WriteString("    " + dimVersion.Render("Esc") + "  Back to Backup menu\n")
-	}
+	// Actions key descriptions live in the help footer (renderHelp
+	// for tabProfile) so they stay pinned at the bottom of the
+	// terminal regardless of how far the user has scrolled. The
+	// previous in-body Actions list scrolled off-screen with the
+	// rest of the content, which made the footer look like it was
+	// "going up" when really the scroll just lifted the in-body
+	// shortcuts above the viewport.
 
-	visibleRows := m.height - 22 - m.footerHeight()
-	for range max(visibleRows, 0) {
-		b.WriteString("\n")
-	}
 	return b.String()
 }
 
@@ -453,6 +487,11 @@ func (m Model) renderEnvInputView() string {
 
 // renderEnvShowView pretty-prints a remote profile (no side effects).
 // Output mirrors `klim env show` so users get parity with the CLI.
+//
+// We intentionally do NOT emit an in-body "Esc back" hint — the same
+// hint is in renderHelp for envViewShowResult, where it stays pinned
+// to the actual bottom of the terminal regardless of how far the
+// user has scrolled.
 func (m Model) renderEnvShowView() string {
 	var b strings.Builder
 	b.WriteString("\n")
@@ -464,12 +503,12 @@ func (m Model) renderEnvShowView() string {
 			b.WriteString("  " + line + "\n")
 		}
 	}
-	b.WriteString("\n  " + dimVersion.Render("Esc") + "  back\n")
 	return b.String()
 }
 
 // renderEnvDiffView prints the diff between the local and the supplied
-// remote profile.
+// remote profile. The "Esc back" hint lives in renderHelp for
+// envViewDiffResult, same reason as renderEnvShowView.
 func (m Model) renderEnvDiffView() string {
 	var b strings.Builder
 	b.WriteString("\n")
@@ -481,7 +520,6 @@ func (m Model) renderEnvDiffView() string {
 			b.WriteString("  " + line + "\n")
 		}
 	}
-	b.WriteString("\n  " + dimVersion.Render("Esc") + "  back\n")
 	return b.String()
 }
 
@@ -489,6 +527,10 @@ func (m Model) renderEnvDiffView() string {
 // Apply runs. Tool installs already render through the existing
 // backupItems progress bar; this view summarises the favorites and
 // packs side-effects which don't go through that flow.
+//
+// As with renderEnvShowView / renderEnvDiffView, the "Esc back" hint
+// is in renderHelp (envViewApplyReport state) so it stays pinned
+// when the report is long.
 func (m Model) renderEnvApplyReportView() string {
 	var b strings.Builder
 	b.WriteString("\n")
@@ -500,7 +542,6 @@ func (m Model) renderEnvApplyReportView() string {
 			b.WriteString("  " + line + "\n")
 		}
 	}
-	b.WriteString("\n  " + dimVersion.Render("Esc") + "  back\n")
 	return b.String()
 }
 

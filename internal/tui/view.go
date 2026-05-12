@@ -26,9 +26,64 @@ const (
 	colReason    = 32 // width for "BECAUSE YOU HAVE" reason column in For You
 )
 
+// fitToVisibleRows is the universal stabiliser for scrollable tab
+// bodies. It mirrors what the My Tools two-column path has always
+// done — produce a body of EXACTLY `rows` visible lines (slice when
+// the content is longer, pad with blanks when shorter) so the
+// layoutWithFooter footer lands at a predictable terminal row
+// regardless of how much content the renderer emitted.
+//
+// scroll is clamped: negative scrolls land at 0; scrolls past the
+// end land at max so the bottom of the content stays visible.
+//
+// Returns the joined string (without a trailing newline — callers
+// can append one if needed) and the clamped scroll value the caller
+// should write back to its model so a stale scroll never persists.
+func fitToVisibleRows(content string, scroll, rows int) (body string, clampedScroll, totalLines int) {
+	if rows < 1 {
+		return "", 0, 0
+	}
+	lines := strings.Split(content, "\n")
+	total := len(lines)
+	maxScroll := total - rows
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+	if scroll > maxScroll {
+		scroll = maxScroll
+	}
+	if scroll > 0 && scroll < len(lines) {
+		lines = lines[scroll:]
+	}
+	if len(lines) > rows {
+		lines = lines[:rows]
+	}
+	for len(lines) < rows {
+		lines = append(lines, "")
+	}
+	return strings.Join(lines, "\n"), scroll, total
+}
+
 func (m Model) renderView() string {
 	if m.quitting {
 		return ""
+	}
+
+	// Plan / checkpoint browser modal — full-screen overlay. Takes
+	// priority over every other view including the health fix modal.
+	if m.viewingPlan {
+		if m.viewingCheckpoints {
+			return m.renderCheckpointBrowser()
+		}
+		return m.renderPlanView()
+	}
+
+	// Health fix modal — full-screen overlay; takes priority over everything else.
+	if m.fixModal.Open {
+		return m.renderFixModal()
 	}
 
 	// Detail view.
@@ -78,114 +133,107 @@ func (m Model) renderView() string {
 
 	// Config tab — supports scrolling.
 	if m.activeTab == tabConfig {
-		content := m.renderConfigView()
-		lines := strings.Split(content, "\n")
-
 		footer := m.renderHelp()
 		footerRows := m.footerHeight()
-		cfgHeaderRows := 4 + m.subtabRows() // title + tabs + rule + blank (+ subtab strip)
+		cfgHeaderRows := 4 + m.subtabRows()
 		const cfgMinGap = 1
 		visibleRows := m.height - cfgHeaderRows - footerRows - cfgMinGap
 		if visibleRows < 5 {
 			visibleRows = 5
 		}
-
-		maxScroll := len(lines) - visibleRows
-		if maxScroll < 0 {
-			maxScroll = 0
-		}
-		scroll := m.configScroll
-		if scroll > maxScroll {
-			scroll = maxScroll
-		}
-
-		if scroll > 0 && scroll < len(lines) {
-			lines = lines[scroll:]
-		}
-
-		body.WriteString(strings.Join(lines, "\n"))
+		// fitToVisibleRows clamps the scroll internally and returns
+		// the body sized to exactly visibleRows. The receiver here
+		// is a value receiver (bubbletea's View() requires it), so
+		// the clamped scroll can't be written back to the model
+		// from this path — key handlers in Update() do that work
+		// to keep the canonical state authoritative.
+		fitted, scroll, total := fitToVisibleRows(m.renderConfigView(), m.configScroll, visibleRows)
+		body.WriteString(fitted)
 		if scroll > 0 {
 			footer = "  " + dimVersion.Render("↑/↓ scroll") + "    " + footer
-		} else if len(strings.Split(content, "\n")) > visibleRows {
+		} else if total > visibleRows {
 			footer = "  " + dimVersion.Render("↓ more below") + "    " + footer
 		}
 		return m.layoutWithFooter(body.String(), footer)
 	}
 
-	// Dashboard tab has its own rendering path — supports scrolling.
+	// Dashboard tab — scrollable.
 	if m.activeTab == tabDashboard {
-		content := m.renderDashboardView()
-		lines := strings.Split(content, "\n")
-
-		// Compute available visible rows: total height minus the
-		// header (title + tab bar + rule + blank, with an extra
-		// row when the active parent has a subtab strip — see
-		// subtabRows()), footer, and a 1-line gap between body
-		// and footer.
 		footer := m.renderHelp()
 		footerRows := m.footerHeight()
-		headerRows := 4 + m.subtabRows() // title + tabs + rule + blank (+ subtab strip)
+		headerRows := 4 + m.subtabRows()
 		const minGap = 1
 		visibleRows := m.height - headerRows - footerRows - minGap
 		if visibleRows < 5 {
 			visibleRows = 5
 		}
-
-		// Clamp scroll offset so last screenful of content stays visible.
-		maxScroll := len(lines) - visibleRows
-		if maxScroll < 0 {
-			maxScroll = 0
-		}
-		scroll := m.dashboardScroll
-		if scroll > maxScroll {
-			scroll = maxScroll
-		}
-
-		// Apply scroll.
-		if scroll > 0 && scroll < len(lines) {
-			lines = lines[scroll:]
-		}
-
-		body.WriteString(strings.Join(lines, "\n"))
+		fitted, scroll, total := fitToVisibleRows(m.renderDashboardView(), m.dashboardScroll, visibleRows)
+		body.WriteString(fitted)
 		if scroll > 0 {
 			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
-		} else if len(strings.Split(content, "\n")) > visibleRows {
+		} else if total > visibleRows {
 			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
 		}
 		return m.layoutWithFooter(body.String(), footer)
 	}
 
-	// Doctor tab — scrollable like dashboard.
-	if m.activeTab == tabDoctor {
-		content := m.renderDoctorView()
-		lines := strings.Split(content, "\n")
-
+	// Health tab — scrollable like dashboard, plus its own PATH sub-view.
+	if m.activeTab == tabHealth {
 		footer := m.renderHelp()
 		footerRows := m.footerHeight()
-		headerRows := 4 + m.subtabRows() // title + tabs + rule + blank (+ subtab strip)
+		headerRows := 4 + m.subtabRows()
 		const minGap = 1
 		visibleRows := m.height - headerRows - footerRows - minGap
 		if visibleRows < 5 {
 			visibleRows = 5
 		}
-
-		maxScroll := len(lines) - visibleRows
-		if maxScroll < 0 {
-			maxScroll = 0
-		}
-		scroll := m.doctorScroll
-		if scroll > maxScroll {
-			scroll = maxScroll
-		}
-
-		if scroll > 0 && scroll < len(lines) {
-			lines = lines[scroll:]
-		}
-
-		body.WriteString(strings.Join(lines, "\n"))
+		fitted, scroll, total := fitToVisibleRows(m.renderHealthView(), m.healthScroll, visibleRows)
+		body.WriteString(fitted)
 		if scroll > 0 {
 			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
-		} else if len(strings.Split(content, "\n")) > visibleRows {
+		} else if total > visibleRows {
+			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
+		}
+		return m.layoutWithFooter(body.String(), footer)
+	}
+
+	// Security (Doctor) tab — scrollable.
+	if m.activeTab == tabDoctor {
+		footer := m.renderHelp()
+		footerRows := m.footerHeight()
+		headerRows := 4 + m.subtabRows()
+		const minGap = 1
+		visibleRows := m.height - headerRows - footerRows - minGap
+		if visibleRows < 5 {
+			visibleRows = 5
+		}
+		fitted, scroll, total := fitToVisibleRows(m.renderDoctorView(), m.doctorScroll, visibleRows)
+		body.WriteString(fitted)
+		if scroll > 0 {
+			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
+		} else if total > visibleRows {
+			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
+		}
+		return m.layoutWithFooter(body.String(), footer)
+	}
+
+	// My Profile tab — same exactly-N-rows pattern, plus scroll support
+	// when the My Score + Env Profile sections together exceed the
+	// viewport (common on smaller terminals).
+	if m.activeTab == tabProfile && m.viewingEnv {
+		footer := m.renderHelp()
+		footerRows := m.footerHeight()
+		headerRows := 4 + m.subtabRows()
+		const minGap = 1
+		visibleRows := m.height - headerRows - footerRows - minGap
+		if visibleRows < 5 {
+			visibleRows = 5
+		}
+		fitted, scroll, total := fitToVisibleRows(m.renderEnvSubview(), m.profileScroll, visibleRows)
+		body.WriteString(fitted)
+		if scroll > 0 {
+			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
+		} else if total > visibleRows {
 			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
 		}
 		return m.layoutWithFooter(body.String(), footer)
@@ -347,7 +395,12 @@ func (m Model) layoutWithFooter(body, footer string) string {
 		ruleLen = 1
 	}
 	rule := "  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
-	return body + strings.Repeat("\n", max(gap-1, 0)) + rule + "\n" + footer
+	// Layout: body (bodyRows) + gap blank rows + rule (1 row, counted in footerRows)
+	// + footer (footerRows-1 rows). Total = m.height. Using `gap` (not gap-1) here
+	// is the fix for the off-by-one that left the bottom row of the terminal blank
+	// and made footers look "floating" on tabs whose body is shorter than the
+	// viewport.
+	return body + strings.Repeat("\n", gap) + rule + "\n" + footer
 }
 
 // visualRows returns the number of terminal rows occupied by s when rendered
@@ -416,6 +469,9 @@ func (m Model) subtabRows() int {
 	if m.activeTab == tabProfile {
 		return 1
 	}
+	if m.activeTab == tabHealth {
+		return 1
+	}
 	return 0
 }
 
@@ -433,6 +489,7 @@ func (m Model) renderTabBar() string {
 		{"Project", tabProject},
 		{"Dashboard", tabDashboard},
 		{"My Profile", tabProfile},
+		{"Health", tabHealth},
 		{"Security", tabDoctor},
 		{"Backup", tabBackup},
 		{"Config", tabConfig},
@@ -479,6 +536,26 @@ func (m Model) renderTabBar() string {
 	// My Profile subtab strip.
 	if m.activeTab == tabProfile {
 		bar += "\n  " + activeTabStyle.Render("Env Profile")
+	}
+
+	// Health subtab strip (Issues / PATH).
+	if m.activeTab == tabHealth {
+		subs := []struct {
+			label string
+			idx   int
+		}{
+			{"Issues", healthSubIssues},
+			{"PATH", healthSubPath},
+		}
+		var subParts []string
+		for _, s := range subs {
+			if s.idx == m.healthSubTab {
+				subParts = append(subParts, activeTabStyle.Render(s.label))
+			} else {
+				subParts = append(subParts, inactiveTabStyle.Render(s.label))
+			}
+		}
+		bar += "\n  " + strings.Join(subParts, "")
 	}
 
 	return bar

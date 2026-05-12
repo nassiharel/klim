@@ -378,6 +378,23 @@ func TestPartialFailureError(t *testing.T) {
 	}
 }
 
+func TestPendingChangesError(t *testing.T) {
+	cases := []struct {
+		op      string
+		pending int
+		want    string
+	}{
+		{"plan", 1, "plan: 1 change pending"},
+		{"plan", 5, "plan: 5 changes pending"},
+	}
+	for _, tc := range cases {
+		got := (&PendingChangesError{Op: tc.op, Pending: tc.pending}).Error()
+		if got != tc.want {
+			t.Errorf("Pending=%d: got %q, want %q", tc.pending, got, tc.want)
+		}
+	}
+}
+
 // --- import.go helper ---
 
 func TestValidateManifest(t *testing.T) {

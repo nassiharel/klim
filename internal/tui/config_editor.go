@@ -119,7 +119,7 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.dashboardScroll = 0
 		m.discoverSubTab = discoverTools
 		return m.gotoParentTab(prev)
-	case "1", "2", "3", "4", "5", "6", "7", "8":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
 			return m, cmd
 		}
@@ -145,6 +145,7 @@ func (m Model) handleKeyConfigEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			// At bottom of settings — allow scrolling past.
 			m.configScroll++
+			m.clampScrollOffsets()
 		}
 		m.autoScrollConfig(settings)
 	case "pgup":

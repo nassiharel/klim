@@ -277,7 +277,7 @@ func (m Model) handleKeyProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "left", "shift+tab":
 			prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 			return m.gotoParentTab(prev)
-		case "1", "2", "3", "4", "5", "6", "7", "8":
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 			if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
 				return m, cmd
 			}
@@ -303,7 +303,7 @@ func (m Model) handleKeyProject(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.dashboardScroll = 0
 		m.discoverSubTab = discoverTools
 		return m.gotoParentTab(prev)
-	case "1", "2", "3", "4", "5", "6", "7", "8":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
 			return m, cmd
 		}

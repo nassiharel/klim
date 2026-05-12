@@ -11,6 +11,12 @@ import (
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Modal key handlers — each intercepts all keys when active.
+	if m.viewingPlan {
+		return m.handleKeyPlanView(msg)
+	}
+	if m.fixModal.Open {
+		return m.handleKeyHealthFixModal(msg)
+	}
 	if m.pendingAction != nil {
 		return m.handleKeyConfirmation(msg)
 	}
