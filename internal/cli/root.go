@@ -133,6 +133,11 @@ func init() {
 	rootCmd.AddCommand(securityCmd)
 	scoreCmd.GroupID = "health"
 	rootCmd.AddCommand(scoreCmd)
+	// Environment health (PATH, multi-installs, missing PMs, cache).
+	// Uses the doctorCmd value defined in doctor.go — kept under that
+	// name internally because the existing function/variable names are
+	// "doctor" everywhere. The user-facing Cobra Use string is "health".
+	rootCmd.AddCommand(doctorCmd)
 
 	// Shell integration.
 	shellCmd.GroupID = "shell"
@@ -180,6 +185,10 @@ func Run() int {
 	}
 	var pf *PartialFailureError
 	if errors.As(err, &pf) {
+		return ExitPartialFailure
+	}
+	var pce *PendingChangesError
+	if errors.As(err, &pce) {
 		return ExitPartialFailure
 	}
 	if isCobraUsageError(err) {

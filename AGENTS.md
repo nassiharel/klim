@@ -27,6 +27,7 @@ Makefile                   build / test / lint / cover / clean
 internal/
   build/       Version/Commit/Date (ldflags) + Info(), VersionOnly()
   catalog/     Fetch marketplace.yaml from GitHub, cache locally, diff, refresh
+  checkpoint/  Named YAML snapshots of installed tools + PATH → ~/.klim/checkpoints/<name>.yaml; Save / Load / List / Delete with filename-safety regex
   cli/         Cobra commands. Notable files:
                  root.go         rootCmd, group registration, Run/Execute
                  errors.go       UsageError, PartialFailureError, exit codes
@@ -38,24 +39,40 @@ internal/
                  install.go      `klim install [tool...] [--pack ...]`
                  upgrade.go      `klim upgrade [tool...] [--pack ...]`
                  remove.go       `klim remove  [tool...] [--pack ...]` with klim self-protection
+                 plan.go         `klim plan` — Terraform-plan-style preview with confidence scoring
+                 apply.go        `klim apply` — plan + auto-checkpoint + postcheck-wrapped upgrade
+                 checkpoint.go   `klim checkpoint <name> | list | show | delete`
+                 rollback.go     `klim rollback <name>` — produces a restore plan
+                 health.go (doctor.go) `klim health` umbrella with `klim health path` subcommand
   config/      config.yaml: logging, marketplace URL, performance, UI prefs
   custompacks/ User-created pack definitions → ~/.klim/marketplace/custom-packs.yaml
   detector/    Fallback version detection (Go buildinfo, Windows PE resources)
+  doctor/      Health diagnostics — duplicate/missing/inaccessible PATH, multi-installs, shadowing, missing PMs, stale cache, unresolved versions, outdated summary. Every Issue carries an interactive Action (CopyCommand/JumpPathView/Rescan/JumpUpdates) + a TouchesPATH flag for the modal's PATH-backup capture.
   favorites/   Favorites list persistence → ~/.klim/favorites/favorites.yaml
   fileutil/    Shared file I/O: AtomicWrite, EnsureDir, ReadYAML, WriteYAML
   finder/      PATH scanning, install source detection (brew/winget/scoop/apt/manual)
   logging/     slog structured logging + lumberjack file rotation
   manifest/    YAML schema for export/import manifests + FromRegistryTool converter
-  paths/       Single source of truth for all ~/.klim/* paths
+  pathbackup/  Captures $PATH (+ Windows User PATH from registry) before any Health-tab fix touches it → ~/.klim/backups/path/path-<UTC>.yaml; generates platform-specific restore commands
+  pathconflict/ Read-only analyzer powering `klim health path` and the TUI Health → PATH view; produces Report{ByTool, ByDir} with version-conflict + privilege-risk flags. Reads $PATH and does best-effort os.Stat on entries; no scanning, no version resolution.
+  paths/       Single source of truth for all ~/.klim/* paths (BackupsDir, PathBackupsDir, CheckpointsDir, …)
   pkgmgr/      Package manager queries (installed + latest versions)
+  plan/        `klim plan` engine: Build/Render/AnalyseRisks/computeConfidence. Confidence factors include semver delta, tool-specific fragility, plugin ecosystem detection, foundational-runtime size.
+  postcheck/   `klim apply` validation pass: parallel binary probes with worker pool, shell resolution, PATH consistency, manager integrity. Regression detection against a before-snapshot so pre-existing issues don't trip auto-rollback.
   registry/    Tool, Instance, PackageIDs, Pack structs; version comparison; SortByName, ToolMap, InstalledSet helpers
   scancache/   Per-host scan cache: installed/not, paths, versions → ~/.klim/cache/scan-cache.yaml
+  score/       0-100 environment score (Tools up to date, Doctor health, Audit clean, Compliance, Managed sources) — shown as "My Score" in the My Profile tab with the full per-category breakdown
   selfupdate/  Self-update from GitHub Releases (download → extract → replace)
-  service/     ToolService: composition root wiring catalog + finder + resolver
+  service/     ToolService: composition root wiring catalog + finder + resolver. RewalkPath() does a path-only refresh (no version resolution) used by the Health-fix post-action flow.
   share/       Compact token encode/decode for sharing tool lists
   tui/         Bubbletea Model (model.go), commands (commands.go), rendering (view.go),
                  sidebar/filter helpers (sidebar.go), pure utilities (util.go),
-                 favorites (favorites.go), styles
+                 favorites (favorites.go), styles, my_score.go (My Profile → My Score panel),
+                 health_tab.go (Health Issues + PATH views), health_fix_modal.go (interactive
+                 fix wizard with PATH backups + restore), health_refresh_cmd.go (fast
+                 path-only refresh after a PATH fix), plan_view.go (Plan modal opened with
+                 `P` from any tab — preview pending changes, apply through `klim apply`,
+                 capture / restore checkpoints).
 ```
 
 ## Architecture
@@ -75,18 +92,19 @@ ToolService
 
 ## TUI Tabs
 
-Number keys 1-8 jump straight to a parent tab. Tab/Shift-Tab and Left/Right arrows step through subtabs first (when the parent has any) and advance to the next/previous parent only at the strip's edge — e.g. on Marketplace, Right cycles Tools → Packs → For You → Onboard before moving to Project; on My Tools, Right cycles Installed → Updates → Favorites before moving to Marketplace.
+Number keys 1-9 jump straight to a parent tab. Tab/Shift-Tab and Left/Right arrows step through subtabs first (when the parent has any) and advance to the next/previous parent only at the strip's edge — e.g. on Marketplace, Right cycles Tools → Packs → For You → Onboard before moving to Project; on My Tools, Right cycles Installed → Updates → Favorites before moving to Marketplace.
 
 | Tab | Key | Subtabs | Content |
 |---|---|---|---|
 | My Tools   | 1 | Installed, Updates, Favorites | All detected tools, available upgrades, and favorites. `*` toggle favorite. |
 | Marketplace| 2 | Tools, Packs, For You, Onboard | Browse catalog, curated packs, recommendations, role-based onboarding. |
 | Project    | 3 | — | Per-project tool checks. |
-| Dashboard  | 4 | — | Aggregate stats, gauges, category/tag/platform breakdowns. |
-| My Profile | 5 | Env Profile | Generate / inspect / compare / apply env profile. |
-| Security   | 6 | Doctor, Audit, Compliance | Health checks, vulnerability scans, compliance policies. |
-| Backup     | 7 | — | Export/import toolchain; share tokens; Trail; My Packs; My Backups. |
-| Config     | 8 | — | View/edit config.yaml settings. |
+| Dashboard  | 4 | — | Aggregate stats, gauges, category/tag/platform breakdowns. (The Environment Score has moved to **My Profile → My Score**.) |
+| My Profile | 5 | Env Profile | Generate / inspect / compare / apply env profile, plus the **My Score** breakdown (overall environment grade with per-category points: Tools up to date, Doctor health, Audit clean, Compliance, Managed sources). |
+| Health     | 6 | Issues, PATH | Environment diagnostics (PATH problems, multi-installs, missing PMs, stale cache) and a visual PATH conflict explorer (Active vs Shadowed, By tool / By PATH dir, `t` to switch view, `u` to uninstall a shadowed copy through its PM). |
+| Security   | 7 | Audit, Compliance | Vulnerability scans and compliance policies. |
+| Backup     | 8 | — | Export/import toolchain; share tokens; Trail; My Packs; My Backups. |
+| Config     | 9 | — | View/edit config.yaml settings. |
 
 **Filter sidebar:** Category / Platform / Tag filters with counters. Configurable left/right position (`config.yaml → ui.sidebar_right`).
 

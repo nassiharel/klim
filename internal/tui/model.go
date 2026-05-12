@@ -18,6 +18,7 @@ import (
 
 	"github.com/nassiharel/klim/internal/audit"
 	"github.com/nassiharel/klim/internal/catalog"
+	"github.com/nassiharel/klim/internal/checkpoint"
 	"github.com/nassiharel/klim/internal/compliance"
 	"github.com/nassiharel/klim/internal/config"
 	"github.com/nassiharel/klim/internal/custompacks"
@@ -25,6 +26,7 @@ import (
 	"github.com/nassiharel/klim/internal/envid"
 	"github.com/nassiharel/klim/internal/favorites"
 	"github.com/nassiharel/klim/internal/onboard"
+	"github.com/nassiharel/klim/internal/plan"
 	"github.com/nassiharel/klim/internal/registry"
 	"github.com/nassiharel/klim/internal/score"
 	"github.com/nassiharel/klim/internal/service"
@@ -41,9 +43,10 @@ const (
 	tabProject
 	tabDashboard
 	tabConfig
-	tabDoctor
+	tabDoctor // Security parent (Audit + Compliance)
 	tabProfile
-	tabCount // sentinel: total number of tab constants. Cycling is
+	tabHealth // Environment Health parent (Issues + PATH)
+	tabCount  // sentinel: total number of tab constants. Cycling is
 	// driven by parentTabOrder/parentIndex below — do not use
 	// tabCount for `(activeTab+1)%tabCount` cycling, since that
 	// would treat each My Tools subtab as a peer of every other
@@ -68,7 +71,8 @@ var parentTabOrder = []int{
 	tabProject,
 	tabDashboard,
 	tabProfile, // My Profile
-	tabDoctor,  // Security
+	tabHealth,  // Health (Issues + PATH)
+	tabDoctor,  // Security (Audit + Compliance)
 	tabBackup,
 	tabConfig,
 }
@@ -88,12 +92,14 @@ func parentIndex(tab int) int {
 		return 3
 	case tabProfile:
 		return 4
-	case tabDoctor:
+	case tabHealth:
 		return 5
-	case tabBackup:
+	case tabDoctor:
 		return 6
-	case tabConfig:
+	case tabBackup:
 		return 7
+	case tabConfig:
+		return 8
 	}
 	return 0
 }
@@ -338,6 +344,11 @@ type Model struct {
 
 	// Dashboard scroll offset.
 	dashboardScroll int
+	// profileScroll is the scroll offset for the My Profile tab.
+	// Added so the My Score + Env Profile sections (which can
+	// exceed the viewport on small terminals) get the same
+	// scroll-and-pin-footer behaviour as Dashboard / Health.
+	profileScroll int
 
 	// Favorites state.
 	favoriteNames   map[string]bool // in-memory lookup set, loaded at init
@@ -350,7 +361,7 @@ type Model struct {
 	configEditInput textinput.Model // text input for string/int/duration settings
 	configScroll    int             // scroll offset for config tab
 
-	// Doctor tab state (includes audit + compliance findings).
+	// Security tab state (audit + compliance findings).
 	doctorIssues     []doctor.Issue     // diagnostic results (nil = not yet checked)
 	auditFindings    []audit.Finding    // security audit findings
 	auditLicenses    map[string]int     // license counts
@@ -359,9 +370,46 @@ type Model struct {
 	complianceError  string             // non-empty when policy failed to load
 	cachedScore      score.Result       // computed once in runDoctor
 	lastScanMeta     doctor.ScanMeta    // remembered so post-action recompute keeps FromCache provenance
-	doctorScroll     int                // scroll offset for doctor tab
+	doctorScroll     int                // scroll offset for Security tab
 	doctorChecked    bool               // true after first doctor check completed
-	doctorSubTab     int                // 0=doctor, 1=audit, 2=compliance
+	doctorSubTab     int                // Security: 0=audit, 1=compliance
+
+	// Health tab state (separate from Security: PATH conflicts +
+	// the legacy "Issues" view; sub-tab cycling lives in its own
+	// scroll/state slot so cycling between Health and Security
+	// keeps each tab's last view).
+	healthSubTab        int    // 0=Issues, 1=PATH
+	healthScroll        int    // scroll offset for Health tab
+	healthIssueCursor   int    // selected issue row (flat index across all categories)
+	healthPathView      int    // 0=By tool, 1=By PATH dir
+	healthPathToolIdx   int    // selected row in By-tool view
+	healthPathShadowIdx int    // selected shadowed copy under that tool
+	healthPathDirIdx    int    // selected row in By-PATH-dir view
+	healthPathStatus    string // transient banner: last uninstall result
+
+	// Health → Issues "fix wizard" modal. Zero value means closed.
+	// See health_fix_modal.go for the rendering + key handling.
+	fixModal fixModal
+
+	// Plan / apply / checkpoint / rollback modal stack. Zero values
+	// mean the modal is closed; see plan_view.go for the renderers
+	// and the key dispatcher. Both viewingPlan and viewingCheckpoints
+	// can be open simultaneously (the checkpoint browser is a child
+	// of the plan view) but only the innermost active modal receives
+	// keys, via the key router in keys.go.
+	viewingPlan            bool
+	planResult             *plan.Plan
+	planScroll             int
+	planMode               string // "forward" | "rollback"
+	planRollbackTarget     string
+	planStatus             string // transient banner under the title
+	applyConfirm           bool   // y/n confirm before exec
+	enteringCheckpointName bool
+	checkpointNameInput    textinput.Model
+
+	viewingCheckpoints bool
+	checkpointsList    []checkpoint.Checkpoint
+	checkpointCursor   int
 
 	// Onboard state (Discover → Onboard sub-tab).
 	onboardRole  int              // selected role index (0 = first role)
@@ -485,6 +533,8 @@ func tabFromName(name string) int {
 		return tabConfig
 	case "doctor", "security":
 		return tabDoctor
+	case "health":
+		return tabHealth
 	case "profile", "my-profile", "myprofile":
 		return tabProfile
 	default:
@@ -518,25 +568,28 @@ func (m *Model) gotoParentTab(parent int) (tea.Model, tea.Cmd) {
 	case tabProfile:
 		_, cmd := m.switchToTabByNumber("5")
 		return *m, cmd
-	case tabDoctor:
+	case tabHealth:
 		_, cmd := m.switchToTabByNumber("6")
 		return *m, cmd
-	case tabBackup:
+	case tabDoctor:
 		_, cmd := m.switchToTabByNumber("7")
 		return *m, cmd
-	case tabConfig:
+	case tabBackup:
 		_, cmd := m.switchToTabByNumber("8")
+		return *m, cmd
+	case tabConfig:
+		_, cmd := m.switchToTabByNumber("9")
 		return *m, cmd
 	}
 	return *m, nil
 }
 
-// switchToTabByNumber handles "1".."8" key presses by switching to the
+// switchToTabByNumber handles "1".."9" key presses by switching to the
 // corresponding parent tab. Returns (handled, cmd). If !handled the key
 // was not a recognised tab number.
 //
 // New mapping (1=My Tools, 2=Marketplace, 3=Project, 4=Dashboard,
-// 5=My Profile, 6=Security, 7=Backup, 8=Config).
+// 5=My Profile, 6=Health, 7=Security, 8=Backup, 9=Config).
 func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 	switch key {
 	case "1":
@@ -582,15 +635,20 @@ func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 		cmd := m.startEnvSubview()
 		return true, cmd
 	case "6":
+		m.activeTab = tabHealth
+		m.cursor = 0
+		m.healthScroll = 0
+		return true, nil
+	case "7":
 		m.activeTab = tabDoctor
 		m.cursor = 0
 		m.doctorScroll = 0
 		return true, nil
-	case "7":
+	case "8":
 		m.activeTab = tabBackup
 		m.cursor = 0
 		return true, nil
-	case "8":
+	case "9":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0
@@ -640,7 +698,15 @@ func (m *Model) startScan() tea.Cmd {
 	m.complianceError = ""
 	m.doctorChecked = false
 	m.doctorScroll = 0
-	m.doctorSubTab = doctorSubDoctor
+	m.doctorSubTab = doctorSubAudit
+	m.healthSubTab = healthSubIssues
+	m.healthScroll = 0
+	m.healthIssueCursor = 0
+	m.healthPathView = healthPathByTool
+	m.healthPathToolIdx = 0
+	m.healthPathShadowIdx = 0
+	m.healthPathDirIdx = 0
+	m.healthPathStatus = ""
 	m.onboardTools = nil // indices tied to old tools slice
 	return tea.Batch(
 		m.spinner.Tick,
@@ -798,6 +864,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = false
 			m.detectTeamFile()
 			cmplCmd := m.runDoctor(doctor.ScanMeta{FromCache: true})
+			m.clampScrollOffsets()
 			return m, cmplCmd
 		}
 
@@ -823,9 +890,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.detectTeamFile()
 			if cmplCmd := m.runDoctor(); cmplCmd != nil {
+				m.clampScrollOffsets()
 				return m, cmplCmd
 			}
 		}
+		m.clampScrollOffsets()
 		return m, tea.Batch(cmds...)
 
 	case toolVersionMsg:
@@ -864,13 +933,90 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// indefinitely.
 			if m.activeTab == tabProfile && m.viewingEnv && m.envProfile == nil {
 				envCmd := buildEnvProfileCmd(m.svc, m.cfg)
+				m.clampScrollOffsets()
 				if cmplCmd == nil {
 					return m, envCmd
 				}
 				return m, tea.Batch(cmplCmd, envCmd)
 			}
+			m.clampScrollOffsets()
 			return m, cmplCmd
 		}
+		return m, nil
+
+	case healthFixResultMsg:
+		// Result of runHealthFixCmd. If the modal was closed in the
+		// meantime (user pressed Esc to detach), drop the result on
+		// the floor — keeping the modal in fixModalRunning forever
+		// would be worse than silently dropping output.
+		if !m.fixModal.Open {
+			return m, nil
+		}
+		m.fixModal.State = fixModalDone
+		m.fixModal.Cursor = 0
+		// Preserve any pre-run "[backup warning: …]" text that the
+		// Run handler stashed into Output before exec.
+		m.fixModal.Output = strings.TrimRight(m.fixModal.Output+msg.Output, "\n")
+		m.fixModal.Err = msg.Err
+		return m, nil
+
+	case planLoadedMsg:
+		// Plan modal might have been closed before build finished.
+		if !m.viewingPlan {
+			return m, nil
+		}
+		m.planResult = msg.plan
+		m.planMode = msg.mode
+		m.planRollbackTarget = msg.target
+		m.planScroll = 0
+		m.planStatus = ""
+		return m, nil
+
+	case checkpointsLoadedMsg:
+		m.checkpointsList = msg.list
+		if msg.err != nil {
+			m.planStatus = "⚠ " + msg.err.Error()
+		}
+		if m.checkpointCursor >= len(m.checkpointsList) {
+			m.checkpointCursor = 0
+		}
+		return m, nil
+
+	case applyFinishedMsg:
+		// klim apply returned control. Status banner + trigger a
+		// rescan so the plan list reflects the new state.
+		if msg.err != nil {
+			m.planStatus = "✗ klim apply failed: " + msg.err.Error()
+		} else {
+			m.planStatus = "✓ klim apply succeeded — rebuilding plan"
+		}
+		// Trigger a fresh scan + rebuild the plan once tools refresh.
+		return m, tea.Batch(m.startScan(), buildPlanCmd(m.tools))
+
+	case healthPathRefreshedMsg:
+		// Lightweight post-PATH-fix refresh. We dropped the catalog
+		// reload AND every PM version-query subprocess because
+		// neither could be affected by a PATH-only fix. The cost is
+		// milliseconds (a single PATH walk + a doctor.Diagnose pass)
+		// vs. several seconds for a full startScan().
+		if msg.Err != nil {
+			m.statusMsg = "⚠ PATH refresh failed: " + msg.Err.Error()
+			return m, nil
+		}
+		m.tools = msg.Tools
+		registry.SortByName(m.tools)
+		m.applyFilter()
+		m.recomputeComplianceDerivedState()
+		if m.scanOK {
+			_ = m.svc.SaveScanCache(m.tools)
+		}
+		// Reset the issue cursor so it points at a valid row in
+		// the refreshed list — the old index might have addressed
+		// an issue that just disappeared.
+		m.healthIssueCursor = 0
+		took := msg.Took.Round(time.Millisecond)
+		m.statusMsg = "✓ Diagnostics refreshed in " + took.String() + " (PATH-only)"
+		m.clampScrollOffsets()
 		return m, nil
 
 	case execFinishedMsg:
@@ -1505,7 +1651,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Clamp scroll offsets on resize.
+		// Clamp scroll offsets on resize. Legacy per-field clamps
+		// kept as a cheap upper bound for the dashboard / config /
+		// doctor offsets that used m.height directly; the
+		// definitive content-aware clamp happens in
+		// clampScrollOffsets(), which also covers the newer
+		// Health / My Profile / Plan-view scroll fields.
 		if m.dashboardScroll > 0 {
 			m.dashboardScroll = max(0, min(m.dashboardScroll, m.height))
 		}
@@ -1519,6 +1670,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.computeDetailMaxScroll()
 			m.clampDetailScroll()
 		}
+		m.clampScrollOffsets()
 		return m, nil
 
 	default:
@@ -1561,6 +1713,58 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// clampScrollOffsets recomputes the maximum scroll for each scrollable
+// tab body and clamps the live scroll fields so they can't drift past
+// the end of the rendered content. Called from:
+//
+//   - key handlers after any scroll increment (the original use case)
+//   - WindowSizeMsg (resize can shrink the viewport)
+//   - scanResultMsg / toolVersionMsg / healthPathRefreshedMsg (content
+//     shrinks after a refresh — e.g. a Health issue gets fixed, a
+//     tool drops off the list).
+//
+// Important because renderView has a value receiver, so the clamped
+// values it computes during render can't be written back to the
+// model.
+//
+// Cheap in practice: each renderXxxView call is local string-building;
+// no IO, no version-resolution. Worst case is the Dashboard renderer
+// which still completes in microseconds.
+func (m *Model) clampScrollOffsets() {
+	headerRows := 4 + m.subtabRows()
+	footer := m.footerHeight()
+	visible := m.height - headerRows - footer - 1
+	if visible < 5 {
+		visible = 5
+	}
+	clamp := func(scroll *int, total int) {
+		maxScroll := total - visible
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		if *scroll > maxScroll {
+			*scroll = maxScroll
+		}
+		if *scroll < 0 {
+			*scroll = 0
+		}
+	}
+	switch m.activeTab {
+	case tabConfig:
+		clamp(&m.configScroll, strings.Count(m.renderConfigView(), "\n")+1)
+	case tabDashboard:
+		clamp(&m.dashboardScroll, strings.Count(m.renderDashboardView(), "\n")+1)
+	case tabHealth:
+		clamp(&m.healthScroll, strings.Count(m.renderHealthView(), "\n")+1)
+	case tabDoctor:
+		clamp(&m.doctorScroll, strings.Count(m.renderDoctorView(), "\n")+1)
+	case tabProfile:
+		if m.viewingEnv {
+			clamp(&m.profileScroll, strings.Count(m.renderEnvSubview(), "\n")+1)
+		}
+	}
 }
 
 // View renders the current UI state.
@@ -1658,12 +1862,26 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 	}
 
+	// Global `P` opens the Plan modal from any tab. Routed here
+	// before the tab-specific dispatchers so the shortcut is
+	// uniform across the whole UI.
+	if msg.String() == "P" && !m.viewingPlan && !m.fixModal.Open && !m.showDetail {
+		mp := &m
+		cmd := mp.openPlanView()
+		return *mp, cmd
+	}
+
 	// Project tab has its own key handler.
 	if m.activeTab == tabProject {
 		return m.handleKeyProject(msg)
 	}
 
-	// Dashboard and Doctor tabs use static/scroll-only key handling.
+	// Health tab — interactive, has its own key handler.
+	if m.activeTab == tabHealth {
+		return m.handleKeyHealth(msg)
+	}
+
+	// Dashboard and Security (Doctor) tabs use static/scroll-only key handling.
 	if m.activeTab == tabDashboard || m.activeTab == tabDoctor {
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -1684,6 +1902,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.activeTab == tabDoctor {
 				m.doctorScroll++
 			}
+			m.clampScrollOffsets()
 			return m, nil
 		case "home", "g":
 			if m.activeTab == tabDashboard {
@@ -1694,7 +1913,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "right", "tab":
-			// On Doctor tab, cycle sub-tabs before switching main tabs.
+			// On Security tab, cycle sub-tabs before switching main tabs.
 			if m.activeTab == tabDoctor && m.doctorSubTab < doctorSubCompliance {
 				m.doctorSubTab++
 				m.doctorScroll = 0
@@ -1703,11 +1922,11 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			next := parentTabOrder[(parentIndex(m.activeTab)+1)%len(parentTabOrder)]
 			m.dashboardScroll = 0
 			m.doctorScroll = 0
-			m.doctorSubTab = doctorSubDoctor
+			m.doctorSubTab = doctorSubAudit
 			m.discoverSubTab = discoverTools
 			return m.gotoParentTab(next)
 		case "left", "shift+tab":
-			if m.activeTab == tabDoctor && m.doctorSubTab > doctorSubDoctor {
+			if m.activeTab == tabDoctor && m.doctorSubTab > doctorSubAudit {
 				m.doctorSubTab--
 				m.doctorScroll = 0
 				return m, nil
@@ -1715,10 +1934,10 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 			m.dashboardScroll = 0
 			m.doctorScroll = 0
-			m.doctorSubTab = doctorSubDoctor
+			m.doctorSubTab = doctorSubAudit
 			m.discoverSubTab = discoverTools
 			return m.gotoParentTab(prev)
-		case "1", "2", "3", "4", "5", "6", "7", "8":
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 			if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
 				return m, cmd
 			}
@@ -1733,8 +1952,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// `i` initialises a sample compliance policy when the user
 			// is on the Compliance sub-tab and no policy is configured
 			// yet. We deliberately gate on activeTab+sub-tab+result==nil
-			// so the key is a no-op everywhere else (Health / Audit /
-			// after the policy already loaded).
+			// so the key is a no-op everywhere else (Audit / after the
+			// policy already loaded).
 			if m.activeTab == tabDoctor && m.doctorSubTab == doctorSubCompliance && m.complianceResult == nil && m.complianceError == "" {
 				m.runComplianceInit()
 			}
@@ -1742,9 +1961,8 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "v":
 			// Force a vulnerability scan from the Audit sub-tab.
 			// Only on Audit because the scan refreshes the cache
-			// the Audit view reads — running it from Health or
-			// Compliance would be confusing without visible
-			// feedback in those panels.
+			// the Audit view reads — running it from Compliance
+			// would be confusing without visible feedback there.
 			if m.activeTab == tabDoctor && m.doctorSubTab == doctorSubAudit {
 				m.statusMsg = "Scanning vulnerabilities..."
 				return m, scanVulnsCmd(m.tools, m.cfg)
@@ -1880,7 +2098,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 		return m.gotoParentTab(prev)
-	case "1", "2", "3", "4", "5", "6", "7", "8":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
 			return m, cmd
 		}

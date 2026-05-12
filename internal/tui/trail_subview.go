@@ -183,10 +183,11 @@ func (m Model) renderTrailList() string {
 			b.WriteString(line + "\n")
 		}
 	}
-	b.WriteString("\n  " + detailLabelStyle.Render("Actions") + "\n")
-	b.WriteString("    " + dimVersion.Render("c") + "  capture current toolchain\n")
-	b.WriteString("    " + dimVersion.Render("r") + "  reload\n")
-	b.WriteString("    " + dimVersion.Render("Esc") + "  back to Backup menu\n")
+	// Actions ("c capture", "r reload", "Esc back") live in
+	// renderHelp for tabBackup + m.viewingTrail so they stay pinned
+	// to the terminal bottom regardless of how long the trail log
+	// is. The old in-body Actions block scrolled off-screen when
+	// the log filled the viewport.
 	return b.String()
 }
 

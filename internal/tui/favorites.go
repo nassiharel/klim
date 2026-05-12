@@ -200,7 +200,7 @@ func (m Model) handleKeyFavorites(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 		m.discoverSubTab = discoverTools
 		return m.gotoParentTab(prev)
-	case "1", "2", "3", "4", "5", "6", "7", "8":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 		if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
 			return m, cmd
 		}
