@@ -232,30 +232,48 @@ func parseWingetUpgradeTable(out string, into map[string]string) {
 	}
 }
 
+// wingetKnownColumns is the full set of column headers winget may
+// emit. wingetColumnRanges scans for ALL of them when bounding any
+// requested column so that e.g. asking for "Version" never returns
+// a slice that overruns into the trailing "Available" or "Source"
+// column. The previous implementation only bounded by columns the
+// caller explicitly requested, which made `winget list` return
+// versions like `"0.71.0  winget"`.
+var wingetKnownColumns = []string{"Name", "Id", "Version", "Available", "Source", "Match"}
+
 // wingetColumnRanges scans `out` for the header row containing every
 // column name in want; returns one [start,end] byte range per
 // requested column, in the order requested. Returns nil if any
-// column is missing.
+// requested column is missing from the header. Bounds use the full
+// set of known winget column names — not just the requested ones —
+// so the returned ranges never swallow adjacent columns we don't
+// care about.
 func wingetColumnRanges(out string, want ...string) [][2]int {
 	for _, line := range strings.Split(out, "\n") {
-		ok := true
+		// Collect start offsets for every known column that appears
+		// on this line. We require every requested column to be
+		// present; otherwise we keep scanning for a better header.
+		allStarts := make(map[string]int, len(wingetKnownColumns))
+		for _, name := range wingetKnownColumns {
+			if idx := strings.Index(line, name); idx >= 0 {
+				allStarts[name] = idx
+			}
+		}
 		ranges := make([][2]int, len(want))
+		ok := true
 		for i, w := range want {
-			start := strings.Index(line, w)
-			if start < 0 {
+			start, present := allStarts[w]
+			if !present {
 				ok = false
 				break
 			}
+			// Bound by the nearest later column from the FULL known
+			// set, not just from `want`. That keeps Version from
+			// running into Available/Source on `winget list`.
 			end := len(line)
-			// Find the next header to bound this column. We rely
-			// on the conventional 2+ spaces between headers.
-			for j, otherW := range want {
-				if j == i {
-					continue
-				}
-				oStart := strings.Index(line, otherW)
-				if oStart > start && oStart < end {
-					end = oStart
+			for _, otherStart := range allStarts {
+				if otherStart > start && otherStart < end {
+					end = otherStart
 				}
 			}
 			ranges[i] = [2]int{start, end}
