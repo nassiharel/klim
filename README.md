@@ -56,14 +56,14 @@ irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 ```
 
 ```powershell
-# Scoop bucket
-scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket
-scoop install klim
+# winget
+winget install nassiharel.klim
 ```
 
 ```powershell
-# winget (after Microsoft moderators merge the auto-submitted PR)
-winget install nassiharel.klim
+# Scoop bucket
+scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket
+scoop install klim
 ```
 
 ### Any OS with Go 1.25+
@@ -125,10 +125,10 @@ irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 # go install — version suffix
 go install github.com/nassiharel/klim/cmd/klim@v0.1.2
 
-# brew / scoop / winget — pin via the package manager itself
+# brew / winget / scoop — pin via the package manager itself
 brew install nassiharel/tap/klim@0.1.2
-scoop install klim@0.1.2
 winget install nassiharel.klim --version 0.1.2
+scoop install klim@0.1.2
 ```
 
 Or download the matching archive from the [tagged release page](https://github.com/nassiharel/klim/releases) directly.

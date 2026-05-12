@@ -52,6 +52,14 @@ Klim supports macOS, Linux, and Windows. Pre-built binaries are published for `d
 brew install nassiharel/tap/klim
 ```
 
+## winget (Windows)
+
+```powershell
+winget install nassiharel.klim
+```
+
+Each `klim` release auto-submits a PR to [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs), so the latest version is published system-wide through `winget`.
+
 ## Scoop (Windows)
 
 ```powershell
@@ -60,14 +68,6 @@ scoop install klim
 ```
 
 The Scoop manifest is published to [`nassiharel/scoop-bucket`](https://github.com/nassiharel/scoop-bucket) on every release and points at the official `klim_<version>_windows_amd64.zip` asset from the corresponding GitHub Release, so version and contents are guaranteed to match. Scoop itself runs on Windows ARM64, but klim only ships a `windows/amd64` archive today (the GoReleaser build matrix explicitly skips `windows/arm64`). On Windows ARM64, fall back to `go install` (see below) until ARM64 binaries are published.
-
-## winget (Windows)
-
-```powershell
-winget install nassiharel.klim
-```
-
-Each `klim` release auto-submits a PR to [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs). After Microsoft moderators merge it (typically within a day for clean submissions), the latest version becomes available through `winget` system-wide. Until then, prefer Scoop or the PowerShell installer.
 
 ## Go Install
 
