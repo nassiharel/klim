@@ -21,11 +21,11 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - uses: github/codeql-action/init@e46ed2cbd01164d986452f91f178727624ae40d7 # v4.35.3
+      - uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4.35.4
         with:
           languages: go
 
-      - uses: github/codeql-action/autobuild@e46ed2cbd01164d986452f91f178727624ae40d7 # v4.35.3
+      - uses: github/codeql-action/autobuild@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4.35.4
 
       # Skip SARIF upload — requires GitHub Advanced Security (paid for private repos).
       # The analysis still runs and logs findings in the workflow output.
