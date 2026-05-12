@@ -199,9 +199,21 @@ func runCheckpointShow(cmd *cobra.Command, args []string) error {
 }
 
 func runCheckpointDelete(cmd *cobra.Command, args []string) error {
+	out, err := checkpointOutput()
+	if err != nil {
+		return err
+	}
+	name := strings.TrimSpace(args[0])
 	if err := checkpoint.Delete(args[0]); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "✓ Deleted checkpoint %q\n", strings.TrimSpace(args[0]))
+	if out == OutputJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(struct {
+			Deleted string `json:"deleted"`
+		}{Deleted: name})
+	}
+	fmt.Fprintf(os.Stderr, "✓ Deleted checkpoint %q\n", name)
 	return nil
 }

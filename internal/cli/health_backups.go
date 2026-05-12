@@ -144,16 +144,29 @@ func runHealthPathBackupsShow(cmd *cobra.Command, args []string) error {
 }
 
 func runHealthPathBackupsRestoreCmd(cmd *cobra.Command, args []string) error {
+	out, err := healthPathBackupsOutput()
+	if err != nil {
+		return err
+	}
 	b, err := findPathBackup(args[0])
 	if err != nil {
 		return err
+	}
+	restoreCmd := pathbackup.RestoreCommand(b)
+	if out == OutputJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(struct {
+			File           string `json:"file"`
+			RestoreCommand string `json:"restore_command"`
+		}{File: b.File, RestoreCommand: restoreCmd})
 	}
 	// Restore command goes to stdout so users can pipe it; the
 	// reminder lines go to stderr.
 	fmt.Fprintln(os.Stderr, "Restore command for "+b.File+":")
 	fmt.Fprintln(os.Stderr, "(review carefully, then paste into your shell)")
 	fmt.Fprintln(os.Stderr)
-	_, _ = fmt.Fprintln(os.Stdout, pathbackup.RestoreCommand(b))
+	_, _ = fmt.Fprintln(os.Stdout, restoreCmd)
 	return nil
 }
 
