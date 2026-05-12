@@ -129,6 +129,7 @@ func (m Model) renderHelp() string {
 		switch m.envState {
 		case envViewIdle:
 			parts = []string{
+				dimVersion.Render("↑↓") + " scroll",
 				dimVersion.Render("c") + " copy",
 				dimVersion.Render("o") + " open",
 				dimVersion.Render("d") + " diff",

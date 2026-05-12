@@ -452,25 +452,14 @@ func (m Model) renderEnvIdleView() string {
 		}
 	}
 
-	b.WriteString("  " + detailLabelStyle.Render("Actions") + "\n")
-	b.WriteString("    " + dimVersion.Render("o") + "  Open another env (paste a token to inspect)\n")
-	b.WriteString("    " + dimVersion.Render("d") + "  Compare another env against this one\n")
-	b.WriteString("    " + dimVersion.Render("a") + "  Apply another env (install missing + favorites + packs)\n")
-	b.WriteString("    " + dimVersion.Render("r") + "  Rebuild this env profile\n")
-	if m.activeTab == tabProfile {
-		// Profile tab — Esc is a no-op here; show the actual
-		// escape hatches instead so the on-screen hint matches
-		// real behaviour.
-		b.WriteString("    " + dimVersion.Render("←→") + "  Switch tab   " +
-			dimVersion.Render("q") + "  Quit\n")
-	} else {
-		b.WriteString("    " + dimVersion.Render("Esc") + "  Back to Backup menu\n")
-	}
+	// Actions key descriptions live in the help footer (renderHelp
+	// for tabProfile) so they stay pinned at the bottom of the
+	// terminal regardless of how far the user has scrolled. The
+	// previous in-body Actions list scrolled off-screen with the
+	// rest of the content, which made the footer look like it was
+	// "going up" when really the scroll just lifted the in-body
+	// shortcuts above the viewport.
 
-	// No manual padding — view.go's fitToVisibleRows pads or
-	// slices the rendered body to exactly fill the available
-	// viewport, which is the universal pattern (same one My Tools
-	// has used since day one).
 	return b.String()
 }
 
