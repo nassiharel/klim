@@ -31,9 +31,12 @@ type VersionResolver interface {
 // falls back to binary detection (Go buildinfo, PE version resources).
 //
 // On every ResolveVersions call the resolver builds a per-call batch
-// cache by running one bulk-list and one bulk-outdated command per
-// package manager (e.g. `winget list` + `winget upgrade`). The cache
-// is strictly local to the call — threaded into resolveOne /
+// cache by running one bulk-list and one bulk-outdated command for
+// the package managers that support it today —
+// winget / brew / scoop / choco (e.g. `winget list` + `winget upgrade`,
+// `brew list --versions` + `brew outdated`). apt / snap / npm don't
+// have bulk fetchers yet and fall through to the per-tool query path.
+// The cache is strictly local to the call — threaded into resolveOne /
 // installedVersion / latestVersion as a parameter — so concurrent
 // ResolveVersions / ResolveOne invocations on the same resolver are
 // race-free. Bulk-fetch failures degrade gracefully — the resolver

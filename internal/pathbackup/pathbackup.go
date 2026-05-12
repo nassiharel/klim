@@ -42,7 +42,7 @@ type Backup struct {
 // (best-effort — falls back to empty string when reading fails).
 func Capture(trigger, issue, command string) Backup {
 	b := Backup{
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Trigger:   trigger,
 		Issue:     issue,
 		GOOS:      runtime.GOOS,
