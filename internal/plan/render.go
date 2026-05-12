@@ -101,11 +101,12 @@ func RenderText(p Plan) string {
 }
 
 // formatChangeLine returns the single-line summary used inside the
-// "Planned changes" group, e.g.
+// "Planned changes" group. Examples reflect the actual rendered
+// output for each ChangeKind:
 //
 //	terraform 1.8.0 -> 1.9.0    (confidence: 92%)
-//	new-tool install (-> 0.5.0)
-//	stale remove (1.0.0 ->)
+//	new-tool install -> 0.5.0
+//	stale remove (was 1.0.0)
 func formatChangeLine(c Change) string {
 	display := c.DisplayName
 	if display == "" {

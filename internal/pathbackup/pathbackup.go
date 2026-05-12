@@ -3,10 +3,10 @@
 // and produces shell-specific restore commands so the user can roll
 // back without leaving the TUI.
 //
-// Backups land at ~/.klim/backups/path/path-<RFC3339-ish>.yaml. We
-// keep the format human-readable on purpose — a user who wants to
-// inspect or restore manually can cat the file and copy the `path:`
-// value.
+// Backups land at ~/.klim/backups/path/path-YYYYMMDD-HHMMSS.yaml
+// (UTC timestamp, no timezone offset). We keep the format human-
+// readable on purpose — a user who wants to inspect or restore
+// manually can cat the file and copy the `path:` value.
 package pathbackup
 
 import (
@@ -61,9 +61,6 @@ func Capture(trigger, issue, command string) Backup {
 func Save(b Backup) (string, error) {
 	dir, err := paths.PathBackupsDir()
 	if err != nil {
-		return "", err
-	}
-	if err := fileutil.EnsureDir(filepath.Join(dir, "x")); err != nil {
 		return "", err
 	}
 	stamp := b.Timestamp.UTC().Format("20060102-150405")

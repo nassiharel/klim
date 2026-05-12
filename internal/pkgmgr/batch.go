@@ -57,9 +57,15 @@ func (c *batchCache) set(s registry.InstallSource, b *pmBatch) {
 // is ~50 ms on a warm SSD) fan out to all cores so the total wall-
 // clock cost is the slowest individual PM, not the sum.
 //
-// Each bulk fetcher writes to its own pmBatch entry in the cache;
-// failures land as nil-but-present sentinels so callers can tell
-// "queried and PM had no entry" from "never queried".
+// Each bulk fetcher writes its own *pmBatch into the cache (always
+// non-nil — the struct is allocated up front and the fetcher
+// populates the installed and latest maps + the hasLatest flag).
+// Subsequent lookups distinguish "PM was queried but returned no
+// outdated data" from "PM was never queried" via pmBatch.hasLatest:
+// when it's false (because the outdated/upgrade command failed or
+// produced no parsable output), latestVersion() falls back to the
+// per-tool query path; when it's true, "not in the latest map" is
+// safely interpreted as "already up-to-date".
 func (c *batchCache) prewarm(ctx context.Context, tools []registry.Tool, timeout time.Duration) {
 	needed := map[registry.InstallSource]bool{}
 	for _, t := range tools {

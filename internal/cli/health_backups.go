@@ -169,7 +169,16 @@ func findPathBackup(query string) (pathbackup.Backup, error) {
 	var matches []pathbackup.Backup
 	for _, b := range backups {
 		name := fileBase(b.File)
-		if name == query || name == query+".yaml" || startsWith(name, query) {
+		// Match by: full file path, exact basename, basename with
+		// or without the .yaml suffix, or unambiguous basename
+		// prefix. Covers everything the user docs / help text
+		// promise: bare names, full paths, and prefixes.
+		switch {
+		case b.File == query:
+			matches = append(matches, b)
+		case name == query, name == query+".yaml":
+			matches = append(matches, b)
+		case startsWith(name, query):
 			matches = append(matches, b)
 		}
 	}
