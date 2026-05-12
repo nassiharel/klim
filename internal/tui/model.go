@@ -864,6 +864,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = false
 			m.detectTeamFile()
 			cmplCmd := m.runDoctor(doctor.ScanMeta{FromCache: true})
+			m.clampScrollOffsets()
 			return m, cmplCmd
 		}
 
@@ -889,9 +890,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.detectTeamFile()
 			if cmplCmd := m.runDoctor(); cmplCmd != nil {
+				m.clampScrollOffsets()
 				return m, cmplCmd
 			}
 		}
+		m.clampScrollOffsets()
 		return m, tea.Batch(cmds...)
 
 	case toolVersionMsg:
@@ -930,11 +933,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// indefinitely.
 			if m.activeTab == tabProfile && m.viewingEnv && m.envProfile == nil {
 				envCmd := buildEnvProfileCmd(m.svc, m.cfg)
+				m.clampScrollOffsets()
 				if cmplCmd == nil {
 					return m, envCmd
 				}
 				return m, tea.Batch(cmplCmd, envCmd)
 			}
+			m.clampScrollOffsets()
 			return m, cmplCmd
 		}
 		return m, nil
@@ -1011,6 +1016,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.healthIssueCursor = 0
 		took := msg.Took.Round(time.Millisecond)
 		m.statusMsg = "✓ Diagnostics refreshed in " + took.String() + " (PATH-only)"
+		m.clampScrollOffsets()
 		return m, nil
 
 	case execFinishedMsg:
@@ -1645,7 +1651,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Clamp scroll offsets on resize.
+		// Clamp scroll offsets on resize. Legacy per-field clamps
+		// kept as a cheap upper bound for the dashboard / config /
+		// doctor offsets that used m.height directly; the
+		// definitive content-aware clamp happens in
+		// clampScrollOffsets(), which also covers the newer
+		// Health / My Profile / Plan-view scroll fields.
 		if m.dashboardScroll > 0 {
 			m.dashboardScroll = max(0, min(m.dashboardScroll, m.height))
 		}
@@ -1659,6 +1670,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.computeDetailMaxScroll()
 			m.clampDetailScroll()
 		}
+		m.clampScrollOffsets()
 		return m, nil
 
 	default:
@@ -1705,10 +1717,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // clampScrollOffsets recomputes the maximum scroll for each scrollable
 // tab body and clamps the live scroll fields so they can't drift past
-// the end of the rendered content. Called from key handlers after
-// any scroll increment so the in-memory state stays consistent with
-// the rendered viewport — important because renderView's value
-// receiver means it can't write the clamped values back itself.
+// the end of the rendered content. Called from:
+//
+//   - key handlers after any scroll increment (the original use case)
+//   - WindowSizeMsg (resize can shrink the viewport)
+//   - scanResultMsg / toolVersionMsg / healthPathRefreshedMsg (content
+//     shrinks after a refresh — e.g. a Health issue gets fixed, a
+//     tool drops off the list).
+//
+// Important because renderView has a value receiver, so the clamped
+// values it computes during render can't be written back to the
+// model.
 //
 // Cheap in practice: each renderXxxView call is local string-building;
 // no IO, no version-resolution. Worst case is the Dashboard renderer

@@ -10,6 +10,7 @@
 package pathbackup
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -125,11 +126,11 @@ func List() ([]Backup, error) {
 //   - Windows: PowerShell single-quoted strings; embedded single
 //     quotes are doubled (PowerShell's literal-string escape rule).
 //   - POSIX:   Bourne single-quoted strings; embedded single quotes
-//     use the canonical close-escape-reopen sequence — i.e. a literal
-//     single quote is rendered as four characters: end-quote,
-//     backslash, single-quote, re-open-quote. Written literally,
-//     that's: '\”  (apostrophe, backslash, apostrophe, apostrophe).
-//     This is the only fully-safe approach because POSIX shells
+//     use the canonical close-escape-reopen sequence. An embedded
+//     single quote becomes four characters in sequence: end-quote,
+//     backslash, single-quote, re-open-quote. See shSingleQuote()
+//     for the implementation. This is the only fully-safe approach
+//     because POSIX shells
 //     perform parameter and command expansion inside double quotes,
 //     and a PATH value containing `$(...)` or backticks would
 //     otherwise be interpreted as a command substitution.
@@ -181,7 +182,12 @@ func readUserPATH() string {
 	if runtime.GOOS != "windows" {
 		return ""
 	}
-	out, err := runCmd("powershell", "-NoProfile", "-NonInteractive", "-Command",
+	// Cap PowerShell at five seconds — a hung profile or
+	// execution-policy prompt must not block a PATH backup
+	// capture (which gates every Health-fix action).
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := runCmd(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command",
 		`[Environment]::GetEnvironmentVariable('PATH', 'User')`)
 	if err != nil {
 		return ""

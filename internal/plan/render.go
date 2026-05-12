@@ -46,14 +46,10 @@ func RenderText(p Plan) string {
 			}
 			fmt.Fprintf(&b, "  %s upgrade confidence: %d%%\n", c.DisplayName, c.Confidence)
 			for _, f := range c.ConfidenceFactors {
-				if f.Delta == 0 {
-					continue
-				}
-				sign := "-"
+				sign := "+"
 				delta := f.Delta
-				if delta > 0 {
-					sign = "+"
-				} else {
+				if delta < 0 {
+					sign = "-"
 					delta = -delta
 				}
 				fmt.Fprintf(&b, "    %s%d  %s\n", sign, delta, f.Reason)
@@ -87,7 +83,7 @@ func RenderText(p Plan) string {
 			fmt.Fprintf(&b, "  +%s cache\n", formatMB(p.Totals.DiskAddedMB))
 		}
 		if p.Totals.DiskReclaimableMB > 0 {
-			fmt.Fprintf(&b, "  -%s old runtimes removable\n", formatMB(p.Totals.DiskReclaimableMB))
+			fmt.Fprintf(&b, "  -%s reclaimable\n", formatMB(p.Totals.DiskReclaimableMB))
 		}
 		b.WriteString("\n")
 	}

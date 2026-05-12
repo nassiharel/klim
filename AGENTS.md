@@ -73,7 +73,6 @@ internal/
                  path-only refresh after a PATH fix), plan_view.go (Plan modal opened with
                  `P` from any tab — preview pending changes, apply through `klim apply`,
                  capture / restore checkpoints).
-                 path-only refresh after a PATH fix)
 ```
 
 ## Architecture
