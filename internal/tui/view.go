@@ -72,6 +72,13 @@ func (m Model) renderView() string {
 		return ""
 	}
 
+	// Boot splash — full-screen Jarvis-style cold-start visual.
+	// Shown while the catalog is loading; replaced by the normal
+	// layout the moment the first toolset arrives.
+	if m.phase == phaseLoading {
+		return m.renderBootSplash()
+	}
+
 	// Plan / checkpoint browser modal — full-screen overlay. Takes
 	// priority over every other view including the health fix modal.
 	if m.viewingPlan {
@@ -437,25 +444,7 @@ func visualRows(s string, width int) int {
 // --- Title & Tabs ---
 
 func (m Model) renderTitleBar() string {
-	title := brandStyle.Render("klim")
-
-	if m.phase == phaseLoading {
-		return "  " + title + "  " + loadingStyle.Render(m.spinner.View()+" Loading tools...")
-	}
-	if m.phase == phaseResolving && m.pending > 0 {
-		return "  " + title + "  " + loadingStyle.Render(fmt.Sprintf("%s Checking versions (%d remaining)...", m.spinner.View(), m.pending))
-	}
-
-	inst, upd, notInst := m.stats()
-	active := inst + notInst
-	summary := fmt.Sprintf("%d/%d installed", inst, active)
-	if upd > 0 {
-		summary += "  " + upgradableStyle.Render(fmt.Sprintf("%d updates", upd))
-	}
-	if notInst > 0 {
-		summary += fmt.Sprintf("  %d available", notInst)
-	}
-	return "  " + title + "  " + summaryStyle.Render(summary)
+	return m.renderCyberHUD()
 }
 
 // subtabRows returns the number of additional header rows occupied by
@@ -475,10 +464,11 @@ func (m Model) subtabRows() int {
 	return 0
 }
 
-// renderTabBar draws the parent tab labels. The three My Tools subtabs
-// (Installed, Updates, Favorites) collapse into a single "My Tools"
-// label; the active style is applied when any of them is the active
-// tab. A second strip below shows the active parent's subtabs (if any).
+// renderTabBar draws the parent tab labels with a cyber underline
+// that brightens directly beneath the active label, giving the strip
+// a focus indicator without resorting to pill backgrounds for every
+// tab. Below the parent strip, an active-tab subtab strip is drawn
+// for parents that own subtabs (My Tools, My Profile, Health).
 func (m Model) renderTabBar() string {
 	parents := []struct {
 		label string
@@ -496,23 +486,21 @@ func (m Model) renderTabBar() string {
 	}
 
 	curParent := parentIndex(m.activeTab)
-	var parts []string
-	for i, tab := range parents {
-		if i == curParent {
-			parts = append(parts, activeTabStyle.Render(tab.label))
-		} else {
-			parts = append(parts, inactiveTabStyle.Render(tab.label))
-		}
-	}
+	tabLine, ranges := buildCyberTabLine(parents, curParent)
 
-	tabLine := "  " + strings.Join(parts, "")
+	// Glow underline — bright cell directly under the active tab,
+	// dim rule everywhere else. Gives the strip its "scanning focus"
+	// without claiming the cells the active label is using.
 	ruleLen := m.width - 4
 	if ruleLen < 1 {
 		ruleLen = 1
 	}
-	bar := tabLine + "\n  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
+	underline := buildCyberUnderline(ranges, curParent, ruleLen)
 
-	// My Tools subtab strip.
+	bar := tabLine + "\n" + underline
+
+	// Subtab strip — rendered with a milder accent so it visually
+	// nests inside the parent.
 	if isMyToolsTab(m.activeTab) {
 		subs := []struct {
 			label string
@@ -525,20 +513,18 @@ func (m Model) renderTabBar() string {
 		var subParts []string
 		for _, s := range subs {
 			if s.tab == m.activeTab {
-				subParts = append(subParts, activeTabStyle.Render(s.label))
+				subParts = append(subParts, cyberSubtabActive(s.label))
 			} else {
-				subParts = append(subParts, inactiveTabStyle.Render(s.label))
+				subParts = append(subParts, cyberSubtabInactive(s.label))
 			}
 		}
-		bar += "\n  " + strings.Join(subParts, "")
+		bar += "\n  " + strings.Join(subParts, "  ")
 	}
 
-	// My Profile subtab strip.
 	if m.activeTab == tabProfile {
-		bar += "\n  " + activeTabStyle.Render("Env Profile")
+		bar += "\n  " + cyberSubtabActive("Env Profile")
 	}
 
-	// Health subtab strip (Issues / PATH).
 	if m.activeTab == tabHealth {
 		subs := []struct {
 			label string
@@ -550,15 +536,86 @@ func (m Model) renderTabBar() string {
 		var subParts []string
 		for _, s := range subs {
 			if s.idx == m.healthSubTab {
-				subParts = append(subParts, activeTabStyle.Render(s.label))
+				subParts = append(subParts, cyberSubtabActive(s.label))
 			} else {
-				subParts = append(subParts, inactiveTabStyle.Render(s.label))
+				subParts = append(subParts, cyberSubtabInactive(s.label))
 			}
 		}
-		bar += "\n  " + strings.Join(subParts, "")
+		bar += "\n  " + strings.Join(subParts, "  ")
 	}
 
 	return bar
+}
+
+// buildCyberTabLine renders the parent-tab labels and reports each
+// label's visible column range so the underline builder can paint
+// the bright slice in the right place.
+//
+// Returns the rendered line (with the 2-cell indent already applied)
+// and a slice of (start, end) inclusive column ranges (1-based, after
+// the indent) for each parent label.
+func buildCyberTabLine(parents []struct {
+	label string
+	idx   int
+}, curParent int) (string, [][2]int) {
+	var b strings.Builder
+	b.WriteString("  ")
+	col := 2 // account for indent
+	ranges := make([][2]int, len(parents))
+	for i, t := range parents {
+		var rendered string
+		labelLen := visualLen(t.label) + 2 // padding 1 cell each side
+		if i == curParent {
+			rendered = cyberTabBracketStyle.Render("[") + cyberTabActiveStyle.Render(t.label) + cyberTabBracketStyle.Render("]")
+			labelLen += 2 // brackets
+		} else {
+			rendered = " " + cyberTabInactiveStyle.Render(t.label) + " "
+		}
+		ranges[i] = [2]int{col, col + labelLen - 1}
+		col += labelLen
+		b.WriteString(rendered)
+	}
+	return b.String(), ranges
+}
+
+// buildCyberUnderline draws the per-cell underline strip. Cells that
+// fall under the active tab's label get the bright accent; the rest
+// get a dim rule. The strip starts at the same 2-cell indent the tab
+// line uses so the brackets visually align.
+func buildCyberUnderline(ranges [][2]int, curParent, ruleLen int) string {
+	var b strings.Builder
+	b.WriteString("  ")
+	if curParent < 0 || curParent >= len(ranges) {
+		b.WriteString(cyberTabUnderlineDimStyle.Render(strings.Repeat("─", ruleLen)))
+		return b.String()
+	}
+	lo, hi := ranges[curParent][0], ranges[curParent][1]
+	// Convert from absolute column to relative (within the rule).
+	lo -= 2
+	hi -= 2
+	if hi >= ruleLen {
+		hi = ruleLen - 1
+	}
+	if lo < 0 {
+		lo = 0
+	}
+	left := strings.Repeat("─", lo)
+	mid := strings.Repeat("━", hi-lo+1) // heavier bar under the active
+	right := strings.Repeat("─", ruleLen-hi-1)
+	b.WriteString(cyberTabUnderlineDimStyle.Render(left))
+	b.WriteString(cyberTabUnderlineStyle.Render(mid))
+	b.WriteString(cyberTabUnderlineDimStyle.Render(right))
+	return b.String()
+}
+
+func cyberSubtabActive(label string) string {
+	return cyberTabBracketStyle.Render("‹") + " " +
+		lipgloss.NewStyle().Foreground(cyberPrimary).Bold(true).Render(label) + " " +
+		cyberTabBracketStyle.Render("›")
+}
+
+func cyberSubtabInactive(label string) string {
+	return "  " + lipgloss.NewStyle().Foreground(cyberFGDim).Render(label) + "  "
 }
 
 // --- Search Bar ---

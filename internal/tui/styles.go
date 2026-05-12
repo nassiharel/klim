@@ -16,10 +16,6 @@ var (
 	tabActiveBg    = lipgloss.Color("24")  // Deep teal for active tab
 	borderColor    = lipgloss.Color("238") // Subtle border gray
 
-	// Title bar.
-	brandStyle   = lipgloss.NewStyle().Bold(true).Foreground(highlightColor).Background(primaryColor).Padding(0, 1)
-	summaryStyle = lipgloss.NewStyle().Foreground(dimColor)
-
 	// Tabs — cleaner pill-style.
 	activeTabStyle = lipgloss.NewStyle().
 			Bold(true).

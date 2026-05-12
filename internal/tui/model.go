@@ -248,6 +248,12 @@ type Model struct {
 	scanGen int  // incremented on each scan; used to discard stale toolVersionMsg
 	scanOK  bool // true when the current scan completed without errors; gates cache writes
 
+	// animFrame is a monotonic counter incremented on every frameMsg
+	// (≈ 10/s). Used by the cyber theme for HUD pulse, boot scan
+	// sweep, and other ambient animations. Wrapping at MaxInt won't
+	// happen in any realistic session lifetime.
+	animFrame int
+
 	// Layout.
 	width  int
 	height int
@@ -662,6 +668,7 @@ func (m Model) Init() tea.Cmd {
 	gen := m.scanGen
 	return tea.Batch(
 		m.spinner.Tick,
+		tickFrame(),
 		func() tea.Msg { return findToolsCmd(m.svc, false, gen)() },
 	)
 }
@@ -719,6 +726,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+
+	case frameMsg:
+		// Animation tick: bump the counter and reschedule the next
+		// frame. animFrame drives the cyber theme's HUD pulse,
+		// boot-splash scanline, and other ambient motion.
+		m.animFrame++
+		return m, tickFrame()
 
 	case scanResultMsg:
 		// Discard stale scan results from an earlier scan generation. Without

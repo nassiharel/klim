@@ -1,0 +1,134 @@
+package tui
+
+import (
+	"strings"
+
+	"charm.land/lipgloss/v2"
+)
+
+// klimASCII is the bootscreen logo. Hand-stenciled at 7×40 cells so
+// it lines up cleanly inside the standard 80-column terminal. Every
+// row contains the same number of cells so the reveal animation
+// progresses left-to-right at a stable rate.
+//
+// The double-row glyphs read as "KLIM" in a 70s-arcade / Jarvis-HUD
+// style — wide rectangles, sharp diagonals.
+var klimASCII = []string{
+	"  ██   ██  ██       ██ ███   ███  ",
+	"  ██  ██   ██       ██ ████ ████  ",
+	"  ██ ██    ██       ██ ██ ███ ██  ",
+	"  ████     ██       ██ ██  █  ██  ",
+	"  ██ ██    ██       ██ ██     ██  ",
+	"  ██  ██   ██████   ██ ██     ██  ",
+	"  ██   ██  ████████ ██ ██     ██  ",
+}
+
+// renderBootSplash draws a full-screen, Jarvis-style boot splash:
+// the KLIM logo with a left-to-right character reveal animation, a
+// brand subtitle ("// JARVIS-CLASS DEVELOPER COMMAND DECK"), a
+// rotating cyber spinner, and a scanline that sweeps top-to-bottom.
+//
+// The splash is shown only while m.phase == phaseLoading. Once the
+// catalog finishes loading we drop straight into the normal layout —
+// keeping the splash short is the point.
+func (m Model) renderBootSplash() string {
+	if m.width <= 0 || m.height <= 0 {
+		return ""
+	}
+
+	// Reveal progress: each frame uncovers 4 more cells of the logo,
+	// so the full ~36-cell line is exposed in 9 frames (~900 ms).
+	// After full reveal we keep the scanline animating until the
+	// real boot finishes.
+	reveal := m.animFrame * 4
+	// Convert the first row to runes to compute the canonical width
+	// (every row is the same rune-length by construction).
+	rowRunes := []rune(klimASCII[0])
+	maxRow := len(rowRunes)
+	if reveal > maxRow {
+		reveal = maxRow
+	}
+
+	// Build the logo: each row gets the first `reveal` cells styled
+	// bright; cells past `reveal` are not emitted, so the row looks
+	// like it's being typed in from the left. Slicing operates on
+	// rune indices so multi-byte glyphs (█ = 3 UTF-8 bytes) stay
+	// intact.
+	var logoBuf strings.Builder
+	for i, row := range klimASCII {
+		runes := []rune(row)
+		end := reveal
+		if end > len(runes) {
+			end = len(runes)
+		}
+		visible := string(runes[:end])
+		// Halo: render the last 3 visible cells in the dim halo
+		// color so the leading edge "glows" as it moves.
+		var styled string
+		if end > 3 {
+			styled = bootGlowStyle.Render(string(runes[:end-3])) + bootHaloStyle.Render(string(runes[end-3:end]))
+		} else {
+			styled = bootHaloStyle.Render(visible)
+		}
+		if i > 0 {
+			logoBuf.WriteString("\n")
+		}
+		logoBuf.WriteString(styled)
+	}
+	logo := logoBuf.String()
+
+	// Subtitle pill — appears once the logo is fully revealed, so
+	// the eye lands on it after the reveal completes.
+	subtitle := ""
+	if reveal >= maxRow {
+		spinner := cyberSpinner(m.animFrame)
+		brand := bootSubtitleStyle.Render("JARVIS-CLASS DEVELOPER COMMAND DECK")
+		boot := bootScanStyle.Render(scanProgress(m.animFrame))
+		subtitle = "  " + spinner + "  " + brand + "  " + boot
+	}
+
+	// Centre the logo block vertically inside the terminal.
+	verticalPad := (m.height - len(klimASCII) - 4) / 2
+	if verticalPad < 1 {
+		verticalPad = 1
+	}
+	pad := strings.Repeat("\n", verticalPad)
+
+	// Horizontal centring: lipgloss alignment handles ANSI-stripped
+	// width correctly.
+	block := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(logo)
+	if subtitle != "" {
+		block += "\n\n" + lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(subtitle)
+	}
+
+	return pad + block
+}
+
+// cyberSpinner returns a single rotating arc character that ticks
+// once per frame. Use it inline next to live status text to signal
+// "system is doing work right now".
+func cyberSpinner(frame int) string {
+	const frames = "◜◝◞◟"
+	r := []rune(frames)
+	return cyberSpinnerStyle.Render(string(r[frame%len(r)]))
+}
+
+// scanProgress returns a short "BOOTING [▓▓▓░░░░░]" style strip
+// whose filled-cells count tracks the animation frame. Caps at a
+// fixed cell count so the strip width never changes (avoids layout
+// jitter when the rest of the line is centred).
+func scanProgress(frame int) string {
+	const cells = 12
+	filled := (frame / 2) % (cells + 1)
+	var b strings.Builder
+	b.WriteString("[")
+	for i := 0; i < cells; i++ {
+		if i < filled {
+			b.WriteRune('▓')
+		} else {
+			b.WriteRune('░')
+		}
+	}
+	b.WriteString("]")
+	return b.String()
+}
