@@ -30,7 +30,7 @@ Only tools that are both detected AND installed are included (so versions
 can be pinned). Tools detected but not installed are listed as suggestions.
 
 When .klim.yaml already exists klim refuses to clobber it; pass --force
-to overwrite. (No -f shorthand: docs/cli-conventions.md reserves -f for
+to overwrite. (No -f shorthand: CLI-CONVENTIONS.md reserves -f for
 --file paths.)
 
 Usage:
@@ -46,7 +46,7 @@ func init() {
 	initCmd.Flags().BoolVar(&initMinVersionFlag, "min-version", false, "Include minimum version constraints (>=X.Y)")
 	initCmd.Flags().StringVar(&initNameFlag, "name", "", "Project name for the manifest")
 	initCmd.Flags().BoolVar(&initAllFlag, "all", false, "Include all installed tools (skip project detection)")
-	// No -f shorthand: docs/cli-conventions.md reserves -f for --file.
+	// No -f shorthand: CLI-CONVENTIONS.md reserves -f for --file.
 	initCmd.Flags().BoolVar(&initForceFlag, "force", false, "Overwrite an existing .klim.yaml")
 	// Registered in root.go with command group.
 }

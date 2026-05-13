@@ -50,7 +50,7 @@ func init() {
 
 	// Wrap Cobra flag-parse errors in UsageError so they exit with code 2
 	// (ExitUsage), matching the convention documented in
-	// docs/cli-conventions.md. Children inherit this from the root.
+	// CLI-CONVENTIONS.md. Children inherit this from the root.
 	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return &UsageError{Err: err}
 	})

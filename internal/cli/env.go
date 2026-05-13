@@ -85,7 +85,7 @@ func init() {
 //   - json  → JSON document to stdout.
 //   - yaml  → YAML document to stdout.
 //
-// Human progress lines go to stderr per docs/cli-conventions.md.
+// Human progress lines go to stderr per CLI-CONVENTIONS.md.
 func runEnvIDPrint(cmd *cobra.Command, _ []string) error {
 	out, err := envOutputFmt()
 	if err != nil {

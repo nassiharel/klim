@@ -543,7 +543,7 @@ func reservedLabelReason(label string) string {
 // LabelInUseError is returned by Capture when the requested label is
 // already taken by another entry. CLI runners detect this with
 // errors.As and surface it as a UsageError so the exit code matches
-// docs/cli-conventions.md (malformed user input ⇒ exit 2).
+// CLI-CONVENTIONS.md (malformed user input ⇒ exit 2).
 type LabelInUseError struct {
 	Label string
 	Index int

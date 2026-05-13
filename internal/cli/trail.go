@@ -141,7 +141,7 @@ var trailDiffCmd = &cobra.Command{
 }
 
 // trailDiffArgs accepts 1 or 2 args, returning a UsageError on any other
-// count so wrong invocations exit 2 (not 1) per docs/cli-conventions.md.
+// count so wrong invocations exit 2 (not 1) per CLI-CONVENTIONS.md.
 func trailDiffArgs(cmd *cobra.Command, args []string) error {
 	if len(args) >= 1 && len(args) <= 2 {
 		return nil
@@ -256,7 +256,7 @@ func runTrailCapture(cmd *cobra.Command, _ []string) error {
 			// can only be detected under the trail lock (post-scan),
 			// so they surface here. Map them to UsageError so the
 			// exit code is 2 (malformed input) per
-			// docs/cli-conventions.md, not 1.
+			// CLI-CONVENTIONS.md, not 1.
 			var dup *trail.LabelInUseError
 			if errors.As(err, &dup) {
 				return &UsageError{Err: err}
@@ -593,7 +593,7 @@ func trailRefError(err error) error {
 	msg := err.Error()
 	// Anything stemming from user-supplied ref input (malformed syntax,
 	// out-of-range indices, unknown labels, ambiguous prefixes) is a
-	// usage error per docs/cli-conventions.md.
+	// usage error per CLI-CONVENTIONS.md.
 	switch {
 	case strings.HasPrefix(msg, "trail: invalid HEAD~ ref "),
 		strings.HasPrefix(msg, "trail: invalid @<index> ref "),

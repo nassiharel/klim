@@ -43,12 +43,6 @@ testdata/fuzz/
 # Marketplace (assembled from marketplace/tools/ and marketplace/packs/ by CI)
 /marketplace.yaml
 
-# Node.js (docs/ and website/)
-node_modules/
-
-# Generated marketplace data (website)
-website/src/data/marketplace.json
-
 # Environment
 .env
 .env.*

@@ -1,0 +1,5535 @@
+{
+  "tools": [
+    {
+      "name": "dotnet",
+      "display_name": ".NET",
+      "category": "Language",
+      "tags": [
+        "csharp",
+        "fsharp",
+        "microsoft"
+      ],
+      "binary_names": [
+        "dotnet"
+      ],
+      "github": "dotnet/sdk",
+      "packages": {
+        "winget": "Microsoft.DotNet.SDK.8",
+        "scoop": "dotnet",
+        "choco": "dotnet-sdk",
+        "brew": "dotnet",
+        "apt": "dotnet-sdk-8.0",
+        "snap": "dotnet-sdk"
+      },
+      "github_info": {
+        "stars": 3112,
+        "forks": 1236,
+        "description": "Core functionality needed to create .NET Core projects, that is shared between Visual Studio and CLI",
+        "homepage": "https://dot.net/core",
+        "license": "MIT",
+        "topics": [
+          "cli",
+          "dotnet",
+          "sdk",
+          "visual-studio"
+        ],
+        "pushed_at": "2026-05-02T04:29:29Z",
+        "updated_at": "2026-05-01T21:45:17Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "act",
+      "display_name": "act",
+      "category": "VCS",
+      "tags": [
+        "github",
+        "continuous-delivery",
+        "automation"
+      ],
+      "binary_names": [
+        "act"
+      ],
+      "github": "nektos/act",
+      "packages": {
+        "winget": "nektos.act",
+        "scoop": "act",
+        "choco": "act-cli",
+        "brew": "act"
+      },
+      "github_info": {
+        "stars": 70118,
+        "forks": 1920,
+        "description": "Run your GitHub Actions locally 🚀",
+        "homepage": "https://nektosact.com",
+        "license": "MIT",
+        "topics": [
+          "ci",
+          "devops",
+          "github-actions",
+          "golang"
+        ],
+        "pushed_at": "2026-05-01T03:13:08Z",
+        "updated_at": "2026-05-02T05:22:09Z",
+        "fetched_at": "2026-05-02T05:42:15Z"
+      }
+    },
+    {
+      "name": "age",
+      "display_name": "age",
+      "category": "Security",
+      "tags": [
+        "encryption",
+        "security",
+        "cli"
+      ],
+      "binary_names": [
+        "age"
+      ],
+      "github": "FiloSottile/age",
+      "packages": {
+        "winget": "FiloSottile.age",
+        "scoop": "age",
+        "choco": "age.portable",
+        "brew": "age",
+        "apt": "age"
+      },
+      "github_info": {
+        "stars": 22145,
+        "forks": 639,
+        "description": "A simple, modern and secure encryption tool (and Go library) with small explicit keys, no config options, and UNIX-style composability.",
+        "homepage": "https://age-encryption.org",
+        "license": "BSD-3-Clause",
+        "topics": [
+          "age-encryption",
+          "built-at-rc"
+        ],
+        "pushed_at": "2026-03-20T21:12:32Z",
+        "updated_at": "2026-05-02T03:09:24Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "aider",
+      "display_name": "Aider",
+      "category": "AI",
+      "tags": [
+        "coding-assistant",
+        "cli"
+      ],
+      "binary_names": [
+        "aider"
+      ],
+      "github": "paul-gauthier/aider",
+      "packages": {
+        "brew": "aider"
+      },
+      "github_info": {
+        "stars": 44223,
+        "forks": 4338,
+        "description": "aider is AI pair programming in your terminal",
+        "homepage": "https://aider.chat/",
+        "license": "Apache-2.0",
+        "topics": [
+          "anthropic",
+          "chatgpt",
+          "claude-3",
+          "cli",
+          "command-line",
+          "gemini",
+          "gpt-3",
+          "gpt-35-turbo",
+          "gpt-4",
+          "gpt-4o",
+          "llama",
+          "openai",
+          "sonnet"
+        ],
+        "pushed_at": "2026-04-25T16:44:33Z",
+        "updated_at": "2026-05-02T04:57:07Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "ansible",
+      "display_name": "Ansible",
+      "category": "IaC",
+      "tags": [
+        "automation",
+        "configuration-management"
+      ],
+      "binary_names": [
+        "ansible"
+      ],
+      "github": "ansible/ansible",
+      "packages": {
+        "brew": "ansible",
+        "apt": "ansible"
+      },
+      "github_info": {
+        "stars": 68461,
+        "forks": 24154,
+        "description": "Ansible is a radically simple IT automation platform that makes your applications and systems easier to deploy and maintain. Automate everything from code deployment to network configuration to cloud management, in a language that approaches plain English, using SSH, with no agents to install on remote systems. https://docs.ansible.com.",
+        "homepage": "https://www.ansible.com/",
+        "license": "GPL-3.0",
+        "topics": [
+          "ansible",
+          "python"
+        ],
+        "pushed_at": "2026-05-01T05:13:31Z",
+        "updated_at": "2026-05-02T04:03:13Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "argocd",
+      "display_name": "Argo CD CLI",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "gitops",
+        "continuous-delivery"
+      ],
+      "binary_names": [
+        "argocd"
+      ],
+      "github": "argoproj/argo-cd",
+      "packages": {
+        "winget": "argoproj.argocd",
+        "scoop": "argocd",
+        "choco": "argocd-cli",
+        "brew": "argocd"
+      },
+      "github_info": {
+        "stars": 22776,
+        "forks": 7145,
+        "description": "Declarative Continuous Deployment for Kubernetes",
+        "homepage": "https://argo-cd.readthedocs.io",
+        "license": "Apache-2.0",
+        "topics": [
+          "argo",
+          "argo-cd",
+          "cd",
+          "ci-cd",
+          "cicd",
+          "continuous-delivery",
+          "continuous-deployment",
+          "devops",
+          "docker",
+          "gitops",
+          "hacktoberfest",
+          "helm",
+          "jsonnet",
+          "kubernetes",
+          "kustomize",
+          "pipeline"
+        ],
+        "pushed_at": "2026-05-02T01:28:22Z",
+        "updated_at": "2026-05-02T03:29:24Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "asdf",
+      "display_name": "asdf",
+      "category": "PkgMgr",
+      "tags": [
+        "version-manager",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "asdf"
+      ],
+      "github": "asdf-vm/asdf",
+      "packages": {
+        "brew": "asdf",
+        "apt": "asdf"
+      },
+      "github_info": {
+        "stars": 25312,
+        "forks": 926,
+        "description": "Extendable version manager with support for Ruby, Node.js, Elixir, Erlang & more",
+        "homepage": "https://asdf-vm.com/",
+        "license": "MIT",
+        "topics": [
+          "asdf-vm",
+          "bash",
+          "cli",
+          "elixir",
+          "elvish",
+          "erlang",
+          "fish",
+          "golang",
+          "multiple-languages",
+          "node",
+          "nushell",
+          "powershell",
+          "python",
+          "ruby",
+          "shell",
+          "version-manager",
+          "zsh"
+        ],
+        "pushed_at": "2026-05-01T15:59:59Z",
+        "updated_at": "2026-05-01T23:09:55Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "atuin",
+      "display_name": "Atuin",
+      "category": "Shell",
+      "tags": [
+        "search",
+        "cross-shell",
+        "cli"
+      ],
+      "binary_names": [
+        "atuin"
+      ],
+      "github": "atuinsh/atuin",
+      "packages": {
+        "brew": "atuin"
+      },
+      "github_info": {
+        "stars": 29568,
+        "forks": 835,
+        "description": "✨ Making your shell magical",
+        "homepage": "https://atuin.sh",
+        "license": "MIT",
+        "topics": [
+          "bash",
+          "fish",
+          "history",
+          "rust",
+          "shell",
+          "zsh"
+        ],
+        "pushed_at": "2026-05-01T00:48:23Z",
+        "updated_at": "2026-05-02T02:11:45Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "aws",
+      "display_name": "AWS CLI",
+      "category": "Cloud",
+      "tags": [
+        "amazon",
+        "cloud"
+      ],
+      "binary_names": [
+        "aws"
+      ],
+      "github": "aws/aws-cli",
+      "packages": {
+        "winget": "Amazon.AWSCLI",
+        "scoop": "aws",
+        "choco": "awscli",
+        "brew": "awscli",
+        "apt": "awscli",
+        "snap": "aws-cli"
+      },
+      "github_info": {
+        "stars": 16919,
+        "forks": 4527,
+        "description": "Universal Command Line Interface for Amazon Web Services",
+        "license": "Other",
+        "topics": [
+          "aws",
+          "aws-cli",
+          "cloud",
+          "cloud-management"
+        ],
+        "pushed_at": "2026-05-01T19:38:13Z",
+        "updated_at": "2026-05-02T01:07:13Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "az",
+      "display_name": "Azure CLI",
+      "category": "Cloud",
+      "tags": [
+        "microsoft",
+        "cloud"
+      ],
+      "binary_names": [
+        "az"
+      ],
+      "github": "Azure/azure-cli",
+      "packages": {
+        "winget": "Microsoft.AzureCLI",
+        "scoop": "az",
+        "choco": "azure-cli",
+        "brew": "azure-cli",
+        "apt": "azure-cli"
+      },
+      "github_info": {
+        "stars": 4520,
+        "forks": 3385,
+        "description": "Azure Command-Line Interface",
+        "license": "MIT",
+        "topics": [
+          "azure",
+          "azure-cli",
+          "cloud"
+        ],
+        "pushed_at": "2026-05-01T00:16:39Z",
+        "updated_at": "2026-05-01T04:21:22Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "azd",
+      "display_name": "Azure Dev CLI",
+      "category": "Cloud",
+      "tags": [
+        "microsoft",
+        "cloud",
+        "dev-workflow"
+      ],
+      "binary_names": [
+        "azd"
+      ],
+      "github": "Azure/azure-dev",
+      "packages": {
+        "winget": "Microsoft.Azd",
+        "scoop": "azd",
+        "choco": "azd",
+        "brew": "azure/azd/azd"
+      },
+      "github_info": {
+        "stars": 523,
+        "forks": 294,
+        "description": "A developer CLI for working with Azure resources to build and deploy AI applications. Commands map to key workflow stages: code, build, deploy, and monitor.",
+        "homepage": "https://aka.ms/azd",
+        "license": "MIT",
+        "topics": [
+          "agents",
+          "ai",
+          "azure",
+          "cli",
+          "deployments",
+          "microsoft"
+        ],
+        "pushed_at": "2026-05-02T04:33:00Z",
+        "updated_at": "2026-05-02T00:26:34Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "bandwhich",
+      "display_name": "bandwhich",
+      "category": "Observability",
+      "tags": [
+        "networking",
+        "process-monitoring",
+        "cli"
+      ],
+      "binary_names": [
+        "bandwhich"
+      ],
+      "github": "imsnif/bandwhich",
+      "packages": {
+        "scoop": "bandwhich",
+        "brew": "bandwhich"
+      },
+      "github_info": {
+        "stars": 11713,
+        "forks": 339,
+        "description": "Terminal bandwidth utilization tool",
+        "license": "MIT",
+        "topics": [
+          "bandwidth",
+          "cli",
+          "dashboard",
+          "networking"
+        ],
+        "pushed_at": "2026-05-01T01:49:41Z",
+        "updated_at": "2026-05-02T05:22:30Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "bat",
+      "display_name": "bat",
+      "category": "CLI",
+      "tags": [
+        "syntax-highlighting",
+        "pager",
+        "cli"
+      ],
+      "binary_names": [
+        "bat"
+      ],
+      "github": "sharkdp/bat",
+      "packages": {
+        "winget": "sharkdp.bat",
+        "scoop": "bat",
+        "choco": "bat",
+        "brew": "bat",
+        "apt": "bat"
+      },
+      "github_info": {
+        "stars": 58653,
+        "forks": 1542,
+        "description": "A cat(1) clone with wings.",
+        "license": "Apache-2.0",
+        "topics": [
+          "cli",
+          "command-line",
+          "git",
+          "hacktoberfest",
+          "rust",
+          "syntax-highlighting",
+          "terminal",
+          "tool"
+        ],
+        "pushed_at": "2026-05-01T03:04:00Z",
+        "updated_at": "2026-05-02T04:12:17Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "btm",
+      "display_name": "bottom",
+      "category": "Observability",
+      "tags": [
+        "process-monitoring",
+        "tui",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "btm"
+      ],
+      "github": "ClementTsang/bottom",
+      "packages": {
+        "winget": "Clement.bottom",
+        "scoop": "bottom",
+        "choco": "bottom",
+        "brew": "bottom"
+      },
+      "github_info": {
+        "stars": 13263,
+        "forks": 337,
+        "description": "Yet another cross-platform graphical process/system monitor.",
+        "homepage": "https://bottom.pages.dev",
+        "license": "MIT",
+        "topics": [
+          "bottom",
+          "btm",
+          "cli",
+          "cross-platform",
+          "monitoring",
+          "rust",
+          "terminal",
+          "top",
+          "tui"
+        ],
+        "pushed_at": "2026-04-28T05:54:36Z",
+        "updated_at": "2026-05-01T16:23:22Z",
+        "fetched_at": "2026-05-02T05:42:22Z"
+      }
+    },
+    {
+      "name": "bun",
+      "display_name": "Bun",
+      "category": "Language",
+      "tags": [
+        "javascript",
+        "typescript"
+      ],
+      "binary_names": [
+        "bun"
+      ],
+      "github": "oven-sh/bun",
+      "packages": {
+        "winget": "Oven-sh.Bun",
+        "scoop": "bun",
+        "choco": "bun",
+        "brew": "oven-sh/bun/bun"
+      },
+      "github_info": {
+        "stars": 89494,
+        "forks": 4375,
+        "description": "Incredibly fast JavaScript runtime, bundler, test runner, and package manager – all in one",
+        "homepage": "https://bun.com",
+        "license": "Other",
+        "topics": [
+          "bun",
+          "bundler",
+          "javascript",
+          "javascriptcore",
+          "jsx",
+          "nodejs",
+          "npm",
+          "react",
+          "transpiler",
+          "typescript",
+          "zig",
+          "ziglang"
+        ],
+        "pushed_at": "2026-05-02T05:41:51Z",
+        "updated_at": "2026-05-02T05:18:34Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "carapace",
+      "display_name": "carapace",
+      "category": "Shell",
+      "tags": [
+        "cli",
+        "cross-platform",
+        "cross-shell"
+      ],
+      "binary_names": [
+        "carapace"
+      ],
+      "github": "carapace-sh/carapace-bin",
+      "packages": {
+        "winget": "rsteube.Carapace",
+        "scoop": "carapace-bin",
+        "brew": "carapace"
+      },
+      "github_info": {
+        "stars": 1804,
+        "forks": 114,
+        "description": "A multi-shell completion binary.",
+        "homepage": "https://carapace.sh",
+        "license": "MIT",
+        "topics": [
+          "bash",
+          "carapace",
+          "cli",
+          "completion",
+          "elvish",
+          "fish",
+          "ion",
+          "nushell",
+          "oil",
+          "powershell",
+          "productivity",
+          "shell",
+          "tcsh",
+          "terminal",
+          "xonsh",
+          "xontrib",
+          "zsh"
+        ],
+        "pushed_at": "2026-05-01T21:07:21Z",
+        "updated_at": "2026-05-01T21:03:22Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "cargo",
+      "display_name": "Cargo",
+      "category": "Language",
+      "tags": [
+        "rust",
+        "package-manager",
+        "build-system"
+      ],
+      "binary_names": [
+        "cargo"
+      ],
+      "github": "rust-lang/cargo",
+      "packages": {
+        "brew": "rust",
+        "apt": "cargo"
+      },
+      "github_info": {
+        "stars": 14894,
+        "forks": 2898,
+        "description": "The Rust package manager",
+        "homepage": "https://doc.rust-lang.org/cargo",
+        "license": "Apache-2.0",
+        "topics": [
+          "cargo",
+          "package-manager",
+          "rust"
+        ],
+        "pushed_at": "2026-05-01T23:09:40Z",
+        "updated_at": "2026-05-01T23:09:43Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "choose",
+      "display_name": "choose",
+      "category": "CLI",
+      "tags": [
+        "cli",
+        "data-processing"
+      ],
+      "binary_names": [
+        "choose"
+      ],
+      "github": "theryangeary/choose",
+      "packages": {
+        "brew": "choose-rust"
+      },
+      "github_info": {
+        "stars": 2223,
+        "forks": 47,
+        "description": "A human-friendly and fast alternative to cut (and sometimes awk)",
+        "license": "GPL-3.0",
+        "pushed_at": "2025-11-18T23:49:34Z",
+        "updated_at": "2026-04-28T02:22:58Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "cilium",
+      "display_name": "Cilium CLI",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "networking",
+        "security"
+      ],
+      "binary_names": [
+        "cilium"
+      ],
+      "github": "cilium/cilium-cli",
+      "packages": {
+        "brew": "cilium-cli"
+      },
+      "github_info": {
+        "stars": 566,
+        "forks": 223,
+        "description": "CLI to install, manage & troubleshoot Kubernetes clusters running Cilium",
+        "homepage": "https://cilium.io",
+        "license": "Apache-2.0",
+        "topics": [
+          "cilium",
+          "ebpf",
+          "kubernetes",
+          "networking",
+          "observability",
+          "security"
+        ],
+        "pushed_at": "2026-05-01T18:34:01Z",
+        "updated_at": "2026-05-01T09:05:08Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "claude",
+      "display_name": "Claude Code",
+      "category": "AI",
+      "tags": [
+        "coding-assistant",
+        "anthropic"
+      ],
+      "binary_names": [
+        "claude"
+      ],
+      "github": "anthropics/claude-code",
+      "packages": {
+        "npm": "@anthropic-ai/claude-code"
+      },
+      "github_info": {
+        "stars": 119771,
+        "forks": 19862,
+        "description": "Claude Code is an agentic coding tool that lives in your terminal, understands your codebase, and helps you code faster by executing routine tasks, explaining complex code, and handling git workflows - all through natural language commands.",
+        "homepage": "https://code.claude.com/docs/en/overview",
+        "pushed_at": "2026-05-01T03:11:33Z",
+        "updated_at": "2026-05-02T05:40:02Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "cmake",
+      "display_name": "CMake",
+      "category": "CLI",
+      "tags": [
+        "build-system",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "cmake"
+      ],
+      "github": "Kitware/CMake",
+      "packages": {
+        "winget": "Kitware.CMake",
+        "scoop": "cmake",
+        "choco": "cmake",
+        "brew": "cmake",
+        "apt": "cmake"
+      },
+      "github_info": {
+        "stars": 7892,
+        "forks": 2678,
+        "description": "Mirror of CMake upstream repository",
+        "homepage": "https://gitlab.kitware.com/cmake/cmake",
+        "license": "BSD-3-Clause",
+        "pushed_at": "2026-05-02T04:13:03Z",
+        "updated_at": "2026-05-02T04:13:13Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "consul",
+      "display_name": "Consul",
+      "category": "IaC",
+      "tags": [
+        "hashicorp",
+        "service-mesh",
+        "networking"
+      ],
+      "binary_names": [
+        "consul"
+      ],
+      "github": "hashicorp/consul",
+      "packages": {
+        "winget": "Hashicorp.Consul",
+        "scoop": "consul",
+        "choco": "consul",
+        "brew": "consul"
+      },
+      "github_info": {
+        "stars": 29875,
+        "forks": 4583,
+        "description": "Consul is a distributed, highly available, and data center aware solution to connect and configure applications across dynamic, distributed infrastructure.",
+        "homepage": "https://www.consul.io",
+        "license": "Other",
+        "topics": [
+          "api-gateway",
+          "consul",
+          "ecs",
+          "kubernetes",
+          "service-discovery",
+          "service-mesh",
+          "vault"
+        ],
+        "pushed_at": "2026-05-01T06:52:56Z",
+        "updated_at": "2026-05-01T18:59:24Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "cosign",
+      "display_name": "Cosign",
+      "category": "Security",
+      "tags": [
+        "security",
+        "container",
+        "encryption"
+      ],
+      "binary_names": [
+        "cosign"
+      ],
+      "github": "sigstore/cosign",
+      "packages": {
+        "winget": "Sigstore.Cosign",
+        "scoop": "cosign",
+        "brew": "cosign"
+      },
+      "github_info": {
+        "stars": 5866,
+        "forks": 726,
+        "description": "Code signing and transparency for containers and binaries",
+        "license": "Apache-2.0",
+        "pushed_at": "2026-04-30T20:38:10Z",
+        "updated_at": "2026-05-01T20:56:44Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "ctop",
+      "display_name": "ctop",
+      "category": "Observability",
+      "tags": [
+        "container",
+        "process-monitoring",
+        "tui"
+      ],
+      "binary_names": [
+        "ctop"
+      ],
+      "github": "bcicen/ctop",
+      "packages": {
+        "scoop": "ctop",
+        "brew": "ctop"
+      },
+      "github_info": {
+        "stars": 17719,
+        "forks": 590,
+        "description": "Top-like interface for container metrics",
+        "homepage": "https://ctop.sh",
+        "license": "MIT",
+        "topics": [
+          "command-line",
+          "commandline",
+          "containers",
+          "docker",
+          "monitoring",
+          "runc",
+          "top"
+        ],
+        "pushed_at": "2024-07-08T11:15:48Z",
+        "updated_at": "2026-05-02T00:11:30Z",
+        "fetched_at": "2026-05-02T05:42:22Z"
+      }
+    },
+    {
+      "name": "curlie",
+      "display_name": "curlie",
+      "category": "CLI",
+      "tags": [
+        "http-client",
+        "api",
+        "cli"
+      ],
+      "binary_names": [
+        "curlie"
+      ],
+      "github": "rs/curlie",
+      "packages": {
+        "brew": "curlie"
+      },
+      "github_info": {
+        "stars": 3643,
+        "forks": 114,
+        "description": "The power of curl, the ease of use of httpie.",
+        "homepage": "https://rs.github.io/curlie",
+        "license": "MIT",
+        "topics": [
+          "api-client",
+          "cli",
+          "curl",
+          "developer-tools",
+          "go",
+          "http-client",
+          "httpie",
+          "terminal",
+          "webdevelopment"
+        ],
+        "pushed_at": "2025-12-07T20:14:24Z",
+        "updated_at": "2026-05-01T08:23:00Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "delta",
+      "display_name": "delta",
+      "category": "CLI",
+      "tags": [
+        "git",
+        "syntax-highlighting",
+        "pager"
+      ],
+      "binary_names": [
+        "delta"
+      ],
+      "github": "dandavison/delta",
+      "packages": {
+        "winget": "dandavison.delta",
+        "scoop": "delta",
+        "choco": "delta",
+        "brew": "git-delta"
+      },
+      "github_info": {
+        "stars": 30584,
+        "forks": 524,
+        "description": "A syntax-highlighting pager for git, diff, grep, rg --json, and blame output",
+        "homepage": "https://dandavison.github.io/delta/",
+        "license": "MIT",
+        "topics": [
+          "color-themes",
+          "delta",
+          "diff",
+          "git",
+          "git-delta",
+          "pager",
+          "rust",
+          "syntax-highlighter"
+        ],
+        "pushed_at": "2026-03-28T20:15:33Z",
+        "updated_at": "2026-05-02T05:00:56Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "dlv",
+      "display_name": "Delve",
+      "category": "Language",
+      "tags": [
+        "golang",
+        "debugger"
+      ],
+      "binary_names": [
+        "dlv"
+      ],
+      "github": "go-delve/delve",
+      "packages": {
+        "brew": "delve"
+      },
+      "github_info": {
+        "stars": 24710,
+        "forks": 2202,
+        "description": "Delve is a debugger for the Go programming language.",
+        "license": "MIT",
+        "topics": [
+          "debugger",
+          "go",
+          "golang"
+        ],
+        "pushed_at": "2026-04-30T19:01:49Z",
+        "updated_at": "2026-05-01T22:21:47Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "deno",
+      "display_name": "Deno",
+      "category": "Language",
+      "tags": [
+        "javascript",
+        "typescript"
+      ],
+      "binary_names": [
+        "deno"
+      ],
+      "github": "denoland/deno",
+      "packages": {
+        "winget": "DenoLand.Deno",
+        "scoop": "deno",
+        "choco": "deno",
+        "brew": "deno"
+      },
+      "github_info": {
+        "stars": 106596,
+        "forks": 6039,
+        "description": "A modern runtime for JavaScript and TypeScript.",
+        "homepage": "https://deno.com",
+        "license": "MIT",
+        "topics": [
+          "deno",
+          "javascript",
+          "rust",
+          "typescript"
+        ],
+        "pushed_at": "2026-05-02T05:42:05Z",
+        "updated_at": "2026-05-02T05:42:11Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "difftastic",
+      "display_name": "difftastic",
+      "category": "CLI",
+      "tags": [
+        "cli",
+        "git",
+        "syntax-highlighting",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "difft"
+      ],
+      "github": "Wilfred/difftastic",
+      "packages": {
+        "winget": "difftastic",
+        "scoop": "difftastic",
+        "choco": "difftastic",
+        "brew": "difftastic"
+      },
+      "github_info": {
+        "stars": 25207,
+        "forks": 471,
+        "description": "a structural diff that understands syntax 🟥🟩",
+        "homepage": "https://difftastic.wilfred.me.uk/",
+        "license": "MIT",
+        "topics": [
+          "diff",
+          "tree-sitter"
+        ],
+        "pushed_at": "2026-04-30T21:00:18Z",
+        "updated_at": "2026-05-02T03:13:46Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "direnv",
+      "display_name": "direnv",
+      "category": "Shell",
+      "tags": [
+        "automation",
+        "dev-workflow",
+        "cross-shell"
+      ],
+      "binary_names": [
+        "direnv"
+      ],
+      "github": "direnv/direnv",
+      "packages": {
+        "winget": "direnv.direnv",
+        "scoop": "direnv",
+        "brew": "direnv",
+        "apt": "direnv"
+      },
+      "github_info": {
+        "stars": 15041,
+        "forks": 783,
+        "description": "unclutter your .profile",
+        "homepage": "http://direnv.net",
+        "license": "MIT",
+        "topics": [
+          "bash",
+          "buildbot-numtide",
+          "direnv",
+          "environment",
+          "fish",
+          "shell",
+          "shell-extension",
+          "tcsh",
+          "zsh"
+        ],
+        "pushed_at": "2026-03-31T18:52:06Z",
+        "updated_at": "2026-05-01T23:11:48Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "dive",
+      "display_name": "dive",
+      "category": "Containers",
+      "tags": [
+        "docker",
+        "cli"
+      ],
+      "binary_names": [
+        "dive"
+      ],
+      "github": "wagoodman/dive",
+      "packages": {
+        "winget": "wagoodman.dive",
+        "scoop": "dive",
+        "choco": "dive",
+        "brew": "dive"
+      },
+      "github_info": null
+    },
+    {
+      "name": "docker",
+      "display_name": "Docker",
+      "category": "Containers",
+      "tags": [
+        "container",
+        "docker"
+      ],
+      "binary_names": [
+        "docker"
+      ],
+      "github": "docker/cli",
+      "packages": {
+        "winget": "Docker.DockerDesktop",
+        "scoop": "docker",
+        "choco": "docker-desktop",
+        "brew": "docker",
+        "apt": "docker.io"
+      },
+      "github_info": {
+        "stars": 5824,
+        "forks": 2124,
+        "description": "The Docker CLI",
+        "license": "Apache-2.0",
+        "topics": [
+          "cli",
+          "docker"
+        ],
+        "pushed_at": "2026-05-01T07:39:32Z",
+        "updated_at": "2026-04-30T15:10:23Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "docker-compose",
+      "display_name": "Docker Compose",
+      "category": "Containers",
+      "tags": [
+        "docker",
+        "container"
+      ],
+      "binary_names": [
+        "docker-compose"
+      ],
+      "github": "docker/compose",
+      "packages": {
+        "choco": "docker-compose",
+        "brew": "docker-compose"
+      },
+      "github_info": {
+        "stars": 37331,
+        "forks": 5841,
+        "description": "Define and run multi-container applications with Docker",
+        "homepage": "https://docs.docker.com/compose/",
+        "license": "Apache-2.0",
+        "topics": [
+          "docker",
+          "docker-compose",
+          "go",
+          "golang",
+          "orchestration"
+        ],
+        "pushed_at": "2026-05-01T10:13:03Z",
+        "updated_at": "2026-05-02T02:04:20Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "doggo",
+      "display_name": "doggo",
+      "category": "Network",
+      "tags": [
+        "networking",
+        "cli"
+      ],
+      "binary_names": [
+        "doggo"
+      ],
+      "github": "mr-karan/doggo",
+      "packages": {
+        "scoop": "doggo",
+        "brew": "doggo"
+      },
+      "github_info": {
+        "stars": 4244,
+        "forks": 136,
+        "description": ":dog: Command-line DNS Client for Humans. Written in Golang",
+        "homepage": "https://doggo.mrkaran.dev/",
+        "license": "GPL-3.0",
+        "topics": [
+          "dns",
+          "dns-client",
+          "doh"
+        ],
+        "pushed_at": "2026-03-25T10:04:56Z",
+        "updated_at": "2026-05-01T19:36:30Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "duckdb",
+      "display_name": "DuckDB",
+      "category": "Database",
+      "tags": [
+        "database",
+        "data-processing",
+        "cli"
+      ],
+      "binary_names": [
+        "duckdb"
+      ],
+      "github": "duckdb/duckdb",
+      "packages": {
+        "winget": "DuckDB.cli",
+        "scoop": "duckdb",
+        "choco": "duckdb",
+        "brew": "duckdb"
+      },
+      "github_info": {
+        "stars": 37889,
+        "forks": 3195,
+        "description": "DuckDB is an analytical in-process SQL database management system",
+        "homepage": "http://www.duckdb.org",
+        "license": "MIT",
+        "topics": [
+          "analytics",
+          "database",
+          "embedded-database",
+          "olap",
+          "sql"
+        ],
+        "pushed_at": "2026-05-01T15:11:51Z",
+        "updated_at": "2026-05-02T04:18:13Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "dust",
+      "display_name": "dust",
+      "category": "CLI",
+      "tags": [
+        "disk-usage",
+        "cli"
+      ],
+      "binary_names": [
+        "dust"
+      ],
+      "github": "bootandy/dust",
+      "packages": {
+        "winget": "bootandy.dust",
+        "scoop": "dust",
+        "choco": "dust",
+        "brew": "dust",
+        "apt": "du-dust"
+      },
+      "github_info": {
+        "stars": 11643,
+        "forks": 268,
+        "description": "A more intuitive version of du in rust",
+        "license": "Apache-2.0",
+        "pushed_at": "2026-02-21T15:29:15Z",
+        "updated_at": "2026-05-01T20:42:03Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "eksctl",
+      "display_name": "eksctl",
+      "category": "Cloud",
+      "tags": [
+        "kubernetes",
+        "amazon",
+        "cloud"
+      ],
+      "binary_names": [
+        "eksctl"
+      ],
+      "github": "eksctl-io/eksctl",
+      "packages": {
+        "choco": "eksctl",
+        "brew": "eksctl"
+      },
+      "github_info": {
+        "stars": 5194,
+        "forks": 1491,
+        "description": "The official CLI for Amazon EKS",
+        "homepage": "https://eksctl.io",
+        "license": "Other",
+        "topics": [
+          "amazon-web-services",
+          "aws-cloudformation",
+          "aws-ec2",
+          "aws-eks",
+          "eks",
+          "kubernetes",
+          "kubernetes-cluster",
+          "kubernetes-deployment",
+          "kubernetes-setup"
+        ],
+        "pushed_at": "2026-05-01T16:42:25Z",
+        "updated_at": "2026-05-01T16:10:11Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "eza",
+      "display_name": "eza",
+      "category": "CLI",
+      "tags": [
+        "cli"
+      ],
+      "binary_names": [
+        "eza"
+      ],
+      "github": "eza-community/eza",
+      "packages": {
+        "winget": "eza-community.eza",
+        "scoop": "eza",
+        "choco": "eza",
+        "brew": "eza",
+        "apt": "eza"
+      },
+      "github_info": {
+        "stars": 21578,
+        "forks": 435,
+        "description": "A modern alternative to ls",
+        "homepage": "https://eza.rocks",
+        "license": "EUPL-1.2",
+        "topics": [
+          "color",
+          "command-line",
+          "files",
+          "hacktoberfest",
+          "icons",
+          "ls",
+          "nerd-fonts",
+          "rust",
+          "terminal",
+          "tools"
+        ],
+        "pushed_at": "2026-04-10T14:51:09Z",
+        "updated_at": "2026-05-02T04:07:33Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "fabric",
+      "display_name": "fabric",
+      "category": "AI",
+      "tags": [
+        "coding-assistant",
+        "cli",
+        "automation"
+      ],
+      "binary_names": [
+        "fabric"
+      ],
+      "github": "danielmiessler/fabric",
+      "packages": {
+        "brew": "fabric-ai"
+      },
+      "github_info": {
+        "stars": 41386,
+        "forks": 4117,
+        "description": "Fabric is an open-source framework for augmenting humans using AI. It provides a modular system for solving specific problems using a crowdsourced set of AI prompts that can be used anywhere.",
+        "homepage": "https://danielmiessler.com/p/fabric-origin-story",
+        "license": "MIT",
+        "topics": [
+          "ai",
+          "augmentation",
+          "flourishing",
+          "life",
+          "work"
+        ],
+        "pushed_at": "2026-04-23T08:55:52Z",
+        "updated_at": "2026-05-02T05:31:05Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "fd",
+      "display_name": "fd",
+      "category": "CLI",
+      "tags": [
+        "search",
+        "cli"
+      ],
+      "binary_names": [
+        "fd"
+      ],
+      "github": "sharkdp/fd",
+      "packages": {
+        "winget": "sharkdp.fd",
+        "scoop": "fd",
+        "choco": "fd",
+        "brew": "fd",
+        "apt": "fd-find"
+      },
+      "github_info": {
+        "stars": 42791,
+        "forks": 1055,
+        "description": "A simple, fast and user-friendly alternative to 'find'",
+        "license": "Apache-2.0",
+        "topics": [
+          "cli",
+          "command-line",
+          "filesystem",
+          "hacktoberfest",
+          "regex",
+          "rust",
+          "search",
+          "terminal",
+          "tool"
+        ],
+        "pushed_at": "2026-05-01T21:06:15Z",
+        "updated_at": "2026-05-02T01:01:18Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "ffmpeg",
+      "display_name": "FFmpeg",
+      "category": "Media",
+      "tags": [
+        "media",
+        "cli"
+      ],
+      "binary_names": [
+        "ffmpeg"
+      ],
+      "github": "FFmpeg/FFmpeg",
+      "packages": {
+        "winget": "Gyan.FFmpeg",
+        "scoop": "ffmpeg",
+        "choco": "ffmpeg",
+        "brew": "ffmpeg",
+        "apt": "ffmpeg"
+      },
+      "github_info": {
+        "stars": 59457,
+        "forks": 13762,
+        "description": "Mirror of https://git.ffmpeg.org/ffmpeg.git",
+        "homepage": "https://ffmpeg.org/",
+        "license": "Other",
+        "topics": [
+          "audio",
+          "c",
+          "ffmpeg",
+          "fft",
+          "hevc",
+          "hls",
+          "matroska",
+          "mp4",
+          "mpeg",
+          "multimedia",
+          "rtmp",
+          "rtsp",
+          "streaming",
+          "video",
+          "webm"
+        ],
+        "pushed_at": "2026-05-01T23:59:33Z",
+        "updated_at": "2026-05-02T05:09:36Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "flux",
+      "display_name": "Flux CLI",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "gitops",
+        "continuous-delivery"
+      ],
+      "binary_names": [
+        "flux"
+      ],
+      "github": "fluxcd/flux2",
+      "packages": {
+        "choco": "flux",
+        "brew": "fluxcd/tap/flux"
+      },
+      "github_info": {
+        "stars": 8089,
+        "forks": 752,
+        "description": "Open and extensible continuous delivery solution for Kubernetes. Powered by GitOps Toolkit.",
+        "homepage": "https://fluxcd.io",
+        "license": "Apache-2.0",
+        "topics": [
+          "continuous-delivery",
+          "gitops",
+          "gitops-toolkit",
+          "helm",
+          "kubernetes",
+          "kustomize"
+        ],
+        "pushed_at": "2026-05-01T01:05:02Z",
+        "updated_at": "2026-05-01T13:25:40Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "freelens",
+      "display_name": "Freelens",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "gui"
+      ],
+      "binary_names": [
+        "freelens"
+      ],
+      "github": "freelensapp/freelens",
+      "packages": {
+        "winget": "Freelensapp.Freelens",
+        "scoop": "freelens",
+        "brew": "freelens",
+        "snap": "freelens"
+      },
+      "github_info": null
+    },
+    {
+      "name": "fzf",
+      "display_name": "fzf",
+      "category": "CLI",
+      "tags": [
+        "fuzzy-finder",
+        "search",
+        "cli"
+      ],
+      "binary_names": [
+        "fzf"
+      ],
+      "github": "junegunn/fzf",
+      "packages": {
+        "winget": "junegunn.fzf",
+        "scoop": "fzf",
+        "choco": "fzf",
+        "brew": "fzf",
+        "apt": "fzf"
+      },
+      "github_info": {
+        "stars": 79943,
+        "forks": 2796,
+        "description": ":cherry_blossom: A command-line fuzzy finder",
+        "homepage": "https://junegunn.github.io/fzf/",
+        "license": "MIT",
+        "topics": [
+          "bash",
+          "cli",
+          "fish",
+          "fzf",
+          "go",
+          "neovim",
+          "tmux",
+          "unix",
+          "vim",
+          "zsh"
+        ],
+        "pushed_at": "2026-04-27T17:02:22Z",
+        "updated_at": "2026-05-02T05:00:10Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "gh-dash",
+      "display_name": "gh-dash",
+      "category": "VCS",
+      "tags": [
+        "github",
+        "tui",
+        "vcs"
+      ],
+      "binary_names": [
+        "gh-dash"
+      ],
+      "github": "dlvhdr/gh-dash",
+      "packages": {
+        "brew": "gh-dash"
+      },
+      "github_info": {
+        "stars": 11521,
+        "forks": 383,
+        "description": "A rich terminal UI for GitHub that doesn't break your flow.",
+        "homepage": "https://gh-dash.dev",
+        "license": "MIT",
+        "topics": [
+          "bubbles",
+          "bubbletea",
+          "cli",
+          "cobra",
+          "gh-extension",
+          "github",
+          "glamour",
+          "go",
+          "golang",
+          "lipgloss",
+          "terminal",
+          "tui"
+        ],
+        "pushed_at": "2026-05-01T20:35:00Z",
+        "updated_at": "2026-05-02T04:21:29Z",
+        "fetched_at": "2026-05-02T05:42:15Z"
+      }
+    },
+    {
+      "name": "git",
+      "display_name": "Git",
+      "category": "VCS",
+      "tags": [
+        "vcs",
+        "git"
+      ],
+      "binary_names": [
+        "git"
+      ],
+      "github": "git/git",
+      "packages": {
+        "winget": "Git.Git",
+        "scoop": "git",
+        "choco": "git",
+        "brew": "git",
+        "apt": "git"
+      },
+      "github_info": {
+        "stars": 60699,
+        "forks": 27859,
+        "description": "Git Source Code Mirror - This is a publish-only repository but pull requests can be turned into patches to the mailing list via GitGitGadget (https://gitgitgadget.github.io/). Please follow Documentation/SubmittingPatches procedure for any of your improvements.",
+        "license": "Other",
+        "topics": [
+          "c",
+          "hacktoberfest",
+          "shell"
+        ],
+        "pushed_at": "2026-05-01T22:20:43Z",
+        "updated_at": "2026-05-02T02:49:51Z",
+        "fetched_at": "2026-05-02T05:42:15Z"
+      }
+    },
+    {
+      "name": "gh",
+      "display_name": "GitHub CLI",
+      "category": "VCS",
+      "tags": [
+        "github",
+        "vcs",
+        "git"
+      ],
+      "binary_names": [
+        "gh"
+      ],
+      "github": "cli/cli",
+      "packages": {
+        "winget": "GitHub.cli",
+        "scoop": "gh",
+        "choco": "gh",
+        "brew": "gh",
+        "apt": "gh"
+      },
+      "github_info": {
+        "stars": 44160,
+        "forks": 8359,
+        "description": "GitHub’s official command line tool",
+        "homepage": "https://cli.github.com",
+        "license": "MIT",
+        "topics": [
+          "cli",
+          "git",
+          "github-api-v4",
+          "golang"
+        ],
+        "pushed_at": "2026-05-01T16:42:15Z",
+        "updated_at": "2026-05-02T04:19:16Z",
+        "fetched_at": "2026-05-02T05:42:15Z"
+      }
+    },
+    {
+      "name": "copilot",
+      "display_name": "GitHub Copilot CLI",
+      "category": "AI",
+      "tags": [
+        "coding-assistant",
+        "github"
+      ],
+      "binary_names": [
+        "github-copilot-cli",
+        "copilot"
+      ],
+      "github": "github/copilot-cli",
+      "packages": {
+        "winget": "GitHub.Copilot",
+        "scoop": "copilot"
+      },
+      "github_info": {
+        "stars": 10330,
+        "forks": 1415,
+        "description": "GitHub Copilot CLI brings the power of Copilot coding agent directly to your terminal. ",
+        "license": "Other",
+        "pushed_at": "2026-05-01T13:10:33Z",
+        "updated_at": "2026-05-02T03:43:36Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "gitleaks",
+      "display_name": "gitleaks",
+      "category": "Security",
+      "tags": [
+        "security",
+        "git",
+        "scanner",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "gitleaks"
+      ],
+      "github": "gitleaks/gitleaks",
+      "packages": {
+        "winget": "Gitleaks.Gitleaks",
+        "scoop": "gitleaks",
+        "choco": "gitleaks",
+        "brew": "gitleaks"
+      },
+      "github_info": {
+        "stars": 26446,
+        "forks": 2011,
+        "description": "Find secrets with Gitleaks 🔑",
+        "homepage": "https://gitleaks.io",
+        "license": "MIT",
+        "topics": [
+          "ai-powered",
+          "ci-cd",
+          "cicd",
+          "cli",
+          "data-loss-prevention",
+          "devsecops",
+          "dlp",
+          "git",
+          "gitleaks",
+          "go",
+          "golang",
+          "hacktoberfest",
+          "llm",
+          "llm-inference",
+          "llm-training",
+          "nhi",
+          "open-source",
+          "secret",
+          "security",
+          "security-tools"
+        ],
+        "pushed_at": "2026-03-25T13:57:45Z",
+        "updated_at": "2026-05-02T05:25:59Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "gitui",
+      "display_name": "gitui",
+      "category": "VCS",
+      "tags": [
+        "git",
+        "tui",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "gitui"
+      ],
+      "github": "extrawurst/gitui",
+      "packages": {
+        "winget": "StephanDilly.gitui",
+        "scoop": "gitui",
+        "choco": "gitui",
+        "brew": "gitui"
+      },
+      "github_info": {
+        "stars": 21864,
+        "forks": 716,
+        "description": "Blazing 💥 fast terminal-ui for git written in rust 🦀",
+        "license": "MIT",
+        "topics": [
+          "async",
+          "bash",
+          "command-line-interface",
+          "command-line-tool",
+          "git",
+          "hacktoberfest",
+          "rust",
+          "terminal",
+          "tui"
+        ],
+        "pushed_at": "2026-04-23T01:39:06Z",
+        "updated_at": "2026-05-01T23:11:35Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "glow",
+      "display_name": "Glow",
+      "category": "CLI",
+      "tags": [
+        "tui",
+        "cli"
+      ],
+      "binary_names": [
+        "glow"
+      ],
+      "github": "charmbracelet/glow",
+      "packages": {
+        "winget": "charmbracelet.glow",
+        "scoop": "glow",
+        "choco": "glow",
+        "brew": "glow"
+      },
+      "github_info": {
+        "stars": 24826,
+        "forks": 665,
+        "description": "Render markdown on the CLI, with pizzazz! 💅🏻",
+        "license": "MIT",
+        "topics": [
+          "cli",
+          "excitement",
+          "hacktoberfest",
+          "markdown"
+        ],
+        "pushed_at": "2026-04-26T00:10:21Z",
+        "updated_at": "2026-05-02T05:41:41Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "go",
+      "display_name": "Go",
+      "category": "Language",
+      "tags": [
+        "golang",
+        "google"
+      ],
+      "binary_names": [
+        "go"
+      ],
+      "github": "golang/go",
+      "packages": {
+        "winget": "GoLang.Go",
+        "scoop": "go",
+        "choco": "golang",
+        "brew": "go",
+        "apt": "golang-go",
+        "snap": "go"
+      },
+      "github_info": {
+        "stars": 133706,
+        "forks": 19021,
+        "description": "The Go programming language",
+        "homepage": "https://go.dev",
+        "license": "BSD-3-Clause",
+        "topics": [
+          "go",
+          "golang",
+          "language",
+          "programming-language"
+        ],
+        "pushed_at": "2026-05-02T00:20:23Z",
+        "updated_at": "2026-05-02T05:14:15Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "golangci-lint",
+      "display_name": "golangci-lint",
+      "category": "Language",
+      "tags": [
+        "golang",
+        "linter",
+        "static-analysis",
+        "code-quality"
+      ],
+      "binary_names": [
+        "golangci-lint"
+      ],
+      "github": "golangci/golangci-lint",
+      "packages": {
+        "winget": "GolangCI.golangci-lint",
+        "scoop": "golangci-lint",
+        "brew": "golangci-lint",
+        "snap": "golangci-lint"
+      },
+      "github_info": {
+        "stars": 18873,
+        "forks": 1572,
+        "description": "Fast linters runner for Go",
+        "homepage": "https://golangci-lint.run",
+        "license": "GPL-3.0",
+        "topics": [
+          "ci",
+          "go",
+          "golang",
+          "golangci-lint",
+          "linter"
+        ],
+        "pushed_at": "2026-05-01T16:07:56Z",
+        "updated_at": "2026-05-02T04:49:31Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "gcloud",
+      "display_name": "Google Cloud CLI",
+      "category": "Cloud",
+      "tags": [
+        "google",
+        "cloud",
+        "kubernetes"
+      ],
+      "binary_names": [
+        "gcloud"
+      ],
+      "github": null,
+      "packages": {
+        "winget": "Google.CloudSDK",
+        "scoop": "gcloud",
+        "choco": "gcloudsdk",
+        "brew": "google-cloud-sdk",
+        "snap": "google-cloud-cli"
+      },
+      "github_info": null
+    },
+    {
+      "name": "gopls",
+      "display_name": "gopls",
+      "category": "Language",
+      "tags": [
+        "golang",
+        "ide"
+      ],
+      "binary_names": [
+        "gopls"
+      ],
+      "github": "golang/tools",
+      "packages": {
+        "brew": "gopls"
+      },
+      "github_info": {
+        "stars": 7934,
+        "forks": 2377,
+        "description": "[mirror] Go Tools",
+        "homepage": "https://golang.org/x/tools",
+        "license": "BSD-3-Clause",
+        "pushed_at": "2026-05-01T22:50:53Z",
+        "updated_at": "2026-05-01T22:50:59Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "gping",
+      "display_name": "gping",
+      "category": "Network",
+      "tags": [
+        "networking",
+        "cli",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "gping"
+      ],
+      "github": "orf/gping",
+      "packages": {
+        "winget": "orf.gping",
+        "scoop": "gping",
+        "choco": "gping",
+        "brew": "gping"
+      },
+      "github_info": {
+        "stars": 12463,
+        "forks": 361,
+        "description": "Ping, but with a graph",
+        "license": "MIT",
+        "topics": [
+          "cli",
+          "command-line",
+          "graph",
+          "linux",
+          "network-monitoring",
+          "ping",
+          "rust",
+          "shell"
+        ],
+        "pushed_at": "2026-04-21T10:33:20Z",
+        "updated_at": "2026-05-02T01:03:55Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "grpcurl",
+      "display_name": "grpcurl",
+      "category": "CLI",
+      "tags": [
+        "http-client",
+        "api",
+        "debugger"
+      ],
+      "binary_names": [
+        "grpcurl"
+      ],
+      "github": "fullstorydev/grpcurl",
+      "packages": {
+        "brew": "grpcurl"
+      },
+      "github_info": {
+        "stars": 12608,
+        "forks": 567,
+        "description": "Like cURL, but for gRPC: Command-line tool for interacting with gRPC servers",
+        "homepage": "https://www.fullstory.com/resources/content/fullstory-engineering-blog/",
+        "license": "MIT",
+        "topics": [
+          "golang",
+          "grpc",
+          "protobuf"
+        ],
+        "pushed_at": "2026-01-27T17:58:21Z",
+        "updated_at": "2026-05-01T18:58:34Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "grype",
+      "display_name": "grype",
+      "category": "Security",
+      "tags": [
+        "security",
+        "container",
+        "scanner"
+      ],
+      "binary_names": [
+        "grype"
+      ],
+      "github": "anchore/grype",
+      "packages": {
+        "winget": "Anchore.Grype",
+        "scoop": "grype",
+        "brew": "grype"
+      },
+      "github_info": {
+        "stars": 12117,
+        "forks": 792,
+        "description": "A vulnerability scanner for container images and filesystems",
+        "license": "Apache-2.0",
+        "topics": [
+          "container-image",
+          "containers",
+          "cyclonedx",
+          "docker",
+          "go",
+          "golang",
+          "hacktoberfest",
+          "oci",
+          "openvex",
+          "security",
+          "static-analysis",
+          "tool",
+          "vex",
+          "vulnerabilities",
+          "vulnerability"
+        ],
+        "pushed_at": "2026-05-01T21:41:37Z",
+        "updated_at": "2026-05-02T04:14:12Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "gum",
+      "display_name": "gum",
+      "category": "CLI",
+      "tags": [
+        "cli",
+        "tui",
+        "charm"
+      ],
+      "binary_names": [
+        "gum"
+      ],
+      "github": "charmbracelet/gum",
+      "packages": {
+        "winget": "charmbracelet.gum",
+        "scoop": "gum",
+        "choco": "gum",
+        "brew": "gum"
+      },
+      "github_info": null
+    },
+    {
+      "name": "helix",
+      "display_name": "Helix",
+      "category": "Editor",
+      "tags": [
+        "tui"
+      ],
+      "binary_names": [
+        "hx"
+      ],
+      "github": "helix-editor/helix",
+      "packages": {
+        "winget": "Helix.Helix",
+        "scoop": "helix",
+        "brew": "helix",
+        "snap": "helix"
+      },
+      "github_info": null
+    },
+    {
+      "name": "helm",
+      "display_name": "Helm",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "package-manager"
+      ],
+      "binary_names": [
+        "helm"
+      ],
+      "github": "helm/helm",
+      "packages": {
+        "winget": "Helm.Helm",
+        "scoop": "helm",
+        "choco": "kubernetes-helm",
+        "brew": "helm",
+        "snap": "helm"
+      },
+      "github_info": {
+        "stars": 29771,
+        "forks": 7592,
+        "description": "The Kubernetes Package Manager",
+        "homepage": "https://helm.sh",
+        "license": "Apache-2.0",
+        "topics": [
+          "chart",
+          "charts",
+          "cncf",
+          "helm",
+          "kubernetes"
+        ],
+        "pushed_at": "2026-05-02T01:01:06Z",
+        "updated_at": "2026-05-01T17:03:01Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "hey",
+      "display_name": "hey",
+      "category": "Testing",
+      "tags": [
+        "load-testing",
+        "http-client",
+        "cli"
+      ],
+      "binary_names": [
+        "hey"
+      ],
+      "github": "rakyll/hey",
+      "packages": {
+        "brew": "hey"
+      },
+      "github_info": {
+        "stars": 19970,
+        "forks": 1290,
+        "description": "HTTP load generator, ApacheBench (ab) replacement",
+        "license": "Apache-2.0",
+        "pushed_at": "2026-01-10T20:54:51Z",
+        "updated_at": "2026-05-02T03:50:17Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "htop",
+      "display_name": "htop",
+      "category": "CLI",
+      "tags": [
+        "process-monitoring",
+        "tui"
+      ],
+      "binary_names": [
+        "htop"
+      ],
+      "github": "htop-dev/htop",
+      "packages": {
+        "brew": "htop",
+        "apt": "htop",
+        "snap": "htop"
+      },
+      "github_info": {
+        "stars": 8033,
+        "forks": 584,
+        "description": "htop - an interactive process viewer",
+        "homepage": "https://htop.dev/",
+        "license": "GPL-2.0",
+        "topics": [
+          "bsd",
+          "c",
+          "console",
+          "hacktoberfest",
+          "linux",
+          "macos",
+          "process",
+          "terminal",
+          "viewer"
+        ],
+        "pushed_at": "2026-05-01T14:42:20Z",
+        "updated_at": "2026-05-01T20:22:04Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "httpie",
+      "display_name": "HTTPie",
+      "category": "CLI",
+      "tags": [
+        "http-client",
+        "api"
+      ],
+      "binary_names": [
+        "http",
+        "https"
+      ],
+      "github": "httpie/cli",
+      "packages": {
+        "winget": "HTTPie.HTTPie",
+        "scoop": "httpie",
+        "choco": "httpie",
+        "brew": "httpie",
+        "apt": "httpie"
+      },
+      "github_info": {
+        "stars": 38032,
+        "forks": 3928,
+        "description": "🥧 HTTPie CLI  — modern, user-friendly command-line HTTP client for the API era. JSON support, colors, sessions, downloads, plugins & more.",
+        "homepage": "https://httpie.io",
+        "license": "BSD-3-Clause",
+        "topics": [
+          "api",
+          "api-client",
+          "api-testing",
+          "cli",
+          "client",
+          "curl",
+          "debugging",
+          "developer-tools",
+          "development",
+          "devops",
+          "http",
+          "http-client",
+          "httpie",
+          "json",
+          "python",
+          "rest",
+          "rest-api",
+          "terminal",
+          "usability",
+          "web"
+        ],
+        "pushed_at": "2024-12-17T17:30:35Z",
+        "updated_at": "2026-05-02T04:42:08Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "hyperfine",
+      "display_name": "hyperfine",
+      "category": "Testing",
+      "tags": [
+        "benchmarking",
+        "cli"
+      ],
+      "binary_names": [
+        "hyperfine"
+      ],
+      "github": "sharkdp/hyperfine",
+      "packages": {
+        "winget": "sharkdp.hyperfine",
+        "scoop": "hyperfine",
+        "choco": "hyperfine",
+        "brew": "hyperfine",
+        "apt": "hyperfine"
+      },
+      "github_info": {
+        "stars": 28034,
+        "forks": 479,
+        "description": "A command-line benchmarking tool",
+        "license": "Apache-2.0",
+        "topics": [
+          "benchmark",
+          "cli",
+          "command-line",
+          "rust",
+          "terminal",
+          "tool"
+        ],
+        "pushed_at": "2026-04-30T08:23:25Z",
+        "updated_at": "2026-05-01T20:09:02Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "magick",
+      "display_name": "ImageMagick",
+      "category": "Media",
+      "tags": [
+        "image-processing",
+        "cli"
+      ],
+      "binary_names": [
+        "magick",
+        "convert"
+      ],
+      "github": "ImageMagick/ImageMagick",
+      "packages": {
+        "winget": "ImageMagick.ImageMagick",
+        "scoop": "magick",
+        "choco": "imagemagick",
+        "brew": "imagemagick",
+        "apt": "imagemagick"
+      },
+      "github_info": {
+        "stars": 16309,
+        "forks": 1584,
+        "description": "ImageMagick is a free, open-source software suite for creating, editing, converting, and displaying images. It supports 200+ formats and offers powerful command-line tools and APIs for automation, scripting, and integration across platforms.",
+        "homepage": "https://imagemagick.org",
+        "license": "Other",
+        "topics": [
+          "command-line-image-tool",
+          "digital-image-editing",
+          "image-conversion",
+          "image-manipulation",
+          "image-processing",
+          "imagemagick",
+          "mastering-digital-image-alchemy",
+          "open-source-software"
+        ],
+        "pushed_at": "2026-04-30T20:28:28Z",
+        "updated_at": "2026-05-01T22:47:52Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "infracost",
+      "display_name": "Infracost",
+      "category": "Cloud",
+      "tags": [
+        "terraform",
+        "cloud",
+        "cli"
+      ],
+      "binary_names": [
+        "infracost"
+      ],
+      "github": "infracost/infracost",
+      "packages": {
+        "winget": "Infracost.Infracost",
+        "scoop": "infracost",
+        "choco": "infracost",
+        "brew": "infracost"
+      },
+      "github_info": null
+    },
+    {
+      "name": "istioctl",
+      "display_name": "Istio CLI",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "service-mesh",
+        "networking"
+      ],
+      "binary_names": [
+        "istioctl"
+      ],
+      "github": "istio/istio",
+      "packages": {
+        "choco": "istioctl",
+        "brew": "istioctl"
+      },
+      "github_info": {
+        "stars": 38159,
+        "forks": 8297,
+        "description": "Connect, secure, control, and observe services.",
+        "homepage": "https://istio.io",
+        "license": "Apache-2.0",
+        "topics": [
+          "api-management",
+          "circuit-breaker",
+          "consul",
+          "enforce-policies",
+          "envoy",
+          "fault-injection",
+          "kubernetes",
+          "lyft-envoy",
+          "microservice",
+          "microservices",
+          "nomad",
+          "polyglot-microservices",
+          "proxies",
+          "request-routing",
+          "resiliency",
+          "service-mesh"
+        ],
+        "pushed_at": "2026-05-02T02:29:23Z",
+        "updated_at": "2026-05-02T05:21:10Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "java",
+      "display_name": "Java",
+      "category": "Language",
+      "tags": [
+        "java",
+        "jvm",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "java"
+      ],
+      "github": "openjdk/jdk",
+      "packages": {
+        "winget": "Microsoft.OpenJDK.21",
+        "scoop": "java",
+        "choco": "openjdk",
+        "brew": "openjdk",
+        "apt": "default-jdk",
+        "snap": "openjdk"
+      },
+      "github_info": {
+        "stars": 22836,
+        "forks": 6318,
+        "description": "JDK main-line development https://openjdk.org/projects/jdk",
+        "license": "GPL-2.0",
+        "topics": [
+          "java",
+          "jvm",
+          "openjdk"
+        ],
+        "pushed_at": "2026-05-02T02:49:53Z",
+        "updated_at": "2026-05-02T04:05:42Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "jq",
+      "display_name": "jq",
+      "category": "CLI",
+      "tags": [
+        "data-processing",
+        "cli"
+      ],
+      "binary_names": [
+        "jq"
+      ],
+      "github": "jqlang/jq",
+      "packages": {
+        "winget": "jqlang.jq",
+        "scoop": "jq",
+        "choco": "jq",
+        "brew": "jq",
+        "apt": "jq"
+      },
+      "github_info": {
+        "stars": 34605,
+        "forks": 1771,
+        "description": "Command-line JSON processor",
+        "homepage": "https://jqlang.org",
+        "license": "Other",
+        "topics": [
+          "jq"
+        ],
+        "pushed_at": "2026-04-26T14:00:59Z",
+        "updated_at": "2026-05-01T23:10:10Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "jj",
+      "display_name": "Jujutsu",
+      "category": "VCS",
+      "tags": [
+        "git",
+        "cli"
+      ],
+      "binary_names": [
+        "jj"
+      ],
+      "github": "jj-vcs/jj",
+      "packages": {
+        "winget": "jj-vcs.jj",
+        "scoop": "jj",
+        "brew": "jj"
+      },
+      "github_info": null
+    },
+    {
+      "name": "just",
+      "display_name": "just",
+      "category": "CLI",
+      "tags": [
+        "task-runner",
+        "build-system",
+        "cli"
+      ],
+      "binary_names": [
+        "just"
+      ],
+      "github": "casey/just",
+      "packages": {
+        "winget": "Casey.Just",
+        "scoop": "just",
+        "choco": "just",
+        "brew": "just"
+      },
+      "github_info": {
+        "stars": 33301,
+        "forks": 772,
+        "description": "🤖 Just a command runner",
+        "homepage": "https://just.systems",
+        "license": "CC0-1.0",
+        "pushed_at": "2026-04-28T18:16:07Z",
+        "updated_at": "2026-05-02T03:55:47Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "k3d",
+      "display_name": "k3d",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "local-cluster",
+        "docker"
+      ],
+      "binary_names": [
+        "k3d"
+      ],
+      "github": "k3d-io/k3d",
+      "packages": {
+        "winget": "k3d.k3d",
+        "scoop": "k3d",
+        "choco": "k3d",
+        "brew": "k3d"
+      },
+      "github_info": {
+        "stars": 6403,
+        "forks": 529,
+        "description": "Little helper to run CNCF's k3s in Docker",
+        "homepage": "https://k3d.io/",
+        "license": "MIT",
+        "topics": [
+          "cluster",
+          "docker",
+          "go",
+          "k3d",
+          "k3s",
+          "kubernetes",
+          "rancher"
+        ],
+        "pushed_at": "2026-04-18T02:39:51Z",
+        "updated_at": "2026-05-01T23:47:45Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "k6",
+      "display_name": "k6",
+      "category": "Testing",
+      "tags": [
+        "load-testing",
+        "api",
+        "javascript"
+      ],
+      "binary_names": [
+        "k6"
+      ],
+      "github": "grafana/k6",
+      "packages": {
+        "winget": "GrafanaLabs.k6",
+        "scoop": "k6",
+        "choco": "k6",
+        "brew": "k6",
+        "apt": "k6"
+      },
+      "github_info": {
+        "stars": 30474,
+        "forks": 1527,
+        "description": "A modern load testing tool, using Go and JavaScript",
+        "homepage": "https://grafana.com/oss/k6/",
+        "license": "AGPL-3.0",
+        "topics": [
+          "es6",
+          "go",
+          "golang",
+          "hacktoberfest",
+          "javascript",
+          "k6",
+          "load-generator",
+          "load-testing",
+          "performance"
+        ],
+        "pushed_at": "2026-05-02T01:56:13Z",
+        "updated_at": "2026-05-02T01:33:49Z",
+        "fetched_at": "2026-05-02T05:42:22Z"
+      }
+    },
+    {
+      "name": "k9s",
+      "display_name": "K9s",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "tui"
+      ],
+      "binary_names": [
+        "k9s"
+      ],
+      "github": "derailed/k9s",
+      "packages": {
+        "winget": "Derailed.k9s",
+        "scoop": "k9s",
+        "choco": "k9s",
+        "brew": "derailed/k9s/k9s"
+      },
+      "github_info": {
+        "stars": 33533,
+        "forks": 2156,
+        "description": "🐶 Kubernetes CLI To Manage Your Clusters In Style!",
+        "homepage": "https://k9scli.io",
+        "license": "Apache-2.0",
+        "topics": [
+          "go",
+          "golang",
+          "k8s",
+          "k8s-cluster",
+          "k9s",
+          "kubernetes",
+          "kubernetes-cli",
+          "kubernetes-clusters"
+        ],
+        "pushed_at": "2026-04-21T00:01:23Z",
+        "updated_at": "2026-05-02T05:13:20Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "kind",
+      "display_name": "kind",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "local-cluster",
+        "docker"
+      ],
+      "binary_names": [
+        "kind"
+      ],
+      "github": "kubernetes-sigs/kind",
+      "packages": {
+        "winget": "Kubernetes.kind",
+        "scoop": "kind",
+        "choco": "kind",
+        "brew": "kind"
+      },
+      "github_info": {
+        "stars": 15211,
+        "forks": 1735,
+        "description": "Kubernetes IN Docker - local clusters for testing Kubernetes",
+        "homepage": "https://kind.sigs.k8s.io/",
+        "license": "Apache-2.0",
+        "topics": [
+          "docker",
+          "golang",
+          "k8s-sig-testing",
+          "kubeadm",
+          "kubernetes",
+          "podman"
+        ],
+        "pushed_at": "2026-04-20T08:50:53Z",
+        "updated_at": "2026-05-01T17:51:28Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "kubectl",
+      "display_name": "kubectl",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "cli"
+      ],
+      "binary_names": [
+        "kubectl"
+      ],
+      "github": "kubernetes/kubectl",
+      "packages": {
+        "winget": "Kubernetes.kubectl",
+        "scoop": "kubectl",
+        "choco": "kubernetes-cli",
+        "brew": "kubernetes-cli",
+        "snap": "kubectl"
+      },
+      "github_info": {
+        "stars": 3262,
+        "forks": 997,
+        "description": "Issue tracker and mirror of kubectl code",
+        "license": "Apache-2.0",
+        "topics": [
+          "k8s-sig-cli",
+          "k8s-staging"
+        ],
+        "pushed_at": "2026-04-29T20:40:16Z",
+        "updated_at": "2026-05-01T05:47:42Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "kubectx",
+      "display_name": "kubectx",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "cli"
+      ],
+      "binary_names": [
+        "kubectx"
+      ],
+      "github": "ahmetb/kubectx",
+      "packages": {
+        "winget": "ahmetb.kubectx",
+        "scoop": "kubectx",
+        "choco": "kubectx",
+        "brew": "kubectx",
+        "apt": "kubectx"
+      },
+      "github_info": {
+        "stars": 19690,
+        "forks": 1371,
+        "description": "Faster way to switch between clusters and namespaces in kubectl",
+        "homepage": "https://kubectx.dev",
+        "license": "Apache-2.0",
+        "topics": [
+          "kubectl",
+          "kubectl-plugins",
+          "kubernetes",
+          "kubernetes-clusters"
+        ],
+        "pushed_at": "2026-04-26T01:42:40Z",
+        "updated_at": "2026-05-01T20:23:44Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "kubelogin",
+      "display_name": "Kubelogin",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "microsoft",
+        "auth"
+      ],
+      "binary_names": [
+        "kubelogin"
+      ],
+      "github": "Azure/kubelogin",
+      "packages": {
+        "winget": "Microsoft.Azure.Kubelogin",
+        "scoop": "kubelogin",
+        "choco": "kubelogin",
+        "brew": "Azure/kubelogin/kubelogin"
+      },
+      "github_info": {
+        "stars": 568,
+        "forks": 119,
+        "description": "A Kubernetes credential (exec) plugin implementing azure authentication",
+        "homepage": "https://azure.github.io/kubelogin/",
+        "license": "MIT",
+        "pushed_at": "2026-04-30T21:15:06Z",
+        "updated_at": "2026-05-01T05:47:58Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "kubens",
+      "display_name": "kubens",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "cli"
+      ],
+      "binary_names": [
+        "kubens"
+      ],
+      "github": "ahmetb/kubectx",
+      "packages": {
+        "winget": "ahmetb.kubens",
+        "scoop": "kubens",
+        "choco": "kubens",
+        "brew": "kubectx",
+        "apt": "kubectx"
+      },
+      "github_info": {
+        "stars": 19690,
+        "forks": 1371,
+        "description": "Faster way to switch between clusters and namespaces in kubectl",
+        "homepage": "https://kubectx.dev",
+        "license": "Apache-2.0",
+        "topics": [
+          "kubectl",
+          "kubectl-plugins",
+          "kubernetes",
+          "kubernetes-clusters"
+        ],
+        "pushed_at": "2026-04-26T01:42:40Z",
+        "updated_at": "2026-05-01T20:23:44Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "kustomize",
+      "display_name": "Kustomize",
+      "category": "IaC",
+      "tags": [
+        "kubernetes",
+        "configuration-management"
+      ],
+      "binary_names": [
+        "kustomize"
+      ],
+      "github": "kubernetes-sigs/kustomize",
+      "packages": {
+        "winget": "Kubernetes.kustomize",
+        "scoop": "kustomize",
+        "choco": "kustomize",
+        "brew": "kustomize"
+      },
+      "github_info": {
+        "stars": 12042,
+        "forks": 2378,
+        "description": "Customization of kubernetes YAML configurations",
+        "license": "Apache-2.0",
+        "topics": [
+          "hacktoberfest",
+          "k8s-sig-cli"
+        ],
+        "pushed_at": "2026-05-01T19:59:24Z",
+        "updated_at": "2026-05-01T20:09:27Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "lazydocker",
+      "display_name": "lazydocker",
+      "category": "Containers",
+      "tags": [
+        "docker",
+        "tui",
+        "container"
+      ],
+      "binary_names": [
+        "lazydocker"
+      ],
+      "github": "jesseduffield/lazydocker",
+      "packages": {
+        "winget": "JesseDuffield.Lazydocker",
+        "scoop": "lazydocker",
+        "choco": "lazydocker",
+        "brew": "lazydocker",
+        "snap": "lazydocker"
+      },
+      "github_info": {
+        "stars": 50875,
+        "forks": 1608,
+        "description": "The lazier way to manage everything docker",
+        "license": "MIT",
+        "pushed_at": "2026-04-19T02:51:06Z",
+        "updated_at": "2026-05-02T02:16:31Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "lazygit",
+      "display_name": "lazygit",
+      "category": "VCS",
+      "tags": [
+        "git",
+        "tui",
+        "vcs"
+      ],
+      "binary_names": [
+        "lazygit"
+      ],
+      "github": "jesseduffield/lazygit",
+      "packages": {
+        "winget": "JesseDuffield.lazygit",
+        "scoop": "lazygit",
+        "choco": "lazygit",
+        "brew": "lazygit",
+        "snap": "lazygit"
+      },
+      "github_info": {
+        "stars": 77321,
+        "forks": 2804,
+        "description": "simple terminal UI for git commands",
+        "license": "MIT",
+        "topics": [
+          "cli",
+          "git",
+          "terminal"
+        ],
+        "pushed_at": "2026-05-01T06:16:36Z",
+        "updated_at": "2026-05-02T05:28:23Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "lazysql",
+      "display_name": "lazysql",
+      "category": "Database",
+      "tags": [
+        "database",
+        "tui"
+      ],
+      "binary_names": [
+        "lazysql"
+      ],
+      "github": "jorgerojas26/lazysql",
+      "packages": {
+        "brew": "lazysql"
+      },
+      "github_info": {
+        "stars": 3801,
+        "forks": 167,
+        "description": "A cross-platform TUI database management tool written in Go.",
+        "license": "MIT",
+        "pushed_at": "2026-03-12T14:17:10Z",
+        "updated_at": "2026-05-01T19:33:22Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "litecli",
+      "display_name": "litecli",
+      "category": "Database",
+      "tags": [
+        "database",
+        "cli",
+        "python"
+      ],
+      "binary_names": [
+        "litecli"
+      ],
+      "github": "dbcli/litecli",
+      "packages": {
+        "brew": "litecli"
+      },
+      "github_info": {
+        "stars": 3234,
+        "forks": 93,
+        "description": "CLI for SQLite Databases with auto-completion and syntax highlighting",
+        "homepage": "https://litecli.com",
+        "license": "BSD-3-Clause",
+        "topics": [
+          "linux",
+          "prompt-toolkit",
+          "python",
+          "sqlite",
+          "syntax-highlighting"
+        ],
+        "pushed_at": "2026-02-15T03:11:46Z",
+        "updated_at": "2026-04-30T19:09:22Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "llm",
+      "display_name": "llm",
+      "category": "AI",
+      "tags": [
+        "coding-assistant",
+        "cli"
+      ],
+      "binary_names": [
+        "llm"
+      ],
+      "github": "simonw/llm",
+      "packages": {
+        "brew": "llm"
+      },
+      "github_info": {
+        "stars": 11761,
+        "forks": 820,
+        "description": "Access large language models from the command-line",
+        "homepage": "https://llm.datasette.io",
+        "license": "Apache-2.0",
+        "topics": [
+          "ai",
+          "llms",
+          "openai"
+        ],
+        "pushed_at": "2026-04-29T23:52:50Z",
+        "updated_at": "2026-05-02T03:45:57Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "minikube",
+      "display_name": "Minikube",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "local-cluster"
+      ],
+      "binary_names": [
+        "minikube"
+      ],
+      "github": "kubernetes/minikube",
+      "packages": {
+        "winget": "Kubernetes.minikube",
+        "scoop": "minikube",
+        "choco": "minikube",
+        "brew": "minikube"
+      },
+      "github_info": {
+        "stars": 31758,
+        "forks": 5209,
+        "description": "Run Kubernetes locally",
+        "homepage": "https://minikube.sigs.k8s.io/",
+        "license": "Apache-2.0",
+        "topics": [
+          "cluster",
+          "cncf",
+          "containers",
+          "go",
+          "kubernetes",
+          "minikube"
+        ],
+        "pushed_at": "2026-05-01T21:11:26Z",
+        "updated_at": "2026-05-01T21:21:29Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "mise",
+      "display_name": "mise",
+      "category": "PkgMgr",
+      "tags": [
+        "version-manager",
+        "task-runner",
+        "dev-workflow"
+      ],
+      "binary_names": [
+        "mise"
+      ],
+      "github": "jdx/mise",
+      "packages": {
+        "winget": "jdx.mise",
+        "scoop": "mise",
+        "choco": "mise",
+        "brew": "mise",
+        "apt": "mise"
+      },
+      "github_info": {
+        "stars": 27542,
+        "forks": 1102,
+        "description": "dev tools, env vars, task runner",
+        "homepage": "https://mise.en.dev",
+        "license": "MIT",
+        "pushed_at": "2026-05-02T01:32:25Z",
+        "updated_at": "2026-05-02T04:49:33Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "mods",
+      "display_name": "mods",
+      "category": "AI",
+      "tags": [
+        "coding-assistant",
+        "cli",
+        "charm"
+      ],
+      "binary_names": [
+        "mods"
+      ],
+      "github": "charmbracelet/mods",
+      "packages": {
+        "winget": "charmbracelet.mods",
+        "scoop": "mods",
+        "brew": "mods"
+      },
+      "github_info": null
+    },
+    {
+      "name": "mongosh",
+      "display_name": "MongoDB Shell",
+      "category": "Database",
+      "tags": [
+        "database",
+        "cli"
+      ],
+      "binary_names": [
+        "mongosh"
+      ],
+      "github": "mongodb-js/mongosh",
+      "packages": {
+        "winget": "MongoDB.Shell",
+        "scoop": "mongosh",
+        "choco": "mongodb-shell",
+        "brew": "mongosh"
+      },
+      "github_info": {
+        "stars": 385,
+        "forks": 90,
+        "description": "The MongoDB Shell",
+        "homepage": "https://www.mongodb.com/try/download/shell",
+        "license": "Apache-2.0",
+        "topics": [
+          "compass",
+          "compass-plugin",
+          "driver",
+          "mongodb",
+          "nodejs",
+          "react",
+          "shell"
+        ],
+        "pushed_at": "2026-05-02T01:00:26Z",
+        "updated_at": "2026-05-01T10:54:54Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "mtr",
+      "display_name": "mtr",
+      "category": "Network",
+      "tags": [
+        "networking",
+        "cli"
+      ],
+      "binary_names": [
+        "mtr"
+      ],
+      "github": "traviscross/mtr",
+      "packages": {
+        "brew": "mtr"
+      },
+      "github_info": {
+        "stars": 3219,
+        "forks": 369,
+        "description": "Official repository for mtr, a network diagnostic tool",
+        "homepage": "http://www.bitwizard.nl/mtr/",
+        "license": "GPL-2.0",
+        "pushed_at": "2026-04-26T13:38:30Z",
+        "updated_at": "2026-04-30T16:53:33Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "mycli",
+      "display_name": "mycli",
+      "category": "Database",
+      "tags": [
+        "database",
+        "cli",
+        "python"
+      ],
+      "binary_names": [
+        "mycli"
+      ],
+      "github": "dbcli/mycli",
+      "packages": {
+        "brew": "mycli"
+      },
+      "github_info": {
+        "stars": 11908,
+        "forks": 690,
+        "description": "A Terminal Client for MySQL with AutoCompletion and Syntax Highlighting.",
+        "homepage": "http://mycli.net",
+        "license": "BSD-3-Clause",
+        "topics": [
+          "auto-completion",
+          "database",
+          "mycli",
+          "mysql",
+          "python",
+          "syntax-highlighting"
+        ],
+        "pushed_at": "2026-05-01T19:08:52Z",
+        "updated_at": "2026-05-01T15:26:00Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "nvim",
+      "display_name": "Neovim",
+      "category": "Editor",
+      "tags": [
+        "ide",
+        "tui",
+        "lua"
+      ],
+      "binary_names": [
+        "nvim"
+      ],
+      "github": "neovim/neovim",
+      "packages": {
+        "winget": "Neovim.Neovim",
+        "scoop": "nvim",
+        "choco": "neovim",
+        "brew": "neovim",
+        "apt": "neovim",
+        "snap": "nvim"
+      },
+      "github_info": {
+        "stars": 99274,
+        "forks": 6861,
+        "description": "Vim-fork focused on extensibility and usability",
+        "homepage": "https://neovim.io",
+        "license": "Other",
+        "topics": [
+          "api",
+          "c",
+          "lua",
+          "neovim",
+          "nvim",
+          "text-editor",
+          "vim"
+        ],
+        "pushed_at": "2026-05-02T04:55:14Z",
+        "updated_at": "2026-05-02T05:35:15Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "ngrok",
+      "display_name": "ngrok",
+      "category": "Network",
+      "tags": [
+        "tunneling",
+        "cli"
+      ],
+      "binary_names": [
+        "ngrok"
+      ],
+      "github": "inconshreveable/ngrok",
+      "packages": {
+        "winget": "Ngrok.Ngrok",
+        "scoop": "ngrok",
+        "choco": "ngrok",
+        "brew": "ngrok",
+        "snap": "ngrok"
+      },
+      "github_info": null
+    },
+    {
+      "name": "nmap",
+      "display_name": "Nmap",
+      "category": "Security",
+      "tags": [
+        "scanner",
+        "security",
+        "networking"
+      ],
+      "binary_names": [
+        "nmap"
+      ],
+      "github": "nmap/nmap",
+      "packages": {
+        "winget": "Insecure.Nmap",
+        "scoop": "nmap",
+        "choco": "nmap",
+        "brew": "nmap",
+        "apt": "nmap"
+      },
+      "github_info": {
+        "stars": 12824,
+        "forks": 2797,
+        "description": "Nmap - the Network Mapper. Github mirror of official SVN repository.",
+        "homepage": "https://svn.nmap.org/",
+        "license": "Other",
+        "topics": [
+          "asynchronous",
+          "c-plus-plus",
+          "libpcap",
+          "linux",
+          "lua",
+          "machine-learning",
+          "netcat",
+          "network-discovery",
+          "nmap",
+          "osx",
+          "pcre",
+          "ping",
+          "port-scanner",
+          "security",
+          "service-discovery",
+          "socket",
+          "windows"
+        ],
+        "pushed_at": "2026-05-01T19:15:06Z",
+        "updated_at": "2026-05-02T01:42:58Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "node",
+      "display_name": "Node.js",
+      "category": "Language",
+      "tags": [
+        "javascript",
+        "typescript"
+      ],
+      "binary_names": [
+        "node"
+      ],
+      "github": "nodejs/node",
+      "packages": {
+        "winget": "OpenJS.NodeJS.LTS",
+        "scoop": "node",
+        "choco": "nodejs",
+        "brew": "node",
+        "apt": "nodejs",
+        "snap": "node"
+      },
+      "github_info": {
+        "stars": 117015,
+        "forks": 35516,
+        "description": "Node.js JavaScript runtime ✨🐢🚀✨",
+        "homepage": "https://nodejs.org",
+        "license": "Other",
+        "topics": [
+          "javascript",
+          "js",
+          "linux",
+          "macos",
+          "mit",
+          "node",
+          "nodejs",
+          "runtime",
+          "windows"
+        ],
+        "pushed_at": "2026-05-02T05:20:10Z",
+        "updated_at": "2026-05-02T04:10:20Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "npm",
+      "display_name": "npm",
+      "category": "PkgMgr",
+      "tags": [
+        "javascript",
+        "package-manager"
+      ],
+      "binary_names": [
+        "npm"
+      ],
+      "github": "npm/cli",
+      "packages": {
+        "npm": "npm"
+      },
+      "github_info": {
+        "stars": 9722,
+        "forks": 4301,
+        "description": "the package manager for JavaScript",
+        "homepage": "https://docs.npmjs.com/cli/",
+        "license": "Other",
+        "topics": [
+          "javascript",
+          "nodejs",
+          "npm",
+          "npm-cli",
+          "package-manager",
+          "tools"
+        ],
+        "pushed_at": "2026-05-02T02:34:03Z",
+        "updated_at": "2026-05-02T03:31:25Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "nushell",
+      "display_name": "Nushell",
+      "category": "Shell",
+      "tags": [
+        "cli",
+        "cross-platform",
+        "data-processing"
+      ],
+      "binary_names": [
+        "nu"
+      ],
+      "github": "nushell/nushell",
+      "packages": {
+        "winget": "nushell",
+        "scoop": "nu",
+        "brew": "nushell"
+      },
+      "github_info": {
+        "stars": 39290,
+        "forks": 2116,
+        "description": "A new type of shell",
+        "homepage": "https://www.nushell.sh/",
+        "license": "MIT",
+        "topics": [
+          "nushell",
+          "rust",
+          "shell"
+        ],
+        "pushed_at": "2026-04-30T20:39:03Z",
+        "updated_at": "2026-05-02T04:51:59Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "ollama",
+      "display_name": "Ollama",
+      "category": "AI",
+      "tags": [
+        "cli"
+      ],
+      "binary_names": [
+        "ollama"
+      ],
+      "github": "ollama/ollama",
+      "packages": {
+        "winget": "Ollama.Ollama",
+        "scoop": "ollama",
+        "brew": "ollama"
+      },
+      "github_info": {
+        "stars": 170531,
+        "forks": 15930,
+        "description": "Get up and running with Kimi-K2.5, GLM-5, MiniMax, DeepSeek, gpt-oss, Qwen, Gemma and other models.",
+        "homepage": "https://ollama.com",
+        "license": "MIT",
+        "topics": [
+          "deepseek",
+          "gemma",
+          "gemma3",
+          "glm",
+          "go",
+          "golang",
+          "gpt-oss",
+          "llama",
+          "llama3",
+          "llm",
+          "llms",
+          "minimax",
+          "mistral",
+          "ollama",
+          "qwen"
+        ],
+        "pushed_at": "2026-05-01T18:36:52Z",
+        "updated_at": "2026-05-02T04:46:49Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "onefetch",
+      "display_name": "onefetch",
+      "category": "VCS",
+      "tags": [
+        "git",
+        "cli",
+        "code-statistics"
+      ],
+      "binary_names": [
+        "onefetch"
+      ],
+      "github": "o2sh/onefetch",
+      "packages": {
+        "winget": "o2sh.onefetch",
+        "scoop": "onefetch",
+        "brew": "onefetch"
+      },
+      "github_info": {
+        "stars": 11754,
+        "forks": 306,
+        "description": "Command-line Git information tool",
+        "homepage": "https://onefetch.dev",
+        "license": "MIT",
+        "topics": [
+          "cli",
+          "command-line",
+          "command-line-interface",
+          "git",
+          "rust",
+          "tool"
+        ],
+        "pushed_at": "2026-05-02T00:18:48Z",
+        "updated_at": "2026-05-02T00:22:24Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "opentofu",
+      "display_name": "OpenTofu",
+      "category": "IaC",
+      "tags": [
+        "provisioning",
+        "cloud",
+        "automation"
+      ],
+      "binary_names": [
+        "tofu"
+      ],
+      "github": "opentofu/opentofu",
+      "packages": {
+        "winget": "OpenTofu.Tofu",
+        "scoop": "opentofu",
+        "brew": "opentofu",
+        "snap": "opentofu"
+      },
+      "github_info": {
+        "stars": 28531,
+        "forks": 1224,
+        "description": "OpenTofu lets you declaratively manage your cloud infrastructure.",
+        "homepage": "https://opentofu.org",
+        "license": "MPL-2.0",
+        "pushed_at": "2026-05-01T19:17:15Z",
+        "updated_at": "2026-05-02T03:58:19Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "ouch",
+      "display_name": "ouch",
+      "category": "CLI",
+      "tags": [
+        "cli",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "ouch"
+      ],
+      "github": "ouch-org/ouch",
+      "packages": {
+        "scoop": "ouch",
+        "brew": "ouch"
+      },
+      "github_info": {
+        "stars": 3537,
+        "forks": 127,
+        "description": "Painless compression and decompression in the terminal",
+        "homepage": "https://crates.io/crates/ouch",
+        "license": "Other",
+        "topics": [
+          "cli",
+          "compression",
+          "decompression",
+          "hacktoberfest",
+          "rust"
+        ],
+        "pushed_at": "2026-04-29T04:14:56Z",
+        "updated_at": "2026-05-02T03:32:31Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "packer",
+      "display_name": "Packer",
+      "category": "IaC",
+      "tags": [
+        "hashicorp",
+        "image-builder",
+        "automation"
+      ],
+      "binary_names": [
+        "packer"
+      ],
+      "github": "hashicorp/packer",
+      "packages": {
+        "winget": "Hashicorp.Packer",
+        "scoop": "packer",
+        "choco": "packer",
+        "brew": "packer"
+      },
+      "github_info": {
+        "stars": 15662,
+        "forks": 3330,
+        "description": "Packer is a tool for creating identical machine images for multiple platforms from a single source configuration.",
+        "homepage": "https://developer.hashicorp.com/packer",
+        "license": "Other",
+        "pushed_at": "2026-05-02T00:58:17Z",
+        "updated_at": "2026-05-01T05:47:15Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "pandoc",
+      "display_name": "Pandoc",
+      "category": "CLI",
+      "tags": [
+        "data-processing",
+        "cli"
+      ],
+      "binary_names": [
+        "pandoc"
+      ],
+      "github": "jgm/pandoc",
+      "packages": {
+        "winget": "JohnMacFarlane.Pandoc",
+        "scoop": "pandoc",
+        "choco": "pandoc",
+        "brew": "pandoc",
+        "apt": "pandoc"
+      },
+      "github_info": {
+        "stars": 43830,
+        "forks": 3837,
+        "description": "Universal markup converter",
+        "homepage": "https://pandoc.org",
+        "license": "GPL-2.0",
+        "topics": [
+          "commonmark",
+          "converter",
+          "document",
+          "haskell",
+          "markdown",
+          "markup",
+          "pandoc",
+          "presentation",
+          "publishing"
+        ],
+        "pushed_at": "2026-04-30T22:16:29Z",
+        "updated_at": "2026-05-02T03:38:42Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "pgcli",
+      "display_name": "pgcli",
+      "category": "Database",
+      "tags": [
+        "database",
+        "cli"
+      ],
+      "binary_names": [
+        "pgcli"
+      ],
+      "github": "dbcli/pgcli",
+      "packages": {
+        "brew": "pgcli",
+        "apt": "pgcli"
+      },
+      "github_info": {
+        "stars": 13138,
+        "forks": 590,
+        "description": "Postgres CLI with autocompletion and syntax highlighting",
+        "homepage": "http://pgcli.com",
+        "license": "BSD-3-Clause",
+        "topics": [
+          "database",
+          "postgres",
+          "postgresql",
+          "psql",
+          "python"
+        ],
+        "pushed_at": "2026-04-27T12:18:35Z",
+        "updated_at": "2026-05-01T14:03:03Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "pnpm",
+      "display_name": "pnpm",
+      "category": "PkgMgr",
+      "tags": [
+        "javascript",
+        "package-manager"
+      ],
+      "binary_names": [
+        "pnpm"
+      ],
+      "github": "pnpm/pnpm",
+      "packages": {
+        "winget": "pnpm.pnpm",
+        "scoop": "pnpm",
+        "choco": "pnpm",
+        "brew": "pnpm",
+        "npm": "pnpm"
+      },
+      "github_info": {
+        "stars": 34809,
+        "forks": 1423,
+        "description": "Fast, disk space efficient package manager",
+        "homepage": "https://pnpm.io",
+        "license": "MIT",
+        "topics": [
+          "dependency-manager",
+          "install",
+          "javascript",
+          "modules",
+          "node",
+          "nodejs",
+          "npm",
+          "package-manager"
+        ],
+        "pushed_at": "2026-05-02T02:00:16Z",
+        "updated_at": "2026-05-02T03:10:06Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "pwsh",
+      "display_name": "PowerShell",
+      "category": "Shell",
+      "tags": [
+        "automation",
+        "microsoft",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "pwsh"
+      ],
+      "github": "PowerShell/PowerShell",
+      "packages": {
+        "winget": "Microsoft.PowerShell",
+        "scoop": "pwsh",
+        "choco": "powershell-core",
+        "brew": "powershell",
+        "apt": "powershell",
+        "snap": "powershell"
+      },
+      "github_info": {
+        "stars": 53254,
+        "forks": 8299,
+        "description": "PowerShell for every system!",
+        "homepage": "https://microsoft.com/PowerShell",
+        "license": "MIT",
+        "topics": [
+          "command-line",
+          "hacktoberfest",
+          "linux",
+          "macos",
+          "netcore",
+          "powershell",
+          "shell",
+          "windows"
+        ],
+        "pushed_at": "2026-05-01T21:03:38Z",
+        "updated_at": "2026-05-02T05:13:33Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "procs",
+      "display_name": "procs",
+      "category": "CLI",
+      "tags": [
+        "process-monitoring",
+        "cli"
+      ],
+      "binary_names": [
+        "procs"
+      ],
+      "github": "dalance/procs",
+      "packages": {
+        "winget": "dalance.procs",
+        "scoop": "procs",
+        "choco": "procs",
+        "brew": "procs"
+      },
+      "github_info": {
+        "stars": 6030,
+        "forks": 142,
+        "description": "A modern replacement for ps written in Rust",
+        "license": "MIT",
+        "topics": [
+          "cli",
+          "process",
+          "rust"
+        ],
+        "pushed_at": "2026-04-23T20:06:08Z",
+        "updated_at": "2026-04-30T14:25:56Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "pulumi",
+      "display_name": "Pulumi",
+      "category": "IaC",
+      "tags": [
+        "cloud",
+        "provisioning"
+      ],
+      "binary_names": [
+        "pulumi"
+      ],
+      "github": "pulumi/pulumi",
+      "packages": {
+        "winget": "Pulumi.Pulumi",
+        "scoop": "pulumi",
+        "choco": "pulumi",
+        "brew": "pulumi"
+      },
+      "github_info": {
+        "stars": 25129,
+        "forks": 1362,
+        "description": "Pulumi - Infrastructure as Code in any programming language 🚀",
+        "homepage": "https://www.pulumi.com",
+        "license": "Apache-2.0",
+        "topics": [
+          "aws",
+          "azure",
+          "cloud",
+          "cloud-computing",
+          "containers",
+          "csharp",
+          "dotnet",
+          "fsharp",
+          "gcp",
+          "go",
+          "golang",
+          "iac",
+          "infrastructure-as-code",
+          "javascript",
+          "kubernetes",
+          "python",
+          "serverless",
+          "typescript"
+        ],
+        "pushed_at": "2026-05-01T23:50:18Z",
+        "updated_at": "2026-05-02T01:45:42Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "python",
+      "display_name": "Python",
+      "category": "Language",
+      "tags": [
+        "python",
+        "automation"
+      ],
+      "binary_names": [
+        "python3",
+        "python"
+      ],
+      "github": "python/cpython",
+      "packages": {
+        "winget": "Python.Python.3.12",
+        "scoop": "python",
+        "choco": "python3",
+        "brew": "python@3",
+        "apt": "python3"
+      },
+      "github_info": {
+        "stars": 72545,
+        "forks": 34531,
+        "description": "The Python programming language",
+        "homepage": "https://www.python.org",
+        "license": "Other",
+        "pushed_at": "2026-05-02T04:10:49Z",
+        "updated_at": "2026-05-02T05:07:14Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "rclone",
+      "display_name": "rclone",
+      "category": "Network",
+      "tags": [
+        "cloud",
+        "cli",
+        "sync"
+      ],
+      "binary_names": [
+        "rclone"
+      ],
+      "github": "rclone/rclone",
+      "packages": {
+        "winget": "Rclone.Rclone",
+        "scoop": "rclone",
+        "choco": "rclone",
+        "brew": "rclone",
+        "apt": "rclone",
+        "snap": "rclone"
+      },
+      "github_info": null
+    },
+    {
+      "name": "redis-cli",
+      "display_name": "Redis CLI",
+      "category": "Database",
+      "tags": [
+        "database",
+        "cli"
+      ],
+      "binary_names": [
+        "redis-cli"
+      ],
+      "github": "redis/redis",
+      "packages": {
+        "choco": "redis",
+        "brew": "redis",
+        "apt": "redis-tools"
+      },
+      "github_info": {
+        "stars": 74097,
+        "forks": 24598,
+        "description": "For developers, who are building real-time data-driven applications, Redis is the preferred, fastest, and most feature-rich cache, data structure server, and document and vector query engine.",
+        "homepage": "http://redis.io",
+        "license": "Other",
+        "topics": [
+          "cache",
+          "caching",
+          "database",
+          "distributed-systems",
+          "in-memory",
+          "in-memory-database",
+          "json",
+          "key-value",
+          "key-value-store",
+          "message-broker",
+          "message-queue",
+          "no-sql",
+          "nosql",
+          "open-source",
+          "real-time",
+          "realtime",
+          "redis",
+          "time-series",
+          "vector-databases",
+          "vector-search"
+        ],
+        "pushed_at": "2026-04-30T13:38:25Z",
+        "updated_at": "2026-05-02T02:03:56Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "ripgrep",
+      "display_name": "ripgrep",
+      "category": "CLI",
+      "tags": [
+        "search",
+        "cli"
+      ],
+      "binary_names": [
+        "rg"
+      ],
+      "github": "BurntSushi/ripgrep",
+      "packages": {
+        "winget": "BurntSushi.ripgrep.MSVC",
+        "scoop": "ripgrep",
+        "choco": "ripgrep",
+        "brew": "ripgrep",
+        "apt": "ripgrep"
+      },
+      "github_info": {
+        "stars": 63196,
+        "forks": 2531,
+        "description": "ripgrep recursively searches directories for a regex pattern while respecting your gitignore",
+        "license": "Unlicense",
+        "topics": [
+          "cli",
+          "command-line",
+          "command-line-tool",
+          "gitignore",
+          "grep",
+          "recursively-search",
+          "regex",
+          "ripgrep",
+          "rust",
+          "search"
+        ],
+        "pushed_at": "2026-02-27T16:25:19Z",
+        "updated_at": "2026-05-02T04:11:11Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "ruby",
+      "display_name": "Ruby",
+      "category": "Language",
+      "tags": [
+        "ruby"
+      ],
+      "binary_names": [
+        "ruby"
+      ],
+      "github": "ruby/ruby",
+      "packages": {
+        "winget": "RubyInstallerTeam.Ruby.3.4",
+        "scoop": "ruby",
+        "choco": "ruby",
+        "brew": "ruby",
+        "apt": "ruby"
+      },
+      "github_info": {
+        "stars": 23563,
+        "forks": 5586,
+        "description": "The Ruby Programming Language",
+        "homepage": "https://www.ruby-lang.org/",
+        "license": "Other",
+        "topics": [
+          "c",
+          "jit",
+          "language",
+          "object-oriented",
+          "programming-language",
+          "ruby",
+          "ruby-language",
+          "rust"
+        ],
+        "pushed_at": "2026-05-01T19:26:23Z",
+        "updated_at": "2026-05-01T19:25:59Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "rustc",
+      "display_name": "Rust",
+      "category": "Language",
+      "tags": [
+        "rust"
+      ],
+      "binary_names": [
+        "rustc"
+      ],
+      "github": "rust-lang/rust",
+      "packages": {
+        "brew": "rust",
+        "apt": "rustc"
+      },
+      "github_info": {
+        "stars": 112473,
+        "forks": 14894,
+        "description": "Empowering everyone to build reliable and efficient software.",
+        "homepage": "https://www.rust-lang.org",
+        "license": "Apache-2.0",
+        "topics": [
+          "compiler",
+          "language",
+          "rust"
+        ],
+        "pushed_at": "2026-05-02T04:46:32Z",
+        "updated_at": "2026-05-02T04:44:36Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "sd",
+      "display_name": "sd",
+      "category": "CLI",
+      "tags": [
+        "cli",
+        "search",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "sd"
+      ],
+      "github": "chmln/sd",
+      "packages": {
+        "winget": "chmln.sd",
+        "scoop": "sd",
+        "brew": "sd"
+      },
+      "github_info": {
+        "stars": 7085,
+        "forks": 156,
+        "description": "Intuitive find & replace CLI (sed alternative)",
+        "license": "MIT",
+        "topics": [
+          "cli",
+          "command-line",
+          "regex",
+          "rust",
+          "terminal",
+          "text-processing"
+        ],
+        "pushed_at": "2026-02-25T19:26:21Z",
+        "updated_at": "2026-05-02T03:41:29Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "skaffold",
+      "display_name": "Skaffold",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "dev-workflow",
+        "google"
+      ],
+      "binary_names": [
+        "skaffold"
+      ],
+      "github": "GoogleContainerTools/skaffold",
+      "packages": {
+        "winget": "Google.ContainerTools.Skaffold",
+        "scoop": "skaffold",
+        "choco": "skaffold",
+        "brew": "skaffold"
+      },
+      "github_info": {
+        "stars": 15820,
+        "forks": 1702,
+        "description": "Easy and Repeatable Kubernetes Development",
+        "homepage": "https://skaffold.dev/",
+        "license": "Apache-2.0",
+        "topics": [
+          "containers",
+          "developer-tools",
+          "docker",
+          "kubernetes"
+        ],
+        "pushed_at": "2026-04-23T17:36:28Z",
+        "updated_at": "2026-05-01T19:00:20Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "sops",
+      "display_name": "SOPS",
+      "category": "Security",
+      "tags": [
+        "secrets",
+        "encryption",
+        "security",
+        "git"
+      ],
+      "binary_names": [
+        "sops"
+      ],
+      "github": "getsops/sops",
+      "packages": {
+        "winget": "Mozilla.SOPS",
+        "scoop": "sops",
+        "choco": "sops",
+        "brew": "sops"
+      },
+      "github_info": {
+        "stars": 21664,
+        "forks": 1022,
+        "description": "Simple and flexible tool for managing secrets",
+        "homepage": "https://getsops.io",
+        "license": "MPL-2.0",
+        "topics": [
+          "aws",
+          "azure",
+          "devops",
+          "gcp",
+          "pgp",
+          "secret-distribution",
+          "secret-management",
+          "security",
+          "sops"
+        ],
+        "pushed_at": "2026-04-27T16:07:56Z",
+        "updated_at": "2026-05-02T05:26:56Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "sqlite3",
+      "display_name": "SQLite",
+      "category": "Database",
+      "tags": [
+        "database",
+        "cli"
+      ],
+      "binary_names": [
+        "sqlite3"
+      ],
+      "github": "sqlite/sqlite",
+      "packages": {
+        "winget": "SQLite.SQLite",
+        "scoop": "sqlite3",
+        "choco": "sqlite",
+        "brew": "sqlite",
+        "apt": "sqlite3"
+      },
+      "github_info": {
+        "stars": 9500,
+        "forks": 1488,
+        "description": "Official Git mirror of the SQLite source tree",
+        "license": "Other",
+        "pushed_at": "2026-05-02T00:06:12Z",
+        "updated_at": "2026-05-02T03:48:00Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "starship",
+      "display_name": "Starship",
+      "category": "Shell",
+      "tags": [
+        "prompt",
+        "cross-shell"
+      ],
+      "binary_names": [
+        "starship"
+      ],
+      "github": "starship/starship",
+      "packages": {
+        "winget": "Starship.Starship",
+        "scoop": "starship",
+        "choco": "starship",
+        "brew": "starship"
+      },
+      "github_info": {
+        "stars": 57067,
+        "forks": 2504,
+        "description": "☄🌌️  The minimal, blazing-fast, and infinitely customizable prompt for any shell!",
+        "homepage": "https://starship.rs",
+        "license": "ISC",
+        "topics": [
+          "bash",
+          "fish",
+          "fish-prompt",
+          "fish-theme",
+          "oh-my-zsh",
+          "powershell",
+          "rust",
+          "shell-prompt",
+          "starship",
+          "zsh",
+          "zsh-prompt",
+          "zsh-theme"
+        ],
+        "pushed_at": "2026-04-30T19:56:27Z",
+        "updated_at": "2026-05-02T05:10:58Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "stern",
+      "display_name": "Stern",
+      "category": "Observability",
+      "tags": [
+        "kubernetes",
+        "log-viewer",
+        "observability"
+      ],
+      "binary_names": [
+        "stern"
+      ],
+      "github": "stern/stern",
+      "packages": {
+        "winget": "stern.stern",
+        "scoop": "stern",
+        "choco": "stern",
+        "brew": "stern"
+      },
+      "github_info": {
+        "stars": 4656,
+        "forks": 166,
+        "description": "⎈ Multi pod and container log tailing for Kubernetes -- Friendly fork of https://github.com/wercker/stern",
+        "license": "Apache-2.0",
+        "topics": [
+          "debugging",
+          "devops",
+          "kubernetes",
+          "logging",
+          "logs",
+          "tail"
+        ],
+        "pushed_at": "2026-04-30T12:34:56Z",
+        "updated_at": "2026-05-01T09:20:50Z",
+        "fetched_at": "2026-05-02T05:42:22Z"
+      }
+    },
+    {
+      "name": "task",
+      "display_name": "Task",
+      "category": "CLI",
+      "tags": [
+        "task-runner",
+        "build-system",
+        "automation"
+      ],
+      "binary_names": [
+        "task"
+      ],
+      "github": "go-task/task",
+      "packages": {
+        "winget": "Task.Task",
+        "scoop": "task",
+        "choco": "go-task",
+        "brew": "go-task",
+        "snap": "task"
+      },
+      "github_info": {
+        "stars": 15436,
+        "forks": 822,
+        "description": "A fast, cross-platform build tool inspired by Make, designed for modern workflows.",
+        "homepage": "https://taskfile.dev",
+        "license": "MIT",
+        "topics": [
+          "build-tool",
+          "devops",
+          "go",
+          "make",
+          "makefile",
+          "task",
+          "task-runner",
+          "taskfile"
+        ],
+        "pushed_at": "2026-05-02T00:47:24Z",
+        "updated_at": "2026-05-02T01:04:15Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "termshark",
+      "display_name": "termshark",
+      "category": "Network",
+      "tags": [
+        "networking",
+        "tui"
+      ],
+      "binary_names": [
+        "termshark"
+      ],
+      "github": "gcla/termshark",
+      "packages": {
+        "brew": "termshark"
+      },
+      "github_info": {
+        "stars": 9881,
+        "forks": 435,
+        "description": "A terminal UI for tshark, inspired by Wireshark",
+        "license": "MIT",
+        "topics": [
+          "go",
+          "golang",
+          "gowid",
+          "pcap",
+          "tcell",
+          "tshark",
+          "tui",
+          "wireshark"
+        ],
+        "pushed_at": "2024-04-30T06:15:11Z",
+        "updated_at": "2026-05-01T21:58:57Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "terraform",
+      "display_name": "Terraform",
+      "category": "IaC",
+      "tags": [
+        "hashicorp",
+        "cloud",
+        "provisioning"
+      ],
+      "binary_names": [
+        "terraform"
+      ],
+      "github": "hashicorp/terraform",
+      "packages": {
+        "winget": "Hashicorp.Terraform",
+        "scoop": "terraform",
+        "choco": "terraform",
+        "brew": "terraform",
+        "snap": "terraform"
+      },
+      "github_info": {
+        "stars": 48307,
+        "forks": 10331,
+        "description": "Terraform enables you to safely and predictably create, change, and improve infrastructure. It is a source-available tool that codifies APIs into declarative configuration files that can be shared amongst team members, treated as code, edited, reviewed, and versioned.",
+        "homepage": "http://developer.hashicorp.com/terraform",
+        "license": "Other",
+        "topics": [
+          "cloud",
+          "cloud-management",
+          "graph",
+          "infrastructure-as-code",
+          "terraform"
+        ],
+        "pushed_at": "2026-05-01T21:24:13Z",
+        "updated_at": "2026-05-02T05:28:47Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "terraform-docs",
+      "display_name": "terraform-docs",
+      "category": "IaC",
+      "tags": [
+        "terraform",
+        "docs",
+        "cli"
+      ],
+      "binary_names": [
+        "terraform-docs"
+      ],
+      "github": "terraform-docs/terraform-docs",
+      "packages": {
+        "winget": "terraform-docs.terraform-docs",
+        "scoop": "terraform-docs",
+        "choco": "terraform-docs",
+        "brew": "terraform-docs"
+      },
+      "github_info": null
+    },
+    {
+      "name": "terragrunt",
+      "display_name": "Terragrunt",
+      "category": "IaC",
+      "tags": [
+        "hashicorp",
+        "provisioning",
+        "automation"
+      ],
+      "binary_names": [
+        "terragrunt"
+      ],
+      "github": "gruntwork-io/terragrunt",
+      "packages": {
+        "winget": "Gruntwork.Terragrunt",
+        "scoop": "terragrunt",
+        "choco": "terragrunt",
+        "brew": "terragrunt"
+      },
+      "github_info": {
+        "stars": 9552,
+        "forks": 1178,
+        "description": "Terragrunt is a flexible orchestration tool that allows Infrastructure as Code written in OpenTofu/Terraform to scale.",
+        "homepage": "https://terragrunt.gruntwork.io/",
+        "license": "MIT",
+        "topics": [
+          "aws",
+          "cli",
+          "developer-tools",
+          "devops",
+          "opentofu",
+          "terraform"
+        ],
+        "pushed_at": "2026-05-01T21:27:49Z",
+        "updated_at": "2026-05-01T19:55:59Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "tflint",
+      "display_name": "TFLint",
+      "category": "IaC",
+      "tags": [
+        "terraform",
+        "linter",
+        "cli"
+      ],
+      "binary_names": [
+        "tflint"
+      ],
+      "github": "terraform-linters/tflint",
+      "packages": {
+        "winget": "terraform-linters.tflint",
+        "scoop": "tflint",
+        "choco": "tflint",
+        "brew": "tflint"
+      },
+      "github_info": null
+    },
+    {
+      "name": "tig",
+      "display_name": "tig",
+      "category": "VCS",
+      "tags": [
+        "git",
+        "tui",
+        "log-viewer"
+      ],
+      "binary_names": [
+        "tig"
+      ],
+      "github": "jonas/tig",
+      "packages": {
+        "choco": "tig",
+        "brew": "tig",
+        "apt": "tig"
+      },
+      "github_info": {
+        "stars": 13206,
+        "forks": 649,
+        "description": "Text-mode interface for git",
+        "homepage": "https://jonas.github.io/tig/",
+        "license": "GPL-2.0",
+        "topics": [
+          "c",
+          "git",
+          "ncurses",
+          "tui"
+        ],
+        "pushed_at": "2026-05-01T18:29:21Z",
+        "updated_at": "2026-05-01T18:55:49Z",
+        "fetched_at": "2026-05-02T05:42:16Z"
+      }
+    },
+    {
+      "name": "tldr",
+      "display_name": "tldr",
+      "category": "CLI",
+      "tags": [
+        "cli"
+      ],
+      "binary_names": [
+        "tldr"
+      ],
+      "github": "tldr-pages/tldr",
+      "packages": {
+        "choco": "tldr",
+        "brew": "tldr",
+        "apt": "tldr",
+        "npm": "tldr"
+      },
+      "github_info": {
+        "stars": 62329,
+        "forks": 5205,
+        "description": "Collaborative cheatsheets for console commands 📚.",
+        "homepage": "https://tldr.sh",
+        "license": "Other",
+        "topics": [
+          "android",
+          "bsd",
+          "cheatsheet",
+          "cheatsheets",
+          "command-line",
+          "console",
+          "documentation",
+          "examples",
+          "hacktoberfest",
+          "help",
+          "linux",
+          "macos",
+          "man-page",
+          "manpages",
+          "manual",
+          "osx",
+          "shell",
+          "terminal",
+          "tldr",
+          "windows"
+        ],
+        "pushed_at": "2026-05-02T04:53:02Z",
+        "updated_at": "2026-05-02T04:53:55Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "tmux",
+      "display_name": "tmux",
+      "category": "Shell",
+      "tags": [
+        "tui",
+        "cli"
+      ],
+      "binary_names": [
+        "tmux"
+      ],
+      "github": "tmux/tmux",
+      "packages": {
+        "brew": "tmux",
+        "apt": "tmux"
+      },
+      "github_info": {
+        "stars": 45061,
+        "forks": 2598,
+        "description": "tmux source code",
+        "license": "ISC",
+        "pushed_at": "2026-05-01T15:03:42Z",
+        "updated_at": "2026-05-02T04:33:52Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "tokei",
+      "display_name": "tokei",
+      "category": "CLI",
+      "tags": [
+        "code-statistics",
+        "cli"
+      ],
+      "binary_names": [
+        "tokei"
+      ],
+      "github": "XAMPPRocky/tokei",
+      "packages": {
+        "winget": "XAMPPRocky.Tokei",
+        "scoop": "tokei",
+        "choco": "tokei",
+        "brew": "tokei"
+      },
+      "github_info": {
+        "stars": 14344,
+        "forks": 670,
+        "description": "Count your code, quickly.",
+        "license": "Other",
+        "topics": [
+          "badge",
+          "cli",
+          "cloc",
+          "code",
+          "command-line-tool",
+          "linux",
+          "macos",
+          "rust",
+          "sloc",
+          "statistics",
+          "tokei",
+          "windows"
+        ],
+        "pushed_at": "2026-01-25T10:11:13Z",
+        "updated_at": "2026-05-01T20:24:23Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "trivy",
+      "display_name": "Trivy",
+      "category": "Security",
+      "tags": [
+        "scanner",
+        "security",
+        "container",
+        "kubernetes"
+      ],
+      "binary_names": [
+        "trivy"
+      ],
+      "github": "aquasecurity/trivy",
+      "packages": {
+        "winget": "AquaSecurity.Trivy",
+        "scoop": "trivy",
+        "choco": "trivy",
+        "brew": "trivy",
+        "apt": "trivy"
+      },
+      "github_info": {
+        "stars": 34807,
+        "forks": 340,
+        "description": "Find vulnerabilities, misconfigurations, secrets, SBOM in containers, Kubernetes, code repositories, clouds and more",
+        "homepage": "https://trivy.dev",
+        "license": "Apache-2.0",
+        "topics": [
+          "containers",
+          "devsecops",
+          "docker",
+          "go",
+          "golang",
+          "hacktoberfest",
+          "iac",
+          "infrastructure-as-code",
+          "kubernetes",
+          "misconfiguration",
+          "security",
+          "security-tools",
+          "vulnerability",
+          "vulnerability-detection",
+          "vulnerability-scanners"
+        ],
+        "pushed_at": "2026-05-01T17:48:17Z",
+        "updated_at": "2026-05-02T05:14:28Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "trufflehog",
+      "display_name": "TruffleHog",
+      "category": "Security",
+      "tags": [
+        "secrets",
+        "cli"
+      ],
+      "binary_names": [
+        "trufflehog"
+      ],
+      "github": "trufflesecurity/trufflehog",
+      "packages": {
+        "winget": "TruffleSecurity.TruffleHog",
+        "scoop": "trufflehog",
+        "brew": "trufflehog"
+      },
+      "github_info": null
+    },
+    {
+      "name": "usql",
+      "display_name": "usql",
+      "category": "Database",
+      "tags": [
+        "database",
+        "cli"
+      ],
+      "binary_names": [
+        "usql"
+      ],
+      "github": "xo/usql",
+      "packages": {
+        "brew": "usql"
+      },
+      "github_info": {
+        "stars": 9932,
+        "forks": 388,
+        "description": "Universal command-line interface for SQL databases",
+        "license": "MIT",
+        "topics": [
+          "command-line",
+          "database",
+          "go",
+          "golang",
+          "mariadb",
+          "microsoft-sql-server",
+          "mysql",
+          "oracle",
+          "oracle-database",
+          "postgres",
+          "postgresql",
+          "sql",
+          "sqlite",
+          "sqlite3"
+        ],
+        "pushed_at": "2026-04-13T16:00:06Z",
+        "updated_at": "2026-04-29T16:34:14Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "uv",
+      "display_name": "uv",
+      "category": "PkgMgr",
+      "tags": [
+        "python",
+        "package-manager"
+      ],
+      "binary_names": [
+        "uv"
+      ],
+      "github": "astral-sh/uv",
+      "packages": {
+        "winget": "astral-sh.uv",
+        "scoop": "uv",
+        "choco": "uv",
+        "brew": "uv"
+      },
+      "github_info": {
+        "stars": 84255,
+        "forks": 3023,
+        "description": "An extremely fast Python package and project manager, written in Rust.",
+        "homepage": "https://docs.astral.sh/uv",
+        "license": "Apache-2.0",
+        "topics": [
+          "packaging",
+          "python",
+          "resolver",
+          "uv"
+        ],
+        "pushed_at": "2026-05-01T20:25:10Z",
+        "updated_at": "2026-05-02T03:27:34Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "vagrant",
+      "display_name": "Vagrant",
+      "category": "IaC",
+      "tags": [
+        "hashicorp",
+        "dev-workflow"
+      ],
+      "binary_names": [
+        "vagrant"
+      ],
+      "github": "hashicorp/vagrant",
+      "packages": {
+        "winget": "Hashicorp.Vagrant",
+        "scoop": "vagrant",
+        "choco": "vagrant",
+        "brew": "vagrant"
+      },
+      "github_info": {
+        "stars": 27142,
+        "forks": 4428,
+        "description": "Vagrant is a tool for building and distributing development environments.",
+        "homepage": "https://www.vagrantup.com",
+        "license": "Other",
+        "topics": [
+          "automation",
+          "ruby",
+          "vagrant",
+          "virtualization"
+        ],
+        "pushed_at": "2026-04-27T07:38:14Z",
+        "updated_at": "2026-05-01T20:13:42Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "vault",
+      "display_name": "Vault",
+      "category": "Security",
+      "tags": [
+        "hashicorp",
+        "secrets",
+        "encryption",
+        "auth"
+      ],
+      "binary_names": [
+        "vault"
+      ],
+      "github": "hashicorp/vault",
+      "packages": {
+        "winget": "Hashicorp.Vault",
+        "scoop": "vault",
+        "choco": "vault",
+        "brew": "vault"
+      },
+      "github_info": {
+        "stars": 35552,
+        "forks": 4660,
+        "description": "A tool for secrets management, encryption as a service, and privileged access management",
+        "homepage": "https://developer.hashicorp.com/vault",
+        "license": "Other",
+        "topics": [
+          "go",
+          "secrets",
+          "vault"
+        ],
+        "pushed_at": "2026-05-01T17:19:45Z",
+        "updated_at": "2026-05-01T21:18:46Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "vegeta",
+      "display_name": "Vegeta",
+      "category": "Testing",
+      "tags": [
+        "load-testing",
+        "http-client",
+        "benchmarking"
+      ],
+      "binary_names": [
+        "vegeta"
+      ],
+      "github": "tsenart/vegeta",
+      "packages": {
+        "brew": "vegeta"
+      },
+      "github_info": {
+        "stars": 25021,
+        "forks": 1418,
+        "description": "HTTP load testing tool and library. It's over 9000!",
+        "homepage": "http://godoc.org/github.com/tsenart/vegeta/lib",
+        "license": "MIT",
+        "topics": [
+          "benchmarking",
+          "go",
+          "http",
+          "load-testing"
+        ],
+        "pushed_at": "2026-02-16T14:07:07Z",
+        "updated_at": "2026-05-01T21:32:52Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "velero",
+      "display_name": "Velero",
+      "category": "Containers",
+      "tags": [
+        "kubernetes",
+        "automation"
+      ],
+      "binary_names": [
+        "velero"
+      ],
+      "github": "vmware-tanzu/velero",
+      "packages": {
+        "choco": "velero",
+        "brew": "velero"
+      },
+      "github_info": {
+        "stars": 9992,
+        "forks": 1531,
+        "description": "Backup and migrate Kubernetes applications and their persistent volumes",
+        "homepage": "https://velero-io.github.io/velero/",
+        "license": "Apache-2.0",
+        "topics": [
+          "backup",
+          "disaster-recovery",
+          "hacktoberfest",
+          "kubernetes",
+          "velero"
+        ],
+        "pushed_at": "2026-04-30T10:26:58Z",
+        "updated_at": "2026-05-02T03:28:28Z",
+        "fetched_at": "2026-05-02T05:42:17Z"
+      }
+    },
+    {
+      "name": "vhs",
+      "display_name": "VHS",
+      "category": "CLI",
+      "tags": [
+        "cli",
+        "charm"
+      ],
+      "binary_names": [
+        "vhs"
+      ],
+      "github": "charmbracelet/vhs",
+      "packages": {
+        "winget": "charmbracelet.vhs",
+        "scoop": "vhs",
+        "brew": "vhs"
+      },
+      "github_info": null
+    },
+    {
+      "name": "viddy",
+      "display_name": "viddy",
+      "category": "CLI",
+      "tags": [
+        "cli",
+        "automation",
+        "dev-workflow"
+      ],
+      "binary_names": [
+        "viddy"
+      ],
+      "github": "sachaos/viddy",
+      "packages": {
+        "scoop": "viddy",
+        "brew": "viddy"
+      },
+      "github_info": {
+        "stars": 5321,
+        "forks": 97,
+        "description": "👀 A modern watch command. Time machine and pager etc.",
+        "license": "MIT",
+        "topics": [
+          "cli",
+          "golang",
+          "terminal",
+          "tui",
+          "watch"
+        ],
+        "pushed_at": "2026-02-05T18:28:09Z",
+        "updated_at": "2026-04-30T19:47:37Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "code",
+      "display_name": "VS Code",
+      "category": "Editor",
+      "tags": [
+        "ide",
+        "microsoft",
+        "gui"
+      ],
+      "binary_names": [
+        "code"
+      ],
+      "github": "microsoft/vscode",
+      "packages": {
+        "winget": "Microsoft.VisualStudioCode",
+        "scoop": "code",
+        "choco": "vscode",
+        "brew": "visual-studio-code",
+        "apt": "code",
+        "snap": "code"
+      },
+      "github_info": {
+        "stars": 184463,
+        "forks": 39620,
+        "description": "Visual Studio Code",
+        "homepage": "https://code.visualstudio.com",
+        "license": "MIT",
+        "topics": [
+          "editor",
+          "electron",
+          "microsoft",
+          "typescript",
+          "visual-studio-code"
+        ],
+        "pushed_at": "2026-05-02T05:26:07Z",
+        "updated_at": "2026-05-02T05:26:18Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "watchexec",
+      "display_name": "watchexec",
+      "category": "CLI",
+      "tags": [
+        "automation",
+        "dev-workflow",
+        "cli",
+        "cross-platform"
+      ],
+      "binary_names": [
+        "watchexec"
+      ],
+      "github": "watchexec/watchexec",
+      "packages": {
+        "scoop": "watchexec",
+        "choco": "watchexec",
+        "brew": "watchexec"
+      },
+      "github_info": {
+        "stars": 6942,
+        "forks": 187,
+        "description": "Executes commands in response to file modifications",
+        "homepage": "https://watchexec.github.io",
+        "license": "Apache-2.0",
+        "topics": [
+          "command-line",
+          "developer-tools",
+          "file-watchers",
+          "linux",
+          "macos",
+          "rust",
+          "windows"
+        ],
+        "pushed_at": "2026-04-27T18:59:59Z",
+        "updated_at": "2026-05-01T20:08:27Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "wget",
+      "display_name": "Wget",
+      "category": "CLI",
+      "tags": [
+        "file-transfer",
+        "cli"
+      ],
+      "binary_names": [
+        "wget"
+      ],
+      "github": null,
+      "packages": {
+        "winget": "JernejSimoncic.Wget",
+        "scoop": "wget",
+        "choco": "wget",
+        "brew": "wget",
+        "apt": "wget"
+      },
+      "github_info": null
+    },
+    {
+      "name": "xh",
+      "display_name": "xh",
+      "category": "CLI",
+      "tags": [
+        "http-client",
+        "api",
+        "cli"
+      ],
+      "binary_names": [
+        "xh"
+      ],
+      "github": "ducaale/xh",
+      "packages": {
+        "winget": "ducaale.xh",
+        "scoop": "xh",
+        "choco": "xh",
+        "brew": "xh"
+      },
+      "github_info": {
+        "stars": 7772,
+        "forks": 127,
+        "description": "Friendly and fast tool for sending HTTP requests",
+        "license": "MIT",
+        "topics": [
+          "api-testing",
+          "cli",
+          "developer-tools",
+          "http-client",
+          "rust",
+          "terminal"
+        ],
+        "pushed_at": "2026-05-01T23:20:21Z",
+        "updated_at": "2026-05-02T02:47:05Z",
+        "fetched_at": "2026-05-02T05:42:19Z"
+      }
+    },
+    {
+      "name": "yq",
+      "display_name": "yq",
+      "category": "CLI",
+      "tags": [
+        "data-processing",
+        "cli"
+      ],
+      "binary_names": [
+        "yq"
+      ],
+      "github": "mikefarah/yq",
+      "packages": {
+        "winget": "MikeFarah.yq",
+        "scoop": "yq",
+        "choco": "yq",
+        "brew": "yq",
+        "snap": "yq"
+      },
+      "github_info": {
+        "stars": 15327,
+        "forks": 769,
+        "description": "yq is a portable command-line YAML, JSON, XML, CSV, TOML, HCL  and properties processor",
+        "homepage": "https://mikefarah.gitbook.io/yq/",
+        "license": "MIT",
+        "topics": [
+          "bash",
+          "cli",
+          "csv",
+          "devops-tools",
+          "golang",
+          "hcl",
+          "json",
+          "portable",
+          "properties",
+          "splat",
+          "terraform",
+          "toml",
+          "xml",
+          "yaml",
+          "yaml-processor"
+        ],
+        "pushed_at": "2026-04-30T03:52:30Z",
+        "updated_at": "2026-05-02T04:08:35Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    },
+    {
+      "name": "zellij",
+      "display_name": "zellij",
+      "category": "Shell",
+      "tags": [
+        "cli",
+        "dev-workflow"
+      ],
+      "binary_names": [
+        "zellij"
+      ],
+      "github": "zellij-org/zellij",
+      "packages": {
+        "brew": "zellij"
+      },
+      "github_info": {
+        "stars": 32106,
+        "forks": 1152,
+        "description": "A terminal workspace with batteries included",
+        "homepage": "https://zellij.dev",
+        "license": "MIT",
+        "topics": [
+          "multiplexer",
+          "terminal",
+          "workspace"
+        ],
+        "pushed_at": "2026-05-01T09:42:04Z",
+        "updated_at": "2026-05-02T05:30:19Z",
+        "fetched_at": "2026-05-02T05:42:21Z"
+      }
+    },
+    {
+      "name": "zig",
+      "display_name": "Zig",
+      "category": "Language",
+      "tags": [
+        "cli"
+      ],
+      "binary_names": [
+        "zig"
+      ],
+      "github": "ziglang/zig",
+      "packages": {
+        "winget": "zig.zig",
+        "scoop": "zig",
+        "choco": "zig",
+        "brew": "zig",
+        "snap": "zig"
+      },
+      "github_info": {
+        "stars": 42887,
+        "forks": 3068,
+        "description": "Moved to Codeberg",
+        "homepage": "https://ziglang.org/news/migrating-from-github-to-codeberg/",
+        "license": "MIT",
+        "topics": [
+          "compiler",
+          "language",
+          "zig"
+        ],
+        "pushed_at": "2025-11-27T01:42:59Z",
+        "updated_at": "2026-05-02T03:05:20Z",
+        "fetched_at": "2026-05-02T05:42:18Z"
+      }
+    },
+    {
+      "name": "zoxide",
+      "display_name": "zoxide",
+      "category": "CLI",
+      "tags": [
+        "cli",
+        "cross-shell"
+      ],
+      "binary_names": [
+        "zoxide"
+      ],
+      "github": "ajeetdsouza/zoxide",
+      "packages": {
+        "winget": "ajeetdsouza.zoxide",
+        "scoop": "zoxide",
+        "choco": "zoxide",
+        "brew": "zoxide",
+        "apt": "zoxide"
+      },
+      "github_info": {
+        "stars": 36243,
+        "forks": 812,
+        "description": "A smarter cd command. Supports all major shells.",
+        "homepage": "https://crates.io/crates/zoxide",
+        "license": "MIT",
+        "topics": [
+          "autojump",
+          "bash",
+          "cli",
+          "command-line",
+          "command-line-tool",
+          "elvish",
+          "fasd",
+          "fish",
+          "fish-shell",
+          "fzf",
+          "hacktoberfest",
+          "jump",
+          "nushell",
+          "powershell",
+          "rust",
+          "shell",
+          "xonsh",
+          "xontrib",
+          "z",
+          "zsh"
+        ],
+        "pushed_at": "2026-04-13T19:40:38Z",
+        "updated_at": "2026-05-02T04:39:06Z",
+        "fetched_at": "2026-05-02T05:42:20Z"
+      }
+    }
+  ],
+  "packs": [
+    {
+      "name": "dotnet-developer",
+      "display_name": ".NET Developer",
+      "description": "Tools for .NET development.",
+      "icon": "📦",
+      "tools": [
+        "dotnet"
+      ]
+    },
+    {
+      "name": "ai-toolkit",
+      "display_name": "AI Toolkit",
+      "description": "AI coding assistants and LLM tools.",
+      "icon": "📦",
+      "tools": [
+        "claude",
+        "copilot",
+        "aider",
+        "ollama"
+      ]
+    },
+    {
+      "name": "api-testing",
+      "display_name": "API Testing",
+      "description": "HTTP and API debugging toolkit.",
+      "icon": "📦",
+      "tools": [
+        "httpie",
+        "grpcurl",
+        "jq",
+        "yq",
+        "curlie",
+        "xh"
+      ]
+    },
+    {
+      "name": "azure-developer",
+      "display_name": "Azure Developer",
+      "description": "Azure-specific CLI tools for cloud development.",
+      "icon": "📦",
+      "tools": [
+        "az",
+        "azd",
+        "kubelogin"
+      ]
+    },
+    {
+      "name": "cli-essentials",
+      "display_name": "CLI Essentials",
+      "description": "Modern command-line replacements for everyday tools.",
+      "icon": "📦",
+      "tools": [
+        "ripgrep",
+        "fzf",
+        "bat",
+        "fd",
+        "eza",
+        "zoxide",
+        "delta",
+        "jq",
+        "yq"
+      ]
+    },
+    {
+      "name": "cloud-essentials",
+      "display_name": "Cloud Essentials",
+      "description": "CLI tools for the major cloud providers.",
+      "icon": "📦",
+      "tools": [
+        "az",
+        "aws",
+        "gcloud",
+        "terraform"
+      ]
+    },
+    {
+      "name": "containers",
+      "display_name": "Container Toolkit",
+      "description": "Docker and container runtime essentials.",
+      "icon": "📦",
+      "tools": [
+        "docker",
+        "docker-compose",
+        "lazydocker"
+      ]
+    },
+    {
+      "name": "data-tools",
+      "display_name": "Data Tools",
+      "description": "CLI tools for data processing and querying.",
+      "icon": "📦",
+      "tools": [
+        "jq",
+        "yq",
+        "sqlite3",
+        "duckdb"
+      ]
+    },
+    {
+      "name": "devops-starter",
+      "display_name": "DevOps Starter",
+      "description": "Core tools for infrastructure and deployment workflows.",
+      "icon": "📦",
+      "tools": [
+        "terraform",
+        "kubectl",
+        "helm",
+        "docker",
+        "git",
+        "gh"
+      ]
+    },
+    {
+      "name": "git-power",
+      "display_name": "Git Power User",
+      "description": "Git workflow tools for power users.",
+      "icon": "📦",
+      "tools": [
+        "git",
+        "gh",
+        "lazygit",
+        "delta",
+        "tig"
+      ]
+    },
+    {
+      "name": "go-developer",
+      "display_name": "Go Developer",
+      "description": "Tools for Go development.",
+      "icon": "📦",
+      "tools": [
+        "go",
+        "gopls",
+        "golangci-lint",
+        "dlv"
+      ]
+    },
+    {
+      "name": "hashicorp-stack",
+      "display_name": "HashiCorp Stack",
+      "description": "The complete HashiCorp toolchain.",
+      "icon": "📦",
+      "tools": [
+        "terraform",
+        "vault",
+        "consul",
+        "packer",
+        "vagrant"
+      ]
+    },
+    {
+      "name": "java-developer",
+      "display_name": "Java Developer",
+      "description": "Tools for Java development.",
+      "icon": "📦",
+      "tools": [
+        "java"
+      ]
+    },
+    {
+      "name": "k8s-advanced",
+      "display_name": "Kubernetes Advanced",
+      "description": "Full Kubernetes toolkit including local clusters and GitOps.",
+      "icon": "📦",
+      "tools": [
+        "kubectl",
+        "helm",
+        "k9s",
+        "kubectx",
+        "kubens",
+        "stern",
+        "kind",
+        "kustomize",
+        "argocd",
+        "flux"
+      ]
+    },
+    {
+      "name": "k8s-local-dev",
+      "display_name": "Kubernetes Local Dev",
+      "description": "Local Kubernetes cluster tools for development.",
+      "icon": "📦",
+      "tools": [
+        "kind",
+        "k3d",
+        "minikube",
+        "skaffold",
+        "docker"
+      ]
+    },
+    {
+      "name": "k8s-starter",
+      "display_name": "Kubernetes Starter",
+      "description": "Essential Kubernetes tools for cluster management and debugging.",
+      "icon": "📦",
+      "tools": [
+        "kubectl",
+        "helm",
+        "k9s",
+        "kubectx",
+        "kubens",
+        "stern"
+      ]
+    },
+    {
+      "name": "node-developer",
+      "display_name": "Node.js Developer",
+      "description": "Tools for Node.js and JavaScript development.",
+      "icon": "📦",
+      "tools": [
+        "node",
+        "deno",
+        "bun",
+        "npm"
+      ]
+    },
+    {
+      "name": "python-developer",
+      "display_name": "Python Developer",
+      "description": "Tools for Python development.",
+      "icon": "📦",
+      "tools": [
+        "python",
+        "uv"
+      ]
+    },
+    {
+      "name": "rust-developer",
+      "display_name": "Rust Developer",
+      "description": "Tools for Rust development.",
+      "icon": "📦",
+      "tools": [
+        "rustc",
+        "cargo"
+      ]
+    },
+    {
+      "name": "security-toolkit",
+      "display_name": "Security Toolkit",
+      "description": "Security scanning, secrets management, and encryption tools.",
+      "icon": "📦",
+      "tools": [
+        "trivy",
+        "cosign",
+        "sops",
+        "vault",
+        "age",
+        "nmap"
+      ]
+    },
+    {
+      "name": "shell-power",
+      "display_name": "Shell Power User",
+      "description": "Shell customization and productivity tools.",
+      "icon": "📦",
+      "tools": [
+        "starship",
+        "tmux",
+        "direnv",
+        "atuin",
+        "zoxide",
+        "fzf"
+      ]
+    }
+  ]
+}

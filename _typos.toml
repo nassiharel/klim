@@ -1,5 +1,5 @@
 [files]
-extend-exclude = ["go.sum", "*.svg", "vendor/", "docs/src/content/docs/marketplace/catalog.mdx"]
+extend-exclude = ["go.sum", "*.svg", "vendor/"]
 
 [default.extend-words]
 # Win32 VS_FIXEDFILEINFO struct field name — not a typo
