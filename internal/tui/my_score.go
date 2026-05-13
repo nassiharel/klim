@@ -50,7 +50,7 @@ func renderMyScoreSection(result score.Result, width int) string {
 	scoreColor := dashGaugeFill
 	switch {
 	case pct < 50:
-		scoreColor = lipgloss.NewStyle().Foreground(lipgloss.Color("167"))
+		scoreColor = lipgloss.NewStyle().Foreground(cyberAlert)
 	case pct < 70:
 		scoreColor = dashGaugeWarn
 	}
@@ -76,7 +76,7 @@ func renderMyScoreSection(result score.Result, width int) string {
 		var miniStyle lipgloss.Style
 		switch cat.Status {
 		case "error":
-			miniStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("167"))
+			miniStyle = lipgloss.NewStyle().Foreground(cyberAlert)
 		case "warning":
 			miniStyle = dashGaugeWarn
 		default:
@@ -99,7 +99,7 @@ func renderMyScoreSection(result score.Result, width int) string {
 func scoreIcon(status string) string {
 	switch status {
 	case "error":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("167")).Render("✗")
+		return lipgloss.NewStyle().Foreground(cyberAlert).Render("✗")
 	case "warning":
 		return dashGaugeWarn.Render("⚠")
 	default:

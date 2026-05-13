@@ -36,13 +36,13 @@ const (
 	healthPathByDir  = 1
 )
 
-// Doctor view color palette.
+// Doctor view color palette — cyber tokens.
 var (
-	doctorError   = lipgloss.NewStyle().Foreground(lipgloss.Color("167"))     // soft rose-red — readable without bold
-	doctorWarning = lipgloss.NewStyle().Foreground(warningColor)              // warm gold
-	doctorInfo    = lipgloss.NewStyle().Foreground(primaryColor)              // teal
-	doctorSection = lipgloss.NewStyle().Bold(true).Foreground(highlightColor) // white bold
-	doctorOK      = lipgloss.NewStyle().Foreground(successColor).Bold(true)   // mint green
+	doctorError   = lipgloss.NewStyle().Foreground(cyberAlert)
+	doctorWarning = lipgloss.NewStyle().Foreground(cyberAccent)
+	doctorInfo    = lipgloss.NewStyle().Foreground(cyberPrimary)
+	doctorSection = lipgloss.NewStyle().Bold(true).Foreground(cyberFG)
+	doctorOK      = lipgloss.NewStyle().Foreground(cyberOK).Bold(true)
 )
 
 // renderDoctorView renders the Security tab content with sub-tabs.

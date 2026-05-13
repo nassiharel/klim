@@ -86,11 +86,11 @@ func (m Model) vulnSourceKey() string {
 func securityBadge(status security.Status) string {
 	switch status {
 	case security.StatusRisk:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true).Render("⛔ at risk")
+		return lipgloss.NewStyle().Foreground(cyberAlert).Bold(true).Render("⛔ at risk")
 	case security.StatusWatch:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true).Render("⚠ watch")
+		return lipgloss.NewStyle().Foreground(cyberAccent).Bold(true).Render("⚠ watch")
 	case security.StatusClean:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true).Render("🛡 clean")
+		return lipgloss.NewStyle().Foreground(cyberOK).Bold(true).Render("🛡 clean")
 	}
 	return dashDim.Render("? unknown")
 }
@@ -99,11 +99,11 @@ func securityBadge(status security.Status) string {
 func severityChip(s vuln.Severity) string {
 	switch s {
 	case vuln.SeverityCritical:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true).Render("[C]")
+		return lipgloss.NewStyle().Foreground(cyberAlert).Bold(true).Render("[C]")
 	case vuln.SeverityHigh:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("[H]")
+		return lipgloss.NewStyle().Foreground(cyberAlert).Render("[H]")
 	case vuln.SeverityMedium:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render("[M]")
+		return lipgloss.NewStyle().Foreground(cyberAccent).Render("[M]")
 	case vuln.SeverityLow:
 		return dashDim.Render("[L]")
 	}

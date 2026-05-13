@@ -11,16 +11,16 @@ import (
 	"github.com/nassiharel/klim/internal/registry"
 )
 
-// Dashboard color palette — aligned with main palette.
+// Dashboard color palette — aliases into the cyber theme tokens.
 var (
-	dashGaugeEmpty = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
-	dashGaugeFill  = lipgloss.NewStyle().Foreground(successColor)
-	dashGaugeWarn  = lipgloss.NewStyle().Foreground(warningColor)
-	dashGaugeInfo  = lipgloss.NewStyle().Foreground(primaryColor)
-	dashNumber     = lipgloss.NewStyle().Bold(true).Foreground(highlightColor)
-	dashLabel      = lipgloss.NewStyle().Foreground(subtleColor)
-	dashSection    = lipgloss.NewStyle().Bold(true).Foreground(primaryColor)
-	dashDim        = lipgloss.NewStyle().Foreground(dimColor)
+	dashGaugeEmpty = lipgloss.NewStyle().Foreground(cyberRule)
+	dashGaugeFill  = lipgloss.NewStyle().Foreground(cyberOK)
+	dashGaugeWarn  = lipgloss.NewStyle().Foreground(cyberAccent)
+	dashGaugeInfo  = lipgloss.NewStyle().Foreground(cyberPrimary)
+	dashNumber     = lipgloss.NewStyle().Bold(true).Foreground(cyberFG)
+	dashLabel      = lipgloss.NewStyle().Foreground(cyberFGDim)
+	dashSection    = lipgloss.NewStyle().Bold(true).Foreground(cyberPrimary)
+	dashDim        = lipgloss.NewStyle().Foreground(cyberFGDim)
 )
 
 // namedCount is a generic name+count pair used in dashboard bar charts.
@@ -80,7 +80,7 @@ func renderStatCard(icon, value, label string, iconStyle lipgloss.Style, width i
 		labelStr += strings.Repeat(" ", inner-labelW)
 	}
 
-	border := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	border := lipgloss.NewStyle().Foreground(cyberRule)
 	top := border.Render("╭" + strings.Repeat("─", inner+2) + "╮")
 	mid1 := border.Render("│") + " " + content + " " + border.Render("│")
 	mid2 := border.Render("│") + " " + labelStr + " " + border.Render("│")
@@ -97,7 +97,7 @@ func (m Model) renderDashboardView() string {
 	if m.phase < phaseDone {
 		b.WriteString("\n")
 		b.WriteString("  " + dashSection.Render("Dashboard") + "\n\n")
-		b.WriteString("  " + m.spinner.View() + " " + dashDim.Render("Scanning tools...") + "\n")
+		b.WriteString("  " + cyberSpinnerStyle.Render(spinnerArc(m.animFrame)) + " " + dashDim.Render("Scanning tools...") + "\n")
 		return b.String()
 	}
 
@@ -333,13 +333,15 @@ func (m Model) renderDashboardView() string {
 			barMax = 50
 		}
 
+		// Per-PM bar colors — rotate through the cyber accent
+		// palette so each PM gets a distinct but on-theme hue.
 		pmColors := []lipgloss.Style{
-			lipgloss.NewStyle().Foreground(lipgloss.Color("42")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("39")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("214")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("135")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("222")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("167")),
+			lipgloss.NewStyle().Foreground(cyberOK),
+			lipgloss.NewStyle().Foreground(cyberPrimary),
+			lipgloss.NewStyle().Foreground(cyberAccent),
+			lipgloss.NewStyle().Foreground(cyberSecondary),
+			lipgloss.NewStyle().Foreground(cyberInfo),
+			lipgloss.NewStyle().Foreground(cyberAlert),
 		}
 
 		for i, pm := range pms {
@@ -432,10 +434,7 @@ func (m Model) renderDashboardView() string {
 			tags = tags[:12]
 		}
 
-		tagPill := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("15")).
-			Background(lipgloss.Color("237")).
-			Padding(0, 1)
+		tagPill := cyberChipStyle
 
 		line := "  "
 		for _, tag := range tags {

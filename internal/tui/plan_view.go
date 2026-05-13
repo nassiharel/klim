@@ -63,10 +63,10 @@ type applyFinishedMsg struct {
 // --- styles ---
 
 var (
-	planTitle    = lipgloss.NewStyle().Bold(true).Foreground(highlightColor)
-	planDim      = lipgloss.NewStyle().Foreground(dimColor)
-	planAccent   = lipgloss.NewStyle().Foreground(primaryColor)
-	planSelected = lipgloss.NewStyle().Foreground(highlightColor).Background(lipgloss.Color("237")).Bold(true)
+	planTitle    = lipgloss.NewStyle().Bold(true).Foreground(cyberFG)
+	planDim      = lipgloss.NewStyle().Foreground(cyberFGDim)
+	planAccent   = lipgloss.NewStyle().Foreground(cyberPrimary)
+	planSelected = lipgloss.NewStyle().Foreground(cyberFG).Background(cyberSelectedBg).Bold(true)
 )
 
 // --- commands ---
