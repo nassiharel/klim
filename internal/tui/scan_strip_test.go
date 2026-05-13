@@ -21,6 +21,10 @@ func TestRenderScanStrip_HiddenWhenIdle(t *testing.T) {
 // label + progress bar + count when version resolution is in flight.
 func TestRenderScanStrip_VisibleDuringResolve(t *testing.T) {
 	m := Model{
+		// Wide enough that every candidate (richest first) fits;
+		// the new width-clamp falls back to leaner candidates
+		// otherwise so this confirms the full-feature path.
+		width:     120,
 		phase:     phaseResolving,
 		pending:   47,
 		animFrame: 5,
@@ -69,6 +73,38 @@ func TestScanProgressBar_FillsProportionally(t *testing.T) {
 		filled := strings.Count(plain, "▓")
 		if filled != c.minFilled {
 			t.Errorf("done=%d total=%d: expected %d ▓, got %d (%q)", c.done, c.total, c.minFilled, filled, plain)
+		}
+	}
+}
+
+// TestRenderScanStrip_NarrowTerminalDoesNotWrap guards against the
+// strip emitting more than one visual row when the terminal is too
+// narrow for the full layout. The width-clamp must either return ""
+// (slot collapses to a blank gap) or a single ≤ m.width string.
+func TestRenderScanStrip_NarrowTerminalDoesNotWrap(t *testing.T) {
+	widths := []int{0, 20, 40, 50, 60, 80, 120, 200}
+	for _, w := range widths {
+		m := Model{
+			width:     w,
+			phase:     phaseResolving,
+			pending:   47,
+			animFrame: 5,
+		}
+		for i := 0; i < 149; i++ {
+			m.tools = append(m.tools, registry.Tool{
+				Name:      "x",
+				Instances: []registry.Instance{{Path: "/usr/bin/x"}},
+			})
+		}
+		out := m.renderScanStrip()
+		if out == "" {
+			continue // strip collapsed; acceptable for tiny widths
+		}
+		if strings.Contains(out, "\n") {
+			t.Errorf("width=%d: strip wrapped to multiple lines: %q", w, out)
+		}
+		if vl := visualLen(out); vl > w {
+			t.Errorf("width=%d: strip visualLen=%d exceeds budget", w, vl)
 		}
 	}
 }

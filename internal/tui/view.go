@@ -72,15 +72,12 @@ func (m Model) renderView() string {
 		return ""
 	}
 
-	// Boot splash — full-screen cyber cold-start visual.
-	// Shown while the catalog is loading; replaced by the normal
-	// layout the moment the first toolset arrives.
-	if m.phase == phaseLoading {
-		return m.renderBootSplash()
-	}
-
-	// Plan / checkpoint browser modal — full-screen overlay. Takes
-	// priority over every other view including the health fix modal.
+	// Modals win over every other layer. A rescan triggered while
+	// a modal is open (e.g. applyFinishedMsg → startScan() while
+	// the plan modal is still up) flips phase back to phaseLoading
+	// — but the user's open modal must stay visible, not get
+	// hidden under the boot splash where its keystrokes silently
+	// disappear. So modals get checked BEFORE the boot splash.
 	if m.viewingPlan {
 		if m.viewingCheckpoints {
 			return m.renderCheckpointBrowser()
@@ -88,7 +85,6 @@ func (m Model) renderView() string {
 		return m.renderPlanView()
 	}
 
-	// Health fix modal — full-screen overlay; takes priority over everything else.
 	if m.fixModal.Open {
 		return m.renderFixModal()
 	}
@@ -101,6 +97,12 @@ func (m Model) renderView() string {
 	// Pack detail view.
 	if m.showPackDetail && m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
 		return m.renderPackDetailView(m.packs[m.packDetailIdx])
+	}
+
+	// Boot splash — full-screen cyber cold-start visual. Drawn
+	// only after the modal/detail layers above have declined.
+	if m.phase == phaseLoading {
+		return m.renderBootSplash()
 	}
 
 	var body strings.Builder
@@ -655,6 +657,36 @@ func cyberSubtabInactive(label string) string {
 	return "  " + cyberSubtabInactiveLabelStyle.Render(label) + "  "
 }
 
+// renderPlanBanner is the Updates-tab call-to-action: a one-line
+// cyber-framed pill that invites the user to preview the upgrade
+// plan before pressing `u` to apply. Helps make the global `P`
+// shortcut discoverable from the tab where it's most useful.
+func (m Model) renderPlanBanner() string {
+	count := 0
+	for _, t := range m.tools {
+		if t.HasUpdate() {
+			count++
+		}
+	}
+	if count == 0 {
+		return ""
+	}
+	plural := "update"
+	if count != 1 {
+		plural = "updates"
+	}
+	pill := cyberTabBracketStyle.Render("⟪") + " " +
+		hudBrandStyle.Render("PREVIEW PLAN") + " " +
+		cyberTabBracketStyle.Render("⟫")
+	hint := hudLabelStyle.Render("press ") +
+		hudValueStyle.Render("P") +
+		hudLabelStyle.Render(" to preview the ") +
+		hudValueStyle.Render(strconv.Itoa(count)) + " " +
+		hudLabelStyle.Render(plural+" before applying with ") +
+		hudValueStyle.Render("u")
+	return "  " + pill + "  " + hint
+}
+
 // --- Search Bar ---
 
 // renderSearchBar renders the search box with a styled border.
@@ -1031,6 +1063,17 @@ func (m Model) buildSidebarLines(maxRows int) []string {
 func (m Model) buildToolLines(maxRows int) []string {
 	lines := make([]string, 0, maxRows+1)
 
+	// Updates tab gets a one-line "Preview plan" banner above the
+	// header so users see — without consulting the help footer —
+	// that they can stage a dry-run before pressing `u` to apply.
+	bannerRow := ""
+	if m.activeTab == tabUpdates && m.phase >= phaseResolving && len(m.filteredIndex) > 0 {
+		bannerRow = m.renderPlanBanner()
+	}
+	if bannerRow != "" {
+		lines = append(lines, bannerRow)
+	}
+
 	// Header row.
 	if m.phase >= phaseResolving && len(m.filteredIndex) > 0 {
 		lines = append(lines, m.renderHeader())
@@ -1039,8 +1082,13 @@ func (m Model) buildToolLines(maxRows int) []string {
 	}
 
 	// Tool rows.
-	// Header takes 1 line from maxRows, so effective data capacity is maxRows-1.
-	dataRows := maxRows - 1
+	// Header + optional banner take 1-2 lines from maxRows, so the
+	// effective data capacity shrinks accordingly.
+	usedHeaderRows := 1
+	if bannerRow != "" {
+		usedHeaderRows = 2
+	}
+	dataRows := maxRows - usedHeaderRows
 	if dataRows < 1 {
 		dataRows = 1
 	}

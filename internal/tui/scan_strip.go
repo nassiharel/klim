@@ -93,6 +93,16 @@ func (s scanStripState) render(m Model) string {
 		return ""
 	}
 
+	// Budget: strip must fit in m.width so it stays exactly one
+	// row tall (every per-tab layout calc budgets blank(1) for
+	// this slot). Subtract 2 cells for the leading indent.
+	budget := m.width - 2
+	if budget < 20 {
+		// Terminal too narrow to render any sensible strip. Let
+		// the caller fall back to a blank gap.
+		return ""
+	}
+
 	spinner := cyberSpinnerStyle.Render(spinnerArc(m.animFrame))
 	label := scanStripLabelStyle.Render(s.label)
 	bar := scanProgressBar(done, total, scanBarCells, m.animFrame)
@@ -102,10 +112,25 @@ func (s scanStripState) render(m Model) string {
 
 	bracketOpen := cyberTabBracketStyle.Render("⟦")
 	bracketClose := cyberTabBracketStyle.Render("⟧")
-	return "  " + bracketOpen + " " + spinner + " " + bracketClose +
-		"  " + label +
-		"  " + bar +
-		"  " + count
+	spinnerCell := bracketOpen + " " + spinner + " " + bracketClose
+
+	// Try ordered fallbacks from richest to leanest until one fits
+	// in the available cell budget. Returning the lean form is
+	// strictly better than letting the strip wrap to 2+ rows and
+	// silently breaking the header-row budgeting that downstream
+	// per-tab layout code relies on.
+	candidates := []string{
+		spinnerCell + "  " + label + "  " + bar + "  " + count,
+		spinnerCell + "  " + label + "  " + count,
+		spinnerCell + "  " + count,
+		spinnerCell,
+	}
+	for _, c := range candidates {
+		if visualLen(c) <= budget {
+			return "  " + c
+		}
+	}
+	return ""
 }
 
 // scanBarCells is the visual width of the progress bar in cells.
