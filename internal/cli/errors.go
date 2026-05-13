@@ -3,7 +3,7 @@ package cli
 import "fmt"
 
 // Exit codes returned by Run. They follow the convention documented in
-// docs/cli-conventions.md:
+// CLI-CONVENTIONS.md:
 //
 //	0 — success
 //	1 — runtime error (default)

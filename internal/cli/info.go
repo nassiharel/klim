@@ -364,7 +364,7 @@ func minInt(a, b int) int {
 // detail blocks) so they don't push the headline metadata off-screen
 // in a small terminal — the layout matches the TUI detail page.
 func renderInfoText(r infoReport, t *registry.Tool) {
-	// Per docs/cli-conventions.md, human-readable prose belongs on
+	// Per CLI-CONVENTIONS.md, human-readable prose belongs on
 	// stderr so that stdout stays free for pipe-friendly machine output
 	// (e.g. `klim info foo --output json | jq`). `klim info` is the
 	// only command in the codebase that previously wrote rendered text

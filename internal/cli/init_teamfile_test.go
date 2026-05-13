@@ -173,7 +173,7 @@ func TestInit_ForceNoProjectFiles_RefusesToBlankExistingFile(t *testing.T) {
 }
 
 func TestInit_ForceFlag_NoShortHand(t *testing.T) {
-	// Convention: -f is reserved for --file (docs/cli-conventions.md).
+	// Convention: -f is reserved for --file (CLI-CONVENTIONS.md).
 	if f := initCmd.Flag("force"); f == nil {
 		t.Fatal("expected --force flag")
 	}

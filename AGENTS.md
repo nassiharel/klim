@@ -18,7 +18,7 @@ marketplace/                Modular tool catalog (source of truth)
   marketplace/   Marketplace assembly & validation scripts
     assemble/    Combines individual files → marketplace.yaml
     validate/    Schema validation, uniqueness, cross-references
-docs/cli-conventions.md    CLI conventions: streams, --output, exit codes
+CLI-CONVENTIONS.md    CLI conventions: streams, --output, exit codes
 install.sh                 Linux/macOS installer script
 install.ps1                Windows PowerShell installer script
 Makefile                   build / test / lint / cover / clean
