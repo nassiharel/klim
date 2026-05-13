@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -769,8 +769,15 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 		cursor = "▸ "
 	}
 
-	// Name column: plain text padded, then styled.
+	// Name column: include the multi-instance count inline as
+	// "name(N)" when the tool has more than one resolved instance.
+	// Replaces the old trailing "(N instances)" tail so the row
+	// reads compactly and the count is visible at the leftmost
+	// position the eye scans first.
 	nameText := toolLabel(tool)
+	if n := len(tool.Instances); n > 1 {
+		nameText += "(" + strconv.Itoa(n) + ")"
+	}
 	nameCell := nameStyle.Render(fixedWidth(nameText, colName))
 
 	// Version column: styled version info, then pad to fixed width.
@@ -786,16 +793,15 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 
 	line := cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 
-	if badge := m.complianceBadge(tool.Name); badge != "" {
-		line += "  " + badge
-	}
-
+	// Order: stars first (positive signal), then compliance state
+	// (negative signal). Reads as "★ 3.3k  ✗ blocked" — keeps the
+	// positive metadata adjacent to the category column and lets
+	// the compliance badge act as a right-side modifier.
 	if badge := githubStarsBadge(tool); badge != "" {
 		line += "  " + fixedWidthANSI(dimVersion.Render(badge), colStars)
 	}
-
-	if len(tool.Instances) > 1 {
-		line += "  " + dimVersion.Render(fmt.Sprintf("(%d instances)", len(tool.Instances)))
+	if badge := m.complianceBadge(tool.Name); badge != "" {
+		line += "  " + badge
 	}
 
 	return line
