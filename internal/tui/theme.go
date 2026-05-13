@@ -23,9 +23,6 @@ var (
 	cyberFG    = lipgloss.Color("#e8f4f8") // near-white with cyan tint
 	cyberFGDim = lipgloss.Color("#90a4b0")
 
-	// Panel surface for the active-tab fill.
-	cyberBGActive = lipgloss.Color("#0066a0")
-
 	// Brighter rule tone for the underline glow.
 	cyberRuleBright = lipgloss.Color("#3b6080")
 )
@@ -43,10 +40,11 @@ var (
 	hudAlertStyle   = lipgloss.NewStyle().Foreground(cyberAccent).Bold(true)
 	hudOKStyle      = lipgloss.NewStyle().Foreground(cyberOK).Bold(true)
 
-	// Tabs.
+	// Tabs — bright accent text, no background fill, matches the
+	// subtab style so the active state reads consistently across
+	// both strips.
 	cyberTabActiveStyle = lipgloss.NewStyle().
-				Foreground(cyberFG).
-				Background(cyberBGActive).
+				Foreground(cyberPrimary).
 				Bold(true).
 				Padding(0, 1)
 	cyberTabInactiveStyle = lipgloss.NewStyle().
