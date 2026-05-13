@@ -613,8 +613,8 @@ func renderFixOption(opt fixModalOption, idx int, selected bool, width int) stri
 	label := fmt.Sprintf("%d. %s", idx+1, opt.Label)
 	if selected {
 		row := lipgloss.NewStyle().
-			Foreground(highlightColor).
-			Background(lipgloss.Color("237")).
+			Foreground(cyberFG).
+			Background(cyberSelectedBg).
 			Bold(true).
 			Padding(0, 1).
 			Render("▶ " + label)

@@ -15,9 +15,9 @@ import (
 // header), not for list rows where silence is already the compliant
 // signal.
 var (
-	complianceErrorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("167")) // soft rose-red
-	complianceWarnStyle  = lipgloss.NewStyle().Foreground(warningColor)          // gold
-	complianceOKStyle    = lipgloss.NewStyle().Foreground(successColor).Bold(true)
+	complianceErrorStyle = lipgloss.NewStyle().Foreground(cyberAlert)
+	complianceWarnStyle  = lipgloss.NewStyle().Foreground(cyberAccent)
+	complianceOKStyle    = lipgloss.NewStyle().Foreground(cyberOK).Bold(true)
 )
 
 // complianceBadge returns a short colored badge for the tool's compliance status.
