@@ -1901,9 +1901,10 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Global `P` opens the Plan modal from any tab. Routed here
 	// before the tab-specific dispatchers so the shortcut is
 	// uniform across the whole UI. Disabled while the catalog is
-	// still loading — the boot splash takes over the screen and
-	// would hide an opened modal, leaving the user with an
-	// invisible modal that swallows keystrokes.
+	// still loading because tools / pending-versions / cache
+	// haven't resolved yet — opening the plan early would render
+	// an empty modal that the user has to dismiss anyway. Once
+	// the first scan completes the shortcut works everywhere.
 	if msg.String() == "P" && !m.viewingPlan && !m.fixModal.Open && !m.showDetail && m.phase != phaseLoading {
 		mp := &m
 		cmd := mp.openPlanView()

@@ -164,8 +164,9 @@ func spinnerArc(frame int) string {
 
 // scanProgressBar renders a filled / unfilled bar of `cells` cells.
 // `done` cells are bright; `total - done` cells are dim. A single
-// "scanline" cell pulses through the filled region every frame to
-// hint that progress is live (not stuck).
+// brighter "scanline" head pulses through the UNFILLED region just
+// past the fill edge so the eye registers continued motion even
+// when `done` hasn't changed.
 //
 // All inputs are pre-validated by the caller (total > 0).
 func scanProgressBar(done, total, cells, frame int) string {
@@ -179,10 +180,11 @@ func scanProgressBar(done, total, cells, frame int) string {
 	if filled < 0 {
 		filled = 0
 	}
-	// Scanline: when there's at least one filled cell, slide a
+	// Scanline: when there's at least one unfilled cell, slide a
 	// bright "head" through the dim region just past the fill so
 	// the eye registers continued motion even when `done` hasn't
-	// changed.
+	// changed. When the bar is fully filled there's no place for
+	// the head to land — we set headPos = -1 to disable it.
 	headPos := -1
 	if filled < cells {
 		headPos = filled + ((frame / 2) % (cells - filled))
