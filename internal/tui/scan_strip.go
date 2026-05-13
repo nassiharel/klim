@@ -8,9 +8,13 @@ import (
 )
 
 // renderScanStrip returns a one-line cyber loading strip when the
-// app is mid-scan, mid-version-resolution, or mid-batch. Returns ""
-// when nothing's in flight so the slot collapses back to a blank
-// gap.
+// app is mid-version-resolution (phaseResolving), running a batch
+// op, or executing a fix-modal command. Returns "" when nothing's
+// in flight so the slot collapses back to a blank gap.
+//
+// Note: phaseLoading is intentionally NOT covered here. During the
+// initial PATH scan / catalog load the full-screen boot splash
+// takes over the view entirely; the strip would never be visible.
 //
 // Layout:
 //
