@@ -41,7 +41,41 @@ func TestCyberHUD_NarrowFallback(t *testing.T) {
 	}
 }
 
-// TestRenderTabBar_UnderlineAlignsAcrossPositions guards against the
+// TestBuildCyberUnderline_NarrowDoesNotPanic guards against the
+// negative strings.Repeat count that used to happen when the active
+// tab's range started past the visible rule (common when total tab
+// strip width exceeds the terminal width).
+func TestBuildCyberUnderline_NarrowDoesNotPanic(t *testing.T) {
+	cases := []struct {
+		name    string
+		ranges  [][2]int
+		cur     int
+		ruleLen int
+	}{
+		{"active starts past rule", [][2]int{{20, 30}, {32, 42}}, 1, 10},
+		{"active fully past rule", [][2]int{{20, 30}}, 0, 10},
+		{"zero rule length", [][2]int{{2, 12}}, 0, 0},
+		{"hi < 0", [][2]int{{-5, -1}}, 0, 10},
+		{"out of range curParent", [][2]int{{2, 12}}, 5, 10},
+		{"negative curParent", [][2]int{{2, 12}}, -1, 10},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("panic: %v", r)
+				}
+			}()
+			got := buildCyberUnderline(c.ranges, c.cur, c.ruleLen)
+			// Must always be a non-empty string with the 2-cell
+			// indent prefix, never a panic.
+			if !strings.HasPrefix(got, "  ") {
+				t.Errorf("expected 2-cell indent prefix, got: %q", got)
+			}
+		})
+	}
+}
+
 // per-tab-width drift that used to happen when active and inactive
 // tabs rendered at different total widths. After fixing the column
 // accounting, the underline's heavy slice should land underneath

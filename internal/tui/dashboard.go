@@ -97,7 +97,7 @@ func (m Model) renderDashboardView() string {
 	if m.phase < phaseDone {
 		b.WriteString("\n")
 		b.WriteString("  " + dashSection.Render("Dashboard") + "\n\n")
-		b.WriteString("  " + m.spinner.View() + " " + dashDim.Render("Scanning tools...") + "\n")
+		b.WriteString("  " + cyberSpinnerStyle.Render(spinnerArc(m.animFrame)) + " " + dashDim.Render("Scanning tools...") + "\n")
 		return b.String()
 	}
 

@@ -600,22 +600,41 @@ func buildCyberTabLine(parents []struct {
 // fall under the active tab's label get the bright accent; the rest
 // get a dim rule. The strip starts at the same 2-cell indent the tab
 // line uses so the brackets visually align.
+//
+// Narrow-terminal guard: when the active tab's range starts past
+// the rule's right edge (because total tab-strip width exceeds the
+// terminal), or any inversion makes lo > hi after clamping, fall
+// back to a fully-dim rule rather than passing a negative count to
+// strings.Repeat (which panics).
 func buildCyberUnderline(ranges [][2]int, curParent, ruleLen int) string {
 	var b strings.Builder
 	b.WriteString("  ")
-	if curParent < 0 || curParent >= len(ranges) {
+	dimAll := func() string {
 		b.WriteString(cyberTabUnderlineDimStyle.Render(strings.Repeat("─", ruleLen)))
 		return b.String()
+	}
+	if ruleLen <= 0 || curParent < 0 || curParent >= len(ranges) {
+		return dimAll()
 	}
 	lo, hi := ranges[curParent][0], ranges[curParent][1]
 	// Convert from absolute column to relative (within the rule).
 	lo -= 2
 	hi -= 2
+	// If the active tab starts past the visible rule, or both
+	// endpoints are out of range, there's no bright slice to draw —
+	// dim the whole rule and bail.
+	if lo >= ruleLen || hi < 0 {
+		return dimAll()
+	}
 	if hi >= ruleLen {
 		hi = ruleLen - 1
 	}
 	if lo < 0 {
 		lo = 0
+	}
+	if lo > hi {
+		// Defensive: after clamping the bright slice collapsed.
+		return dimAll()
 	}
 	left := strings.Repeat("─", lo)
 	mid := strings.Repeat("━", hi-lo+1) // heavier bar under the active

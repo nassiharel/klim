@@ -20,11 +20,15 @@ import (
 //
 // Falls back gracefully on narrow terminals: drops segments from the
 // right (least-critical first) until the line fits the available
-// width. The bracket "╭─" / "─╮" terminators are always kept so the
-// HUD silhouette stays recognisable.
+// width. The bracket "╭─" / "─╮" terminators are kept whenever the
+// HUD is drawn, but below the 30-cell threshold we drop to a
+// minimal brand-only line (no frame, no segments) so the title row
+// never overflows.
 func (m Model) renderCyberHUD() string {
 	if m.width < 30 {
-		// Too narrow for a HUD — fall back to a minimal brand line.
+		// Too narrow for a HUD — fall back to a minimal brand
+		// line. This is the one path that doesn't carry the
+		// bracket frame.
 		return "  " + hudBrandStyle.Render("KLIM")
 	}
 
@@ -53,10 +57,13 @@ func (m Model) renderCyberHUD() string {
 	// Try to fit all segments; drop from the right until it fits.
 	for len(segments) > 0 {
 		mid := joinSegments(segments)
-		// Approximate visible width with runewidth-aware visualRows
-		// helper (single-line content).
+		// visualLen strips ANSI SGR sequences and counts the
+		// remaining cell width via runewidth, so the comparison
+		// reflects the actual on-screen column count of the
+		// styled string.
 		probe := leftSide + " " + mid + " " + rightSide
-		// 8 = padding budget for the two-space indent prefix below.
+		// m.width - 2 accounts for the two-cell indent prefix
+		// renderCyberHUD emits below ("  " + probe).
 		if visualLen(probe) <= m.width-2 {
 			return "  " + probe
 		}

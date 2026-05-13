@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 
 	"charm.land/bubbles/v2/progress"
-	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
@@ -185,9 +184,8 @@ type Model struct {
 	clip Clipboard
 	cfg  *config.Config
 
-	tools   []registry.Tool
-	cursor  int
-	spinner spinner.Model
+	tools  []registry.Tool
+	cursor int
 
 	// Tabs.
 	activeTab int
@@ -456,9 +454,6 @@ type Model struct {
 
 // NewModel creates a new TUI model.
 func NewModel() Model {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-
 	ti := textinput.New()
 	ti.Placeholder = "search tools..."
 	ti.CharLimit = 30
@@ -494,7 +489,6 @@ func NewModel() Model {
 	return Model{
 		svc:                service.New(),
 		clip:               systemClipboard{},
-		spinner:            s,
 		filterInput:        ti,
 		importInput:        ii,
 		tokenInput:         ti2,
@@ -680,9 +674,10 @@ func (m Model) Init() tea.Cmd {
 	gen := m.scanGen
 	// animTicking is set true in NewModel*; tickFrame here matches
 	// that state. ensureAnimating isn't safe to call here because
-	// Init has a value receiver and can't mutate the model.
+	// Init has a value receiver and can't mutate the model. The
+	// 10 fps frameMsg loop drives every animation (HUD pulse, scan
+	// strip spinner, boot splash reveal) — no second ticker.
 	return tea.Batch(
-		m.spinner.Tick,
 		tickFrame(),
 		func() tea.Msg { return findToolsCmd(m.svc, false, gen)() },
 	)
@@ -735,7 +730,6 @@ func (m *Model) startScan() tea.Cmd {
 	// (idle terminal), restart it now so the boot/scan splash
 	// animates correctly.
 	cmds := []tea.Cmd{
-		m.spinner.Tick,
 		func() tea.Msg { return findToolsCmd(m.svc, true, gen)() },
 	}
 	if tickCmd := m.ensureAnimating(); tickCmd != nil {
@@ -1750,11 +1744,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.configEditInput, cmd = m.configEditInput.Update(msg)
 			return m, cmd
 		}
-		if m.loading {
-			var cmd tea.Cmd
-			m.spinner, cmd = m.spinner.Update(msg)
-			return m, cmd
-		}
+		// Loading-state messages used to drive a separate bubbles
+		// spinner ticker. The cyber theme replaced that with the
+		// global frameMsg loop — no dispatch needed here.
 	}
 	return m, nil
 }
