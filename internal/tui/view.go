@@ -106,7 +106,16 @@ func (m Model) renderView() string {
 	var body strings.Builder
 
 	body.WriteString(m.renderTitleBar() + "\n")
-	body.WriteString(m.renderTabBar() + "\n\n")
+	body.WriteString(m.renderTabBar() + "\n")
+	// The line below the tab strip is either the cyber scan strip
+	// (when a scan / version resolution is in flight) or a blank
+	// gap. Either way it's exactly one row so every per-tab layout
+	// calculation that budgets "blank(1)" stays correct.
+	if strip := m.renderScanStrip(); strip != "" {
+		body.WriteString(strip + "\n")
+	} else {
+		body.WriteString("\n")
+	}
 
 	// Backup tab has its own rendering path.
 	if m.activeTab == tabBackup {
