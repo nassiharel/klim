@@ -1,102 +1,72 @@
 package tui
 
-import (
-	"charm.land/lipgloss/v2"
-)
+import "charm.land/lipgloss/v2"
 
+// styles.go is the legacy palette / style-token layer. Every name
+// below is preserved for backwards compatibility — callers from the
+// pre-cyber era still reference primaryColor, successColor,
+// activeTabStyle, etc. — but the values now alias the canonical
+// cyber palette declared in theme.go. New code should import from
+// theme.go directly; this file exists only so the rest of the
+// package doesn't need a sweeping rename.
 var (
-	// Colors — distinctive teal/mint palette.
-	primaryColor   = lipgloss.Color("37")  // Teal (more distinctive than stock cyan)
-	successColor   = lipgloss.Color("78")  // Mint green (warmer than pure green)
-	dimColor       = lipgloss.Color("241") // Medium gray
-	highlightColor = lipgloss.Color("15")  // Bright white
-	warningColor   = lipgloss.Color("179") // Warm gold (softer than orange)
-	subtleColor    = lipgloss.Color("244") // Lighter gray
-	selectedBg     = lipgloss.Color("236") // Subtle dark gray background
-	tabActiveBg    = lipgloss.Color("24")  // Deep teal for active tab
-	borderColor    = lipgloss.Color("238") // Subtle border gray
+	// ── Color aliases ───────────────────────────────────────────
+	// Only the aliases still referenced by older render paths are
+	// retained. Unused legacy names (successColor, dimColor,
+	// warningColor, selectedBg, tabActiveBg, borderColor) have
+	// been dropped now that every consumer migrated to the cyber
+	// tokens directly.
+	primaryColor   = cyberPrimary
+	highlightColor = cyberFG
+	subtleColor    = cyberFGDim
 
-	// Title bar.
-	brandStyle   = lipgloss.NewStyle().Bold(true).Foreground(highlightColor).Background(primaryColor).Padding(0, 1)
-	summaryStyle = lipgloss.NewStyle().Foreground(dimColor)
-
-	// Tabs — cleaner pill-style.
+	// ── Tabs (legacy filled-pill style; left for any render path
+	// that hasn't migrated to cyberTab*Style yet — the cyber HUD
+	// tab bar in view.go uses the cyber tokens directly).
 	activeTabStyle = lipgloss.NewStyle().
+			Foreground(cyberPrimary).
 			Bold(true).
-			Foreground(highlightColor).
-			Background(tabActiveBg).
 			Padding(0, 1)
-
 	inactiveTabStyle = lipgloss.NewStyle().
-				Foreground(subtleColor).
+				Foreground(cyberFGDim).
 				Padding(0, 1)
 
-	// Tool name.
-	nameStyle = lipgloss.NewStyle().Bold(true).Foreground(highlightColor)
+	// ── Inline text ─────────────────────────────────────────────
+	nameStyle    = lipgloss.NewStyle().Bold(true).Foreground(cyberFG)
+	headerStyle  = lipgloss.NewStyle().Foreground(cyberFGDim)
+	dimVersion   = lipgloss.NewStyle().Foreground(cyberFGDim)
+	loadingStyle = lipgloss.NewStyle().Foreground(cyberFGDim)
+	helpStyle    = lipgloss.NewStyle().Foreground(cyberFGDim)
 
-	// Table header.
-	headerStyle = lipgloss.NewStyle().Foreground(subtleColor)
+	// ── Status colors ───────────────────────────────────────────
+	upToDateStyle   = lipgloss.NewStyle().Foreground(cyberOK)
+	upgradableStyle = lipgloss.NewStyle().Foreground(cyberAccent).Bold(true)
 
-	// Version text.
-	dimVersion = lipgloss.NewStyle().Foreground(dimColor)
+	// ── Inline cells ────────────────────────────────────────────
+	sourceStyle      = lipgloss.NewStyle().Foreground(cyberFGDim)
+	categoryStyle    = lipgloss.NewStyle().Foreground(cyberInfo)
+	confirmStyle     = lipgloss.NewStyle().Foreground(cyberAccent).Bold(true)
+	selectedRowStyle = cyberSelectedRowStyle
 
-	// Status icons.
-	upToDateStyle   = lipgloss.NewStyle().Foreground(successColor)
-	upgradableStyle = lipgloss.NewStyle().Foreground(warningColor)
-
-	// Source label.
-	sourceStyle = lipgloss.NewStyle().Foreground(subtleColor)
-
-	// Selected row — accent left border effect via prefix.
-	selectedRowStyle = lipgloss.NewStyle().Background(selectedBg)
-
-	// Loading spinner.
-	loadingStyle = lipgloss.NewStyle().Foreground(dimColor)
-
-	// Help bar — with subtle top rule.
-	helpStyle = lipgloss.NewStyle().Foreground(dimColor)
-
-	// Filter input.
-	filterPromptStyle = lipgloss.NewStyle().Foreground(primaryColor).Bold(true)
-
-	// Detail view.
-	detailTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(primaryColor)
-	detailLabelStyle = lipgloss.NewStyle().Foreground(subtleColor)
-	detailCmdStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("222")) // Yellow for commands
+	// ── Detail view ─────────────────────────────────────────────
+	detailTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(cyberPrimary)
+	detailLabelStyle = lipgloss.NewStyle().Foreground(cyberFGDim)
+	detailCmdStyle   = lipgloss.NewStyle().Foreground(cyberAccent)
 
 	// Hero description — readable, not dim.
-	heroDescStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	heroDescStyle = lipgloss.NewStyle().Foreground(cyberFG)
 
-	// Pill backgrounds for metadata chips.
-	chipStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("15")).
-			Background(lipgloss.Color("237")).
-			Padding(0, 1)
-	chipAccentStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("15")).
-			Background(tabActiveBg).
-			Padding(0, 1).
-			Bold(true)
+	// ── Filter input ────────────────────────────────────────────
+	filterPromptStyle = lipgloss.NewStyle().Foreground(cyberPrimary).Bold(true)
 
-	// Category badge.
-	categoryStyle = lipgloss.NewStyle().Foreground(subtleColor)
+	// ── Pills / chips ───────────────────────────────────────────
+	chipStyle       = cyberChipStyle
+	chipAccentStyle = cyberChipAccentStyle
 
-	// Confirmation prompt.
-	confirmStyle = lipgloss.NewStyle().Foreground(warningColor).Bold(true)
+	// ── Buttons ─────────────────────────────────────────────────
+	buttonStyle     = cyberButtonStyle
+	buttonDoneStyle = cyberButtonDoneStyle
 
-	// Button.
-	buttonStyle = lipgloss.NewStyle().
-			Foreground(highlightColor).
-			Background(tabActiveBg).
-			Padding(0, 2).
-			Bold(true)
-
-	buttonDoneStyle = lipgloss.NewStyle().
-			Foreground(highlightColor).
-			Background(successColor).
-			Padding(0, 2).
-			Bold(true)
-
-	// Accent rule style for separators.
-	ruleStyle = lipgloss.NewStyle().Foreground(borderColor)
+	// ── Rules ───────────────────────────────────────────────────
+	ruleStyle = cyberRuleStyle
 )

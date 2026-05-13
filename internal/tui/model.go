@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 
 	"charm.land/bubbles/v2/progress"
-	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
@@ -185,9 +184,8 @@ type Model struct {
 	clip Clipboard
 	cfg  *config.Config
 
-	tools   []registry.Tool
-	cursor  int
-	spinner spinner.Model
+	tools  []registry.Tool
+	cursor int
 
 	// Tabs.
 	activeTab int
@@ -247,6 +245,20 @@ type Model struct {
 	pending int  // count of tools still resolving versions
 	scanGen int  // incremented on each scan; used to discard stale toolVersionMsg
 	scanOK  bool // true when the current scan completed without errors; gates cache writes
+
+	// animFrame is a monotonic counter incremented on every frameMsg
+	// (≈ 10/s). Used by the cyber theme for HUD pulse, boot scan
+	// sweep, and other ambient animations. Wrapping at MaxInt won't
+	// happen in any realistic session lifetime.
+	animFrame int
+
+	// animTicking is true while a tickFrame chain is in flight.
+	// frameMsg flips it to false once nothing on screen needs to
+	// animate (idle state); any code path that starts new work
+	// calls ensureAnimating() to restart the loop. This keeps the
+	// 10 fps render budget at zero while the user is just reading
+	// a static page.
+	animTicking bool
 
 	// Layout.
 	width  int
@@ -442,9 +454,6 @@ type Model struct {
 
 // NewModel creates a new TUI model.
 func NewModel() Model {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-
 	ti := textinput.New()
 	ti.Placeholder = "search tools..."
 	ti.CharLimit = 30
@@ -480,7 +489,6 @@ func NewModel() Model {
 	return Model{
 		svc:                service.New(),
 		clip:               systemClipboard{},
-		spinner:            s,
 		filterInput:        ti,
 		importInput:        ii,
 		tokenInput:         ti2,
@@ -499,6 +507,10 @@ func NewModel() Model {
 		toolMenu:           noMenu,
 		width:              80,
 		height:             24,
+		// Init() returns tickFrame; record the tick as live so
+		// future restarts (startScan, etc.) know they don't need
+		// to schedule a duplicate ticker.
+		animTicking: true,
 	}
 }
 
@@ -660,8 +672,13 @@ func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 // Init starts the initial tool discovery process.
 func (m Model) Init() tea.Cmd {
 	gen := m.scanGen
+	// animTicking is set true in NewModel*; tickFrame here matches
+	// that state. ensureAnimating isn't safe to call here because
+	// Init has a value receiver and can't mutate the model. The
+	// 10 fps frameMsg loop drives every animation (HUD pulse, scan
+	// strip spinner, boot splash reveal) — no second ticker.
 	return tea.Batch(
-		m.spinner.Tick,
+		tickFrame(),
 		func() tea.Msg { return findToolsCmd(m.svc, false, gen)() },
 	)
 }
@@ -708,10 +725,17 @@ func (m *Model) startScan() tea.Cmd {
 	m.healthPathDirIdx = 0
 	m.healthPathStatus = ""
 	m.onboardTools = nil // indices tied to old tools slice
-	return tea.Batch(
-		m.spinner.Tick,
+	// startScan brings phase back to phaseLoading, which means
+	// animationActive returns true. If the tick chain had paused
+	// (idle terminal), restart it now so the boot/scan splash
+	// animates correctly.
+	cmds := []tea.Cmd{
 		func() tea.Msg { return findToolsCmd(m.svc, true, gen)() },
-	)
+	}
+	if tickCmd := m.ensureAnimating(); tickCmd != nil {
+		cmds = append(cmds, tickCmd)
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles all incoming messages and returns updated model and commands.
@@ -719,6 +743,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+
+	case frameMsg:
+		// Animation tick: bump the counter, then either reschedule
+		// (if anything on screen still needs to animate) or let
+		// the chain end. Idle terminals don't pay a 10 fps render
+		// budget. Any code path that needs animation back —
+		// startScan, batch start, fix modal — calls
+		// ensureAnimating() to restart the loop.
+		m.animFrame++
+		if m.animationActive() {
+			return m, tickFrame()
+		}
+		m.animTicking = false
+		return m, nil
 
 	case scanResultMsg:
 		// Discard stale scan results from an earlier scan generation. Without
@@ -1706,11 +1744,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.configEditInput, cmd = m.configEditInput.Update(msg)
 			return m, cmd
 		}
-		if m.loading {
-			var cmd tea.Cmd
-			m.spinner, cmd = m.spinner.Update(msg)
-			return m, cmd
-		}
+		// Loading-state messages used to drive a separate bubbles
+		// spinner ticker. The cyber theme replaced that with the
+		// global frameMsg loop — no dispatch needed here.
 	}
 	return m, nil
 }
@@ -1864,8 +1900,12 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Global `P` opens the Plan modal from any tab. Routed here
 	// before the tab-specific dispatchers so the shortcut is
-	// uniform across the whole UI.
-	if msg.String() == "P" && !m.viewingPlan && !m.fixModal.Open && !m.showDetail {
+	// uniform across the whole UI. Disabled while the catalog is
+	// still loading because tools / pending-versions / cache
+	// haven't resolved yet — opening the plan early would render
+	// an empty modal that the user has to dismiss anyway. Once
+	// the first scan completes the shortcut works everywhere.
+	if msg.String() == "P" && !m.viewingPlan && !m.fixModal.Open && !m.showDetail && m.phase != phaseLoading {
 		mp := &m
 		cmd := mp.openPlanView()
 		return *mp, cmd
@@ -3033,6 +3073,9 @@ func (m Model) startBatchUpgrade() (tea.Model, tea.Cmd) {
 	m.activeBatch = newBatchOp("Upgrading", items)
 	if cmd := m.activeBatch.next(); cmd != nil {
 		m.statusMsg = m.activeBatch.statusLine()
+		if tickCmd := m.ensureAnimating(); tickCmd != nil {
+			return m, tea.Batch(cmd, tickCmd)
+		}
 		return m, cmd
 	}
 	// All items were pre-skipped.

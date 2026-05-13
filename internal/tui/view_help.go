@@ -243,6 +243,7 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("Space") + " toggle",
 				dimVersion.Render("a") + " select all",
 				dimVersion.Render("u") + " upgrade",
+				dimVersion.Render("P") + " preview plan",
 				dimVersion.Render("f") + " category",
 				dimVersion.Render("Enter") + " detail",
 				dimVersion.Render("q") + " quit",

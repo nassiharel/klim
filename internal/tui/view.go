@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -72,8 +72,12 @@ func (m Model) renderView() string {
 		return ""
 	}
 
-	// Plan / checkpoint browser modal — full-screen overlay. Takes
-	// priority over every other view including the health fix modal.
+	// Modals win over every other layer. A rescan triggered while
+	// a modal is open (e.g. applyFinishedMsg → startScan() while
+	// the plan modal is still up) flips phase back to phaseLoading
+	// — but the user's open modal must stay visible, not get
+	// hidden under the boot splash where its keystrokes silently
+	// disappear. So modals get checked BEFORE the boot splash.
 	if m.viewingPlan {
 		if m.viewingCheckpoints {
 			return m.renderCheckpointBrowser()
@@ -81,7 +85,6 @@ func (m Model) renderView() string {
 		return m.renderPlanView()
 	}
 
-	// Health fix modal — full-screen overlay; takes priority over everything else.
 	if m.fixModal.Open {
 		return m.renderFixModal()
 	}
@@ -96,10 +99,25 @@ func (m Model) renderView() string {
 		return m.renderPackDetailView(m.packs[m.packDetailIdx])
 	}
 
+	// Boot splash — full-screen cyber cold-start visual. Drawn
+	// only after the modal/detail layers above have declined.
+	if m.phase == phaseLoading {
+		return m.renderBootSplash()
+	}
+
 	var body strings.Builder
 
 	body.WriteString(m.renderTitleBar() + "\n")
-	body.WriteString(m.renderTabBar() + "\n\n")
+	body.WriteString(m.renderTabBar() + "\n")
+	// The line below the tab strip is either the cyber scan strip
+	// (when a scan / version resolution is in flight) or a blank
+	// gap. Either way it's exactly one row so every per-tab layout
+	// calculation that budgets "blank(1)" stays correct.
+	if strip := m.renderScanStrip(); strip != "" {
+		body.WriteString(strip + "\n")
+	} else {
+		body.WriteString("\n")
+	}
 
 	// Backup tab has its own rendering path.
 	if m.activeTab == tabBackup {
@@ -437,25 +455,7 @@ func visualRows(s string, width int) int {
 // --- Title & Tabs ---
 
 func (m Model) renderTitleBar() string {
-	title := brandStyle.Render("klim")
-
-	if m.phase == phaseLoading {
-		return "  " + title + "  " + loadingStyle.Render(m.spinner.View()+" Loading tools...")
-	}
-	if m.phase == phaseResolving && m.pending > 0 {
-		return "  " + title + "  " + loadingStyle.Render(fmt.Sprintf("%s Checking versions (%d remaining)...", m.spinner.View(), m.pending))
-	}
-
-	inst, upd, notInst := m.stats()
-	active := inst + notInst
-	summary := fmt.Sprintf("%d/%d installed", inst, active)
-	if upd > 0 {
-		summary += "  " + upgradableStyle.Render(fmt.Sprintf("%d updates", upd))
-	}
-	if notInst > 0 {
-		summary += fmt.Sprintf("  %d available", notInst)
-	}
-	return "  " + title + "  " + summaryStyle.Render(summary)
+	return m.renderCyberHUD()
 }
 
 // subtabRows returns the number of additional header rows occupied by
@@ -475,10 +475,11 @@ func (m Model) subtabRows() int {
 	return 0
 }
 
-// renderTabBar draws the parent tab labels. The three My Tools subtabs
-// (Installed, Updates, Favorites) collapse into a single "My Tools"
-// label; the active style is applied when any of them is the active
-// tab. A second strip below shows the active parent's subtabs (if any).
+// renderTabBar draws the parent tab labels with a cyber underline
+// that brightens directly beneath the active label, giving the strip
+// a focus indicator without resorting to pill backgrounds for every
+// tab. Below the parent strip, an active-tab subtab strip is drawn
+// for parents that own subtabs (My Tools, My Profile, Health).
 func (m Model) renderTabBar() string {
 	parents := []struct {
 		label string
@@ -496,23 +497,21 @@ func (m Model) renderTabBar() string {
 	}
 
 	curParent := parentIndex(m.activeTab)
-	var parts []string
-	for i, tab := range parents {
-		if i == curParent {
-			parts = append(parts, activeTabStyle.Render(tab.label))
-		} else {
-			parts = append(parts, inactiveTabStyle.Render(tab.label))
-		}
-	}
+	tabLine, ranges := buildCyberTabLine(parents, curParent)
 
-	tabLine := "  " + strings.Join(parts, "")
+	// Glow underline — bright cell directly under the active tab,
+	// dim rule everywhere else. Gives the strip its "scanning focus"
+	// without claiming the cells the active label is using.
 	ruleLen := m.width - 4
 	if ruleLen < 1 {
 		ruleLen = 1
 	}
-	bar := tabLine + "\n  " + ruleStyle.Render(strings.Repeat("─", ruleLen))
+	underline := buildCyberUnderline(ranges, curParent, ruleLen)
 
-	// My Tools subtab strip.
+	bar := tabLine + "\n" + underline
+
+	// Subtab strip — rendered with a milder accent so it visually
+	// nests inside the parent.
 	if isMyToolsTab(m.activeTab) {
 		subs := []struct {
 			label string
@@ -525,20 +524,18 @@ func (m Model) renderTabBar() string {
 		var subParts []string
 		for _, s := range subs {
 			if s.tab == m.activeTab {
-				subParts = append(subParts, activeTabStyle.Render(s.label))
+				subParts = append(subParts, cyberSubtabActive(s.label))
 			} else {
-				subParts = append(subParts, inactiveTabStyle.Render(s.label))
+				subParts = append(subParts, cyberSubtabInactive(s.label))
 			}
 		}
-		bar += "\n  " + strings.Join(subParts, "")
+		bar += "\n  " + strings.Join(subParts, "  ")
 	}
 
-	// My Profile subtab strip.
 	if m.activeTab == tabProfile {
-		bar += "\n  " + activeTabStyle.Render("Env Profile")
+		bar += "\n  " + cyberSubtabActive("Env Profile")
 	}
 
-	// Health subtab strip (Issues / PATH).
 	if m.activeTab == tabHealth {
 		subs := []struct {
 			label string
@@ -550,15 +547,144 @@ func (m Model) renderTabBar() string {
 		var subParts []string
 		for _, s := range subs {
 			if s.idx == m.healthSubTab {
-				subParts = append(subParts, activeTabStyle.Render(s.label))
+				subParts = append(subParts, cyberSubtabActive(s.label))
 			} else {
-				subParts = append(subParts, inactiveTabStyle.Render(s.label))
+				subParts = append(subParts, cyberSubtabInactive(s.label))
 			}
 		}
-		bar += "\n  " + strings.Join(subParts, "")
+		bar += "\n  " + strings.Join(subParts, "  ")
 	}
 
 	return bar
+}
+
+// buildCyberTabLine renders the parent-tab labels and reports each
+// label's visible column range so the underline builder can paint
+// the bright slice in the right place.
+//
+// Layout invariant: every tab — active or inactive — occupies the
+// same total width (label + inner padding + two outer cells). The
+// active tab fills the outer cells with bracket characters; the
+// inactive tab fills them with spaces. Keeping the widths equal is
+// what lets the underline strip's column math stay in sync with the
+// rendered output for every position of `curParent`.
+//
+// Returns the rendered line (with the 2-cell indent already applied)
+// and a slice of (start, end) inclusive column ranges for each parent
+// label.
+func buildCyberTabLine(parents []struct {
+	label string
+	idx   int
+}, curParent int) (string, [][2]int) {
+	var b strings.Builder
+	b.WriteString("  ")
+	col := 2 // account for indent
+	ranges := make([][2]int, len(parents))
+	for i, t := range parents {
+		// Width = label + 2 (cyberTab*Style's Padding(0,1)) + 2
+		// (outer brackets-or-spaces). Same for both states so
+		// switching active never shifts neighbour columns.
+		labelLen := visualLen(t.label) + 4
+		var rendered string
+		if i == curParent {
+			rendered = cyberTabBracketStyle.Render("[") + cyberTabActiveStyle.Render(t.label) + cyberTabBracketStyle.Render("]")
+		} else {
+			rendered = " " + cyberTabInactiveStyle.Render(t.label) + " "
+		}
+		ranges[i] = [2]int{col, col + labelLen - 1}
+		col += labelLen
+		b.WriteString(rendered)
+	}
+	return b.String(), ranges
+}
+
+// buildCyberUnderline draws the per-cell underline strip. Cells that
+// fall under the active tab's label get the bright accent; the rest
+// get a dim rule. The strip starts at the same 2-cell indent the tab
+// line uses so the brackets visually align.
+//
+// Narrow-terminal guard: when the active tab's range starts past
+// the rule's right edge (because total tab-strip width exceeds the
+// terminal), or any inversion makes lo > hi after clamping, fall
+// back to a fully-dim rule rather than passing a negative count to
+// strings.Repeat (which panics).
+func buildCyberUnderline(ranges [][2]int, curParent, ruleLen int) string {
+	var b strings.Builder
+	b.WriteString("  ")
+	dimAll := func() string {
+		b.WriteString(cyberTabUnderlineDimStyle.Render(strings.Repeat("─", ruleLen)))
+		return b.String()
+	}
+	if ruleLen <= 0 || curParent < 0 || curParent >= len(ranges) {
+		return dimAll()
+	}
+	lo, hi := ranges[curParent][0], ranges[curParent][1]
+	// Convert from absolute column to relative (within the rule).
+	lo -= 2
+	hi -= 2
+	// If the active tab starts past the visible rule, or both
+	// endpoints are out of range, there's no bright slice to draw —
+	// dim the whole rule and bail.
+	if lo >= ruleLen || hi < 0 {
+		return dimAll()
+	}
+	if hi >= ruleLen {
+		hi = ruleLen - 1
+	}
+	if lo < 0 {
+		lo = 0
+	}
+	if lo > hi {
+		// Defensive: after clamping the bright slice collapsed.
+		return dimAll()
+	}
+	left := strings.Repeat("─", lo)
+	mid := strings.Repeat("━", hi-lo+1) // heavier bar under the active
+	right := strings.Repeat("─", ruleLen-hi-1)
+	b.WriteString(cyberTabUnderlineDimStyle.Render(left))
+	b.WriteString(cyberTabUnderlineStyle.Render(mid))
+	b.WriteString(cyberTabUnderlineDimStyle.Render(right))
+	return b.String()
+}
+
+func cyberSubtabActive(label string) string {
+	return cyberTabBracketStyle.Render("‹") + " " +
+		cyberSubtabActiveLabelStyle.Render(label) + " " +
+		cyberTabBracketStyle.Render("›")
+}
+
+func cyberSubtabInactive(label string) string {
+	return "  " + cyberSubtabInactiveLabelStyle.Render(label) + "  "
+}
+
+// renderPlanBanner is the Updates-tab call-to-action: a one-line
+// cyber-framed pill that invites the user to preview the upgrade
+// plan before pressing `u` to apply. Helps make the global `P`
+// shortcut discoverable from the tab where it's most useful.
+func (m Model) renderPlanBanner() string {
+	count := 0
+	for _, t := range m.tools {
+		if t.HasUpdate() {
+			count++
+		}
+	}
+	if count == 0 {
+		return ""
+	}
+	plural := "update"
+	if count != 1 {
+		plural = "updates"
+	}
+	pill := cyberTabBracketStyle.Render("⟪") + " " +
+		hudBrandStyle.Render("PREVIEW PLAN") + " " +
+		cyberTabBracketStyle.Render("⟫")
+	hint := hudLabelStyle.Render("press ") +
+		hudValueStyle.Render("P") +
+		hudLabelStyle.Render(" to preview the ") +
+		hudValueStyle.Render(strconv.Itoa(count)) + " " +
+		hudLabelStyle.Render(plural+" before applying with ") +
+		hudValueStyle.Render("u")
+	return "  " + pill + "  " + hint
 }
 
 // --- Search Bar ---
@@ -675,8 +801,15 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 		cursor = "▸ "
 	}
 
-	// Name column: plain text padded, then styled.
+	// Name column: include the multi-instance count inline as
+	// "name(N)" when the tool has more than one resolved instance.
+	// Replaces the old trailing "(N instances)" tail so the row
+	// reads compactly and the count is visible at the leftmost
+	// position the eye scans first.
 	nameText := toolLabel(tool)
+	if n := len(tool.Instances); n > 1 {
+		nameText += "(" + strconv.Itoa(n) + ")"
+	}
 	nameCell := nameStyle.Render(fixedWidth(nameText, colName))
 
 	// Version column: styled version info, then pad to fixed width.
@@ -692,16 +825,15 @@ func (m Model) renderInstalledRow(tool registry.Tool, selected bool) string {
 
 	line := cursor + nameCell + "  " + verCell + "  " + srcCell + "  " + catCell
 
-	if badge := m.complianceBadge(tool.Name); badge != "" {
-		line += "  " + badge
-	}
-
+	// Order: stars first (positive signal), then compliance state
+	// (negative signal). Reads as "★ 3.3k  ✗ blocked" — keeps the
+	// positive metadata adjacent to the category column and lets
+	// the compliance badge act as a right-side modifier.
 	if badge := githubStarsBadge(tool); badge != "" {
 		line += "  " + fixedWidthANSI(dimVersion.Render(badge), colStars)
 	}
-
-	if len(tool.Instances) > 1 {
-		line += "  " + dimVersion.Render(fmt.Sprintf("(%d instances)", len(tool.Instances)))
+	if badge := m.complianceBadge(tool.Name); badge != "" {
+		line += "  " + badge
 	}
 
 	return line
@@ -931,6 +1063,17 @@ func (m Model) buildSidebarLines(maxRows int) []string {
 func (m Model) buildToolLines(maxRows int) []string {
 	lines := make([]string, 0, maxRows+1)
 
+	// Updates tab gets a one-line "Preview plan" banner above the
+	// header so users see — without consulting the help footer —
+	// that they can stage a dry-run before pressing `u` to apply.
+	bannerRow := ""
+	if m.activeTab == tabUpdates && m.phase >= phaseResolving && len(m.filteredIndex) > 0 {
+		bannerRow = m.renderPlanBanner()
+	}
+	if bannerRow != "" {
+		lines = append(lines, bannerRow)
+	}
+
 	// Header row.
 	if m.phase >= phaseResolving && len(m.filteredIndex) > 0 {
 		lines = append(lines, m.renderHeader())
@@ -939,8 +1082,13 @@ func (m Model) buildToolLines(maxRows int) []string {
 	}
 
 	// Tool rows.
-	// Header takes 1 line from maxRows, so effective data capacity is maxRows-1.
-	dataRows := maxRows - 1
+	// Header + optional banner take 1-2 lines from maxRows, so the
+	// effective data capacity shrinks accordingly.
+	usedHeaderRows := 1
+	if bannerRow != "" {
+		usedHeaderRows = 2
+	}
+	dataRows := maxRows - usedHeaderRows
 	if dataRows < 1 {
 		dataRows = 1
 	}
