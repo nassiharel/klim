@@ -20,9 +20,9 @@ var klimASCII = []string{
 	"  ██   ██  ████████ ██ ██     ██  ",
 }
 
-// renderBootSplash draws a full-screen, Jarvis-style boot splash:
+// renderBootSplash draws a full-screen, cyber-styled boot splash:
 // the KLIM logo with a left-to-right character reveal animation, a
-// brand subtitle ("// JARVIS-CLASS DEVELOPER COMMAND DECK"), a
+// brand subtitle ("// AI-CLASS DEVELOPER COMMAND DECK"), a
 // rotating cyber spinner, and a horizontal boot-progress bar that
 // fills left-to-right.
 //
@@ -80,7 +80,7 @@ func (m Model) renderBootSplash() string {
 	subtitle := ""
 	if reveal >= maxRow {
 		spinner := cyberSpinner(m.animFrame)
-		brand := bootSubtitleStyle.Render("JARVIS-CLASS DEVELOPER COMMAND DECK")
+		brand := bootSubtitleStyle.Render("AI-CLASS DEVELOPER COMMAND DECK")
 		boot := bootScanStyle.Render(scanProgress(m.animFrame))
 		subtitle = "  " + spinner + "  " + brand + "  " + boot
 	}

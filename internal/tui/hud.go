@@ -4,20 +4,19 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/mattn/go-runewidth"
 )
 
-// renderCyberHUD renders the Jarvis-style header: a bracket-framed
-// brand on the left, a live status grid in the middle (TIME / TOOLS /
+// renderCyberHUD renders the cyber-styled header: a bracket-framed
+// brand on the left, a live status grid in the middle (TOOLS /
 // UPDATES / HEALTH), and a pulsing activity dot on the right. The
 // frame wraps in matching brackets so the whole row reads as a
 // single HUD strip.
 //
 // Layout:
 //
-//	╭─[ KLIM // v0.1.2 ]──── 22:39:42 ─── 149 TOOLS ─── 3 UPDATES ─── HEALTHY ─── ◉ ─╮
+//	╭─[ KLIM // READY ]──── 149/149 TOOLS ┃ 3 UPDATES ┃ HEALTHY ─── ◉ ─╮
 //
 // Falls back gracefully on narrow terminals: drops segments from the
 // right (least-critical first) until the line fits the available
@@ -109,11 +108,6 @@ func (m Model) buildHUDSegments() []string {
 
 	// 3. Health badge — secondary signal.
 	segs = append(segs, m.healthBadge())
-
-	// 4. Time — useful ambient context but the first thing we
-	// can afford to drop when the terminal is narrow.
-	now := time.Now().Format("15:04:05")
-	segs = append(segs, hudValueStyle.Render(now))
 
 	return segs
 }

@@ -4,14 +4,14 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Cyber theme — Jarvis-inspired palette.
+// Cyber theme — electric cyber-modern palette.
 //
 // Colors are hex (true-color) — lipgloss auto-degrades to the nearest
 // 256-color slot on terminals without true-color support, so we still
 // get a recognisable look on Windows cmd / older xterm.
 var (
 	// Bright accents (the "active" / "live" layer).
-	cyberPrimary = lipgloss.Color("#00d9ff") // electric Jarvis cyan
+	cyberPrimary = lipgloss.Color("#00d9ff") // electric cyber cyan
 	cyberAccent  = lipgloss.Color("#ffb000") // amber for warnings / hints
 	cyberOK      = lipgloss.Color("#39ff14") // bright green for OK / installed
 	cyberInfo    = lipgloss.Color("#94e1ff") // soft cyan tint for info

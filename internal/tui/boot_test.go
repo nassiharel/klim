@@ -16,10 +16,10 @@ func TestRenderBootSplash_RevealsLogoOverFrames(t *testing.T) {
 	m.animFrame = 12
 	late := stripAnsi(m.renderBootSplash())
 
-	if strings.Contains(early, "JARVIS-CLASS") {
+	if strings.Contains(early, "AI-CLASS") {
 		t.Errorf("subtitle should not appear before full reveal, got: %s", early)
 	}
-	if !strings.Contains(late, "JARVIS-CLASS") {
+	if !strings.Contains(late, "AI-CLASS") {
 		t.Errorf("subtitle should appear after full reveal, got: %s", late)
 	}
 }

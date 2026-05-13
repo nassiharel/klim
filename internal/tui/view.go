@@ -72,7 +72,7 @@ func (m Model) renderView() string {
 		return ""
 	}
 
-	// Boot splash — full-screen Jarvis-style cold-start visual.
+	// Boot splash — full-screen cyber cold-start visual.
 	// Shown while the catalog is loading; replaced by the normal
 	// layout the moment the first toolset arrives.
 	if m.phase == phaseLoading {
