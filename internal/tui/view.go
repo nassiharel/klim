@@ -551,9 +551,16 @@ func (m Model) renderTabBar() string {
 // label's visible column range so the underline builder can paint
 // the bright slice in the right place.
 //
+// Layout invariant: every tab — active or inactive — occupies the
+// same total width (label + inner padding + two outer cells). The
+// active tab fills the outer cells with bracket characters; the
+// inactive tab fills them with spaces. Keeping the widths equal is
+// what lets the underline strip's column math stay in sync with the
+// rendered output for every position of `curParent`.
+//
 // Returns the rendered line (with the 2-cell indent already applied)
-// and a slice of (start, end) inclusive column ranges (1-based, after
-// the indent) for each parent label.
+// and a slice of (start, end) inclusive column ranges for each parent
+// label.
 func buildCyberTabLine(parents []struct {
 	label string
 	idx   int
@@ -563,11 +570,13 @@ func buildCyberTabLine(parents []struct {
 	col := 2 // account for indent
 	ranges := make([][2]int, len(parents))
 	for i, t := range parents {
+		// Width = label + 2 (cyberTab*Style's Padding(0,1)) + 2
+		// (outer brackets-or-spaces). Same for both states so
+		// switching active never shifts neighbour columns.
+		labelLen := visualLen(t.label) + 4
 		var rendered string
-		labelLen := visualLen(t.label) + 2 // padding 1 cell each side
 		if i == curParent {
 			rendered = cyberTabBracketStyle.Render("[") + cyberTabActiveStyle.Render(t.label) + cyberTabBracketStyle.Render("]")
-			labelLen += 2 // brackets
 		} else {
 			rendered = " " + cyberTabInactiveStyle.Render(t.label) + " "
 		}
@@ -610,12 +619,12 @@ func buildCyberUnderline(ranges [][2]int, curParent, ruleLen int) string {
 
 func cyberSubtabActive(label string) string {
 	return cyberTabBracketStyle.Render("‹") + " " +
-		lipgloss.NewStyle().Foreground(cyberPrimary).Bold(true).Render(label) + " " +
+		cyberSubtabActiveLabelStyle.Render(label) + " " +
 		cyberTabBracketStyle.Render("›")
 }
 
 func cyberSubtabInactive(label string) string {
-	return "  " + lipgloss.NewStyle().Foreground(cyberFGDim).Render(label) + "  "
+	return "  " + cyberSubtabInactiveLabelStyle.Render(label) + "  "
 }
 
 // --- Search Bar ---

@@ -123,7 +123,11 @@ func buildFixOptions(issue doctor.Issue) []fixModalOption {
 						}
 						m.fixModal.State = fixModalRunning
 						m.fixModal.Err = nil
-						return m, runHealthFixCmd(cmd)
+						runCmd := runHealthFixCmd(cmd)
+						if tickCmd := m.ensureAnimating(); tickCmd != nil {
+							return m, tea.Batch(runCmd, tickCmd)
+						}
+						return m, runCmd
 					},
 				},
 				fixModalOption{
@@ -305,6 +309,9 @@ func (m Model) startFixModalRestore() (Model, tea.Cmd) {
 		Command: cmd,
 	}
 	restoreCmd := runHealthFixCmd(cmd)
+	if tickCmd := m.ensureAnimating(); tickCmd != nil {
+		return m, tea.Batch(restoreCmd, tickCmd)
+	}
 	return m, restoreCmd
 }
 

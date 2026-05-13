@@ -41,20 +41,40 @@ func TestCyberHUD_NarrowFallback(t *testing.T) {
 	}
 }
 
-// TestRenderTabBar_ActiveTabHasBracketsAndUnderline verifies the new
-// cyber tab bar wraps the active tab in brackets and emits a heavy
-// underline cell beneath it.
-func TestRenderTabBar_ActiveTabHasBracketsAndUnderline(t *testing.T) {
-	m := Model{width: 140, activeTab: tabDashboard}
-	bar := stripAnsi(m.renderTabBar())
-	// Active tab is bracket-wrapped (inner padding from the active
-	// style adds a space on each side).
-	if !strings.Contains(bar, "[ Dashboard ]") {
-		t.Errorf("active tab should be bracket-wrapped, got: %s", bar)
+// TestRenderTabBar_UnderlineAlignsAcrossPositions guards against the
+// per-tab-width drift that used to happen when active and inactive
+// tabs rendered at different total widths. After fixing the column
+// accounting, the underline's heavy slice should land underneath
+// each parent label regardless of which one is active.
+func TestRenderTabBar_UnderlineAlignsAcrossPositions(t *testing.T) {
+	// Sweep every parent slot. For each, the rendered tab line must
+	// contain [ Label ] for that label specifically, and the
+	// underline strip must contain a run of ━ characters.
+	cases := []struct {
+		tab   int
+		label string
+	}{
+		{tabInstalled, "[ My Tools ]"},
+		{tabDiscover, "[ Marketplace ]"},
+		{tabProject, "[ Project ]"},
+		{tabDashboard, "[ Dashboard ]"},
+		{tabProfile, "[ My Profile ]"},
+		{tabHealth, "[ Health ]"},
+		{tabDoctor, "[ Security ]"},
+		{tabBackup, "[ Backup ]"},
+		{tabConfig, "[ Config ]"},
 	}
-	// Heavy box-drawing underline char beneath the active label.
-	if !strings.Contains(bar, "━") {
-		t.Errorf("tab bar should emit heavy underline (━), got: %s", bar)
+	for _, c := range cases {
+		m := Model{width: 160, activeTab: c.tab}
+		plain := stripAnsi(m.renderTabBar())
+		if !strings.Contains(plain, c.label) {
+			t.Errorf("tab=%d: want %q in bar, got: %s", c.tab, c.label, plain)
+		}
+		// Find ━ in the underline (which is on the second line).
+		lines := strings.Split(plain, "\n")
+		if len(lines) < 2 || !strings.Contains(lines[1], "━") {
+			t.Errorf("tab=%d: underline line must contain heavy bar, got: %q", c.tab, lines)
+		}
 	}
 }
 

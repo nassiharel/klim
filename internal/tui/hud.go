@@ -31,7 +31,14 @@ func (m Model) renderCyberHUD() string {
 
 	brand := buildBrand(m.phase, m.pending)
 	segments := m.buildHUDSegments()
-	dot := pulseDot(m.animFrame)
+	// Pulse only while there's something to signal. When the app
+	// is fully idle (scan done, no pending work), show a static
+	// dot so the HUD stays visually quiet and the animation loop
+	// can pause without losing the indicator.
+	dot := staticDot()
+	if m.animationActive() {
+		dot = pulseDot(m.animFrame)
+	}
 
 	// Outer frame characters.
 	left := hudBracketStyle.Render("╭─")
@@ -81,29 +88,32 @@ func buildBrand(phase int, pending int) string {
 }
 
 // buildHUDSegments returns the HUD's middle status segments in
-// priority order (most important first), so the dropping logic
-// degrades gracefully.
+// priority order (most important FIRST). renderCyberHUD drops
+// segments from the end of this slice until the line fits, so
+// putting the most-critical info first guarantees it survives the
+// longest under narrow-terminal pressure.
 func (m Model) buildHUDSegments() []string {
 	var segs []string
 
-	// Time — cheap to compute, low priority for narrow terminals.
-	now := time.Now().Format("15:04:05")
-	segs = append(segs, hudValueStyle.Render(now))
-
-	// Tools count.
+	// 1. Tools count — the headline number. Most important.
 	inst, upd, notInst := m.stats()
 	active := inst + notInst
 	segs = append(segs,
 		hudValueStyle.Render(strconv.Itoa(inst))+hudLabelStyle.Render("/")+
 			hudValueStyle.Render(strconv.Itoa(active))+" "+hudLabelStyle.Render("TOOLS"))
 
-	// Updates (only when there are any).
+	// 2. Updates count — only when there's something actionable.
 	if upd > 0 {
 		segs = append(segs, hudAlertStyle.Render(fmt.Sprintf("%d UPDATES", upd)))
 	}
 
-	// Health.
+	// 3. Health badge — secondary signal.
 	segs = append(segs, m.healthBadge())
+
+	// 4. Time — useful ambient context but the first thing we
+	// can afford to drop when the terminal is narrow.
+	now := time.Now().Format("15:04:05")
+	segs = append(segs, hudValueStyle.Render(now))
 
 	return segs
 }

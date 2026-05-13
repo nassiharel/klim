@@ -6,13 +6,10 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// klimASCII is the bootscreen logo. Hand-stenciled at 7×40 cells so
-// it lines up cleanly inside the standard 80-column terminal. Every
-// row contains the same number of cells so the reveal animation
-// progresses left-to-right at a stable rate.
-//
-// The double-row glyphs read as "KLIM" in a 70s-arcade / Jarvis-HUD
-// style — wide rectangles, sharp diagonals.
+// klimASCII is the bootscreen logo. Each row is exactly 34 runes
+// (mixed spaces + █ FULL BLOCK glyphs) so the reveal animation
+// progresses left-to-right at a stable rate; renderBootSplash reads
+// the first row's rune count as the canonical width.
 var klimASCII = []string{
 	"  ██   ██  ██       ██ ███   ███  ",
 	"  ██  ██   ██       ██ ████ ████  ",
@@ -26,7 +23,8 @@ var klimASCII = []string{
 // renderBootSplash draws a full-screen, Jarvis-style boot splash:
 // the KLIM logo with a left-to-right character reveal animation, a
 // brand subtitle ("// JARVIS-CLASS DEVELOPER COMMAND DECK"), a
-// rotating cyber spinner, and a scanline that sweeps top-to-bottom.
+// rotating cyber spinner, and a horizontal boot-progress bar that
+// fills left-to-right.
 //
 // The splash is shown only while m.phase == phaseLoading. Once the
 // catalog finishes loading we drop straight into the normal layout —

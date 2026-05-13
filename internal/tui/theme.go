@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"image/color"
-
 	"charm.land/lipgloss/v2"
 )
 
@@ -66,25 +64,42 @@ var (
 
 	// Cyber spinner.
 	cyberSpinnerStyle = lipgloss.NewStyle().Foreground(cyberPrimary).Bold(true)
+
+	// Subtabs — slimmer accent for nested tab strips.
+	cyberSubtabActiveLabelStyle   = lipgloss.NewStyle().Foreground(cyberPrimary).Bold(true)
+	cyberSubtabInactiveLabelStyle = lipgloss.NewStyle().Foreground(cyberFGDim)
+
+	// HUD pulse — prebuilt for each brightness tier so the per-
+	// frame render path doesn't allocate a fresh style every call.
+	hudPulseDimStyle     = lipgloss.NewStyle().Foreground(cyberPrimaryDim).Bold(true)
+	hudPulsePrimaryStyle = lipgloss.NewStyle().Foreground(cyberPrimary).Bold(true)
+	hudPulseInfoStyle    = lipgloss.NewStyle().Foreground(cyberInfo).Bold(true)
 )
 
-// pulseColor returns one of three brightness tiers based on the
-// animation frame counter, producing a soft breathing effect on
-// "live" indicators. Use it sparingly — only on elements meant to
-// signal active state (heartbeat, scanning).
-func pulseColor(frame int) color.Color {
+// pulseColor returns the prebuilt pulse style for the current
+// animation frame, producing a soft breathing effect on "live"
+// indicators. Reusable style tokens (no allocation per call) keep
+// per-frame render cheap even at the 10 fps tick rate.
+func pulseStyle(frame int) lipgloss.Style {
 	switch (frame / 3) % 6 {
 	case 0, 5:
-		return cyberPrimaryDim
+		return hudPulseDimStyle
 	case 1, 4:
-		return cyberPrimary
+		return hudPulsePrimaryStyle
 	default:
-		return cyberInfo
+		return hudPulseInfoStyle
 	}
 }
 
-// pulseDot returns a glowing dot character whose intensity tracks the
-// animation frame. Renders as a single visible cell.
+// pulseDot returns a glowing dot character whose intensity tracks
+// the animation frame. Renders as a single visible cell.
 func pulseDot(frame int) string {
-	return lipgloss.NewStyle().Foreground(pulseColor(frame)).Bold(true).Render("◉")
+	return pulseStyle(frame).Render("◉")
+}
+
+// staticDot returns a non-animated dim cyan dot, used when the
+// animation loop is idle so the HUD still shows the activity
+// indicator without consuming a frame budget.
+func staticDot() string {
+	return hudPulseDimStyle.Render("◉")
 }
