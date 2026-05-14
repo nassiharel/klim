@@ -43,6 +43,9 @@ testdata/fuzz/
 # Marketplace (assembled from marketplace/tools/ and marketplace/packs/ by CI)
 /marketplace.yaml
 
+# Node.js (any subdir that hosts a Node toolchain, e.g. local prototypes)
+node_modules/
+
 # Environment
 .env
 .env.*
