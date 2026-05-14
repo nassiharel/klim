@@ -116,6 +116,128 @@ func TestFilterName(t *testing.T) {
 	}
 }
 
+func TestWindowAgentRows(t *testing.T) {
+	// 100 rows, window of 10.
+	rows := make([]agentRow, 100)
+	for i := range rows {
+		rows[i] = agentRow{name: "r" + string(rune('0'+i%10))}
+	}
+
+	// Cursor near top — window starts at 0.
+	vis, start, dc, ha, hb := windowAgentRows(rows, 2, 10)
+	if len(vis) != 10 || start != 0 || dc != 2 || ha != 0 || hb != 90 {
+		t.Errorf("near-top: vis=%d start=%d dc=%d ha=%d hb=%d", len(vis), start, dc, ha, hb)
+	}
+
+	// Cursor near middle — window centers around it.
+	vis, start, dc, ha, hb = windowAgentRows(rows, 50, 10)
+	if len(vis) != 10 || ha != start || dc != 50-start {
+		t.Errorf("middle: start=%d dc=%d ha=%d hb=%d", start, dc, ha, hb)
+	}
+	if ha+hb+len(vis) != len(rows) {
+		t.Errorf("counts don't add up: ha=%d hb=%d vis=%d", ha, hb, len(vis))
+	}
+
+	// Cursor near bottom — window pinned to end.
+	vis, start, dc, ha, hb = windowAgentRows(rows, 99, 10)
+	if len(vis) != 10 || start != 90 || dc != 9 || hb != 0 {
+		t.Errorf("near-bottom: start=%d dc=%d hb=%d", start, dc, hb)
+	}
+	if ha != 90 {
+		t.Errorf("hidden above should be 90, got %d", ha)
+	}
+
+	// Small list — entire list visible.
+	short := rows[:5]
+	vis, start, dc, ha, hb = windowAgentRows(short, 2, 10)
+	if len(vis) != 5 || start != 0 || dc != 2 || ha != 0 || hb != 0 {
+		t.Errorf("short: len=%d start=%d dc=%d ha=%d hb=%d", len(vis), start, dc, ha, hb)
+	}
+
+	// Empty list.
+	vis, _, _, _, _ = windowAgentRows(nil, 0, 10)
+	if vis != nil {
+		t.Errorf("empty list should return nil; got %v", vis)
+	}
+}
+
+func TestRowCopyText(t *testing.T) {
+	cases := []struct {
+		name     string
+		row      agentRow
+		wantText string
+		wantTag  string
+	}{
+		{
+			name: "claude session resume command",
+			row: agentRow{session: &agents.Session{
+				ID: "claude:abc-123", Provider: agents.ProviderClaudeCode,
+			}},
+			wantText: "claude -r abc-123",
+			wantTag:  "resume command",
+		},
+		{
+			name: "copilot session resume command",
+			row: agentRow{session: &agents.Session{
+				ID: "copilot:xyz", Provider: agents.ProviderCopilotCLI,
+			}},
+			wantText: "copilot --resume=xyz",
+			wantTag:  "resume command",
+		},
+		{
+			name:     "skill produces slash invocation",
+			row:      agentRow{skill: &agents.Skill{Name: "summarize"}},
+			wantText: "/summarize",
+			wantTag:  "skill invocation",
+		},
+		{
+			name: "plugin produces install command with marketplace",
+			row: agentRow{plugin: &agents.Plugin{
+				Name: "workiq", Marketplace: "copilot-plugins",
+				Provider: agents.ProviderCopilotCLI,
+			}},
+			wantText: "copilot plugin install workiq@copilot-plugins",
+			wantTag:  "install command",
+		},
+	}
+	for _, c := range cases {
+		gotText, gotTag := rowCopyText(c.row)
+		if gotText != c.wantText || gotTag != c.wantTag {
+			t.Errorf("%s: got (%q,%q), want (%q,%q)", c.name, gotText, gotTag, c.wantText, c.wantTag)
+		}
+	}
+}
+
+func TestRowOpenURL(t *testing.T) {
+	cases := []struct {
+		row  agentRow
+		want string
+	}{
+		{agentRow{marketplace: &agents.Marketplace{URL: "https://a"}}, "https://a"},
+		{agentRow{plugin: &agents.Plugin{Homepage: "https://h", Repository: "https://r"}}, "https://h"},
+		{agentRow{plugin: &agents.Plugin{Repository: "https://r"}}, "https://r"},
+		{agentRow{mcp: &agents.MCP{URL: "https://m"}}, "https://m"},
+		{agentRow{}, ""},
+	}
+	for i, c := range cases {
+		if got := rowOpenURL(c.row); got != c.want {
+			t.Errorf("case %d: got %q want %q", i, got, c.want)
+		}
+	}
+}
+
+func TestSortColumnFor(t *testing.T) {
+	if col := sortColumnFor(agentsSubSessions, agentsSortDefault); col != -1 {
+		t.Errorf("default should be -1, got %d", col)
+	}
+	if col := sortColumnFor(agentsSubSessions, agentsSortTurns); col != 4 {
+		t.Errorf("sessions/turns should be column 4, got %d", col)
+	}
+	if col := sortColumnFor(agentsSubMarketplaces, agentsSortName); col != 1 {
+		t.Errorf("marketplaces/name should be column 1, got %d", col)
+	}
+}
+
 func TestAgentsSnapshotCounts(t *testing.T) {
 	snap := &agents.Snapshot{
 		Marketplaces: []agents.Marketplace{{}},

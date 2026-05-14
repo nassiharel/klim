@@ -3,6 +3,7 @@ package tui
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -393,6 +394,45 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		st.viewerTitle = path
 		st.viewerLines = lines
 		return true, nil
+	case "o":
+		// Open the current row's primary URL in the user's browser.
+		rows := m.agentsVisibleRows()
+		if st.cursor < 0 || st.cursor >= len(rows) {
+			return true, nil
+		}
+		url := rowOpenURL(rows[st.cursor])
+		if url == "" {
+			st.flash = "no URL to open for this row"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		if err := openBrowser(url); err != nil {
+			st.flash = "open error: " + err.Error()
+		} else {
+			st.flash = "opened: " + url
+		}
+		st.flashEnd = time.Now().Add(3 * time.Second)
+		return true, nil
+	case "c":
+		// Copy the row's most useful command/URL/path to clipboard.
+		rows := m.agentsVisibleRows()
+		if st.cursor < 0 || st.cursor >= len(rows) {
+			return true, nil
+		}
+		text, label := rowCopyText(rows[st.cursor])
+		if text == "" {
+			st.flash = "nothing to copy for this row"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		cb := systemClipboard{}
+		if err := cb.WriteAll(text); err != nil {
+			st.flash = "clipboard error: " + err.Error()
+		} else {
+			st.flash = "copied " + label + ": " + truncAgentRow(text, 60)
+		}
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
 	case "?":
 		st.helpOpen = true
 		return true, nil
@@ -404,6 +444,87 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	}
 	return false, nil
 }
+
+// rowOpenURL picks the most-useful URL for `o`-to-open. Each entity
+// type has a canonical "primary" link.
+func rowOpenURL(r agentRow) string {
+	switch {
+	case r.marketplace != nil:
+		return r.marketplace.URL
+	case r.plugin != nil:
+		if r.plugin.Homepage != "" {
+			return r.plugin.Homepage
+		}
+		return r.plugin.Repository
+	case r.mcp != nil:
+		return r.mcp.URL
+	}
+	return ""
+}
+
+// rowCopyText returns the text that `c` should yank, along with a
+// short label that goes into the flash message. Sessions/skills get
+// a ready-to-run resume/invoke command; plugins+MCPs get an install
+// or config snippet.
+func rowCopyText(r agentRow) (text, label string) {
+	switch {
+	case r.session != nil:
+		id := strings.TrimPrefix(r.session.ID, "claude:")
+		id = strings.TrimPrefix(id, "copilot:")
+		switch r.session.Provider {
+		case agents.ProviderClaudeCode:
+			return "claude -r " + id, "resume command"
+		case agents.ProviderCopilotCLI:
+			return "copilot --resume=" + id, "resume command"
+		}
+		return r.session.TranscriptPath, "transcript path"
+	case r.skill != nil:
+		return "/" + r.skill.Name, "skill invocation"
+	case r.plugin != nil:
+		ref := r.plugin.Name
+		if r.plugin.Marketplace != "" {
+			ref = r.plugin.Name + "@" + r.plugin.Marketplace
+		}
+		switch r.plugin.Provider {
+		case agents.ProviderClaudeCode:
+			return "claude plugin install " + ref, "install command"
+		case agents.ProviderCopilotCLI:
+			return "copilot plugin install " + ref, "install command"
+		}
+		return ref, "plugin ref"
+	case r.mcp != nil:
+		if r.mcp.URL != "" {
+			return r.mcp.URL, "MCP URL"
+		}
+		if r.mcp.Command != "" {
+			return r.mcp.Command + " " + strings.Join(r.mcp.Args, " "), "MCP command"
+		}
+		return r.mcp.Name, "MCP name"
+	case r.marketplace != nil:
+		return r.marketplace.URL, "marketplace URL"
+	}
+	return "", ""
+}
+
+// openBrowser opens the given URL in the user's default browser. Uses
+// platform-appropriate tooling (rundll32 / open / xdg-open).
+func openBrowser(url string) error {
+	if url == "" {
+		return errors.New("empty url")
+	}
+	var cmd *exec.Cmd
+	switch runtimeGOOS() {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	return cmd.Start()
+}
+
+func runtimeGOOS() string { return goos }
 
 func (st *agentsState) setSubTab(i int) {
 	st.subTab = i
@@ -785,16 +906,15 @@ func (m *Model) renderAgentsView() string {
 	}
 
 	const maxRows = 25
-	visible := rows
-	more := 0
-	if len(visible) > maxRows {
-		more = len(visible) - maxRows
-		visible = visible[:maxRows]
-	}
+	visible, windowStart, displayCursor, hiddenAbove, hiddenBelow := windowAgentRows(rows, st.cursor, maxRows)
+	_ = windowStart
 
-	b.WriteString(renderAgentsTable(st.subTab, visible, st.cursor))
-	if more > 0 {
-		fmt.Fprintf(&b, "  … %d more (search to narrow)\n", more)
+	if hiddenAbove > 0 {
+		fmt.Fprintf(&b, "  %s\n", dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)))
+	}
+	b.WriteString(renderAgentsTable(st.subTab, visible, displayCursor, st.sortMode[st.subTab]))
+	if hiddenBelow > 0 {
+		fmt.Fprintf(&b, "  %s\n", dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)))
 	}
 
 	if st.detailOpen && st.cursor < len(rows) {
@@ -961,19 +1081,90 @@ func renderRow(cells []string, cols []column, lead string) string {
 	return b.String()
 }
 
-func renderHeader(cols []column) string {
+// renderHeader builds the table header row. When sortColumn is >= 0
+// it appends a tiny ▼ arrow to that column's title so users can see
+// at a glance which column drives the current order.
+func renderHeader(cols []column, sortColumn int) string {
 	cells := make([]string, len(cols))
 	for i, c := range cols {
-		cells[i] = headerStyle.Render(c.header)
+		title := c.header
+		if i == sortColumn {
+			title += " ▼"
+		}
+		cells[i] = headerStyle.Render(title)
 	}
 	return renderRow(cells, cols, "    ")
+}
+
+// sortColumnFor returns the column index that the given sort mode acts
+// on for the given sub-tab, or -1 when the sort is the default order
+// (no specific column to mark).
+func sortColumnFor(subTab int, mode agentsSortMode) int {
+	if mode == agentsSortDefault {
+		return -1
+	}
+	switch subTab {
+	case agentsSubMarketplaces, agentsSubPlugins, agentsSubSkills, agentsSubMCPs:
+		if mode == agentsSortName {
+			return 1
+		}
+	case agentsSubSessions:
+		switch mode {
+		case agentsSortName:
+			return 1
+		case agentsSortCreated:
+			return 5
+		case agentsSortTurns:
+			return 4
+		case agentsSortModified:
+			return 6
+		}
+	}
+	return -1
+}
+
+// windowAgentRows centers a visible window of `maxRows` around the cursor
+// and returns the slice plus the cursor position within the slice and
+// the counts hidden above/below for the scroll indicators.
+func windowAgentRows(rows []agentRow, cursor, maxRows int) (visible []agentRow, start, displayCursor, hiddenAbove, hiddenBelow int) {
+	n := len(rows)
+	if n == 0 {
+		return nil, 0, 0, 0, 0
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= n {
+		cursor = n - 1
+	}
+	if n <= maxRows {
+		return rows, 0, cursor, 0, 0
+	}
+
+	// Center the cursor in the window when possible.
+	start = cursor - maxRows/2
+	if start < 0 {
+		start = 0
+	}
+	if start+maxRows > n {
+		start = n - maxRows
+	}
+	end := start + maxRows
+	visible = rows[start:end]
+	displayCursor = cursor - start
+	hiddenAbove = start
+	hiddenBelow = n - end
+	return
 }
 
 // renderAgentsTable produces an aligned table for the current sub-tab.
 // Uses lipgloss fixed-width cells so colored content (SOURCE chips,
 // STATUS pills, SCOPE tags) stays in line — text/tabwriter counted
 // ANSI escapes as visible width and pushed columns out of alignment.
-func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
+//
+// The activeSort argument drives a small ↑/↓ indicator on the column
+// that's currently sorted so users can see the order at a glance.
+func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agentsSortMode) string {
 	var b strings.Builder
 
 	switch subTab {
@@ -985,7 +1176,7 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			{header: "PLUGINS", width: 8},
 			{header: "URL", width: 48},
 		}
-		b.WriteString(renderHeader(cols))
+		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			mp := r.marketplace
 			owner, url, count := "", "", 0
@@ -1010,7 +1201,7 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			{header: "STATUS", width: 10},
 			{header: "DESCRIPTION", width: 50},
 		}
-		b.WriteString(renderHeader(cols))
+		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			pl := r.plugin
 			version, market, status, desc := "", "", "available", ""
@@ -1042,7 +1233,7 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			{header: "MODEL", width: 8},
 			{header: "DESCRIPTION", width: 50},
 		}
-		b.WriteString(renderHeader(cols))
+		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			sk := r.skill
 			model, from, desc := "", "", ""
@@ -1071,7 +1262,7 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			{header: "TOOLS", width: 6},
 			{header: "ENDPOINT", width: 48},
 		}
-		b.WriteString(renderHeader(cols))
+		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			mcp := r.mcp
 			transport, endpoint, tools := "", "", 0
@@ -1104,7 +1295,7 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			{header: "MODIFIED", width: 14},
 			{header: "PROJECT", width: 36},
 		}
-		b.WriteString(renderHeader(cols))
+		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			s := r.session
 			typ, status, project := "", "", r.subtitle
@@ -1409,6 +1600,8 @@ func agentsHelpOverlay() string {
 		{"s", "cycle sort mode"},
 		{"f", "cycle status filter (plugins, MCPs)"},
 		{"l", "launch session (skill / plugin / session)"},
+		{"o", "open primary URL in browser"},
+		{"c", "copy launch / install / config command"},
 		{"y", "yank entity id to clipboard"},
 		{"v", "view first 60 lines of session transcript"},
 		{"d", "delete current row (sessions / MCPs) — confirms first"},
