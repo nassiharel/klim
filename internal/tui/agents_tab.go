@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/klim/internal/agents"
 	"github.com/nassiharel/klim/internal/agents/providers/claudecode"
@@ -32,12 +34,33 @@ type agentsState struct {
 	searchActive bool
 	searchInput  string
 
+	// sortMode is per sub-tab: see agentsSortMode* below.
+	// The map keys are sub-tab indices.
+	sortMode map[int]agentsSortMode
+
 	launchPrompt string // non-empty while the launch confirmation modal is up
 	launchPlan   agents.ExecPlan
 
 	flash    string
 	flashEnd time.Time
 }
+
+// agentsSortMode names the supported sort orders.
+type agentsSortMode int
+
+const (
+	agentsSortDefault  agentsSortMode = iota // per-sub-tab default
+	agentsSortName                           // alphabetical
+	agentsSortModified                       // recent-first (mtime / last event)
+	agentsSortCreated                        // recent-first (created)
+	agentsSortTurns                          // sessions: most turns first
+	agentsSortCount
+)
+
+// agentsCacheTTL is how long a cached scan is considered fresh on tab
+// entry. Older caches still render immediately but trigger a
+// background refresh so the user sees latest state on the next tick.
+const agentsCacheTTL = 10 * time.Minute
 
 const (
 	agentsSubMarketplaces = 0
@@ -97,10 +120,20 @@ func (m *Model) agentsInit() tea.Cmd {
 	if m.agents == nil {
 		m.agents = newAgentsState()
 	}
-	if m.agents.snapshot != nil && !m.agents.loadedAt.IsZero() {
+	st := m.agents
+	if st.sortMode == nil {
+		st.sortMode = make(map[int]agentsSortMode)
+	}
+	if st.snapshot != nil && !st.loadedAt.IsZero() {
+		// Already loaded — trigger a background refresh if the cache
+		// is older than agentsCacheTTL. We keep showing the stale
+		// snapshot while the new one is fetched.
+		if time.Since(st.loadedAt) > agentsCacheTTL {
+			return loadAgentsCmd(true)
+		}
 		return nil
 	}
-	m.agents.loading = true
+	st.loading = true
 	return loadAgentsCmd(false)
 }
 
@@ -112,6 +145,9 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		m.agents = newAgentsState()
 	}
 	st := m.agents
+	if st.sortMode == nil {
+		st.sortMode = make(map[int]agentsSortMode)
+	}
 
 	// Launch confirmation modal owns input while open.
 	if st.launchPrompt != "" {
@@ -212,6 +248,29 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		st.launchPlan = plan
 		st.launchPrompt = "Launch this command?"
+		return true, nil
+	case "s":
+		// Cycle sort mode for the current sub-tab.
+		modes := agentsSortModesFor(st.subTab)
+		cur := st.sortMode[st.subTab]
+		next := nextSortMode(modes, cur)
+		st.sortMode[st.subTab] = next
+		st.cursor = 0
+		st.flash = "sort: " + sortModeName(next)
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
+	case "y":
+		// Yank the current row's id (or command, if the launch modal is up).
+		rows := m.agentsVisibleRows()
+		if st.cursor >= 0 && st.cursor < len(rows) {
+			cb := systemClipboard{}
+			if err := cb.WriteAll(rows[st.cursor].id); err == nil {
+				st.flash = "copied id: " + rows[st.cursor].id
+			} else {
+				st.flash = "clipboard error: " + err.Error()
+			}
+			st.flashEnd = time.Now().Add(2 * time.Second)
+		}
 		return true, nil
 	case "r":
 		st.loading = true
@@ -368,7 +427,7 @@ func (m *Model) agentsVisibleRows() []agentRow {
 			})
 		}
 	}
-	return filterAgentRows(rows, q)
+	return sortAgentRows(filterAgentRows(rows, q), st.subTab, st.sortMode[st.subTab])
 }
 
 func sessionShortID(id string) string {
@@ -398,6 +457,135 @@ func filterAgentRows(rows []agentRow, q string) []agentRow {
 	return out
 }
 
+// agentsSortModesFor returns the sort modes available for a sub-tab.
+// Default is always included as the first cycle stop so the user can
+// return to the natural order with one extra `s`.
+func agentsSortModesFor(subTab int) []agentsSortMode {
+	switch subTab {
+	case agentsSubSessions:
+		return []agentsSortMode{agentsSortDefault, agentsSortName, agentsSortCreated, agentsSortTurns}
+	case agentsSubPlugins, agentsSubSkills, agentsSubMCPs, agentsSubMarketplaces:
+		return []agentsSortMode{agentsSortDefault, agentsSortName, agentsSortModified}
+	}
+	return []agentsSortMode{agentsSortDefault}
+}
+
+func nextSortMode(modes []agentsSortMode, cur agentsSortMode) agentsSortMode {
+	for i, m := range modes {
+		if m == cur {
+			return modes[(i+1)%len(modes)]
+		}
+	}
+	return modes[0]
+}
+
+func sortModeName(m agentsSortMode) string {
+	switch m {
+	case agentsSortName:
+		return "name"
+	case agentsSortModified:
+		return "modified"
+	case agentsSortCreated:
+		return "created"
+	case agentsSortTurns:
+		return "turns"
+	default:
+		return "default"
+	}
+}
+
+// sortAgentRows reorders rows in place per the given mode. Default
+// preserves the original order (matches snapshot sort: name asc for
+// most entities, modified desc for sessions).
+func sortAgentRows(rows []agentRow, subTab int, mode agentsSortMode) []agentRow {
+	if mode == agentsSortDefault || len(rows) < 2 {
+		return rows
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		switch mode {
+		case agentsSortName:
+			return strings.ToLower(a.name) < strings.ToLower(b.name)
+		case agentsSortModified:
+			ai, bi := sortRowMTime(a), sortRowMTime(b)
+			return ai.After(bi)
+		case agentsSortCreated:
+			ai, bi := sortRowCTime(a), sortRowCTime(b)
+			return ai.After(bi)
+		case agentsSortTurns:
+			at, bt := 0, 0
+			if a.session != nil {
+				at = a.session.TurnCount
+			}
+			if b.session != nil {
+				bt = b.session.TurnCount
+			}
+			return at > bt
+		}
+		return false
+	})
+	return rows
+}
+
+func sortRowMTime(r agentRow) time.Time {
+	switch {
+	case r.session != nil:
+		return r.session.LastModified
+	case r.marketplace != nil:
+		return r.marketplace.LastSynced
+	}
+	return time.Time{}
+}
+
+func sortRowCTime(r agentRow) time.Time {
+	if r.session != nil {
+		return r.session.Created
+	}
+	return time.Time{}
+}
+
+// agentsProviderStyle returns a lipgloss style for the short provider
+// label. Same palette across the TUI so users can map color→provider
+// at a glance.
+func agentsProviderStyle(id agents.ProviderID) lipgloss.Style {
+	base := lipgloss.NewStyle().Bold(true)
+	switch id {
+	case agents.ProviderClaudeCode:
+		return base.Foreground(cyberPrimary) // cyan
+	case agents.ProviderCopilotCLI:
+		return base.Foreground(cyberSecondary) // magenta
+	case agents.ProviderMCPRegistry:
+		return base.Foreground(cyberAccent) // amber
+	}
+	return base.Foreground(cyberFG)
+}
+
+// agentsStatusStyle colors a session status string.
+func agentsStatusStyle(status agents.SessionStatus) lipgloss.Style {
+	switch status {
+	case agents.SessionStatusActive:
+		return lipgloss.NewStyle().Foreground(cyberOK)
+	case agents.SessionStatusCompleted:
+		return lipgloss.NewStyle().Foreground(cyberFGDim)
+	case agents.SessionStatusStopped:
+		return lipgloss.NewStyle().Foreground(cyberAlert)
+	}
+	return lipgloss.NewStyle().Foreground(cyberFGDim)
+}
+
+// agentsScopeStyle dims user scope and bolds project scope so a
+// project entity stands out in a list dominated by user-wide entries.
+func agentsScopeStyle(s agents.Scope) lipgloss.Style {
+	base := lipgloss.NewStyle()
+	switch s {
+	case agents.ScopeProject:
+		return base.Foreground(cyberAccent).Bold(true)
+	case agents.ScopeRemote:
+		return base.Foreground(cyberInfo)
+	}
+	return base.Foreground(cyberFGDim)
+}
+
 func (m *Model) renderAgentsView() string {
 	if m.agents == nil {
 		m.agents = newAgentsState()
@@ -406,15 +594,25 @@ func (m *Model) renderAgentsView() string {
 	var b strings.Builder
 
 	subs := []string{"Marketplaces", "Plugins", "Skills", "MCPs", "Sessions"}
+	counts := agentsSnapshotCounts(st.snapshot)
 	var parts []string
 	for i, label := range subs {
+		label := fmt.Sprintf("%s (%d)", label, counts[i])
 		if i == st.subTab {
 			parts = append(parts, cyberSubtabActive(label))
 		} else {
 			parts = append(parts, cyberSubtabInactive(label))
 		}
 	}
-	b.WriteString("  " + strings.Join(parts, "  ") + "\n\n")
+	b.WriteString("  " + strings.Join(parts, "  ") + "\n")
+
+	// Cache age + provider status line.
+	if st.snapshot != nil && !st.loadedAt.IsZero() {
+		age := dimVersion.Render("scanned " + humaniseTime(st.loadedAt))
+		providersLine := agentsProviderHealth(st.snapshot)
+		b.WriteString("  " + providersLine + "  " + age + "\n")
+	}
+	b.WriteString("\n")
 
 	switch {
 	case st.searchActive:
@@ -422,7 +620,8 @@ func (m *Model) renderAgentsView() string {
 	case st.searchInput != "":
 		b.WriteString("  filter: " + st.searchInput + "  (/  edit · esc clear)\n")
 	default:
-		b.WriteString("  /  search       l  launch       r  refresh       enter  detail       1-5  sub-tab\n")
+		sortLabel := sortModeName(st.sortMode[st.subTab])
+		b.WriteString(fmt.Sprintf("  /  search       l  launch       s  sort (%s)       y  yank id       r  refresh       enter  detail\n", sortLabel))
 	}
 	b.WriteString("\n")
 
@@ -466,7 +665,7 @@ func (m *Model) renderAgentsView() string {
 
 	if st.detailOpen && st.cursor < len(rows) {
 		b.WriteString("\n  ─── detail ───\n")
-		b.WriteString(renderAgentDetail(rows[st.cursor]))
+		b.WriteString(renderAgentDetail(rows[st.cursor], st.snapshot))
 	}
 
 	if st.flash != "" && time.Now().Before(st.flashEnd) {
@@ -514,6 +713,70 @@ func providerShort(id agents.ProviderID) string {
 	}
 }
 
+// agentsSnapshotCounts returns the per-sub-tab counts. Returns zeros
+// when snapshot is nil (mid-load).
+func agentsSnapshotCounts(s *agents.Snapshot) [5]int {
+	if s == nil {
+		return [5]int{}
+	}
+	return [5]int{
+		len(s.Marketplaces),
+		len(s.Plugins),
+		len(s.Skills),
+		len(s.MCPs),
+		len(s.Sessions),
+	}
+}
+
+// agentsProviderHealth renders a compact provider-status pill row:
+//
+//	claude ✓1.2.0   copilot ✓1.0.48   mcp-reg ✓
+//
+// Each pill is colored by provider; failing providers are dimmed.
+func agentsProviderHealth(s *agents.Snapshot) string {
+	if s == nil {
+		return ""
+	}
+	order := []agents.ProviderID{agents.ProviderClaudeCode, agents.ProviderCopilotCLI, agents.ProviderMCPRegistry}
+	var pills []string
+	for _, id := range order {
+		st, ok := s.ProviderStatus[id]
+		if !ok {
+			continue
+		}
+		label := providerShort(id)
+		if st.Installed {
+			label += " ✓"
+			pills = append(pills, agentsProviderStyle(id).Render(label))
+		} else {
+			label += " ✗"
+			pills = append(pills, lipgloss.NewStyle().Foreground(cyberFGDim).Render(label))
+		}
+	}
+	return strings.Join(pills, "  ")
+}
+
+// renderProviderShort returns the colored short provider label.
+func renderProviderShort(id agents.ProviderID) string {
+	return agentsProviderStyle(id).Render(providerShort(id))
+}
+
+// renderScope colors the scope tag.
+func renderScope(s agents.Scope) string {
+	if s == "" {
+		return "—"
+	}
+	return agentsScopeStyle(s).Render(string(s))
+}
+
+// renderStatusOrDash returns a colored status label or "—" for empty.
+func renderStatusOrDash(s agents.SessionStatus) string {
+	if s == "" {
+		return "—"
+	}
+	return agentsStatusStyle(s).Render(string(s))
+}
+
 // renderAgentsTable produces an aligned table for the current sub-tab.
 // Every sub-tab leads with a SOURCE column showing the short provider
 // label (claude / copilot / mcp-reg / …) so provenance is always
@@ -532,7 +795,7 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			}
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
 				cursorMark(i, cursor),
-				providerShort(r.provider),
+				renderProviderShort(r.provider),
 				truncAgentRow(r.name, 32),
 				truncAgentRow(owner, 16),
 				dashOrInt(count),
@@ -555,7 +818,7 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			}
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				cursorMark(i, cursor),
-				providerShort(r.provider),
+				renderProviderShort(r.provider),
 				truncAgentRow(r.name, 32),
 				truncAgentRow(version, 10),
 				truncAgentRow(market, 22),
@@ -576,9 +839,9 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			}
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				cursorMark(i, cursor),
-				providerShort(r.provider),
+				renderProviderShort(r.provider),
 				truncAgentRow(r.name, 32),
-				string(r.scope),
+				renderScope(r.scope),
 				truncAgentRow(from, 20),
 				truncAgentRow(model, 10),
 				truncAgentRow(desc, 50),
@@ -599,10 +862,10 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			}
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				cursorMark(i, cursor),
-				providerShort(r.provider),
+				renderProviderShort(r.provider),
 				truncAgentRow(r.name, 32),
 				transport,
-				string(r.scope),
+				renderScope(r.scope),
 				dashOrInt(tools),
 				truncAgentRow(endpoint, 48),
 			)
@@ -619,16 +882,13 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 				if typ == "" {
 					typ = "interactive"
 				}
-				status = string(s.Status)
-				if status == "" {
-					status = "—"
-				}
+				status = renderStatusOrDash(s.Status)
 				created = humaniseTime(s.Created)
 				modified = humaniseTime(s.LastModified)
 			}
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				cursorMark(i, cursor),
-				providerShort(r.provider),
+				renderProviderShort(r.provider),
 				truncAgentRow(r.name, 10),
 				typ,
 				status,
@@ -683,7 +943,7 @@ func humaniseTime(t time.Time) string {
 }
 
 // renderAgentDetail builds a rich detail block per entity type.
-func renderAgentDetail(r agentRow) string {
+func renderAgentDetail(r agentRow, snap *agents.Snapshot) string {
 	var b strings.Builder
 	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 
@@ -739,6 +999,20 @@ func renderAgentDetail(r agentRow) string {
 		}
 		if p.Description != "" {
 			_, _ = fmt.Fprintf(tw, "  description\t%s\n", p.Description)
+		}
+		// Enumerate contained skills + MCPs by walking the snapshot
+		// and matching SourcePlugin == p.Name.
+		if snap != nil {
+			var skillNames []string
+			for _, s := range snap.Skills {
+				if s.Provider == p.Provider && s.SourcePlugin == p.Name {
+					skillNames = append(skillNames, s.Name)
+				}
+			}
+			if len(skillNames) > 0 {
+				_, _ = fmt.Fprintf(tw, "  skills (%d)\t%s\n", len(skillNames),
+					strings.Join(truncList(skillNames, 8), ", "))
+			}
 		}
 	case r.skill != nil:
 		s := r.skill
