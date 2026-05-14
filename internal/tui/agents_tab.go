@@ -497,15 +497,33 @@ func truncAgentRow(s string, n int) string {
 	return s[:n-1] + "…"
 }
 
+// providerShort renders a compact, recognisable label for a ProviderID.
+// Used as the leading SOURCE column in every sub-tab so the user can see
+// at a glance whether an entity came from Claude Code, Copilot CLI, the
+// MCP registry, or a future provider.
+func providerShort(id agents.ProviderID) string {
+	switch id {
+	case agents.ProviderClaudeCode:
+		return "claude"
+	case agents.ProviderCopilotCLI:
+		return "copilot"
+	case agents.ProviderMCPRegistry:
+		return "mcp-reg"
+	default:
+		return string(id)
+	}
+}
+
 // renderAgentsTable produces an aligned table for the current sub-tab.
-// Each sub-tab gets a tailored column set; the cursor marker lives in
-// its own column so tabwriter alignment isn't disturbed.
+// Every sub-tab leads with a SOURCE column showing the short provider
+// label (claude / copilot / mcp-reg / …) so provenance is always
+// visible without expanding the detail pane.
 func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 	var b strings.Builder
 	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	switch subTab {
 	case agentsSubMarketplaces:
-		_, _ = fmt.Fprintln(tw, "  \tNAME\tPROVIDER\tOWNER\tPLUGINS\tURL")
+		_, _ = fmt.Fprintln(tw, "  \tSOURCE\tNAME\tOWNER\tPLUGINS\tURL")
 		for i, r := range rows {
 			mp := r.marketplace
 			owner, url, count := "", "", 0
@@ -514,15 +532,15 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			}
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
 				cursorMark(i, cursor),
+				providerShort(r.provider),
 				truncAgentRow(r.name, 32),
-				r.provider,
 				truncAgentRow(owner, 16),
 				dashOrInt(count),
 				truncAgentRow(url, 48),
 			)
 		}
 	case agentsSubPlugins:
-		_, _ = fmt.Fprintln(tw, "  \tNAME\tVERSION\tMARKETPLACE\tSTATUS\tDESCRIPTION")
+		_, _ = fmt.Fprintln(tw, "  \tSOURCE\tNAME\tVERSION\tMARKETPLACE\tSTATUS\tDESCRIPTION")
 		for i, r := range rows {
 			pl := r.plugin
 			version, market, status, desc := "", "", "available", ""
@@ -535,8 +553,9 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 					status = "disabled"
 				}
 			}
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				cursorMark(i, cursor),
+				providerShort(r.provider),
 				truncAgentRow(r.name, 32),
 				truncAgentRow(version, 10),
 				truncAgentRow(market, 22),
@@ -545,28 +564,28 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			)
 		}
 	case agentsSubSkills:
-		_, _ = fmt.Fprintln(tw, "  \tNAME\tPROVIDER\tSCOPE\tSOURCE\tMODEL\tDESCRIPTION")
+		_, _ = fmt.Fprintln(tw, "  \tSOURCE\tNAME\tSCOPE\tFROM\tMODEL\tDESCRIPTION")
 		for i, r := range rows {
 			sk := r.skill
-			model, source, desc := "", "", ""
+			model, from, desc := "", "", ""
 			if sk != nil {
-				model, source, desc = sk.Model, sk.SourcePlugin, sk.Description
-				if source == "" {
-					source = string(sk.Scope)
+				model, from, desc = sk.Model, sk.SourcePlugin, sk.Description
+				if from == "" {
+					from = string(sk.Scope)
 				}
 			}
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				cursorMark(i, cursor),
+				providerShort(r.provider),
 				truncAgentRow(r.name, 32),
-				r.provider,
 				string(r.scope),
-				truncAgentRow(source, 20),
+				truncAgentRow(from, 20),
 				truncAgentRow(model, 10),
 				truncAgentRow(desc, 50),
 			)
 		}
 	case agentsSubMCPs:
-		_, _ = fmt.Fprintln(tw, "  \tNAME\tPROVIDER\tTRANSPORT\tSCOPE\tTOOLS\tENDPOINT")
+		_, _ = fmt.Fprintln(tw, "  \tSOURCE\tNAME\tTRANSPORT\tSCOPE\tTOOLS\tENDPOINT")
 		for i, r := range rows {
 			mcp := r.mcp
 			transport, endpoint, tools := "", "", 0
@@ -580,8 +599,8 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			}
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				cursorMark(i, cursor),
+				providerShort(r.provider),
 				truncAgentRow(r.name, 32),
-				r.provider,
 				transport,
 				string(r.scope),
 				dashOrInt(tools),
@@ -589,7 +608,7 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 			)
 		}
 	case agentsSubSessions:
-		_, _ = fmt.Fprintln(tw, "  \tID\tTYPE\tSTATUS\tTURNS\tCREATED\tMODIFIED\tPROJECT")
+		_, _ = fmt.Fprintln(tw, "  \tSOURCE\tID\tTYPE\tSTATUS\tTURNS\tCREATED\tMODIFIED\tPROJECT")
 		for i, r := range rows {
 			s := r.session
 			typ, status, project := "", "", r.subtitle
@@ -607,8 +626,9 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 				created = humaniseTime(s.Created)
 				modified = humaniseTime(s.LastModified)
 			}
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				cursorMark(i, cursor),
+				providerShort(r.provider),
 				truncAgentRow(r.name, 10),
 				typ,
 				status,

@@ -293,17 +293,17 @@ func renderSnapshotText(snap *agents.Snapshot) error {
 
 	if len(snap.Marketplaces) > 0 {
 		_, _ = fmt.Fprintln(w, "\nMARKETPLACES")
-		_, _ = fmt.Fprintln(w, "NAME\tPROVIDER\tOWNER\tPLUGINS\tURL\tDESCRIPTION")
+		_, _ = fmt.Fprintln(w, "SOURCE\tNAME\tOWNER\tPLUGINS\tURL\tDESCRIPTION")
 		for _, m := range snap.Marketplaces {
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				m.Name, m.Provider, dashOr(m.Owner),
+				providerShortCLI(m.Provider), m.Name, dashOr(m.Owner),
 				intOrDash(m.PluginCount), truncateAgent(m.URL, 50),
 				truncateAgent(m.Description, 50))
 		}
 	}
 	if len(snap.Plugins) > 0 {
 		_, _ = fmt.Fprintln(w, "\nPLUGINS")
-		_, _ = fmt.Fprintln(w, "NAME\tVERSION\tPROVIDER\tMARKETPLACE\tSTATUS\tAUTHOR\tLICENSE\tDESCRIPTION")
+		_, _ = fmt.Fprintln(w, "SOURCE\tNAME\tVERSION\tMARKETPLACE\tSTATUS\tAUTHOR\tLICENSE\tDESCRIPTION")
 		for _, p := range snap.Plugins {
 			status := "available"
 			switch {
@@ -313,41 +313,41 @@ func renderSnapshotText(snap *agents.Snapshot) error {
 				status = "disabled"
 			}
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				p.Name, dashOr(p.Version), p.Provider, dashOr(p.Marketplace),
+				providerShortCLI(p.Provider), p.Name, dashOr(p.Version), dashOr(p.Marketplace),
 				status, dashOr(p.Author), dashOr(p.License),
 				truncateAgent(p.Description, 60))
 		}
 	}
 	if len(snap.Skills) > 0 {
 		_, _ = fmt.Fprintln(w, "\nSKILLS")
-		_, _ = fmt.Fprintln(w, "NAME\tPROVIDER\tSCOPE\tSOURCE\tMODEL\tALLOWED-TOOLS\tDESCRIPTION")
+		_, _ = fmt.Fprintln(w, "SOURCE\tNAME\tSCOPE\tFROM\tMODEL\tALLOWED-TOOLS\tDESCRIPTION")
 		for _, s := range snap.Skills {
-			source := s.SourcePlugin
-			if source == "" {
-				source = string(s.Scope)
+			from := s.SourcePlugin
+			if from == "" {
+				from = string(s.Scope)
 			}
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				s.Name, s.Provider, s.Scope, dashOr(source),
+				providerShortCLI(s.Provider), s.Name, s.Scope, dashOr(from),
 				dashOr(s.Model), truncateAgent(dashOr(s.AllowedTools), 28),
 				truncateAgent(s.Description, 60))
 		}
 	}
 	if len(snap.MCPs) > 0 {
 		_, _ = fmt.Fprintln(w, "\nMCPS")
-		_, _ = fmt.Fprintln(w, "NAME\tPROVIDER\tTRANSPORT\tSCOPE\tENABLED\tTOOLS\tENDPOINT")
+		_, _ = fmt.Fprintln(w, "SOURCE\tNAME\tTRANSPORT\tSCOPE\tENABLED\tTOOLS\tENDPOINT")
 		for _, m := range snap.MCPs {
 			endpoint := m.URL
 			if endpoint == "" {
 				endpoint = m.Command
 			}
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%s\t%s\n",
-				m.Name, m.Provider, m.Transport, m.Scope, m.Enabled,
+				providerShortCLI(m.Provider), m.Name, m.Transport, m.Scope, m.Enabled,
 				intOrDash(len(m.Tools)), truncateAgent(endpoint, 60))
 		}
 	}
 	if len(snap.Sessions) > 0 {
 		_, _ = fmt.Fprintln(w, "\nSESSIONS")
-		_, _ = fmt.Fprintln(w, "ID\tPROVIDER\tTYPE\tSTATUS\tTURNS\tCREATED\tMODIFIED\tPROJECT")
+		_, _ = fmt.Fprintln(w, "SOURCE\tID\tTYPE\tSTATUS\tTURNS\tCREATED\tMODIFIED\tPROJECT")
 		for _, s := range snap.Sessions {
 			typ := s.Type
 			if typ == "" {
@@ -370,10 +370,25 @@ func renderSnapshotText(snap *agents.Snapshot) error {
 				modified = s.LastModified.Format(time.RFC3339)
 			}
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				s.ID, s.Provider, typ, status, turns, created, modified, truncateAgent(s.ProjectPath, 40))
+				providerShortCLI(s.Provider), s.ID, typ, status, turns, created, modified, truncateAgent(s.ProjectPath, 40))
 		}
 	}
 	return nil
+}
+
+// providerShortCLI is the CLI counterpart of providerShort. Mirrors the
+// TUI labels so users see the same short tag in both surfaces.
+func providerShortCLI(id agents.ProviderID) string {
+	switch id {
+	case agents.ProviderClaudeCode:
+		return "claude"
+	case agents.ProviderCopilotCLI:
+		return "copilot"
+	case agents.ProviderMCPRegistry:
+		return "mcp-reg"
+	default:
+		return string(id)
+	}
 }
 
 func truncateAgent(s string, n int) string {
@@ -430,10 +445,10 @@ func printSearchResults(results []agents.SearchResult) error {
 		fmt.Fprintln(os.Stderr, "agents: no matches")
 		return nil
 	}
-	_, _ = fmt.Fprintln(w, "TYPE\tNAME\tPROVIDER\tSUBTITLE\tSCORE")
+	_, _ = fmt.Fprintln(w, "SOURCE\tTYPE\tNAME\tSUBTITLE\tSCORE")
 	for _, r := range results {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\n",
-			r.Type, r.Name, r.Provider, truncateAgent(r.Subtitle, 60), r.Score)
+			providerShortCLI(r.Provider), r.Type, r.Name, truncateAgent(r.Subtitle, 60), r.Score)
 	}
 	return nil
 }
