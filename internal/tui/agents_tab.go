@@ -1,9 +1,12 @@
 package tui
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,15 +38,42 @@ type agentsState struct {
 	searchInput  string
 
 	// sortMode is per sub-tab: see agentsSortMode* below.
-	// The map keys are sub-tab indices.
 	sortMode map[int]agentsSortMode
+
+	// statusFilter is per sub-tab: see agentsFilter* below.
+	statusFilter map[int]agentsFilter
 
 	launchPrompt string // non-empty while the launch confirmation modal is up
 	launchPlan   agents.ExecPlan
 
+	// deleteTarget is non-empty while the delete confirmation modal is up.
+	// The string is a human description; the actual action is held in
+	// deleteAction so the model can fire it after the user confirms.
+	deleteTarget string
+	deleteAction tea.Cmd
+
+	// helpOpen toggles the keymap overlay.
+	helpOpen bool
+
+	// viewerLines holds the first N lines of a session transcript so the
+	// user can peek at it without leaving the TUI.
+	viewerOpen  bool
+	viewerTitle string
+	viewerLines []string
+
 	flash    string
 	flashEnd time.Time
 }
+
+// agentsFilter narrows a sub-tab's rows beyond the search box.
+type agentsFilter int
+
+const (
+	agentsFilterAll       agentsFilter = iota
+	agentsFilterInstalled              // plugins: installed; MCPs: configured (scope ≠ remote)
+	agentsFilterCatalog                // remote / not installed
+	agentsFilterCount
+)
 
 // agentsSortMode names the supported sort orders.
 type agentsSortMode int
@@ -147,6 +177,39 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	st := m.agents
 	if st.sortMode == nil {
 		st.sortMode = make(map[int]agentsSortMode)
+	}
+	if st.statusFilter == nil {
+		st.statusFilter = make(map[int]agentsFilter)
+	}
+
+	// Help overlay closes on any key.
+	if st.helpOpen {
+		st.helpOpen = false
+		return true, nil
+	}
+	// Viewer modal closes on Esc/Enter/q.
+	if st.viewerOpen {
+		switch msg.String() {
+		case "esc", "enter", "q":
+			st.viewerOpen = false
+		}
+		return true, nil
+	}
+	// Delete confirmation owns input while open.
+	if st.deleteTarget != "" {
+		switch msg.String() {
+		case "y", "Y", "enter":
+			cmd := st.deleteAction
+			st.deleteTarget = ""
+			st.deleteAction = nil
+			st.flash = "deleting…"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, cmd
+		case "esc", "n", "N":
+			st.deleteTarget = ""
+			st.deleteAction = nil
+		}
+		return true, nil
 	}
 
 	// Launch confirmation modal owns input while open.
@@ -272,6 +335,67 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			st.flashEnd = time.Now().Add(2 * time.Second)
 		}
 		return true, nil
+	case "f":
+		// Cycle status filter for the current sub-tab. Only Plugins and
+		// MCPs care; other sub-tabs treat the keystroke as a no-op flash.
+		if !agentsSupportsFilter(st.subTab) {
+			st.flash = "filter not applicable to this sub-tab"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		next := (st.statusFilter[st.subTab] + 1) % agentsFilterCount
+		st.statusFilter[st.subTab] = next
+		st.cursor = 0
+		st.flash = "filter: " + filterName(next)
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
+	case "d":
+		// Delete current row — only sessions and MCPs are deletable here.
+		rows := m.agentsVisibleRows()
+		if st.cursor < 0 || st.cursor >= len(rows) {
+			return true, nil
+		}
+		row := rows[st.cursor]
+		switch {
+		case row.session != nil:
+			st.deleteTarget = "session " + row.id
+			st.deleteAction = deleteAgentEntityCmd(row.provider, agents.EntitySession, row.id)
+		case row.mcp != nil:
+			st.deleteTarget = "MCP " + row.mcp.Name
+			st.deleteAction = deleteAgentEntityCmd(row.provider, agents.EntityMCP, row.mcp.Name)
+		default:
+			st.flash = "delete not supported for this row type"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+		}
+		return true, nil
+	case "v":
+		// View transcript — sessions only.
+		rows := m.agentsVisibleRows()
+		if st.cursor < 0 || st.cursor >= len(rows) || rows[st.cursor].session == nil {
+			st.flash = "view: not a session row"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		s := rows[st.cursor].session
+		path := s.TranscriptPath
+		if path == "" {
+			st.flash = "no transcript path recorded"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		lines, err := readSessionTranscript(path, 60)
+		if err != nil {
+			st.flash = "view error: " + err.Error()
+			st.flashEnd = time.Now().Add(3 * time.Second)
+			return true, nil
+		}
+		st.viewerOpen = true
+		st.viewerTitle = path
+		st.viewerLines = lines
+		return true, nil
+	case "?":
+		st.helpOpen = true
+		return true, nil
 	case "r":
 		st.loading = true
 		st.flash = "refreshing…"
@@ -339,6 +463,15 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 			st.flash = "session ended — back in klim"
 		}
 		st.flashEnd = time.Now().Add(4 * time.Second)
+		return true, loadAgentsCmd(true)
+	case agentsDeletedMsg:
+		if v.err != nil {
+			st.flash = "delete failed: " + v.err.Error()
+			st.flashEnd = time.Now().Add(4 * time.Second)
+			return true, nil
+		}
+		st.flash = fmt.Sprintf("deleted %s %s", v.typ, v.id)
+		st.flashEnd = time.Now().Add(3 * time.Second)
 		return true, loadAgentsCmd(true)
 	}
 	return false, nil
@@ -427,7 +560,7 @@ func (m *Model) agentsVisibleRows() []agentRow {
 			})
 		}
 	}
-	return sortAgentRows(filterAgentRows(rows, q), st.subTab, st.sortMode[st.subTab])
+	return sortAgentRows(applyStatusFilter(filterAgentRows(rows, q), st.subTab, st.statusFilter[st.subTab]), st.subTab, st.sortMode[st.subTab])
 }
 
 func sessionShortID(id string) string {
@@ -618,10 +751,11 @@ func (m *Model) renderAgentsView() string {
 	case st.searchActive:
 		b.WriteString("  search: " + st.searchInput + "▌\n")
 	case st.searchInput != "":
-		b.WriteString("  filter: " + st.searchInput + "  (/  edit · esc clear)\n")
+		b.WriteString("  filter: " + st.searchInput + "  " + dimVersion.Render("/ edit · esc clear"))
+		b.WriteString("\n")
 	default:
-		sortLabel := sortModeName(st.sortMode[st.subTab])
-		b.WriteString(fmt.Sprintf("  /  search       l  launch       s  sort (%s)       y  yank id       r  refresh       enter  detail\n", sortLabel))
+		// Single, subtle hint — full keymap lives behind ?.
+		b.WriteString("  " + dimVersion.Render("press ? for help") + "\n")
 	}
 	b.WriteString("\n")
 
@@ -681,6 +815,29 @@ func (m *Model) renderAgentsView() string {
 		}
 		b.WriteString("  ║ y/Enter = run · n/Esc = cancel\n")
 		b.WriteString("  ╚════════════════════════════════════════════════════╝\n")
+	}
+
+	if st.deleteTarget != "" {
+		b.WriteString("\n  ╔ Confirm delete ══════════════════════════════════════╗\n")
+		b.WriteString("  ║ Delete " + st.deleteTarget + "?\n")
+		b.WriteString("  ║ y/Enter = delete · n/Esc = cancel\n")
+		b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
+	}
+
+	if st.viewerOpen {
+		b.WriteString("\n  ╔ Transcript ══════════════════════════════════════════╗\n")
+		b.WriteString("  ║ " + truncAgentRow(st.viewerTitle, 64) + "\n")
+		b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
+		for _, line := range st.viewerLines {
+			b.WriteString("  ║ " + truncAgentRow(line, 80) + "\n")
+		}
+		b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
+		b.WriteString("  ║ Esc / Enter / q = close\n")
+		b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
+	}
+
+	if st.helpOpen {
+		b.WriteString(agentsHelpOverlay())
 	}
 
 	return b.String()
@@ -777,33 +934,83 @@ func renderStatusOrDash(s agents.SessionStatus) string {
 	return agentsStatusStyle(s).Render(string(s))
 }
 
+// column describes one column in a sub-tab's table.
+type column struct {
+	header string
+	width  int
+}
+
+// renderRow concatenates cells into a row with each cell padded to the
+// configured column width. lipgloss.NewStyle().Width is ANSI-aware so
+// colored content stays aligned (unlike text/tabwriter).
+func renderRow(cells []string, cols []column, lead string) string {
+	var b strings.Builder
+	b.WriteString(lead)
+	for i, c := range cells {
+		w := cols[i].width
+		if w == 0 {
+			b.WriteString(c)
+		} else {
+			b.WriteString(lipgloss.NewStyle().Width(w).Render(c))
+		}
+		if i < len(cells)-1 {
+			b.WriteString("  ")
+		}
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+func renderHeader(cols []column) string {
+	cells := make([]string, len(cols))
+	for i, c := range cols {
+		cells[i] = headerStyle.Render(c.header)
+	}
+	return renderRow(cells, cols, "    ")
+}
+
 // renderAgentsTable produces an aligned table for the current sub-tab.
-// Every sub-tab leads with a SOURCE column showing the short provider
-// label (claude / copilot / mcp-reg / …) so provenance is always
-// visible without expanding the detail pane.
+// Uses lipgloss fixed-width cells so colored content (SOURCE chips,
+// STATUS pills, SCOPE tags) stays in line — text/tabwriter counted
+// ANSI escapes as visible width and pushed columns out of alignment.
 func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 	var b strings.Builder
-	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+
 	switch subTab {
 	case agentsSubMarketplaces:
-		_, _ = fmt.Fprintln(tw, "  \tSOURCE\tNAME\tOWNER\tPLUGINS\tURL")
+		cols := []column{
+			{header: "SOURCE", width: 8},
+			{header: "NAME", width: 28},
+			{header: "OWNER", width: 14},
+			{header: "PLUGINS", width: 8},
+			{header: "URL", width: 48},
+		}
+		b.WriteString(renderHeader(cols))
 		for i, r := range rows {
 			mp := r.marketplace
 			owner, url, count := "", "", 0
 			if mp != nil {
 				owner, url, count = mp.Owner, mp.URL, mp.PluginCount
 			}
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				cursorMark(i, cursor),
+			cells := []string{
 				renderProviderShort(r.provider),
-				truncAgentRow(r.name, 32),
-				truncAgentRow(owner, 16),
+				truncAgentRow(r.name, cols[1].width),
+				truncAgentRow(owner, cols[2].width),
 				dashOrInt(count),
-				truncAgentRow(url, 48),
-			)
+				truncAgentRow(url, cols[4].width),
+			}
+			b.WriteString(renderRow(cells, cols, rowLead(i, cursor)))
 		}
 	case agentsSubPlugins:
-		_, _ = fmt.Fprintln(tw, "  \tSOURCE\tNAME\tVERSION\tMARKETPLACE\tSTATUS\tDESCRIPTION")
+		cols := []column{
+			{header: "SOURCE", width: 8},
+			{header: "NAME", width: 26},
+			{header: "VERSION", width: 10},
+			{header: "MARKETPLACE", width: 24},
+			{header: "STATUS", width: 10},
+			{header: "DESCRIPTION", width: 50},
+		}
+		b.WriteString(renderHeader(cols))
 		for i, r := range rows {
 			pl := r.plugin
 			version, market, status, desc := "", "", "available", ""
@@ -816,18 +1023,26 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 					status = "disabled"
 				}
 			}
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				cursorMark(i, cursor),
+			cells := []string{
 				renderProviderShort(r.provider),
-				truncAgentRow(r.name, 32),
-				truncAgentRow(version, 10),
-				truncAgentRow(market, 22),
+				truncAgentRow(r.name, cols[1].width),
+				truncAgentRow(version, cols[2].width),
+				truncAgentRow(market, cols[3].width),
 				status,
-				truncAgentRow(desc, 50),
-			)
+				truncAgentRow(desc, cols[5].width),
+			}
+			b.WriteString(renderRow(cells, cols, rowLead(i, cursor)))
 		}
 	case agentsSubSkills:
-		_, _ = fmt.Fprintln(tw, "  \tSOURCE\tNAME\tSCOPE\tFROM\tMODEL\tDESCRIPTION")
+		cols := []column{
+			{header: "SOURCE", width: 8},
+			{header: "NAME", width: 32},
+			{header: "SCOPE", width: 8},
+			{header: "FROM", width: 18},
+			{header: "MODEL", width: 8},
+			{header: "DESCRIPTION", width: 50},
+		}
+		b.WriteString(renderHeader(cols))
 		for i, r := range rows {
 			sk := r.skill
 			model, from, desc := "", "", ""
@@ -837,18 +1052,26 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 					from = string(sk.Scope)
 				}
 			}
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				cursorMark(i, cursor),
+			cells := []string{
 				renderProviderShort(r.provider),
-				truncAgentRow(r.name, 32),
+				truncAgentRow(r.name, cols[1].width),
 				renderScope(r.scope),
-				truncAgentRow(from, 20),
-				truncAgentRow(model, 10),
-				truncAgentRow(desc, 50),
-			)
+				truncAgentRow(from, cols[3].width),
+				truncAgentRow(model, cols[4].width),
+				truncAgentRow(desc, cols[5].width),
+			}
+			b.WriteString(renderRow(cells, cols, rowLead(i, cursor)))
 		}
 	case agentsSubMCPs:
-		_, _ = fmt.Fprintln(tw, "  \tSOURCE\tNAME\tTRANSPORT\tSCOPE\tTOOLS\tENDPOINT")
+		cols := []column{
+			{header: "SOURCE", width: 8},
+			{header: "NAME", width: 34},
+			{header: "TRANSPORT", width: 10},
+			{header: "SCOPE", width: 8},
+			{header: "TOOLS", width: 6},
+			{header: "ENDPOINT", width: 48},
+		}
+		b.WriteString(renderHeader(cols))
 		for i, r := range rows {
 			mcp := r.mcp
 			transport, endpoint, tools := "", "", 0
@@ -860,18 +1083,28 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 				}
 				tools = len(mcp.Tools)
 			}
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				cursorMark(i, cursor),
+			cells := []string{
 				renderProviderShort(r.provider),
-				truncAgentRow(r.name, 32),
+				truncAgentRow(r.name, cols[1].width),
 				transport,
 				renderScope(r.scope),
 				dashOrInt(tools),
-				truncAgentRow(endpoint, 48),
-			)
+				truncAgentRow(endpoint, cols[5].width),
+			}
+			b.WriteString(renderRow(cells, cols, rowLead(i, cursor)))
 		}
 	case agentsSubSessions:
-		_, _ = fmt.Fprintln(tw, "  \tSOURCE\tID\tTYPE\tSTATUS\tTURNS\tCREATED\tMODIFIED\tPROJECT")
+		cols := []column{
+			{header: "SOURCE", width: 8},
+			{header: "ID", width: 10},
+			{header: "TYPE", width: 12},
+			{header: "STATUS", width: 10},
+			{header: "TURNS", width: 6},
+			{header: "CREATED", width: 18},
+			{header: "MODIFIED", width: 14},
+			{header: "PROJECT", width: 36},
+		}
+		b.WriteString(renderHeader(cols))
 		for i, r := range rows {
 			s := r.session
 			typ, status, project := "", "", r.subtitle
@@ -886,28 +1119,28 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
 				created = humaniseTime(s.Created)
 				modified = humaniseTime(s.LastModified)
 			}
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				cursorMark(i, cursor),
+			cells := []string{
 				renderProviderShort(r.provider),
-				truncAgentRow(r.name, 10),
+				truncAgentRow(r.name, cols[1].width),
 				typ,
 				status,
 				dashOrInt(turns),
 				created,
 				modified,
-				truncAgentRow(project, 36),
-			)
+				truncAgentRow(project, cols[7].width),
+			}
+			b.WriteString(renderRow(cells, cols, rowLead(i, cursor)))
 		}
 	}
-	_ = tw.Flush()
 	return b.String()
 }
 
-func cursorMark(i, cursor int) string {
+// rowLead returns the two-character cursor mark prefix for the row.
+func rowLead(i, cursor int) string {
 	if i == cursor {
-		return "▸"
+		return "  ▸ "
 	}
-	return " "
+	return "    "
 }
 
 func dashOrInt(n int) string {
@@ -1107,4 +1340,150 @@ func truncList(items []string, n int) []string {
 	out := make([]string, n, n+1)
 	copy(out, items[:n])
 	return append(out, fmt.Sprintf("+%d more", len(items)-n))
+}
+
+// agentsSupportsFilter reports whether `f` cycling applies to a sub-tab.
+func agentsSupportsFilter(subTab int) bool {
+	switch subTab {
+	case agentsSubPlugins, agentsSubMCPs:
+		return true
+	}
+	return false
+}
+
+// filterName returns a display label for a status filter.
+func filterName(f agentsFilter) string {
+	switch f {
+	case agentsFilterInstalled:
+		return "installed"
+	case agentsFilterCatalog:
+		return "catalog"
+	}
+	return "all"
+}
+
+// applyStatusFilter narrows rows for the current sub-tab/filter. Default
+// is identity. Plugins: installed vs catalog (Installed bool). MCPs:
+// installed (scope ≠ remote) vs catalog (scope == remote).
+func applyStatusFilter(rows []agentRow, subTab int, f agentsFilter) []agentRow {
+	if f == agentsFilterAll {
+		return rows
+	}
+	out := make([]agentRow, 0, len(rows))
+	for _, r := range rows {
+		keep := false
+		switch subTab {
+		case agentsSubPlugins:
+			if r.plugin == nil {
+				continue
+			}
+			if (f == agentsFilterInstalled) == r.plugin.Installed {
+				keep = true
+			}
+		case agentsSubMCPs:
+			if r.mcp == nil {
+				continue
+			}
+			installed := r.mcp.Scope != agents.ScopeRemote
+			if (f == agentsFilterInstalled) == installed {
+				keep = true
+			}
+		default:
+			keep = true
+		}
+		if keep {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// agentsHelpOverlay renders the keymap modal.
+func agentsHelpOverlay() string {
+	keymap := [][2]string{
+		{"1-5", "jump to sub-tab"},
+		{"Tab / Shift-Tab", "next / previous sub-tab (or parent at edge)"},
+		{"j / k or ↓ / ↑", "move cursor"},
+		{"Enter", "toggle detail pane"},
+		{"/", "search (fuzzy)"},
+		{"s", "cycle sort mode"},
+		{"f", "cycle status filter (plugins, MCPs)"},
+		{"l", "launch session (skill / plugin / session)"},
+		{"y", "yank entity id to clipboard"},
+		{"v", "view first 60 lines of session transcript"},
+		{"d", "delete current row (sessions / MCPs) — confirms first"},
+		{"r", "refresh (re-scan everything)"},
+		{"?", "toggle this help overlay"},
+		{"Esc", "close overlay / cancel modal"},
+	}
+	var b strings.Builder
+	b.WriteString("\n  ╔ Agents — keymap ════════════════════════════════════════════╗\n")
+	for _, row := range keymap {
+		b.WriteString(fmt.Sprintf("  ║ %-18s  %-40s ║\n", row[0], row[1]))
+	}
+	b.WriteString("  ║                                                                 ║\n")
+	b.WriteString("  ║ press any key to close                                          ║\n")
+	b.WriteString("  ╚═════════════════════════════════════════════════════════════════╝\n")
+	return b.String()
+}
+
+// readSessionTranscript reads at most `max` lines from a session
+// transcript file. Returns the lines so the viewer modal can render them.
+func readSessionTranscript(path string, limit int) ([]string, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if st.IsDir() {
+		path = filepath.Join(path, "events.jsonl")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	var lines []string
+	br := bufio.NewReader(f)
+	for i := 0; i < limit; i++ {
+		line, err := br.ReadString('\n')
+		if line != "" {
+			lines = append(lines, strings.TrimRight(line, "\r\n"))
+		}
+		if err != nil {
+			break
+		}
+	}
+	return lines, nil
+}
+
+// deleteAgentEntityCmd builds the Bubbletea command that deletes a
+// session or MCP through the right provider. The result triggers
+// agentsLoadedMsg via a re-scan when complete.
+func deleteAgentEntityCmd(provider agents.ProviderID, typ agents.EntityType, id string) tea.Cmd {
+	return func() tea.Msg {
+		svc := agentsService()
+		p := svc.ProviderFor(provider)
+		if p == nil {
+			return agentsDeletedMsg{err: fmt.Errorf("provider %q not registered", provider)}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		var err error
+		switch typ {
+		case agents.EntitySession:
+			err = p.DeleteSession(ctx, id)
+		case agents.EntityMCP:
+			err = p.RemoveMCP(ctx, id)
+		default:
+			err = fmt.Errorf("delete not supported for %s", typ)
+		}
+		return agentsDeletedMsg{err: err, typ: typ, id: id}
+	}
+}
+
+// agentsDeletedMsg lands in handleAgentsMsg when a delete completes.
+type agentsDeletedMsg struct {
+	err error
+	typ agents.EntityType
+	id  string
 }

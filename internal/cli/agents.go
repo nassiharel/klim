@@ -456,12 +456,28 @@ func printSearchResults(results []agents.SearchResult) error {
 // ---------------- launch ----------------
 
 func runAgentsLaunch(cmd *cobra.Command, _ []string) error {
-	if agentsLaunchProvider == "" {
-		return &UsageError{Err: errors.New("--provider is required (claude-code|copilot-cli)")}
-	}
 	svc := newAgentsService()
+	providerID := agents.ProviderID(agentsLaunchProvider)
+
+	// Smart provider inference: when --provider is omitted but the
+	// caller specified --skill, --session, or --plugin, look at the
+	// snapshot to see which provider uniquely owns that entity. If
+	// exactly one matches, infer it; if zero or many match, ask the
+	// user to disambiguate.
+	if providerID == "" {
+		inferred, why, err := inferLaunchProvider(cmd.Context(), svc,
+			agentsLaunchSkill, agentsLaunchSession, agentsLaunchPlugin)
+		if err != nil {
+			return &UsageError{Err: err}
+		}
+		providerID = inferred
+		if why != "" {
+			fmt.Fprintln(os.Stderr, "agents: inferred provider:", why)
+		}
+	}
+
 	spec := agents.LaunchSpec{
-		Provider:   agents.ProviderID(agentsLaunchProvider),
+		Provider:   providerID,
 		SkillName:  agentsLaunchSkill,
 		SessionID:  agentsLaunchSession,
 		PluginName: agentsLaunchPlugin,
@@ -479,6 +495,62 @@ func runAgentsLaunch(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintln(os.Stderr, "agents: ", plan.Note)
 	fmt.Fprintln(os.Stderr, "agents:  $ "+plan.CommandLine())
 	return execPlanCLI(plan)
+}
+
+// inferLaunchProvider resolves the --provider for a launch when the
+// caller omitted it. Returns ("", "", error) when no entity hint is
+// given, or when the hint matches zero or many providers.
+func inferLaunchProvider(ctx context.Context, svc *agents.Service, skill, session, plugin string) (agents.ProviderID, string, error) {
+	if skill == "" && session == "" && plugin == "" {
+		return "", "", errors.New("--provider is required (claude-code|copilot-cli) — or pass one of --skill / --session / --plugin to let klim infer it")
+	}
+
+	// Session id is provider-prefixed ("claude:…" / "copilot:…"), so we
+	// can map it directly without a snapshot scan.
+	if session != "" {
+		switch {
+		case strings.HasPrefix(session, "claude:"):
+			return agents.ProviderClaudeCode, "from session id prefix", nil
+		case strings.HasPrefix(session, "copilot:"):
+			return agents.ProviderCopilotCLI, "from session id prefix", nil
+		}
+	}
+
+	// Otherwise scan the snapshot and count provider matches.
+	if _, err := svc.LoadAll(ctx, agents.LoadOpts{}); err != nil {
+		return "", "", fmt.Errorf("scan: %w", err)
+	}
+	snap := svc.Snapshot()
+	if snap == nil {
+		return "", "", errors.New("no scan data available")
+	}
+
+	matches := map[agents.ProviderID]bool{}
+	switch {
+	case skill != "":
+		for _, s := range snap.Skills {
+			if s.Name == skill {
+				matches[s.Provider] = true
+			}
+		}
+	case plugin != "":
+		for _, p := range snap.Plugins {
+			if p.Name == plugin {
+				matches[p.Provider] = true
+			}
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return "", "", errors.New("no provider owns the requested entity — pass --provider to disambiguate")
+	case 1:
+		for p := range matches {
+			hint := "matched only " + string(p)
+			return p, hint, nil
+		}
+	}
+	return "", "", errors.New("multiple providers own this entity — pass --provider to disambiguate")
 }
 
 // execPlanCLI replaces the current process (Unix) or runs the child with

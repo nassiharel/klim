@@ -773,7 +773,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.animTicking = false
 		return m, nil
 
-	case agentsLoadedMsg, agentsLaunchedMsg:
+	case agentsLoadedMsg, agentsLaunchedMsg, agentsDeletedMsg:
 		mp := &m
 		if handled, cmd := mp.handleAgentsMsg(msg); handled {
 			return *mp, cmd

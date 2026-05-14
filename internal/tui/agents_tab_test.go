@@ -57,6 +57,65 @@ func TestNextSortMode_CyclesThroughList(t *testing.T) {
 	}
 }
 
+func TestApplyStatusFilter_Plugins(t *testing.T) {
+	rows := []agentRow{
+		{name: "installed", plugin: &agents.Plugin{Installed: true}},
+		{name: "available", plugin: &agents.Plugin{Installed: false}},
+	}
+	all := applyStatusFilter(rows, agentsSubPlugins, agentsFilterAll)
+	if len(all) != 2 {
+		t.Errorf("all filter: got %d rows, want 2", len(all))
+	}
+	inst := applyStatusFilter(rows, agentsSubPlugins, agentsFilterInstalled)
+	if len(inst) != 1 || inst[0].name != "installed" {
+		t.Errorf("installed filter: %+v", inst)
+	}
+	cat := applyStatusFilter(rows, agentsSubPlugins, agentsFilterCatalog)
+	if len(cat) != 1 || cat[0].name != "available" {
+		t.Errorf("catalog filter: %+v", cat)
+	}
+}
+
+func TestApplyStatusFilter_MCPs(t *testing.T) {
+	rows := []agentRow{
+		{name: "user-mcp", mcp: &agents.MCP{Scope: agents.ScopeUser}},
+		{name: "remote-mcp", mcp: &agents.MCP{Scope: agents.ScopeRemote}},
+	}
+	inst := applyStatusFilter(rows, agentsSubMCPs, agentsFilterInstalled)
+	if len(inst) != 1 || inst[0].name != "user-mcp" {
+		t.Errorf("installed MCPs: %+v", inst)
+	}
+	cat := applyStatusFilter(rows, agentsSubMCPs, agentsFilterCatalog)
+	if len(cat) != 1 || cat[0].name != "remote-mcp" {
+		t.Errorf("catalog MCPs: %+v", cat)
+	}
+}
+
+func TestAgentsSupportsFilter(t *testing.T) {
+	for _, sub := range []int{agentsSubPlugins, agentsSubMCPs} {
+		if !agentsSupportsFilter(sub) {
+			t.Errorf("sub %d should support filter", sub)
+		}
+	}
+	for _, sub := range []int{agentsSubMarketplaces, agentsSubSkills, agentsSubSessions} {
+		if agentsSupportsFilter(sub) {
+			t.Errorf("sub %d should NOT support filter", sub)
+		}
+	}
+}
+
+func TestFilterName(t *testing.T) {
+	if filterName(agentsFilterAll) != "all" {
+		t.Error("agentsFilterAll name")
+	}
+	if filterName(agentsFilterInstalled) != "installed" {
+		t.Error("agentsFilterInstalled name")
+	}
+	if filterName(agentsFilterCatalog) != "catalog" {
+		t.Error("agentsFilterCatalog name")
+	}
+}
+
 func TestAgentsSnapshotCounts(t *testing.T) {
 	snap := &agents.Snapshot{
 		Marketplaces: []agents.Marketplace{{}},
