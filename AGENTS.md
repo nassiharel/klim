@@ -92,7 +92,7 @@ ToolService
 
 ## TUI Tabs
 
-Number keys 1-9 jump straight to a parent tab. Tab/Shift-Tab and Left/Right arrows step through subtabs first (when the parent has any) and advance to the next/previous parent only at the strip's edge — e.g. on Marketplace, Right cycles Tools → Packs → For You → Onboard before moving to Project; on My Tools, Right cycles Installed → Updates → Favorites before moving to Marketplace.
+Number keys 1-9 + 0 jump straight to a parent tab. Tab/Shift-Tab and Left/Right arrows step through subtabs first (when the parent has any) and advance to the next/previous parent only at the strip's edge — e.g. on Marketplace, Right cycles Tools → Packs → For You → Onboard before moving to Project; on My Tools, Right cycles Installed → Updates → Favorites before moving to Marketplace.
 
 | Tab | Key | Subtabs | Content |
 |---|---|---|---|
@@ -100,11 +100,12 @@ Number keys 1-9 jump straight to a parent tab. Tab/Shift-Tab and Left/Right arro
 | Marketplace| 2 | Tools, Packs, For You, Onboard | Browse catalog, curated packs, recommendations, role-based onboarding. |
 | Project    | 3 | — | Per-project tool checks. |
 | Dashboard  | 4 | — | Aggregate stats, gauges, category/tag/platform breakdowns. (The Environment Score has moved to **My Profile → My Score**.) |
-| My Profile | 5 | Env Profile | Generate / inspect / compare / apply env profile, plus the **My Score** breakdown (overall environment grade with per-category points: Tools up to date, Doctor health, Audit clean, Compliance, Managed sources). |
-| Health     | 6 | Issues, PATH | Environment diagnostics (PATH problems, multi-installs, missing PMs, stale cache) and a visual PATH conflict explorer (Active vs Shadowed, By tool / By PATH dir, `t` to switch view, `u` to uninstall a shadowed copy through its PM). |
-| Security   | 7 | Audit, Compliance | Vulnerability scans and compliance policies. |
-| Backup     | 8 | — | Export/import toolchain; share tokens; Trail; My Packs; My Backups. |
-| Config     | 9 | — | View/edit config.yaml settings. |
+| **Agents** | **5** | Marketplaces, Plugins, Skills, MCPs, Sessions | Browse and manage the agent ecosystem across Claude Code and GitHub Copilot CLI. `/` scoped search, `l` launch session, `r` refresh, `enter` detail. See `klim agents …` for the matching CLI surface. |
+| My Profile | 6 | Env Profile | Generate / inspect / compare / apply env profile, plus the **My Score** breakdown (overall environment grade with per-category points: Tools up to date, Doctor health, Audit clean, Compliance, Managed sources). |
+| Health     | 7 | Issues, PATH | Environment diagnostics (PATH problems, multi-installs, missing PMs, stale cache) and a visual PATH conflict explorer (Active vs Shadowed, By tool / By PATH dir, `t` to switch view, `u` to uninstall a shadowed copy through its PM). |
+| Security   | 8 | Audit, Compliance | Vulnerability scans and compliance policies. |
+| Backup     | 9 | — | Export/import toolchain; share tokens; Trail; My Packs; My Backups. |
+| Config     | 0 | — | View/edit config.yaml settings. |
 
 **Filter sidebar:** Category / Platform / Tag filters with counters. Configurable left/right position (`config.yaml → ui.sidebar_right`).
 

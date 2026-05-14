@@ -1,0 +1,275 @@
+package agents
+
+import (
+	"context"
+	"errors"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Service is the composition root for the agents subsystem. It owns the
+// Registry of Providers, the on-disk cache, and coordinates concurrent
+// scans with a bounded worker pool.
+type Service struct {
+	registry *Registry
+	sem      chan struct{}
+
+	mu       sync.RWMutex
+	snapshot *Snapshot
+}
+
+// LoadOpts configures a Service.LoadAll call.
+type LoadOpts struct {
+	// Refresh, when true, ignores the cache and rescans.
+	Refresh bool
+	// MaxAge controls cache acceptance; older caches are refreshed.
+	// Zero means accept any cache.
+	MaxAge time.Duration
+}
+
+// NewService constructs a Service with the given Providers registered.
+// Concurrency 0 means default (4 — matches the version-resolver pool).
+func NewService(concurrency int, providers ...Provider) *Service {
+	if concurrency <= 0 {
+		concurrency = 4
+	}
+	reg := NewRegistry()
+	for _, p := range providers {
+		reg.Register(p)
+	}
+	return &Service{
+		registry: reg,
+		sem:      make(chan struct{}, concurrency),
+	}
+}
+
+// Registry exposes the underlying Registry for introspection.
+func (s *Service) Registry() *Registry { return s.registry }
+
+// LoadAll returns the merged Snapshot across every registered provider.
+// Uses the cache when present and acceptable; otherwise scans fresh and
+// writes a new cache.
+func (s *Service) LoadAll(ctx context.Context, opts LoadOpts) (*Snapshot, error) {
+	if !opts.Refresh {
+		if c, ok, err := LoadCache(); err == nil && ok {
+			if opts.MaxAge == 0 || time.Since(c.WrittenAt) <= opts.MaxAge {
+				snap := c.Snapshot
+				s.mu.Lock()
+				s.snapshot = &snap
+				s.mu.Unlock()
+				return &snap, nil
+			}
+		}
+	}
+
+	snap, err := s.scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache write is best-effort — a write failure doesn't fail the call.
+	_ = SaveCache(*snap)
+
+	s.mu.Lock()
+	s.snapshot = snap
+	s.mu.Unlock()
+	return snap, nil
+}
+
+// Snapshot returns the last loaded Snapshot (or nil if LoadAll hasn't run).
+func (s *Service) Snapshot() *Snapshot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.snapshot == nil {
+		return nil
+	}
+	cp := *s.snapshot
+	return &cp
+}
+
+// Invalidate forces the next LoadAll to skip the cache.
+func (s *Service) Invalidate() {
+	_ = DeleteCache()
+	s.mu.Lock()
+	s.snapshot = nil
+	s.mu.Unlock()
+}
+
+// scan runs every provider's read methods concurrently and merges results.
+// Errors from individual providers/methods are collected onto the Snapshot
+// via ProviderStatus rather than failing the whole scan — a missing
+// `claude` binary should not hide a working `copilot`.
+func (s *Service) scan(ctx context.Context) (*Snapshot, error) {
+	providers := s.registry.Providers()
+	snap := &Snapshot{
+		ProviderStatus: make(map[ProviderID]Status, len(providers)),
+	}
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, p := range providers {
+		wg.Add(1)
+		go func(p Provider) {
+			defer wg.Done()
+			s.sem <- struct{}{}
+			defer func() { <-s.sem }()
+
+			st := p.Detect(ctx)
+			results := scanProvider(ctx, p)
+
+			mu.Lock()
+			defer mu.Unlock()
+			snap.ProviderStatus[p.ID()] = st
+			snap.Marketplaces = append(snap.Marketplaces, results.marketplaces...)
+			snap.Plugins = append(snap.Plugins, results.plugins...)
+			snap.Skills = append(snap.Skills, results.skills...)
+			snap.MCPs = append(snap.MCPs, results.mcps...)
+			snap.Sessions = append(snap.Sessions, results.sessions...)
+		}(p)
+	}
+	wg.Wait()
+
+	sortSnapshot(snap)
+	return snap, nil
+}
+
+type providerResults struct {
+	marketplaces []Marketplace
+	plugins      []Plugin
+	skills       []Skill
+	mcps         []MCP
+	sessions     []Session
+}
+
+func scanProvider(ctx context.Context, p Provider) providerResults {
+	var r providerResults
+	if v, err := p.Marketplaces(ctx); err == nil {
+		r.marketplaces = v
+	}
+	if v, err := p.Plugins(ctx); err == nil {
+		r.plugins = v
+	}
+	if v, err := p.Skills(ctx); err == nil {
+		r.skills = v
+	}
+	if v, err := p.MCPs(ctx); err == nil {
+		r.mcps = v
+	}
+	if v, err := p.Sessions(ctx); err == nil {
+		r.sessions = v
+	}
+	return r
+}
+
+func sortSnapshot(s *Snapshot) {
+	sort.SliceStable(s.Marketplaces, func(i, j int) bool { return s.Marketplaces[i].Name < s.Marketplaces[j].Name })
+	sort.SliceStable(s.Plugins, func(i, j int) bool { return s.Plugins[i].Name < s.Plugins[j].Name })
+	sort.SliceStable(s.Skills, func(i, j int) bool { return s.Skills[i].Name < s.Skills[j].Name })
+	sort.SliceStable(s.MCPs, func(i, j int) bool { return s.MCPs[i].Name < s.MCPs[j].Name })
+	sort.SliceStable(s.Sessions, func(i, j int) bool {
+		// recent first
+		return s.Sessions[i].LastModified.After(s.Sessions[j].LastModified)
+	})
+}
+
+// Search runs a fuzzy search across the current Snapshot.
+// scope == "" means all entity types. A `<type>:<query>` prefix in
+// query overrides scope.
+func (s *Service) Search(query string, scope EntityType) []SearchResult {
+	snap := s.Snapshot()
+	if snap == nil {
+		return nil
+	}
+
+	// Honour scoped-query prefix.
+	if t, rest := ParseScopedQuery(query); t != "" {
+		scope = t
+		query = rest
+	}
+	query = strings.TrimSpace(query)
+
+	var results []SearchResult
+
+	collect := func(typ EntityType, id, name, subtitle string, provider ProviderID) {
+		if scope != "" && scope != typ {
+			return
+		}
+		score, matches := FuzzyMatch(query, name)
+		if score == 0 && query != "" {
+			// Try description / subtitle as a secondary match target.
+			altScore, _ := FuzzyMatch(query, subtitle)
+			if altScore == 0 {
+				return
+			}
+			score = altScore / 2
+		}
+		results = append(results, SearchResult{
+			Score:    score,
+			Type:     typ,
+			ID:       id,
+			Name:     name,
+			Subtitle: subtitle,
+			Provider: provider,
+			Matches:  matches,
+		})
+	}
+
+	for _, m := range snap.Marketplaces {
+		collect(EntityMarketplace, m.ID, m.Name, m.Description, m.Provider)
+	}
+	for _, p := range snap.Plugins {
+		collect(EntityPlugin, p.ID, p.Name, p.Description, p.Provider)
+	}
+	for _, k := range snap.Skills {
+		collect(EntitySkill, k.ID, k.Name, k.Description, k.Provider)
+	}
+	for _, m := range snap.MCPs {
+		collect(EntityMCP, m.ID, m.Name, mcpSubtitle(m), m.Provider)
+	}
+	for _, s := range snap.Sessions {
+		collect(EntitySession, s.ID, sessionDisplayName(s), s.ProjectPath, s.Provider)
+	}
+
+	rankResults(results)
+	return results
+}
+
+func mcpSubtitle(m MCP) string {
+	switch m.Transport {
+	case "http", "sse":
+		return m.URL
+	default:
+		if len(m.Args) > 0 {
+			return m.Command + " " + strings.Join(m.Args, " ")
+		}
+		return m.Command
+	}
+}
+
+func sessionDisplayName(s Session) string {
+	if s.Name != "" {
+		return s.Name
+	}
+	if s.Title != "" {
+		return s.Title
+	}
+	return s.ID
+}
+
+// Launch builds the ExecPlan for the spec. Caller (TUI or CLI) is
+// responsible for actually executing it.
+func (s *Service) Launch(spec LaunchSpec) (ExecPlan, error) {
+	if spec.Provider == "" {
+		return ExecPlan{}, errors.New("launch: provider is required")
+	}
+	p := s.registry.Get(spec.Provider)
+	if p == nil {
+		return ExecPlan{}, errors.New("launch: provider not registered: " + string(spec.Provider))
+	}
+	return p.BuildLaunch(spec)
+}
+
+// ProviderFor returns the registered provider with the given ID, or nil.
+func (s *Service) ProviderFor(id ProviderID) Provider { return s.registry.Get(id) }

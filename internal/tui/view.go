@@ -195,6 +195,27 @@ func (m Model) renderView() string {
 		return m.layoutWithFooter(body.String(), footer)
 	}
 
+	// Agents tab — self-contained renderer in agents_tab.go.
+	if m.activeTab == tabAgents {
+		footer := m.renderHelp()
+		footerRows := m.footerHeight()
+		headerRows := 4 + m.subtabRows()
+		const minGap = 1
+		visibleRows := m.height - headerRows - footerRows - minGap
+		if visibleRows < 5 {
+			visibleRows = 5
+		}
+		mp := &m
+		fitted, scroll, total := fitToVisibleRows(mp.renderAgentsView(), 0, visibleRows)
+		body.WriteString(fitted)
+		if scroll > 0 {
+			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
+		} else if total > visibleRows {
+			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
+		}
+		return m.layoutWithFooter(body.String(), footer)
+	}
+
 	// Health tab — scrollable like dashboard, plus its own PATH sub-view.
 	if m.activeTab == tabHealth {
 		footer := m.renderHelp()
@@ -489,6 +510,7 @@ func (m Model) renderTabBar() string {
 		{"Marketplace", tabDiscover},
 		{"Project", tabProject},
 		{"Dashboard", tabDashboard},
+		{"Agents", tabAgents},
 		{"My Profile", tabProfile},
 		{"Health", tabHealth},
 		{"Security", tabDoctor},

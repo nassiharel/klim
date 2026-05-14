@@ -45,6 +45,7 @@ const (
 	tabDoctor // Security parent (Audit + Compliance)
 	tabProfile
 	tabHealth // Environment Health parent (Issues + PATH)
+	tabAgents // Agents parent (Marketplaces / Plugins / Skills / MCPs / Sessions)
 	tabCount  // sentinel: total number of tab constants. Cycling is
 	// driven by parentTabOrder/parentIndex below — do not use
 	// tabCount for `(activeTab+1)%tabCount` cycling, since that
@@ -69,6 +70,7 @@ var parentTabOrder = []int{
 	tabDiscover,  // Marketplace
 	tabProject,
 	tabDashboard,
+	tabAgents,  // Agents (Marketplaces / Plugins / Skills / MCPs / Sessions)
 	tabProfile, // My Profile
 	tabHealth,  // Health (Issues + PATH)
 	tabDoctor,  // Security (Audit + Compliance)
@@ -89,16 +91,18 @@ func parentIndex(tab int) int {
 		return 2
 	case tabDashboard:
 		return 3
-	case tabProfile:
+	case tabAgents:
 		return 4
-	case tabHealth:
+	case tabProfile:
 		return 5
-	case tabDoctor:
+	case tabHealth:
 		return 6
-	case tabBackup:
+	case tabDoctor:
 		return 7
-	case tabConfig:
+	case tabBackup:
 		return 8
+	case tabConfig:
+		return 9
 	}
 	return 0
 }
@@ -399,6 +403,9 @@ type Model struct {
 	healthPathDirIdx    int    // selected row in By-PATH-dir view
 	healthPathStatus    string // transient banner: last uninstall result
 
+	// Agents tab — self-contained state. See agents_tab.go.
+	agents *agentsState
+
 	// Health → Issues "fix wizard" modal. Zero value means closed.
 	// See health_fix_modal.go for the rendering + key handling.
 	fixModal fixModal
@@ -629,6 +636,11 @@ func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 		m.myBackupFiles = scanBackupsDir()
 		return true, nil
 	case "5":
+		m.activeTab = tabAgents
+		m.cursor = 0
+		cmd := m.agentsInit()
+		return true, cmd
+	case "6":
 		m.activeTab = tabProfile
 		m.cursor = 0
 		// Defer env build until the initial scan finishes — the
@@ -646,21 +658,21 @@ func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 		}
 		cmd := m.startEnvSubview()
 		return true, cmd
-	case "6":
+	case "7":
 		m.activeTab = tabHealth
 		m.cursor = 0
 		m.healthScroll = 0
 		return true, nil
-	case "7":
+	case "8":
 		m.activeTab = tabDoctor
 		m.cursor = 0
 		m.doctorScroll = 0
 		return true, nil
-	case "8":
+	case "9":
 		m.activeTab = tabBackup
 		m.cursor = 0
 		return true, nil
-	case "9":
+	case "0":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0
@@ -756,6 +768,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tickFrame()
 		}
 		m.animTicking = false
+		return m, nil
+
+	case agentsLoadedMsg, agentsLaunchedMsg:
+		mp := &m
+		if handled, cmd := mp.handleAgentsMsg(msg); handled {
+			return *mp, cmd
+		}
 		return m, nil
 
 	case scanResultMsg:
@@ -1914,6 +1933,15 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Project tab has its own key handler.
 	if m.activeTab == tabProject {
 		return m.handleKeyProject(msg)
+	}
+
+	// Agents tab has its own key handler. We use a pointer receiver via
+	// a temporary so the embedded state mutations are picked up.
+	if m.activeTab == tabAgents {
+		mp := &m
+		if handled, cmd := mp.handleAgentsKey(msg); handled {
+			return *mp, cmd
+		}
 	}
 
 	// Health tab — interactive, has its own key handler.

@@ -1,0 +1,114 @@
+package copilotcli
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/nassiharel/klim/internal/agents"
+)
+
+func fixture(t *testing.T) (home, cwd string) {
+	t.Helper()
+	root := t.TempDir()
+	home = filepath.Join(root, "copilot-home")
+	cwd = filepath.Join(root, "proj")
+	for _, d := range []string{home, cwd} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", d, err)
+		}
+	}
+	writeFile(t, filepath.Join(home, "mcp-config.json"), `{
+  "mcpServers": {
+    "playwright": {"type": "local", "command": "npx", "args": ["@playwright/mcp@latest"]},
+    "context7": {"type": "http", "url": "https://mcp.context7.com/mcp"}
+  }
+}`)
+	writeFile(t, filepath.Join(cwd, ".github", "mcp.json"), `{
+  "mcpServers": {"projectsrv": {"type": "local", "command": "/bin/proj"}}
+}`)
+	writeFile(t, filepath.Join(home, "skills", "personal-tip", "SKILL.md"),
+		"---\nname: personal-tip\ndescription: A personal tip\n---\n")
+	writeFile(t, filepath.Join(cwd, ".github", "skills", "ci-debug", "SKILL.md"),
+		"---\nname: ci-debug\ndescription: Debug CI\n---\n")
+
+	pluginDir := filepath.Join(home, "installed-plugins", "copilot-plugins", "workiq")
+	writeFile(t, filepath.Join(pluginDir, "plugin.json"), `{"name": "workiq", "description": "Work IQ", "version": "1.0.0"}`)
+	writeFile(t, filepath.Join(pluginDir, "skills", "do-work", "SKILL.md"),
+		"---\nname: do-work\ndescription: Do work\n---\n")
+	return home, cwd
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func TestProvider_Skills(t *testing.T) {
+	home, cwd := fixture(t)
+	p := &Provider{HomeOverride: home, CwdOverride: cwd}
+	skills, err := p.Skills(context.Background())
+	if err != nil {
+		t.Fatalf("Skills: %v", err)
+	}
+	names := map[string]bool{}
+	for _, s := range skills {
+		names[s.Name] = true
+	}
+	for _, want := range []string{"personal-tip", "ci-debug", "do-work"} {
+		if !names[want] {
+			t.Errorf("missing skill %q in %v", want, names)
+		}
+	}
+}
+
+func TestProvider_MCPs(t *testing.T) {
+	home, cwd := fixture(t)
+	p := &Provider{HomeOverride: home, CwdOverride: cwd}
+	mcps, err := p.MCPs(context.Background())
+	if err != nil {
+		t.Fatalf("MCPs: %v", err)
+	}
+	if len(mcps) != 3 {
+		t.Fatalf("expected 3 MCPs, got %d: %+v", len(mcps), mcps)
+	}
+	transports := map[string]string{}
+	for _, m := range mcps {
+		transports[m.Name] = m.Transport
+	}
+	if transports["playwright"] != "stdio" {
+		t.Errorf("playwright transport = %q, want stdio (local→stdio normalization)", transports["playwright"])
+	}
+	if transports["context7"] != "http" {
+		t.Errorf("context7 transport = %q, want http", transports["context7"])
+	}
+}
+
+func TestProvider_Plugins(t *testing.T) {
+	home, cwd := fixture(t)
+	p := &Provider{HomeOverride: home, CwdOverride: cwd}
+	plugins, err := p.Plugins(context.Background())
+	if err != nil {
+		t.Fatalf("Plugins: %v", err)
+	}
+	if len(plugins) != 1 || plugins[0].Name != "workiq" {
+		t.Fatalf("plugins = %+v", plugins)
+	}
+}
+
+func TestProvider_BuildLaunch(t *testing.T) {
+	p := &Provider{BinaryOverride: "/usr/bin/copilot"}
+	plan, err := p.BuildLaunch(agents.LaunchSpec{SessionID: "copilot:abc"})
+	if err != nil {
+		t.Fatalf("BuildLaunch: %v", err)
+	}
+	if len(plan.Args) != 1 || plan.Args[0] != "--resume=abc" {
+		t.Errorf("Args = %v, want [--resume=abc]", plan.Args)
+	}
+}
