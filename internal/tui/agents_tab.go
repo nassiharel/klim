@@ -165,9 +165,17 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		st.setSubTab(agentsSubSessions)
 		return true, nil
 	case "tab", "right":
+		// On the rightmost sub-tab, let the global handler advance to
+		// the next parent tab instead of wrapping inside Agents.
+		if st.subTab == agentsSubCount-1 {
+			return false, nil
+		}
 		st.setSubTab((st.subTab + 1) % agentsSubCount)
 		return true, nil
 	case "shift+tab", "left":
+		if st.subTab == 0 {
+			return false, nil
+		}
 		st.setSubTab((st.subTab + agentsSubCount - 1) % agentsSubCount)
 		return true, nil
 	case "down", "j":

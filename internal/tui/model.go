@@ -584,31 +584,34 @@ func (m *Model) gotoParentTab(parent int) (tea.Model, tea.Cmd) {
 	case tabDashboard:
 		_, cmd := m.switchToTabByNumber("4")
 		return *m, cmd
-	case tabProfile:
+	case tabAgents:
 		_, cmd := m.switchToTabByNumber("5")
 		return *m, cmd
-	case tabHealth:
+	case tabProfile:
 		_, cmd := m.switchToTabByNumber("6")
 		return *m, cmd
-	case tabDoctor:
+	case tabHealth:
 		_, cmd := m.switchToTabByNumber("7")
 		return *m, cmd
-	case tabBackup:
+	case tabDoctor:
 		_, cmd := m.switchToTabByNumber("8")
 		return *m, cmd
-	case tabConfig:
+	case tabBackup:
 		_, cmd := m.switchToTabByNumber("9")
+		return *m, cmd
+	case tabConfig:
+		_, cmd := m.switchToTabByNumber("0")
 		return *m, cmd
 	}
 	return *m, nil
 }
 
-// switchToTabByNumber handles "1".."9" key presses by switching to the
-// corresponding parent tab. Returns (handled, cmd). If !handled the key
-// was not a recognised tab number.
+// switchToTabByNumber handles "1".."9" + "0" key presses by switching
+// to the corresponding parent tab. Returns (handled, cmd). If !handled
+// the key was not a recognised tab number.
 //
 // New mapping (1=My Tools, 2=Marketplace, 3=Project, 4=Dashboard,
-// 5=My Profile, 6=Health, 7=Security, 8=Backup, 9=Config).
+// 5=Agents, 6=My Profile, 7=Health, 8=Security, 9=Backup, 0=Config).
 func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 	switch key {
 	case "1":
@@ -2166,7 +2169,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 		return m.gotoParentTab(prev)
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9", "0":
 		if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
 			return m, cmd
 		}
