@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image/color"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/catalog"
 	"github.com/nassiharel/klim/internal/agents/providers/claudecode"
 	"github.com/nassiharel/klim/internal/agents/providers/copilotcli"
 	"github.com/nassiharel/klim/internal/agents/providers/mcpregistry"
@@ -104,11 +106,31 @@ const (
 
 // agentsService factory. Swappable so tests can inject a fake.
 var agentsService = func() *agents.Service {
-	return agents.NewService(4,
+	svc := agents.NewService(4,
 		claudecode.New(),
 		copilotcli.New(),
 		mcpregistry.New(),
 	)
+	svc.RemoteCatalog = tuiCatalogAdapter{f: catalog.New()}
+	return svc
+}
+
+// tuiCatalogAdapter bridges catalog.Fetcher to agents.RemoteCatalog.
+type tuiCatalogAdapter struct{ f *catalog.Fetcher }
+
+// FetchAll fetches every configured marketplace and adapts the result
+// into the agents.RemoteCatalogResult shape the service expects.
+func (a tuiCatalogAdapter) FetchAll(ctx context.Context) []agents.RemoteCatalogResult {
+	in := a.f.FetchAll(ctx)
+	out := make([]agents.RemoteCatalogResult, 0, len(in))
+	for _, r := range in {
+		out = append(out, agents.RemoteCatalogResult{
+			SourceName: r.Source.Name,
+			Plugins:    r.Plugins,
+			Err:        r.Err,
+		})
+	}
+	return out
 }
 
 func newAgentsState() *agentsState { return &agentsState{} }
@@ -814,19 +836,6 @@ func agentsProviderStyle(id agents.ProviderID) lipgloss.Style {
 	return base.Foreground(cyberFG)
 }
 
-// agentsStatusStyle colors a session status string.
-func agentsStatusStyle(status agents.SessionStatus) lipgloss.Style {
-	switch status {
-	case agents.SessionStatusActive:
-		return lipgloss.NewStyle().Foreground(cyberOK)
-	case agents.SessionStatusCompleted:
-		return lipgloss.NewStyle().Foreground(cyberFGDim)
-	case agents.SessionStatusStopped:
-		return lipgloss.NewStyle().Foreground(cyberAlert)
-	}
-	return lipgloss.NewStyle().Foreground(cyberFGDim)
-}
-
 // agentsScopeStyle dims user scope and bolds project scope so a
 // project entity stands out in a list dominated by user-wide entries.
 func agentsScopeStyle(s agents.Scope) lipgloss.Style {
@@ -912,7 +921,7 @@ func (m *Model) renderAgentsView() string {
 	if hiddenAbove > 0 {
 		fmt.Fprintf(&b, "  %s\n", dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)))
 	}
-	b.WriteString(renderAgentsTable(st.subTab, visible, displayCursor, st.sortMode[st.subTab]))
+	b.WriteString(renderAgentsTable(st.subTab, visible, displayCursor, st.sortMode[st.subTab], m.width))
 	if hiddenBelow > 0 {
 		fmt.Fprintf(&b, "  %s\n", dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)))
 	}
@@ -1033,11 +1042,6 @@ func agentsProviderHealth(s *agents.Snapshot) string {
 	return strings.Join(pills, "  ")
 }
 
-// renderProviderShort returns the colored short provider label.
-func renderProviderShort(id agents.ProviderID) string {
-	return agentsProviderStyle(id).Render(providerShort(id))
-}
-
 // renderScope colors the scope tag.
 func renderScope(s agents.Scope) string {
 	if s == "" {
@@ -1046,39 +1050,89 @@ func renderScope(s agents.Scope) string {
 	return agentsScopeStyle(s).Render(string(s))
 }
 
-// renderStatusOrDash returns a colored status label or "—" for empty.
-func renderStatusOrDash(s agents.SessionStatus) string {
-	if s == "" {
-		return "—"
-	}
-	return agentsStatusStyle(s).Render(string(s))
-}
-
 // column describes one column in a sub-tab's table.
 type column struct {
 	header string
-	width  int
+	width  int  // fixed width; ignored when grow=true
+	grow   bool // the column expands to fill remaining terminal width
+}
+
+// computeColumnWidths returns a copy of the cols slice with widths
+// resolved against the terminal's totalWidth. A column with grow=true
+// receives `totalWidth - sum(fixed) - gaps - leadPad`, clamped to a
+// reasonable minimum so descriptions don't collapse to zero.
+func computeColumnWidths(cols []column, totalWidth int) []column {
+	const leadPad = 4
+	const gap = 2
+	const minGrow = 16
+
+	out := make([]column, len(cols))
+	copy(out, cols)
+
+	if totalWidth <= 0 {
+		// No width info — fall back to a sensible default (older
+		// behaviour for tests / pre-WindowSizeMsg renders).
+		for i := range out {
+			if out[i].grow {
+				out[i].width = 50
+			}
+		}
+		return out
+	}
+
+	fixed := 0
+	growIdx := -1
+	for i, c := range out {
+		if c.grow {
+			growIdx = i
+			continue
+		}
+		fixed += c.width
+	}
+	if growIdx < 0 {
+		return out
+	}
+	gaps := gap * (len(out) - 1)
+	available := totalWidth - leadPad - fixed - gaps
+	if available < minGrow {
+		available = minGrow
+	}
+	out[growIdx].width = available
+	return out
 }
 
 // renderRow concatenates cells into a row with each cell padded to the
 // configured column width. lipgloss.NewStyle().Width is ANSI-aware so
 // colored content stays aligned (unlike text/tabwriter).
-func renderRow(cells []string, cols []column, lead string) string {
-	var b strings.Builder
-	b.WriteString(lead)
+//
+// When selected is true the entire row is wrapped in
+// cyberSelectedRowStyle, with the row first padded out to totalWidth
+// so the background fill covers the whole horizontal strip — the same
+// pattern as renderPackageManagers in view_detail.go.
+func renderRow(cells []string, cols []column, lead string, selected bool, totalWidth int) string {
+	var inner strings.Builder
+	inner.WriteString(lead)
 	for i, c := range cells {
 		w := cols[i].width
 		if w == 0 {
-			b.WriteString(c)
+			inner.WriteString(c)
 		} else {
-			b.WriteString(lipgloss.NewStyle().Width(w).Render(c))
+			inner.WriteString(lipgloss.NewStyle().Width(w).Render(c))
 		}
 		if i < len(cells)-1 {
-			b.WriteString("  ")
+			inner.WriteString("  ")
 		}
 	}
-	b.WriteString("\n")
-	return b.String()
+	line := inner.String()
+
+	if selected {
+		w := lipgloss.Width(line)
+		if totalWidth > w {
+			line += strings.Repeat(" ", totalWidth-w)
+		}
+		line = cyberSelectedRowStyle.Render(line)
+	}
+	return line + "\n"
 }
 
 // renderHeader builds the table header row. When sortColumn is >= 0
@@ -1093,7 +1147,60 @@ func renderHeader(cols []column, sortColumn int) string {
 		}
 		cells[i] = headerStyle.Render(title)
 	}
-	return renderRow(cells, cols, "    ")
+	return renderRow(cells, cols, "    ", false, 0)
+}
+
+// agentsProviderChip wraps the short provider label in a colored chip
+// (foreground=provider color, background=cyberChipBg). This is the
+// research-recommended replacement for the bare colored text used
+// previously.
+func agentsProviderChip(id agents.ProviderID) string {
+	label := providerShort(id)
+	fg := providerChipFG(id)
+	return lipgloss.NewStyle().
+		Foreground(fg).
+		Background(cyberChipBg).
+		Padding(0, 1).
+		Bold(true).
+		Render(label)
+}
+
+func providerChipFG(id agents.ProviderID) color.Color {
+	switch id {
+	case agents.ProviderClaudeCode:
+		return cyberPrimary
+	case agents.ProviderCopilotCLI:
+		return cyberSecondary
+	case agents.ProviderMCPRegistry:
+		return cyberAccent
+	}
+	return cyberFG
+}
+
+// agentsStatusChip is a colored chip for session status. Empty status
+// renders as a single dim em-dash without a background fill.
+func agentsStatusChip(s agents.SessionStatus) string {
+	if s == "" {
+		return lipgloss.NewStyle().Foreground(cyberFGDim).Render("—")
+	}
+	fg := statusChipFG(s)
+	return lipgloss.NewStyle().
+		Foreground(fg).
+		Background(cyberChipBg).
+		Padding(0, 1).
+		Render(string(s))
+}
+
+func statusChipFG(s agents.SessionStatus) color.Color {
+	switch s {
+	case agents.SessionStatusActive:
+		return cyberOK
+	case agents.SessionStatusCompleted:
+		return cyberFGDim
+	case agents.SessionStatusStopped:
+		return cyberAlert
+	}
+	return cyberFGDim
 }
 
 // sortColumnFor returns the column index that the given sort mode acts
@@ -1164,18 +1271,18 @@ func windowAgentRows(rows []agentRow, cursor, maxRows int) (visible []agentRow, 
 //
 // The activeSort argument drives a small ↑/↓ indicator on the column
 // that's currently sorted so users can see the order at a glance.
-func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agentsSortMode) string {
+func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agentsSortMode, totalWidth int) string {
 	var b strings.Builder
 
 	switch subTab {
 	case agentsSubMarketplaces:
-		cols := []column{
-			{header: "SOURCE", width: 8},
+		cols := computeColumnWidths([]column{
+			{header: "SOURCE", width: 10},
 			{header: "NAME", width: 28},
 			{header: "OWNER", width: 14},
 			{header: "PLUGINS", width: 8},
-			{header: "URL", width: 48},
-		}
+			{header: "URL", grow: true},
+		}, totalWidth)
 		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			mp := r.marketplace
@@ -1184,23 +1291,23 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agent
 				owner, url, count = mp.Owner, mp.URL, mp.PluginCount
 			}
 			cells := []string{
-				renderProviderShort(r.provider),
+				agentsProviderChip(r.provider),
 				truncAgentRow(r.name, cols[1].width),
 				truncAgentRow(owner, cols[2].width),
 				dashOrInt(count),
 				truncAgentRow(url, cols[4].width),
 			}
-			b.WriteString(renderRow(cells, cols, rowLead(i, cursor)))
+			b.WriteString(renderRow(cells, cols, rowLead(i, cursor), i == cursor, totalWidth))
 		}
 	case agentsSubPlugins:
-		cols := []column{
-			{header: "SOURCE", width: 8},
+		cols := computeColumnWidths([]column{
+			{header: "SOURCE", width: 10},
 			{header: "NAME", width: 26},
 			{header: "VERSION", width: 10},
 			{header: "MARKETPLACE", width: 24},
-			{header: "STATUS", width: 10},
-			{header: "DESCRIPTION", width: 50},
-		}
+			{header: "STATUS", width: 12},
+			{header: "DESCRIPTION", grow: true},
+		}, totalWidth)
 		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			pl := r.plugin
@@ -1215,24 +1322,24 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agent
 				}
 			}
 			cells := []string{
-				renderProviderShort(r.provider),
+				agentsProviderChip(r.provider),
 				truncAgentRow(r.name, cols[1].width),
 				truncAgentRow(version, cols[2].width),
 				truncAgentRow(market, cols[3].width),
-				status,
+				agentsPluginStatusChip(status),
 				truncAgentRow(desc, cols[5].width),
 			}
-			b.WriteString(renderRow(cells, cols, rowLead(i, cursor)))
+			b.WriteString(renderRow(cells, cols, rowLead(i, cursor), i == cursor, totalWidth))
 		}
 	case agentsSubSkills:
-		cols := []column{
-			{header: "SOURCE", width: 8},
+		cols := computeColumnWidths([]column{
+			{header: "SOURCE", width: 10},
 			{header: "NAME", width: 32},
-			{header: "SCOPE", width: 8},
+			{header: "SCOPE", width: 10},
 			{header: "FROM", width: 18},
-			{header: "MODEL", width: 8},
-			{header: "DESCRIPTION", width: 50},
-		}
+			{header: "MODEL", width: 10},
+			{header: "DESCRIPTION", grow: true},
+		}, totalWidth)
 		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			sk := r.skill
@@ -1244,24 +1351,24 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agent
 				}
 			}
 			cells := []string{
-				renderProviderShort(r.provider),
+				agentsProviderChip(r.provider),
 				truncAgentRow(r.name, cols[1].width),
 				renderScope(r.scope),
 				truncAgentRow(from, cols[3].width),
 				truncAgentRow(model, cols[4].width),
 				truncAgentRow(desc, cols[5].width),
 			}
-			b.WriteString(renderRow(cells, cols, rowLead(i, cursor)))
+			b.WriteString(renderRow(cells, cols, rowLead(i, cursor), i == cursor, totalWidth))
 		}
 	case agentsSubMCPs:
-		cols := []column{
-			{header: "SOURCE", width: 8},
+		cols := computeColumnWidths([]column{
+			{header: "SOURCE", width: 10},
 			{header: "NAME", width: 34},
 			{header: "TRANSPORT", width: 10},
-			{header: "SCOPE", width: 8},
+			{header: "SCOPE", width: 10},
 			{header: "TOOLS", width: 6},
-			{header: "ENDPOINT", width: 48},
-		}
+			{header: "ENDPOINT", grow: true},
+		}, totalWidth)
 		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			mcp := r.mcp
@@ -1275,58 +1382,83 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agent
 				tools = len(mcp.Tools)
 			}
 			cells := []string{
-				renderProviderShort(r.provider),
+				agentsProviderChip(r.provider),
 				truncAgentRow(r.name, cols[1].width),
 				transport,
 				renderScope(r.scope),
 				dashOrInt(tools),
 				truncAgentRow(endpoint, cols[5].width),
 			}
-			b.WriteString(renderRow(cells, cols, rowLead(i, cursor)))
+			b.WriteString(renderRow(cells, cols, rowLead(i, cursor), i == cursor, totalWidth))
 		}
 	case agentsSubSessions:
-		cols := []column{
-			{header: "SOURCE", width: 8},
+		cols := computeColumnWidths([]column{
+			{header: "SOURCE", width: 10},
 			{header: "ID", width: 10},
 			{header: "TYPE", width: 12},
-			{header: "STATUS", width: 10},
+			{header: "STATUS", width: 12},
 			{header: "TURNS", width: 6},
 			{header: "CREATED", width: 18},
 			{header: "MODIFIED", width: 14},
-			{header: "PROJECT", width: 36},
-		}
+			{header: "PROJECT", grow: true},
+		}, totalWidth)
 		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			s := r.session
-			typ, status, project := "", "", r.subtitle
+			typ, project := "", r.subtitle
 			created, modified := "", ""
+			var status agents.SessionStatus
 			turns := 0
 			if s != nil {
 				typ, project, turns = s.Type, s.ProjectPath, s.TurnCount
 				if typ == "" {
 					typ = "interactive"
 				}
-				status = renderStatusOrDash(s.Status)
+				status = s.Status
 				created = humaniseTime(s.Created)
 				modified = humaniseTime(s.LastModified)
 			}
 			cells := []string{
-				renderProviderShort(r.provider),
+				agentsProviderChip(r.provider),
 				truncAgentRow(r.name, cols[1].width),
 				typ,
-				status,
+				agentsStatusChip(status),
 				dashOrInt(turns),
 				created,
 				modified,
 				truncAgentRow(project, cols[7].width),
 			}
-			b.WriteString(renderRow(cells, cols, rowLead(i, cursor)))
+			b.WriteString(renderRow(cells, cols, rowLead(i, cursor), i == cursor, totalWidth))
 		}
 	}
 	return b.String()
 }
 
-// rowLead returns the two-character cursor mark prefix for the row.
+// agentsPluginStatusChip returns a colored chip for the plugin status
+// label (installed / disabled / available). Same chip vocabulary as
+// agentsStatusChip for visual consistency.
+func agentsPluginStatusChip(status string) string {
+	fg := pluginStatusChipFG(status)
+	return lipgloss.NewStyle().
+		Foreground(fg).
+		Background(cyberChipBg).
+		Padding(0, 1).
+		Render(status)
+}
+
+func pluginStatusChipFG(status string) color.Color {
+	switch status {
+	case "installed":
+		return cyberOK
+	case "disabled":
+		return cyberFGDim
+	}
+	return cyberAccent // "available"
+}
+
+// rowLead returns the lead string for the row. The cursor row gets a
+// "▸" marker; non-cursor rows are blank-padded to the same width so
+// the columns line up.
 func rowLead(i, cursor int) string {
 	if i == cursor {
 		return "  ▸ "

@@ -56,6 +56,9 @@ const (
 // ProviderID identifies the source agent CLI for an entity.
 type ProviderID string
 
+// String satisfies fmt.Stringer.
+func (p ProviderID) String() string { return string(p) }
+
 // ProviderID values for the built-in providers.
 const (
 	ProviderClaudeCode  ProviderID = "claude-code"

@@ -16,8 +16,27 @@ type Service struct {
 	registry *Registry
 	sem      chan struct{}
 
+	// RemoteCatalog, when set, contributes catalog (available-to-install)
+	// plugins to every scan's snapshot. Nil means "local only".
+	RemoteCatalog RemoteCatalog
+
 	mu       sync.RWMutex
 	snapshot *Snapshot
+}
+
+// RemoteCatalog fetches available plugins from online marketplaces.
+// Defined here as an interface so the agents package doesn't import
+// the catalog package directly (avoids a cycle).
+type RemoteCatalog interface {
+	FetchAll(ctx context.Context) []RemoteCatalogResult
+}
+
+// RemoteCatalogResult is one source's contribution to the snapshot.
+// Errors are non-fatal — a partial result still flows through.
+type RemoteCatalogResult struct {
+	SourceName string
+	Plugins    []Plugin
+	Err        error
 }
 
 // LoadOpts configures a Service.LoadAll call.
@@ -130,6 +149,26 @@ func (s *Service) scan(ctx context.Context) (*Snapshot, error) {
 		}(p)
 	}
 	wg.Wait()
+
+	// Merge in the remote catalog (online marketplaces). De-duplicate
+	// against the locally-installed plugin list — when a plugin already
+	// shows up as installed, we never want a phantom "available" copy
+	// of the same plugin to push it down the list.
+	if s.RemoteCatalog != nil {
+		installed := make(map[string]bool, len(snap.Plugins))
+		for _, p := range snap.Plugins {
+			installed[p.Provider.String()+"/"+p.Name] = true
+		}
+		for _, rc := range s.RemoteCatalog.FetchAll(ctx) {
+			for _, p := range rc.Plugins {
+				key := p.Provider.String() + "/" + p.Name
+				if installed[key] {
+					continue
+				}
+				snap.Plugins = append(snap.Plugins, p)
+			}
+		}
+	}
 
 	sortSnapshot(snap)
 	return snap, nil

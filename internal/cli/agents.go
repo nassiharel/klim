@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/catalog"
 	"github.com/nassiharel/klim/internal/agents/providers/claudecode"
 	"github.com/nassiharel/klim/internal/agents/providers/copilotcli"
 	"github.com/nassiharel/klim/internal/agents/providers/mcpregistry"
@@ -23,11 +24,34 @@ import (
 // newAgentsService builds the AgentService used by every `klim agents`
 // subcommand. Kept as a function so future tests can swap in fakes.
 var newAgentsService = func() *agents.Service {
-	return agents.NewService(4,
+	svc := agents.NewService(4,
 		claudecode.New(),
 		copilotcli.New(),
 		mcpregistry.New(),
 	)
+	svc.RemoteCatalog = catalogAdapter{f: catalog.New()}
+	return svc
+}
+
+// catalogAdapter bridges catalog.Fetcher to agents.RemoteCatalog. The
+// agents package defines the RemoteCatalog interface so it never needs
+// to import the catalog package (which would create a cycle since
+// catalog imports agents for its types).
+type catalogAdapter struct{ f *catalog.Fetcher }
+
+// FetchAll fetches every configured marketplace and adapts the result
+// into the agents.RemoteCatalogResult shape the service expects.
+func (a catalogAdapter) FetchAll(ctx context.Context) []agents.RemoteCatalogResult {
+	in := a.f.FetchAll(ctx)
+	out := make([]agents.RemoteCatalogResult, 0, len(in))
+	for _, r := range in {
+		out = append(out, agents.RemoteCatalogResult{
+			SourceName: r.Source.Name,
+			Plugins:    r.Plugins,
+			Err:        r.Err,
+		})
+	}
+	return out
 }
 
 // agentsCmd is the top-level umbrella. With no args it runs `agents list`.
