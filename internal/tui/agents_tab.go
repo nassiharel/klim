@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -293,6 +295,15 @@ type agentRow struct {
 	source   agents.Source
 	scope    agents.Scope
 	enabled  bool
+
+	// Per-entity payloads — only one of these is set, matching the
+	// current sub-tab. The render layer pulls richer columns from
+	// these when present.
+	marketplace *agents.Marketplace
+	plugin      *agents.Plugin
+	skill       *agents.Skill
+	mcp         *agents.MCP
+	session     *agents.Session
 }
 
 func (m *Model) agentsVisibleRows() []agentRow {
@@ -304,45 +315,72 @@ func (m *Model) agentsVisibleRows() []agentRow {
 	var rows []agentRow
 	switch st.subTab {
 	case agentsSubMarketplaces:
-		for _, x := range st.snapshot.Marketplaces {
-			rows = append(rows, agentRow{id: x.ID, name: x.Name, subtitle: x.Description, provider: x.Provider, source: x.Source})
+		for i := range st.snapshot.Marketplaces {
+			x := st.snapshot.Marketplaces[i]
+			rows = append(rows, agentRow{
+				id: x.ID, name: x.Name, subtitle: x.Description,
+				provider: x.Provider, source: x.Source,
+				marketplace: &x,
+			})
 		}
 	case agentsSubPlugins:
-		for _, x := range st.snapshot.Plugins {
-			sub := x.Description
-			if x.Marketplace != "" {
-				sub = "[" + x.Marketplace + "] " + sub
-			}
-			rows = append(rows, agentRow{id: x.ID, name: x.Name, subtitle: sub, provider: x.Provider, source: x.Source, enabled: x.Enabled})
+		for i := range st.snapshot.Plugins {
+			x := st.snapshot.Plugins[i]
+			rows = append(rows, agentRow{
+				id: x.ID, name: x.Name, subtitle: x.Description,
+				provider: x.Provider, source: x.Source, enabled: x.Enabled,
+				plugin: &x,
+			})
 		}
 	case agentsSubSkills:
-		for _, x := range st.snapshot.Skills {
-			rows = append(rows, agentRow{id: x.ID, name: x.Name, subtitle: x.Description, provider: x.Provider, source: x.Source, scope: x.Scope, enabled: x.Enabled})
+		for i := range st.snapshot.Skills {
+			x := st.snapshot.Skills[i]
+			rows = append(rows, agentRow{
+				id: x.ID, name: x.Name, subtitle: x.Description,
+				provider: x.Provider, source: x.Source, scope: x.Scope, enabled: x.Enabled,
+				skill: &x,
+			})
 		}
 	case agentsSubMCPs:
-		for _, x := range st.snapshot.MCPs {
-			sub := x.Transport
-			if x.URL != "" {
-				sub += " " + x.URL
-			} else if x.Command != "" {
-				sub += " " + x.Command
+		for i := range st.snapshot.MCPs {
+			x := st.snapshot.MCPs[i]
+			sub := x.URL
+			if sub == "" {
+				sub = x.Command
 			}
-			rows = append(rows, agentRow{id: x.ID, name: x.Name, subtitle: sub, provider: x.Provider, source: x.Source, scope: x.Scope, enabled: x.Enabled})
+			rows = append(rows, agentRow{
+				id: x.ID, name: x.Name, subtitle: sub,
+				provider: x.Provider, source: x.Source, scope: x.Scope, enabled: x.Enabled,
+				mcp: &x,
+			})
 		}
 	case agentsSubSessions:
-		for _, x := range st.snapshot.Sessions {
+		for i := range st.snapshot.Sessions {
+			x := st.snapshot.Sessions[i]
 			label := x.Name
 			if label == "" {
-				label = x.ID
+				label = sessionShortID(x.ID)
 			}
-			sub := x.ProjectPath
-			if !x.LastModified.IsZero() {
-				sub += " · " + x.LastModified.Format(time.RFC3339)
-			}
-			rows = append(rows, agentRow{id: x.ID, name: label, subtitle: sub, provider: x.Provider, source: x.Source})
+			rows = append(rows, agentRow{
+				id: x.ID, name: label, subtitle: x.ProjectPath,
+				provider: x.Provider, source: x.Source,
+				session: &x,
+			})
 		}
 	}
 	return filterAgentRows(rows, q)
+}
+
+func sessionShortID(id string) string {
+	// Strip "<provider>:" prefix and keep the first 8 chars of the uuid
+	// for a denser column.
+	if i := strings.IndexByte(id, ':'); i >= 0 {
+		id = id[i+1:]
+	}
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
 }
 
 func filterAgentRows(rows []agentRow, q string) []agentRow {
@@ -414,35 +452,21 @@ func (m *Model) renderAgentsView() string {
 	}
 
 	const maxRows = 25
-	for i, r := range rows {
-		if i >= maxRows {
-			fmt.Fprintf(&b, "  … %d more (search to narrow)\n", len(rows)-maxRows)
-			break
-		}
-		cursor := "  "
-		if i == st.cursor {
-			cursor = "▸ "
-		}
-		marker := ""
-		if r.source == agents.SourceCatalogClaude || r.source == agents.SourceCatalogCopilot || r.source == agents.SourceCatalogMCP {
-			marker = " (catalog)"
-		}
-		fmt.Fprintf(&b, "%s%-30s  %-12s  %s%s\n",
-			cursor, truncAgentRow(r.name, 30), r.provider, truncAgentRow(r.subtitle, 60), marker)
+	visible := rows
+	more := 0
+	if len(visible) > maxRows {
+		more = len(visible) - maxRows
+		visible = visible[:maxRows]
+	}
+
+	b.WriteString(renderAgentsTable(st.subTab, visible, st.cursor))
+	if more > 0 {
+		fmt.Fprintf(&b, "  … %d more (search to narrow)\n", more)
 	}
 
 	if st.detailOpen && st.cursor < len(rows) {
-		r := rows[st.cursor]
 		b.WriteString("\n  ─── detail ───\n")
-		fmt.Fprintf(&b, "  id        %s\n", r.id)
-		fmt.Fprintf(&b, "  provider  %s\n", r.provider)
-		fmt.Fprintf(&b, "  source    %s\n", r.source)
-		if r.scope != "" {
-			fmt.Fprintf(&b, "  scope     %s\n", r.scope)
-		}
-		if r.subtitle != "" {
-			b.WriteString("  detail    " + r.subtitle + "\n")
-		}
+		b.WriteString(renderAgentDetail(rows[st.cursor]))
 	}
 
 	if st.flash != "" && time.Now().Before(st.flashEnd) {
@@ -471,4 +495,322 @@ func truncAgentRow(s string, n int) string {
 		return s[:n]
 	}
 	return s[:n-1] + "…"
+}
+
+// renderAgentsTable produces an aligned table for the current sub-tab.
+// Each sub-tab gets a tailored column set; the cursor marker lives in
+// its own column so tabwriter alignment isn't disturbed.
+func renderAgentsTable(subTab int, rows []agentRow, cursor int) string {
+	var b strings.Builder
+	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	switch subTab {
+	case agentsSubMarketplaces:
+		_, _ = fmt.Fprintln(tw, "  \tNAME\tPROVIDER\tOWNER\tPLUGINS\tURL")
+		for i, r := range rows {
+			mp := r.marketplace
+			owner, url, count := "", "", 0
+			if mp != nil {
+				owner, url, count = mp.Owner, mp.URL, mp.PluginCount
+			}
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				cursorMark(i, cursor),
+				truncAgentRow(r.name, 32),
+				r.provider,
+				truncAgentRow(owner, 16),
+				dashOrInt(count),
+				truncAgentRow(url, 48),
+			)
+		}
+	case agentsSubPlugins:
+		_, _ = fmt.Fprintln(tw, "  \tNAME\tVERSION\tMARKETPLACE\tSTATUS\tDESCRIPTION")
+		for i, r := range rows {
+			pl := r.plugin
+			version, market, status, desc := "", "", "available", ""
+			if pl != nil {
+				version, market, desc = pl.Version, pl.Marketplace, pl.Description
+				switch {
+				case pl.Installed && pl.Enabled:
+					status = "installed"
+				case pl.Installed:
+					status = "disabled"
+				}
+			}
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				cursorMark(i, cursor),
+				truncAgentRow(r.name, 32),
+				truncAgentRow(version, 10),
+				truncAgentRow(market, 22),
+				status,
+				truncAgentRow(desc, 50),
+			)
+		}
+	case agentsSubSkills:
+		_, _ = fmt.Fprintln(tw, "  \tNAME\tPROVIDER\tSCOPE\tSOURCE\tMODEL\tDESCRIPTION")
+		for i, r := range rows {
+			sk := r.skill
+			model, source, desc := "", "", ""
+			if sk != nil {
+				model, source, desc = sk.Model, sk.SourcePlugin, sk.Description
+				if source == "" {
+					source = string(sk.Scope)
+				}
+			}
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				cursorMark(i, cursor),
+				truncAgentRow(r.name, 32),
+				r.provider,
+				string(r.scope),
+				truncAgentRow(source, 20),
+				truncAgentRow(model, 10),
+				truncAgentRow(desc, 50),
+			)
+		}
+	case agentsSubMCPs:
+		_, _ = fmt.Fprintln(tw, "  \tNAME\tPROVIDER\tTRANSPORT\tSCOPE\tTOOLS\tENDPOINT")
+		for i, r := range rows {
+			mcp := r.mcp
+			transport, endpoint, tools := "", "", 0
+			if mcp != nil {
+				transport = mcp.Transport
+				endpoint = mcp.URL
+				if endpoint == "" {
+					endpoint = mcp.Command
+				}
+				tools = len(mcp.Tools)
+			}
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				cursorMark(i, cursor),
+				truncAgentRow(r.name, 32),
+				r.provider,
+				transport,
+				string(r.scope),
+				dashOrInt(tools),
+				truncAgentRow(endpoint, 48),
+			)
+		}
+	case agentsSubSessions:
+		_, _ = fmt.Fprintln(tw, "  \tID\tTYPE\tSTATUS\tTURNS\tCREATED\tMODIFIED\tPROJECT")
+		for i, r := range rows {
+			s := r.session
+			typ, status, project := "", "", r.subtitle
+			created, modified := "", ""
+			turns := 0
+			if s != nil {
+				typ, project, turns = s.Type, s.ProjectPath, s.TurnCount
+				if typ == "" {
+					typ = "interactive"
+				}
+				status = string(s.Status)
+				if status == "" {
+					status = "—"
+				}
+				created = humaniseTime(s.Created)
+				modified = humaniseTime(s.LastModified)
+			}
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				cursorMark(i, cursor),
+				truncAgentRow(r.name, 10),
+				typ,
+				status,
+				dashOrInt(turns),
+				created,
+				modified,
+				truncAgentRow(project, 36),
+			)
+		}
+	}
+	_ = tw.Flush()
+	return b.String()
+}
+
+func cursorMark(i, cursor int) string {
+	if i == cursor {
+		return "▸"
+	}
+	return " "
+}
+
+func dashOrInt(n int) string {
+	if n <= 0 {
+		return "—"
+	}
+	return strconv.Itoa(n)
+}
+
+// humaniseTime renders a time in a column-friendly form: empty for zero,
+// a date for older than 24h, "HH:MM" for the same day, or a relative
+// "<n>m ago" / "<n>h ago" string for very recent events.
+func humaniseTime(t time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	now := time.Now()
+	diff := now.Sub(t)
+	switch {
+	case diff < 0:
+		return t.Format("2006-01-02 15:04")
+	case diff < time.Minute:
+		return "just now"
+	case diff < time.Hour:
+		return fmt.Sprintf("%dm ago", int(diff.Minutes()))
+	case diff < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(diff.Hours()))
+	case diff < 7*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(diff.Hours()/24))
+	default:
+		return t.Format("2006-01-02 15:04")
+	}
+}
+
+// renderAgentDetail builds a rich detail block per entity type.
+func renderAgentDetail(r agentRow) string {
+	var b strings.Builder
+	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+
+	switch {
+	case r.marketplace != nil:
+		m := r.marketplace
+		_, _ = fmt.Fprintf(tw, "  name\t%s\n", m.Name)
+		if m.DisplayName != "" && m.DisplayName != m.Name {
+			_, _ = fmt.Fprintf(tw, "  display\t%s\n", m.DisplayName)
+		}
+		_, _ = fmt.Fprintf(tw, "  provider\t%s\n", m.Provider)
+		if m.Owner != "" {
+			_, _ = fmt.Fprintf(tw, "  owner\t%s\n", m.Owner)
+		}
+		if m.URL != "" {
+			_, _ = fmt.Fprintf(tw, "  url\t%s\n", m.URL)
+		}
+		if m.PluginCount > 0 {
+			_, _ = fmt.Fprintf(tw, "  plugins\t%d\n", m.PluginCount)
+		}
+		if m.Description != "" {
+			_, _ = fmt.Fprintf(tw, "  description\t%s\n", m.Description)
+		}
+		_, _ = fmt.Fprintf(tw, "  source\t%s\n", m.Source)
+	case r.plugin != nil:
+		p := r.plugin
+		_, _ = fmt.Fprintf(tw, "  name\t%s\n", p.Name)
+		if p.Version != "" {
+			_, _ = fmt.Fprintf(tw, "  version\t%s\n", p.Version)
+		}
+		_, _ = fmt.Fprintf(tw, "  provider\t%s\n", p.Provider)
+		if p.Marketplace != "" {
+			_, _ = fmt.Fprintf(tw, "  marketplace\t%s\n", p.Marketplace)
+		}
+		_, _ = fmt.Fprintf(tw, "  installed\t%v   enabled  %v\n", p.Installed, p.Enabled)
+		if p.Author != "" {
+			_, _ = fmt.Fprintf(tw, "  author\t%s\n", p.Author)
+		}
+		if p.License != "" {
+			_, _ = fmt.Fprintf(tw, "  license\t%s\n", p.License)
+		}
+		if p.Homepage != "" {
+			_, _ = fmt.Fprintf(tw, "  homepage\t%s\n", p.Homepage)
+		}
+		if p.Repository != "" {
+			_, _ = fmt.Fprintf(tw, "  repository\t%s\n", p.Repository)
+		}
+		if len(p.Keywords) > 0 {
+			_, _ = fmt.Fprintf(tw, "  keywords\t%s\n", strings.Join(p.Keywords, ", "))
+		}
+		if p.InstallPath != "" {
+			_, _ = fmt.Fprintf(tw, "  path\t%s\n", p.InstallPath)
+		}
+		if p.Description != "" {
+			_, _ = fmt.Fprintf(tw, "  description\t%s\n", p.Description)
+		}
+	case r.skill != nil:
+		s := r.skill
+		_, _ = fmt.Fprintf(tw, "  name\t%s\n", s.Name)
+		_, _ = fmt.Fprintf(tw, "  provider\t%s\n", s.Provider)
+		_, _ = fmt.Fprintf(tw, "  scope\t%s\n", s.Scope)
+		if s.SourcePlugin != "" {
+			_, _ = fmt.Fprintf(tw, "  source plugin\t%s\n", s.SourcePlugin)
+		}
+		if s.Model != "" {
+			_, _ = fmt.Fprintf(tw, "  model\t%s\n", s.Model)
+		}
+		if s.AllowedTools != "" {
+			_, _ = fmt.Fprintf(tw, "  allowed-tools\t%s\n", s.AllowedTools)
+		}
+		if s.ArgumentHint != "" {
+			_, _ = fmt.Fprintf(tw, "  arguments\t%s\n", s.ArgumentHint)
+		}
+		_, _ = fmt.Fprintf(tw, "  user-invocable\t%v   model-invocable  %v\n", s.UserInvocable, !s.DisableModelInvoke)
+		if s.Path != "" {
+			_, _ = fmt.Fprintf(tw, "  path\t%s\n", s.Path)
+		}
+		if s.Description != "" {
+			_, _ = fmt.Fprintf(tw, "  description\t%s\n", s.Description)
+		}
+		if s.WhenToUse != "" {
+			_, _ = fmt.Fprintf(tw, "  when to use\t%s\n", s.WhenToUse)
+		}
+	case r.mcp != nil:
+		m := r.mcp
+		_, _ = fmt.Fprintf(tw, "  name\t%s\n", m.Name)
+		_, _ = fmt.Fprintf(tw, "  provider\t%s\n", m.Provider)
+		_, _ = fmt.Fprintf(tw, "  transport\t%s\n", m.Transport)
+		_, _ = fmt.Fprintf(tw, "  scope\t%s\n", m.Scope)
+		_, _ = fmt.Fprintf(tw, "  enabled\t%v\n", m.Enabled)
+		if m.URL != "" {
+			_, _ = fmt.Fprintf(tw, "  url\t%s\n", m.URL)
+		}
+		if m.Command != "" {
+			_, _ = fmt.Fprintf(tw, "  command\t%s %s\n", m.Command, strings.Join(m.Args, " "))
+		}
+		if len(m.Tools) > 0 {
+			_, _ = fmt.Fprintf(tw, "  tools\t%d (%s)\n", len(m.Tools), strings.Join(truncList(m.Tools, 6), ", "))
+		}
+		if len(m.EnvKeys) > 0 {
+			_, _ = fmt.Fprintf(tw, "  env keys\t%s\n", strings.Join(m.EnvKeys, ", "))
+		}
+	case r.session != nil:
+		s := r.session
+		_, _ = fmt.Fprintf(tw, "  id\t%s\n", s.ID)
+		if s.Name != "" {
+			_, _ = fmt.Fprintf(tw, "  name\t%s\n", s.Name)
+		}
+		_, _ = fmt.Fprintf(tw, "  provider\t%s\n", s.Provider)
+		if s.Type != "" {
+			_, _ = fmt.Fprintf(tw, "  type\t%s\n", s.Type)
+		}
+		if s.Status != "" {
+			_, _ = fmt.Fprintf(tw, "  status\t%s\n", s.Status)
+		}
+		if !s.Created.IsZero() {
+			_, _ = fmt.Fprintf(tw, "  created\t%s\n", s.Created.Format(time.RFC3339))
+		}
+		if !s.LastModified.IsZero() {
+			_, _ = fmt.Fprintf(tw, "  modified\t%s\n", s.LastModified.Format(time.RFC3339))
+		}
+		if s.TurnCount > 0 {
+			_, _ = fmt.Fprintf(tw, "  turns\t%d\n", s.TurnCount)
+		}
+		if s.ProjectPath != "" {
+			_, _ = fmt.Fprintf(tw, "  project\t%s\n", s.ProjectPath)
+		}
+		if s.Title != "" {
+			_, _ = fmt.Fprintf(tw, "  title\t%s\n", s.Title)
+		}
+		if s.TranscriptPath != "" {
+			_, _ = fmt.Fprintf(tw, "  transcript\t%s\n", s.TranscriptPath)
+		}
+	default:
+		_, _ = fmt.Fprintf(tw, "  id\t%s\n", r.id)
+		_, _ = fmt.Fprintf(tw, "  provider\t%s\n", r.provider)
+		_, _ = fmt.Fprintf(tw, "  source\t%s\n", r.source)
+	}
+	_ = tw.Flush()
+	return b.String()
+}
+
+func truncList(items []string, n int) []string {
+	if len(items) <= n {
+		return items
+	}
+	out := make([]string, n, n+1)
+	copy(out, items[:n])
+	return append(out, fmt.Sprintf("+%d more", len(items)-n))
 }

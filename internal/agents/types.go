@@ -160,17 +160,31 @@ type MCP struct {
 	Source    Source            `yaml:"source"`
 }
 
+// SessionStatus categorizes a session's lifecycle state.
+type SessionStatus string
+
+// Session status values.
+const (
+	SessionStatusActive    SessionStatus = "active"
+	SessionStatusCompleted SessionStatus = "completed"
+	SessionStatusStopped   SessionStatus = "stopped"
+	SessionStatusUnknown   SessionStatus = ""
+)
+
 // Session is a saved or recent agent session.
 type Session struct {
-	ID             string     `yaml:"id"`
-	Name           string     `yaml:"name,omitempty"`
-	Provider       ProviderID `yaml:"provider"`
-	ProjectPath    string     `yaml:"project_path,omitempty"`
-	LastModified   time.Time  `yaml:"last_modified,omitempty"`
-	TurnCount      int        `yaml:"turn_count,omitempty"`
-	Title          string     `yaml:"title,omitempty"`
-	TranscriptPath string     `yaml:"transcript_path,omitempty"`
-	Source         Source     `yaml:"source"`
+	ID             string        `yaml:"id"`
+	Name           string        `yaml:"name,omitempty"`
+	Provider       ProviderID    `yaml:"provider"`
+	ProjectPath    string        `yaml:"project_path,omitempty"`
+	Created        time.Time     `yaml:"created,omitempty"`       // first event (session.start)
+	LastModified   time.Time     `yaml:"last_modified,omitempty"` // last event / dir mtime
+	TurnCount      int           `yaml:"turn_count,omitempty"`
+	Title          string        `yaml:"title,omitempty"`
+	Type           string        `yaml:"type,omitempty"`   // e.g. "interactive", "background", "ado"
+	Status         SessionStatus `yaml:"status,omitempty"` // active | completed | stopped | ""
+	TranscriptPath string        `yaml:"transcript_path,omitempty"`
+	Source         Source        `yaml:"source"`
 }
 
 // PluginRef identifies a plugin to install. Either a marketplace-qualified

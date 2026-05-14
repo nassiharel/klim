@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -292,37 +293,84 @@ func renderSnapshotText(snap *agents.Snapshot) error {
 
 	if len(snap.Marketplaces) > 0 {
 		_, _ = fmt.Fprintln(w, "\nMARKETPLACES")
-		_, _ = fmt.Fprintln(w, "NAME\tPROVIDER\tDESCRIPTION")
+		_, _ = fmt.Fprintln(w, "NAME\tPROVIDER\tOWNER\tPLUGINS\tURL\tDESCRIPTION")
 		for _, m := range snap.Marketplaces {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", m.Name, m.Provider, truncateAgent(m.Description, 60))
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				m.Name, m.Provider, dashOr(m.Owner),
+				intOrDash(m.PluginCount), truncateAgent(m.URL, 50),
+				truncateAgent(m.Description, 50))
 		}
 	}
 	if len(snap.Plugins) > 0 {
 		_, _ = fmt.Fprintln(w, "\nPLUGINS")
-		_, _ = fmt.Fprintln(w, "NAME\tPROVIDER\tMARKETPLACE\tINSTALLED")
+		_, _ = fmt.Fprintln(w, "NAME\tVERSION\tPROVIDER\tMARKETPLACE\tSTATUS\tAUTHOR\tLICENSE\tDESCRIPTION")
 		for _, p := range snap.Plugins {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%v\n", p.Name, p.Provider, p.Marketplace, p.Installed)
+			status := "available"
+			switch {
+			case p.Installed && p.Enabled:
+				status = "installed"
+			case p.Installed:
+				status = "disabled"
+			}
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				p.Name, dashOr(p.Version), p.Provider, dashOr(p.Marketplace),
+				status, dashOr(p.Author), dashOr(p.License),
+				truncateAgent(p.Description, 60))
 		}
 	}
 	if len(snap.Skills) > 0 {
 		_, _ = fmt.Fprintln(w, "\nSKILLS")
-		_, _ = fmt.Fprintln(w, "NAME\tPROVIDER\tSCOPE\tDESCRIPTION")
+		_, _ = fmt.Fprintln(w, "NAME\tPROVIDER\tSCOPE\tSOURCE\tMODEL\tALLOWED-TOOLS\tDESCRIPTION")
 		for _, s := range snap.Skills {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.Name, s.Provider, s.Scope, truncateAgent(s.Description, 60))
+			source := s.SourcePlugin
+			if source == "" {
+				source = string(s.Scope)
+			}
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				s.Name, s.Provider, s.Scope, dashOr(source),
+				dashOr(s.Model), truncateAgent(dashOr(s.AllowedTools), 28),
+				truncateAgent(s.Description, 60))
 		}
 	}
 	if len(snap.MCPs) > 0 {
 		_, _ = fmt.Fprintln(w, "\nMCPS")
-		_, _ = fmt.Fprintln(w, "NAME\tPROVIDER\tTRANSPORT\tSCOPE")
+		_, _ = fmt.Fprintln(w, "NAME\tPROVIDER\tTRANSPORT\tSCOPE\tENABLED\tTOOLS\tENDPOINT")
 		for _, m := range snap.MCPs {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", m.Name, m.Provider, m.Transport, m.Scope)
+			endpoint := m.URL
+			if endpoint == "" {
+				endpoint = m.Command
+			}
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%s\t%s\n",
+				m.Name, m.Provider, m.Transport, m.Scope, m.Enabled,
+				intOrDash(len(m.Tools)), truncateAgent(endpoint, 60))
 		}
 	}
 	if len(snap.Sessions) > 0 {
 		_, _ = fmt.Fprintln(w, "\nSESSIONS")
-		_, _ = fmt.Fprintln(w, "ID\tPROVIDER\tPROJECT\tLAST-MODIFIED")
+		_, _ = fmt.Fprintln(w, "ID\tPROVIDER\tTYPE\tSTATUS\tTURNS\tCREATED\tMODIFIED\tPROJECT")
 		for _, s := range snap.Sessions {
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.ID, s.Provider, truncateAgent(s.ProjectPath, 40), s.LastModified.Format(time.RFC3339))
+			typ := s.Type
+			if typ == "" {
+				typ = "interactive"
+			}
+			status := string(s.Status)
+			if status == "" {
+				status = "—"
+			}
+			turns := "—"
+			if s.TurnCount > 0 {
+				turns = strconv.Itoa(s.TurnCount)
+			}
+			created := "—"
+			if !s.Created.IsZero() {
+				created = s.Created.Format(time.RFC3339)
+			}
+			modified := "—"
+			if !s.LastModified.IsZero() {
+				modified = s.LastModified.Format(time.RFC3339)
+			}
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				s.ID, s.Provider, typ, status, turns, created, modified, truncateAgent(s.ProjectPath, 40))
 		}
 	}
 	return nil
@@ -336,6 +384,20 @@ func truncateAgent(s string, n int) string {
 		return s[:n]
 	}
 	return s[:n-1] + "…"
+}
+
+func dashOr(s string) string {
+	if s == "" {
+		return "—"
+	}
+	return s
+}
+
+func intOrDash(n int) string {
+	if n <= 0 {
+		return "—"
+	}
+	return strconv.Itoa(n)
 }
 
 // ---------------- search ----------------

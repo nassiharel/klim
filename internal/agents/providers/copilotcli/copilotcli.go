@@ -541,9 +541,18 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	return sessions, nil
 }
 
-// enrichFromEventsJSONL pulls the session start time and project cwd
-// out of the first handful of events. Best-effort: parse errors and
-// missing files are silently ignored.
+// enrichFromEventsJSONL streams the full transcript to populate
+// Created/Modified/Type/Status/TurnCount/ProjectPath/Title. It bails out
+// gracefully on parse error or missing file — sessions stay usable with
+// just their id + dir mtime when the transcript can't be parsed.
+//
+// Heuristics:
+//   - Created   = data.startTime of the first session.start event.
+//   - Modified  = timestamp of the most recent event.
+//   - Type      = data.context.hostType (or "interactive" by default).
+//   - Status    = derived from the last event type: session.end →
+//     completed; session.stopped → stopped; otherwise active.
+//   - TurnCount = number of `turn.start` / `user.message` events.
 func enrichFromEventsJSONL(path string, s *agents.Session) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -551,24 +560,40 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 	}
 	defer func() { _ = f.Close() }()
 	dec := json.NewDecoder(f)
-	for i := 0; i < 8; i++ {
+
+	var lastType string
+	var firstStart, lastTS time.Time
+	turns := 0
+
+	for {
 		var ev struct {
-			Type string `json:"type"`
-			Data struct {
+			Type      string `json:"type"`
+			Timestamp string `json:"timestamp"`
+			Data      struct {
 				SessionID string `json:"sessionId"`
 				StartTime string `json:"startTime"`
 				Context   struct {
 					Cwd        string `json:"cwd"`
 					Repository string `json:"repository"`
+					HostType   string `json:"hostType"`
 				} `json:"context"`
 			} `json:"data"`
 		}
 		if err := dec.Decode(&ev); err != nil {
-			return
+			break
+		}
+		lastType = ev.Type
+		if ts, err := time.Parse(time.RFC3339Nano, ev.Timestamp); err == nil {
+			if firstStart.IsZero() {
+				firstStart = ts
+			}
+			lastTS = ts
 		}
 		if ev.Type == "session.start" && ev.Data.StartTime != "" {
 			if t, err := time.Parse(time.RFC3339Nano, ev.Data.StartTime); err == nil {
-				s.LastModified = t
+				if firstStart.IsZero() || t.Before(firstStart) {
+					firstStart = t
+				}
 			}
 		}
 		if ev.Data.Context.Cwd != "" && s.ProjectPath == "" {
@@ -577,6 +602,36 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 		if ev.Data.Context.Repository != "" && s.Title == "" {
 			s.Title = ev.Data.Context.Repository
 		}
+		if ev.Data.Context.HostType != "" && s.Type == "" {
+			s.Type = ev.Data.Context.HostType
+		}
+		switch ev.Type {
+		case "turn.start", "user.message":
+			turns++
+		}
+	}
+
+	if !firstStart.IsZero() {
+		s.Created = firstStart
+	}
+	if !lastTS.IsZero() {
+		s.LastModified = lastTS
+	}
+	if turns > 0 {
+		s.TurnCount = turns
+	}
+	if s.Type == "" {
+		s.Type = "interactive"
+	}
+	switch lastType {
+	case "session.end", "session.close", "session.completed":
+		s.Status = agents.SessionStatusCompleted
+	case "session.stopped":
+		s.Status = agents.SessionStatusStopped
+	case "":
+		s.Status = agents.SessionStatusUnknown
+	default:
+		s.Status = agents.SessionStatusActive
 	}
 }
 
