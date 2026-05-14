@@ -3,8 +3,9 @@
 # See: https://github.com/nassiharel/klim
 
 tools:
-  - name: gh
-  - name: git
-  - name: go
-  - name: node
-  - name: npm
+    - name: gh
+    - name: git
+    - name: go
+    - name: golangci-lint
+    - name: node
+    - name: npm
