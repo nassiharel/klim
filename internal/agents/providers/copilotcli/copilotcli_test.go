@@ -112,3 +112,42 @@ func TestProvider_BuildLaunch(t *testing.T) {
 		t.Errorf("Args = %v, want [--resume=abc]", plan.Args)
 	}
 }
+
+func TestProvider_Sessions_RealLayout(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "copilot-home")
+	sid := "0596511c-4387-4cc2-8d08-4302511cc586"
+	dir := filepath.Join(home, "session-state", sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// First-2-lines snippet that mirrors a real Copilot CLI events.jsonl.
+	events := `{"data":{"copilotVersion":"1.0.43","producer":"agency","sessionId":"` + sid + `","startTime":"2026-05-13T12:55:58.438Z","version":1},"id":"x","parentId":null,"timestamp":"2026-05-13T12:55:58.438Z","type":"session.start"}
+{"type":"session.resume","data":{"resumeTime":"2026-05-13T12:57:08.765Z","eventCount":1,"context":{"cwd":"C:\\dev\\VideoIndexer-CLI","gitRoot":"C:\\dev\\VideoIndexer-CLI","repository":"DefaultCollection/One/VideoIndexer-CLI","hostType":"ado","repositoryHost":"msazure.visualstudio.com"}},"id":"y","timestamp":"2026-05-13T12:57:08.765Z","parentId":"x"}
+`
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	sessions, err := p.Sessions(context.Background())
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("got %d sessions, want 1: %+v", len(sessions), sessions)
+	}
+	s := sessions[0]
+	if s.ID != "copilot:"+sid {
+		t.Errorf("ID = %q, want copilot:%s", s.ID, sid)
+	}
+	if s.ProjectPath != `C:\dev\VideoIndexer-CLI` {
+		t.Errorf("ProjectPath = %q, want C:\\dev\\VideoIndexer-CLI", s.ProjectPath)
+	}
+	if s.Title != "DefaultCollection/One/VideoIndexer-CLI" {
+		t.Errorf("Title = %q", s.Title)
+	}
+	if s.LastModified.IsZero() {
+		t.Error("LastModified should be set from session.start startTime")
+	}
+}

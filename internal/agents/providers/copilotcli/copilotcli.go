@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/nassiharel/klim/internal/agents"
 	"gopkg.in/yaml.v3"
@@ -484,42 +485,99 @@ func redactHeaders(in map[string]string) map[string]string {
 
 // ---------- Sessions ----------
 
-// Sessions enumerates session transcripts under ~/.copilot/. Exact
-// transcript path is undocumented [TBV]; we list any directory under
-// the copilot home that looks session-shaped (mtime-sorted, capped at
-// 100 entries) and the user can resume by ID through the CLI.
+// Sessions enumerates session transcripts. Real layout used by Copilot
+// CLI 1.0+:
+//
+//	~/.copilot/session-state/<uuid>/events.jsonl    transcript
+//	~/.copilot/session-state/<uuid>/session.db      (optional)
+//	~/.copilot/session-store.db                     SQLite index
+//
+// We scan the directories under `session-state/`, peek at the first
+// couple of lines of `events.jsonl` to lift the session id + cwd, and
+// fall back to two pre-1.0 layout candidates so older installs keep
+// working. Sessions are returned recent-first.
 func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	root := p.copilotHome()
-	// Two likely roots.
 	candidates := []string{
+		filepath.Join(root, "session-state"),
 		filepath.Join(root, "sessions"),
 		filepath.Join(root, "state"),
 	}
 	var sessions []agents.Session
+	seen := make(map[string]bool)
 	for _, c := range candidates {
 		entries, err := os.ReadDir(c)
 		if err != nil {
 			continue
 		}
 		for _, e := range entries {
-			full := filepath.Join(c, e.Name())
-			fi, err := e.Info()
-			if err != nil {
+			if !e.IsDir() {
 				continue
 			}
-			sessions = append(sessions, agents.Session{
+			if seen[e.Name()] {
+				continue
+			}
+			seen[e.Name()] = true
+			dir := filepath.Join(c, e.Name())
+			s := agents.Session{
 				ID:             "copilot:" + e.Name(),
 				Provider:       p.ID(),
-				LastModified:   fi.ModTime(),
-				TranscriptPath: full,
+				TranscriptPath: dir,
 				Source:         agents.SourceLocalCopilot,
-			})
+			}
+			if fi, err := e.Info(); err == nil {
+				s.LastModified = fi.ModTime()
+			}
+			enrichFromEventsJSONL(filepath.Join(dir, "events.jsonl"), &s)
+			sessions = append(sessions, s)
 		}
 	}
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].LastModified.After(sessions[j].LastModified)
+	})
 	if len(sessions) > 100 {
 		sessions = sessions[:100]
 	}
 	return sessions, nil
+}
+
+// enrichFromEventsJSONL pulls the session start time and project cwd
+// out of the first handful of events. Best-effort: parse errors and
+// missing files are silently ignored.
+func enrichFromEventsJSONL(path string, s *agents.Session) {
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer func() { _ = f.Close() }()
+	dec := json.NewDecoder(f)
+	for i := 0; i < 8; i++ {
+		var ev struct {
+			Type string `json:"type"`
+			Data struct {
+				SessionID string `json:"sessionId"`
+				StartTime string `json:"startTime"`
+				Context   struct {
+					Cwd        string `json:"cwd"`
+					Repository string `json:"repository"`
+				} `json:"context"`
+			} `json:"data"`
+		}
+		if err := dec.Decode(&ev); err != nil {
+			return
+		}
+		if ev.Type == "session.start" && ev.Data.StartTime != "" {
+			if t, err := time.Parse(time.RFC3339Nano, ev.Data.StartTime); err == nil {
+				s.LastModified = t
+			}
+		}
+		if ev.Data.Context.Cwd != "" && s.ProjectPath == "" {
+			s.ProjectPath = ev.Data.Context.Cwd
+		}
+		if ev.Data.Context.Repository != "" && s.Title == "" {
+			s.Title = ev.Data.Context.Repository
+		}
+	}
 }
 
 // ---------- Mutations ----------
