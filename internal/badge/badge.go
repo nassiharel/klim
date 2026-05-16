@@ -7,7 +7,10 @@
 //
 //   - score: overall klim env score, X/Y (graded)
 //   - tools: number of installed tools
-//   - audit: vulnerability status (clean / N issues)
+//   - audit: count of klim audit findings (unmanaged installs,
+//     missing versions, stale repos, outdated tools — see
+//     internal/audit). This is NOT a CVE / vulnerability scan; for
+//     that, point readers at `klim security` output instead.
 //   - fresh: percentage of installed tools currently up to date
 //
 // Each Badge knows its label, value, color, and link target so the
@@ -88,7 +91,7 @@ type Inputs struct {
 
 	ToolCount int // count of installed tools
 
-	AuditIssues int // total vuln findings (errors+warnings)
+	AuditIssues int // total klim audit findings (warnings + infos from audit.CountBySeverity); NOT a CVE/vulnerability count
 
 	FreshPercent int // 0-100 percentage of installed tools up to date
 }

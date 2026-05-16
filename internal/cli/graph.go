@@ -192,8 +192,17 @@ func groupByEdges(g *graphviz.Graph, tools []registry.Tool, getBuckets func(regi
 			buckets[b] = append(buckets[b], t.Name)
 		}
 	}
+	// Iterate buckets in a deterministic order so the seeded force
+	// simulation produces the same layout snapshot across runs for
+	// the same installed tools (map iteration order is random).
+	keys := make([]string, 0, len(buckets))
+	for k := range buckets {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 	seen := map[string]bool{}
-	for _, members := range buckets {
+	for _, k := range keys {
+		members := buckets[k]
 		for i := 0; i < len(members); i++ {
 			for j := i + 1; j < len(members); j++ {
 				a, b := members[i], members[j]

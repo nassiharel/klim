@@ -145,6 +145,12 @@ func (g *Graph) Step() float64 {
 // iterations actually executed. Stops early when the maximum
 // per-frame displacement falls below threshold.
 func (g *Graph) Layout(maxIters int, threshold float64) int {
+	if maxIters < 0 {
+		// Contract: return the number of iterations actually
+		// executed. Negative inputs become 0 rather than echoing
+		// the bogus value back to the caller.
+		return 0
+	}
 	for i := 0; i < maxIters; i++ {
 		if g.Step() < threshold {
 			return i + 1

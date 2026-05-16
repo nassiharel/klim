@@ -265,22 +265,21 @@ func fallbackLine(name string, target int) string {
 	default:
 		return name
 	}
+	_ = nameSyl // reserved for future name-aware refinement
 	for _, o := range pool {
 		candidate := o.prefix + name + o.suffix
 		if CountLine(candidate) == target {
 			return candidate
 		}
-		// Try without the name's contribution (some tools have
-		// silent letters CountSyllables can't predict).
-		_ = nameSyl
 	}
-	// Hard fallback: build a line entirely from pre-counted
-	// fragments that CountLine evaluates correctly.
-	if target == 5 {
-		return "Quiet hand on code"
-	}
-	if target == 7 {
-		return "Quiet hand sings through the night"
+	// Hard fallback: lines built from 1-2 syllable words whose
+	// CountLine value we verify in haiku_test (TestFallback_HardLines)
+	// so they cannot silently drift out of 5-7-5.
+	switch target {
+	case 5:
+		return "Code hums in the night"
+	case 7:
+		return "Code hums softly through the night"
 	}
 	return name
 }

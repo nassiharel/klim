@@ -65,7 +65,6 @@ func Compute(input Input) Result {
 	}
 }
 
-// BadgeURL returns a shields.io badge URL for the score.
 // BadgeURL returns a shields.io badge URL for the score. The color
 // uses BadgeColor so any caller building their own score badge stays
 // in sync with this canonical URL builder.

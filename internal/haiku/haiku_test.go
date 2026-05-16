@@ -91,3 +91,28 @@ func TestBuildPalette_SkipsEmpty(t *testing.T) {
 		t.Errorf("descWords should be empty: %v", p.descWords)
 	}
 }
+
+func TestFallback_HardLines(t *testing.T) {
+	// PR-78 review: hard-fallback strings must match CountLine; if a
+	// future syllable rule shifts these out of 5/7 the test fires.
+	if got := CountLine("Code hums in the night"); got != 5 {
+		t.Errorf("hard 5-syllable fallback: got %d want 5", got)
+	}
+	if got := CountLine("Code hums softly through the night"); got != 7 {
+		t.Errorf("hard 7-syllable fallback: got %d want 7", got)
+	}
+}
+
+func TestFallbackLine_VariousNames(t *testing.T) {
+	// Stress fallbackLine: every name × target must produce a line
+	// CountLine accepts as the target.
+	names := []string{"klim", "go", "git", "docker", "kubectl", "terraform", "x", "weirdname", "rustc", "fzf"}
+	for _, n := range names {
+		for _, target := range []int{5, 7} {
+			got := fallbackLine(n, target)
+			if c := CountLine(got); c != target {
+				t.Errorf("fallbackLine(%q, %d) = %q (%d syllables); want %d", n, target, got, c, target)
+			}
+		}
+	}
+}

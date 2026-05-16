@@ -36,7 +36,7 @@ subset.
 Badges:
   klim score   overall env score X/Y graded A+..F
   klim tools   number of installed tools
-  klim audit   vulnerability status (clean / N issues)
+  klim audit   audit findings count (clean / N issues from internal/audit)
   klim fresh   percent of installed tools up to date
 
 Examples:

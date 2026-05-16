@@ -22,7 +22,11 @@ locally from the tool's catalog metadata (name, category, description,
 tags). The output is deterministic — running the command twice gives
 the same haiku — unless you pass --seed for variety.
 
-No network. No agent. Pure delight.
+The catalog is loaded through klim's normal catalog path: if a fresh
+local cache exists no network call is made; if the cache is missing
+or stale the catalog package will try to refresh it from GitHub the
+same way the rest of klim does. There is no agent and no LLM in the
+loop — generation is pure template + syllable counting.
 
 Examples:
   klim haiku terraform

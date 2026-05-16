@@ -9,9 +9,12 @@
 // of the three lines picks a template from a small library and fills
 // it with words drawn from the tool's name, display name, category,
 // description, and tags. Templates are tagged with their fixed
-// syllable count so the 5-7-5 invariant holds without runtime
-// counting on the line as a whole — we only need to syllable-count
-// the variable word a template inserts.
+// syllable count so we know what the variable word's count needs to
+// be, but every built candidate is then re-validated against
+// CountLine before it is returned. The fallback path also uses
+// CountLine so the 5-7-5 contract is preserved even when the
+// template's nominal count and the line's real count disagree (e.g.
+// for tool names with silent letters CountSyllables can't predict).
 package haiku
 
 import (

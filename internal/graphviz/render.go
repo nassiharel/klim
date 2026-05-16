@@ -48,9 +48,15 @@ func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 	for _, n := range g.Nodes {
 		x, y := worldToGrid(n.x, n.y, width, height)
 		canvas.setStyled(x, y, '●', nodeStyle(n.Color))
-		if n.Label != "" && x+len(n.Label)+1 < width {
-			for i, r := range n.Label {
-				canvas.setStyled(x+1+i, y, r, labelStyle())
+		// Label fits when its last rune lands inside the canvas.
+		// First rune sits at x+1, so the last rune is at
+		// x+utf8.RuneCountInString(label); that needs to be < width.
+		if n.Label != "" {
+			runes := []rune(n.Label)
+			if x+len(runes) < width {
+				for i, r := range runes {
+					canvas.setStyled(x+1+i, y, r, labelStyle())
+				}
 			}
 		}
 	}
