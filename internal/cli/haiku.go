@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -97,5 +96,3 @@ func toolHaikuDescription(t *registry.Tool) string {
 	}
 	return ""
 }
-
-var _ = errors.New // kept for future error wrapping

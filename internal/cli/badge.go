@@ -2,8 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -46,6 +44,7 @@ Examples:
   klim badge --score --audit
   klim badge --output json
   klim badge --output yaml > badges.yaml`,
+	Args: cobra.NoArgs,
 	RunE: runBadge,
 }
 
@@ -78,12 +77,11 @@ type badgeReportB struct {
 	Markdown string `json:"markdown" yaml:"markdown"`
 }
 
-func runBadge(cmd *cobra.Command, args []string) error {
+func runBadge(cmd *cobra.Command, _ []string) error {
 	out, err := badgeFormatFn()
 	if err != nil {
 		return err
 	}
-	_ = args
 
 	svc := svcFrom(cmd)
 	sp := spinnerFor(out, "Scanning…")
@@ -212,8 +210,3 @@ func freshPercent(tools []registry.Tool) int {
 	}
 	return fresh * 100 / installed
 }
-
-// Stop the linter complaining about os.Stderr in shared file; we
-// intentionally keep stdout-only output for the markdown body.
-var _ = os.Stderr
-var _ = strings.TrimSpace

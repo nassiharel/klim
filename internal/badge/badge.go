@@ -13,6 +13,23 @@
 // Each Badge knows its label, value, color, and link target so the
 // command layer can render markdown / html / plain URL forms without
 // reaching into Shields.io specifics.
+//
+// # Colour thresholds
+//
+// Score / Fresh follow a "percent of max" scale (see colorByPercent
+// and colorByFreshness in badge.go):
+//
+//	      Score              Fresh
+//	>=  90  brightgreen      ==100  brightgreen
+//	>=  75  green            >=90   green
+//	>=  60  yellow           >=75   yellow
+//	>=  40  orange           else   red
+//	else    red
+//
+// Tools is informational: blue when >=1 installed, lightgrey when 0.
+//
+// Audit is binary-ish: 0 issues = brightgreen "clean"; 1..3 issues =
+// yellow with the count; >3 issues = red with the count.
 package badge
 
 import (
@@ -65,9 +82,8 @@ type Inputs struct {
 	FreshPercent int // 0-100 percentage of installed tools up to date
 }
 
-// Build returns the four standard badges for the given inputs. Each
-// badge's color follows the simple thresholds documented in
-// internal/badge/badge.go's doc comment.
+// Build returns the four standard badges for the given inputs. The
+// per-badge colour scheme is documented in the package doc comment.
 func Build(in Inputs) []Badge {
 	return []Badge{
 		scoreBadge(in),

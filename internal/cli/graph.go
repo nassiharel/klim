@@ -3,12 +3,14 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/nassiharel/klim/internal/graphviz"
 	"github.com/nassiharel/klim/internal/registry"
@@ -51,8 +53,27 @@ func init() {
 	// Registered in root.go.
 }
 
-func runGraph(cmd *cobra.Command, args []string) error {
-	_ = args
+// validGraphByValues is the closed set the --by flag accepts.
+// PR-78 review: invalid values used to fall through the switch and
+// render a graph with nodes but no edges. We now reject unknown
+// values with a UsageError so the help text doesn't lie.
+var validGraphByValues = []string{"category", "tag", "pm"}
+
+func runGraph(cmd *cobra.Command, _ []string) error {
+	by := strings.ToLower(strings.TrimSpace(graphBy))
+	if by == "" {
+		by = "category"
+	}
+	valid := false
+	for _, v := range validGraphByValues {
+		if v == by {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return usageErrorf("--by %q is not supported (valid: %s)", graphBy, strings.Join(validGraphByValues, ", "))
+	}
 	svc := svcFrom(cmd)
 	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), graphRefreshFlag)
 	if err != nil {
@@ -63,7 +84,7 @@ func runGraph(cmd *cobra.Command, args []string) error {
 		return errors.New("klim graph: no installed tools to draw")
 	}
 
-	g := buildToolGraph(installed, graphBy)
+	g := buildToolGraph(installed, by)
 
 	if graphTUI {
 		return runGraphTUI(g)
@@ -71,8 +92,19 @@ func runGraph(cmd *cobra.Command, args []string) error {
 
 	g.Layout(graphMaxIters, 1e-4)
 	w, h := resolveGraphDimensions(graphTermWidth, graphTermHeight)
-	fmt.Println(g.Render(w, h))
+
+	// When stdout isn't a TTY, render unstyled (no ANSI escapes) so
+	// the snapshot is friendly to README-paste / pipe-to-file.
+	unstyled := !isStdoutTerminal()
+	fmt.Println(g.Render(w, h, graphviz.RenderOpts{Unstyled: unstyled}))
 	return nil
+}
+
+// isStdoutTerminal reports whether stdout is attached to a real
+// terminal. Pure-go via golang.org/x/term so it works on every
+// platform klim ships.
+func isStdoutTerminal() bool {
+	return term.IsTerminal(int(os.Stdout.Fd())) //nolint:gosec // fd values fit comfortably in int
 }
 
 // installedOnly filters the tool list down to tools the user has
@@ -179,8 +211,21 @@ func groupByEdges(g *graphviz.Graph, tools []registry.Tool, getBuckets func(regi
 }
 
 // resolveGraphDimensions returns (width, height) for the renderer.
-// Zero values fall back to a sensible terminal-friendly default.
+// Zero values try to autodetect from the controlling terminal; if
+// detection fails (CI / pipe / non-TTY) we fall back to 80×24 — the
+// same defaults the help text advertised.
 func resolveGraphDimensions(w, h int) (int, int) {
+	if w <= 0 || h <= 0 {
+		//nolint:gosec // fd values fit comfortably in int
+		if tw, th, err := term.GetSize(int(os.Stdout.Fd())); err == nil && tw > 0 && th > 0 {
+			if w <= 0 {
+				w = tw
+			}
+			if h <= 0 {
+				h = th - 1 // leave one row for the shell prompt
+			}
+		}
+	}
 	if w <= 0 {
 		w = 80
 	}

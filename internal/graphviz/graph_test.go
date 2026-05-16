@@ -21,15 +21,18 @@ func TestLayout_Converges(t *testing.T) {
 	for i, name := range []string{"a", "b", "c", "d", "e"} {
 		g.AddNode(name, name, i%4)
 	}
-	// Add a couple of edges so the spring forces have something to do.
 	g.AddEdge("a", "b")
 	g.AddEdge("b", "c")
 	g.AddEdge("c", "d")
 	g.AddEdge("d", "e")
 	g.AddEdge("a", "e")
+	// PR-78 review: previously this test logged but never failed.
+	// Assert that Layout converges well under the iteration ceiling
+	// for this small graph; if a future tunable change blows past
+	// the threshold we want the test to fail loudly.
 	iters := g.Layout(500, 1e-4)
 	if iters >= 500 {
-		t.Logf("did not converge under 500 iters (last threshold reached at %d)", iters)
+		t.Errorf("layout did not converge under 500 iterations (last threshold reached at %d)", iters)
 	}
 }
 

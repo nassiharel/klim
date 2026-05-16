@@ -15,15 +15,15 @@ func TestGenerate_DeterministicByDefault(t *testing.T) {
 }
 
 func TestGenerate_DifferentSeedGivesDifferentOutput(t *testing.T) {
+	// PR-78 review: previously this test logged but didn't assert.
+	// The pair (1, 99999) is empirically known to land different
+	// templates for this tool — if a future template change makes
+	// them collide we want the test to fail so we re-tune.
 	tool := Tool{Name: "terraform", Category: "infrastructure", Tags: []string{"iac"}, Description: "infrastructure as code"}
 	h1 := Generate(tool, Options{Seed: 1})
 	h2 := Generate(tool, Options{Seed: 99999})
-	// Not guaranteed to differ in *every* line but at least one should.
 	if h1.String() == h2.String() {
-		t.Logf("h1: %s", h1.String())
-		t.Logf("h2: %s", h2.String())
-		// Don't fail the test — same output with different seeds is
-		// rare but possible. Just log.
+		t.Errorf("expected different output for different seeds; got identical:\n%s", h1.String())
 	}
 }
 

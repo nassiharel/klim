@@ -7,20 +7,33 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Render produces a terminal-printable string representation of the
-// graph using box-drawing characters. The arena is mapped from
-// [0,1]x[0,1] to width×height grid cells; nodes render as a single
-// coloured dot followed (when there's room) by an inline label.
-// Edges are drawn as straight lines using Bresenham's algorithm.
+// RenderOpts tunes Render's output.
 //
-// The renderer is deterministic given the same Positions(): no rng
-// inside this function. Animated layouts can call Render after each
-// Step() to produce frames.
-func (g *Graph) Render(width, height int) string {
+// Unstyled disables all ANSI escapes so the snapshot is safe to paste
+// into a Markdown code fence, an issue body, or a log file. PR-78
+// review: stdout is now treated as untrustworthy for ANSI when the
+// caller passes Unstyled=true.
+type RenderOpts struct {
+	Unstyled bool
+}
+
+// Render produces a terminal-printable string representation of the
+// graph using box-drawing characters. Nodes render as a single dot
+// followed (when there's room) by an inline label. Edges are drawn
+// as straight lines using Bresenham's algorithm.
+//
+// The renderer is deterministic given the same node positions; no
+// rng inside this function. Animated callers re-Render after each
+// Step().
+func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	canvas := newCanvas(width, height)
+	var o RenderOpts
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	canvas := newCanvas(width, height, o.Unstyled)
 
 	for _, e := range g.Edges {
 		a, b, ok := g.edgePositions(e)
@@ -75,8 +88,9 @@ func worldToGrid(x, y float64, width, height int) (int, int) {
 }
 
 type canvas struct {
-	w, h  int
-	cells [][]styledCell
+	w, h     int
+	cells    [][]styledCell
+	unstyled bool
 }
 
 type styledCell struct {
@@ -85,8 +99,8 @@ type styledCell struct {
 	set   bool
 }
 
-func newCanvas(w, h int) *canvas {
-	c := &canvas{w: w, h: h, cells: make([][]styledCell, h)}
+func newCanvas(w, h int, unstyled bool) *canvas {
+	c := &canvas{w: w, h: h, cells: make([][]styledCell, h), unstyled: unstyled}
 	for i := range c.cells {
 		c.cells[i] = make([]styledCell, w)
 		for j := range c.cells[i] {
@@ -136,10 +150,13 @@ func (c *canvas) String() string {
 	var b strings.Builder
 	for _, row := range c.cells {
 		for _, cell := range row {
-			if cell.set {
-				b.WriteString(cell.style.Render(string(cell.r)))
-			} else {
+			switch {
+			case !cell.set:
 				b.WriteRune(cell.r)
+			case c.unstyled:
+				b.WriteRune(cell.r)
+			default:
+				b.WriteString(cell.style.Render(string(cell.r)))
 			}
 		}
 		b.WriteByte('\n')
