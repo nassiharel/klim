@@ -90,7 +90,7 @@ var trailLogCmd = &cobra.Command{
 
   --limit N       cap output at N entries
   --since DUR     only entries newer than DUR ago (e.g. 7d, 24h, 30m)
-  --output text|json
+  --output text|json|yaml
 
 Examples:
   klim trail log                          # all entries, newest first

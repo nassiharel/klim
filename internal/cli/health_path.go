@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -62,9 +61,7 @@ func runHealthPath(cmd *cobra.Command, _ []string) error {
 	report := pathconflict.Analyze(tools)
 
 	if out == OutputJSON || out == OutputYAML {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(report); err != nil {
+		if err := printStructured(out, report); err != nil {
 			return err
 		}
 		if n := countVersionConflicts(report); n > 0 {

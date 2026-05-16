@@ -216,9 +216,18 @@ func buildToolGraph(tools []registry.Tool, by string) *graphviz.Graph {
 	return g
 }
 
-// groupByEdges adds one edge between every pair of tools that share
-// at least one bucket. Buckets come from getBuckets(tool); pairs
-// already linked stay linked (we don't add duplicates).
+// maxBucketCliqueSize caps how many tools a single bucket connects
+// in a full clique. Above the cap we degrade to a "spoke" pattern
+// (every member linked to the first) so a single huge bucket (e.g.
+// 200 tools tagged "cli") doesn't produce O(n²) edges and pin the
+// force simulation.
+const maxBucketCliqueSize = 32
+
+// groupByEdges connects tools that share at least one bucket. For
+// small buckets we emit a full clique (every pair); for buckets
+// larger than maxBucketCliqueSize we fall back to a star pattern
+// rooted at the lexicographically-first member to keep the edge
+// count linear.
 func groupByEdges(g *graphviz.Graph, tools []registry.Tool, getBuckets func(registry.Tool) []string) {
 	buckets := map[string][]string{}
 	for _, t := range tools {
@@ -237,25 +246,35 @@ func groupByEdges(g *graphviz.Graph, tools []registry.Tool, getBuckets func(regi
 	seen := map[string]bool{}
 	for _, k := range keys {
 		members := buckets[k]
+		// Sort members so the star-pattern root is stable.
+		sort.Strings(members)
+		if len(members) > maxBucketCliqueSize {
+			root := members[0]
+			for _, m := range members[1:] {
+				addPairEdge(g, seen, root, m)
+			}
+			continue
+		}
 		for i := 0; i < len(members); i++ {
 			for j := i + 1; j < len(members); j++ {
-				a, b := members[i], members[j]
-				if a > b {
-					a, b = b, a
-				}
-				// Use a length-prefixed pair key so a tool name
-				// containing the separator can't collide with a
-				// different pair. ("a|b","c") and ("a","b|c")
-				// both collapsed to "a|b|c" under the old key.
-				key := fmt.Sprintf("%d:%s\x00%d:%s", len(a), a, len(b), b)
-				if seen[key] {
-					continue
-				}
-				seen[key] = true
-				g.AddEdge(a, b)
+				addPairEdge(g, seen, members[i], members[j])
 			}
 		}
 	}
+}
+
+func addPairEdge(g *graphviz.Graph, seen map[string]bool, a, b string) {
+	if a > b {
+		a, b = b, a
+	}
+	// Length-prefixed pair key so a tool name containing the
+	// separator can't collide with a different pair.
+	key := fmt.Sprintf("%d:%s\x00%d:%s", len(a), a, len(b), b)
+	if seen[key] {
+		return
+	}
+	seen[key] = true
+	g.AddEdge(a, b)
 }
 
 // resolveGraphDimensions returns (width, height) for the renderer.

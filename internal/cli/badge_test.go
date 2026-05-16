@@ -5,7 +5,7 @@ import (
 )
 
 // TestBadgeCmd_NoArgs verifies the badge command rejects positional
-// args (CLI-CONVENTIONS.md:48).
+// args (see CLI-CONVENTIONS.md "Exit codes" — extra args are usage errors, exit 2).
 func TestBadgeCmd_NoArgs(t *testing.T) {
 	if err := badgeCmd.Args(badgeCmd, []string{"oops"}); err == nil {
 		t.Error("badgeCmd.Args(['oops']) returned nil; want error")

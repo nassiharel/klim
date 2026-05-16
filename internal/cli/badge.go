@@ -89,10 +89,28 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 	}
 	sp.Stop()
 
-	// Share the score-input assembly with runScore so the two
-	// commands can't disagree on what counts as the canonical
-	// inputs (doctor + compliance + audit) for a given scan.
-	result, auditWarns, auditInfos := buildScoreInputs(cmd, tools)
+	// Resolve which badges the user actually asked for FIRST, so we
+	// can skip the doctor/compliance/audit scan for runs that don't
+	// need score or audit inputs (e.g. `klim badge --tools --fresh`).
+	ids := selectedBadgeIDs()
+	wantScore := needsBadge(ids, "score")
+	wantAudit := needsBadge(ids, "audit")
+	wantStructured := out == OutputJSON || out == OutputYAML
+
+	var (
+		result            score.Result
+		auditWarns        int
+		auditInfos        int
+		havePolicyOrAudit bool
+	)
+	// Structured output always carries the full score block, so
+	// fall through to the heavy path for --output json/yaml even
+	// when the user only asked for one badge.
+	if wantScore || wantAudit || wantStructured {
+		result, auditWarns, auditInfos = buildScoreInputs(cmd, tools)
+		havePolicyOrAudit = true
+	}
+	_ = havePolicyOrAudit
 
 	pct := 0
 	if result.MaxTotal > 0 {
@@ -112,20 +130,30 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 		FreshPercent: freshPercent(tools),
 	}
 
-	ids := selectedBadgeIDs()
 	badges := badge.ByID(in, ids...)
 
-	switch out {
-	case OutputJSON:
+	if wantStructured {
 		return printStructured(out, buildBadgeReport(result, badges))
-	case OutputYAML:
-		return printYAML(buildBadgeReport(result, badges))
 	}
 
 	for _, b := range badges {
 		fmt.Println(b.Markdown())
 	}
 	return nil
+}
+
+// needsBadge reports whether the given badge id is requested. nil
+// ids means "all badges" (the no-flag default).
+func needsBadge(ids []string, id string) bool {
+	if ids == nil {
+		return true
+	}
+	for _, x := range ids {
+		if x == id {
+			return true
+		}
+	}
+	return false
 }
 
 func selectedBadgeIDs() []string {

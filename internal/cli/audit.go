@@ -78,6 +78,12 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	}
 
 	if auditSBOMFlag {
+		// SBOM emits CycloneDX, which is JSON-by-spec (no YAML
+		// form). Reject --output yaml + --sbom early rather than
+		// silently emit JSON anyway.
+		if out == OutputYAML {
+			return usageErrorf("--sbom emits CycloneDX JSON; --output yaml is not supported with --sbom")
+		}
 		return generateSBOM(tools)
 	}
 

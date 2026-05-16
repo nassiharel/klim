@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -99,9 +98,7 @@ func runRollback(cmd *cobra.Command, args []string) error {
 	p := plan.Build(tools, opts)
 
 	if out == OutputJSON || out == OutputYAML {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(struct {
+		return printStructured(out, struct {
 			Checkpoint string    `json:"checkpoint"`
 			Plan       plan.Plan `json:"plan"`
 		}{Checkpoint: cp.Name, Plan: p})

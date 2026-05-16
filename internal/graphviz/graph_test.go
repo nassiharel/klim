@@ -165,25 +165,29 @@ func TestRender_LabelSanitization_StripsControlChars(t *testing.T) {
 }
 
 func TestRender_DimensionCapPreventsOOM(t *testing.T) {
-	// Pathological dimensions must be clamped, not honoured. Without
-	// the cap this allocates ~width*height bytes which can OOM.
+	// Pathological dimensions must be clamped, not honoured. Per-axis
+	// cap is 2000, and the area cap further scales both axes down so
+	// width*height ≤ renderMaxArea (≈250k cells). Without the caps a
+	// 10M×10M ask could OOM the process.
 	g := New()
 	g.AddNode("a", "x", 0)
 	got := g.Render(10_000_000, 10_000_000, RenderOpts{Unstyled: true})
 	if got == "" {
 		t.Error("Render returned empty string for capped dimensions")
 	}
-	// Sanity-check the output isn't actually 10M^2 bytes: it should
-	// be far smaller than 100MB (cap is 2000*2000 ≈ 4M cells).
-	if len(got) > 20_000_000 {
-		t.Errorf("Render output suspiciously large (%d bytes); cap not applied?", len(got))
+	// Sanity-check the output isn't unbounded: after the per-axis
+	// cap (≤2000) and the area cap (≈250k cells), even a 10M×10M
+	// request renders to under ~2MB of styled output.
+	if len(got) > 5_000_000 {
+		t.Errorf("Render output suspiciously large (%d bytes); caps not applied?", len(got))
 	}
 }
 
 func TestRender_AreaCap(t *testing.T) {
-	// Dimensions inside the per-axis cap can still exceed the area
-	// cap (2000 * 2000 = 4M cells). Render must scale them down
-	// before allocating the canvas.
+	// Dimensions inside the per-axis cap (≤2000) can still exceed
+	// the area cap. Render must scale both axes down so the cell
+	// count fits under renderMaxArea (≈250k) before allocating
+	// the canvas.
 	g := New()
 	g.AddNode("a", "x", 0)
 	got := g.Render(2000, 2000, RenderOpts{Unstyled: true})

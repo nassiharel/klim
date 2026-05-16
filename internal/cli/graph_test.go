@@ -8,7 +8,7 @@ import (
 )
 
 // TestGraphCmd_NoArgs verifies stray positional args are a usage
-// error (CLI-CONVENTIONS.md:48).
+// error (see CLI-CONVENTIONS.md "Exit codes" — extra args are usage errors, exit 2).
 func TestGraphCmd_NoArgs(t *testing.T) {
 	if err := graphCmd.Args(graphCmd, []string{"extra"}); err == nil {
 		t.Error("graphCmd.Args(['extra']) returned nil; want error")

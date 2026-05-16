@@ -34,7 +34,7 @@ Flags:
   --source <name>      Show only tools from a specific install source (e.g. brew, winget, apt)
   --categories         Print available category names and exit
   --refresh            Force a fresh scan, ignoring the on-disk cache
-  --output text|json   Output format (default: text)
+  --output text|json|yaml   Output format (default: text)
 
 Examples:
   klim list                          # all installed tools

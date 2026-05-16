@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -88,9 +87,7 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	p := plan.Build(tools, opts)
 
 	if out == OutputJSON || out == OutputYAML {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(p); err != nil {
+		if err := printStructured(out, p); err != nil {
 			return err
 		}
 		return planExitCode(p)

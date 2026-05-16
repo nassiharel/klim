@@ -30,9 +30,10 @@ const (
 )
 
 // Render produces a terminal-printable string representation of the
-// graph using box-drawing characters. Nodes render as a single dot
-// followed (when there's room) by an inline label. Edges are drawn
-// as straight lines using Bresenham's algorithm.
+// graph. Nodes are drawn as a filled circle ('●') optionally followed
+// by an inline label; edges are drawn as a series of middle-dot ('·')
+// glyphs using Bresenham's line algorithm. (No box-drawing characters
+// despite the historical "box-drawing" wording in earlier comments.)
 //
 // The renderer is deterministic given the same node positions; no
 // rng inside this function. Animated callers re-Render after each
