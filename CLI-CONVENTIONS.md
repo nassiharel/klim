@@ -17,7 +17,7 @@ expects, while the human-readable summary still prints to the terminal.
 
 ## Output format
 
-Every command that produces structured data accepts:
+Every command that produces structured data accepts a subset of:
 
 ```
 --output text|json|yaml
@@ -28,17 +28,22 @@ Every command that produces structured data accepts:
   a deprecation warning.
 * When `--output=json` (or `yaml`) is set, only the structured payload is
   written to stdout; prose stays on stderr.
-* `--output=yaml` emits a YAML document on stdout. Commands that don't
-  support YAML return a usage error and exit 2 — they do **not** silently
-  fall back to text.
+* Each command opts in to specific formats via `addOutputFlag(cmd,
+  OutputText, OutputJSON[, OutputYAML])`. Passing a format the command
+  didn't opt in to (e.g. `--output=yaml` to a JSON-only command) returns a
+  usage error and exits 2 — it does **not** silently fall back to text.
 * Unknown values (e.g. `--output=jsno`) are usage errors and exit 2.
 
-Currently supports `--output={json,yaml}` (wired via `addOutputFlag`):
-`audit`, `badge`, `check`, `compliance check`, `diff`, `doctor`,
-`info`, `list`, `score`, `search`, `share`, `tools path`, `trail log`,
-`trail show`, `trail diff`, `watch`, `why`, and `config marketplace list`.
-(`export` already emits YAML by design.) `graph` is text-only — its
-output is a force-directed terminal drawing, not structured data.
+Commands that wire `OutputText, OutputJSON` (JSON + text only): `audit`,
+`check`, `compliance check`, `diff`, `doctor`, `info`, `list`, `score`,
+`search`, `share`, `tools path`, `trail log`, `trail show`, `trail diff`,
+`watch`, `why`, and `config marketplace list`.
+
+Commands that additionally wire `OutputYAML`: `agents list`,
+`agents search`, `badge`, `env`. (`export` already emits YAML by design.)
+
+`graph` is text-only — its output is a force-directed terminal drawing,
+not structured data.
 
 ## Exit codes
 

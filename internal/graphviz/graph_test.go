@@ -138,29 +138,29 @@ func TestRender_LabelSanitization_StripsControlChars(t *testing.T) {
 	// row-terminator characters into the canvas. unicode.IsPrint
 	// keeps the visible parts of the escape (the [31m brackets etc.)
 	// because those are printable characters; we only need the ESC
-	// and newline gone for the output to be safe.
+	// and the label's own '\n' gone for the output to be safe.
+	const label = "ok\x1b[31mRED\x1b[0m\nNEWROW"
 	g := New()
-	g.AddNode("a", "ok\x1b[31mRED\x1b[0m\nNEWROW", 1)
+	g.AddNode("a", label, 1)
 	g.Layout(20, 1e-4)
 	got := g.Render(60, 10, RenderOpts{Unstyled: true})
+
 	if strings.ContainsRune(got, 0x1b) {
 		t.Errorf("Unstyled render leaked ESC despite control char in label:\n%q", got)
 	}
-	if strings.ContainsRune(got, '\n') {
-		// The render output naturally contains \n between rows;
-		// what we don't want is the label's own \n breaking the
-		// grid structure. Check it doesn't appear on the same row
-		// as the label.
-		rows := strings.Split(got, "\n")
-		for _, row := range rows {
-			if strings.Contains(row, "okRED") && strings.Contains(row, "NEWROW") {
-				// Both halves on the same row = sanitised OK.
-				return
-			}
-			if strings.Contains(row, "okNEWROW") || strings.Contains(row, "ok[31mRED[0mNEWROW") {
-				return
-			}
+	// Render itself separates rows with '\n', so we can't just
+	// count newlines. The proof the label's own '\n' was stripped:
+	// the prefix "ok" and the suffix "NEWROW" must appear on the
+	// same rendered row.
+	sameRow := false
+	for _, row := range strings.Split(got, "\n") {
+		if strings.Contains(row, "ok") && strings.Contains(row, "NEWROW") {
+			sameRow = true
+			break
 		}
+	}
+	if !sameRow {
+		t.Fatalf("label's embedded \\n was not stripped: 'ok' and 'NEWROW' landed on different rows.\nfull output:\n%s", got)
 	}
 }
 

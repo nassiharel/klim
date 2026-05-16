@@ -35,23 +35,19 @@ func TestRunGraph_RejectsInvalidBy(t *testing.T) {
 }
 
 // TestRunGraph_RejectsWidthWithTUI exercises the --tui + --width/--height
-// guard. Important: cmd.Flags().Set permanently flips pflag's Changed
-// bit, so we reset by re-creating the command instead of just resetting
-// the value (which would leave Changed=true and leak into later tests).
+// guard. cmd.Flags().Set permanently flips pflag's Changed bit, so the
+// cleanup must explicitly reset both Value and Changed on each affected
+// flag — otherwise the next test that calls runGraph with --tui would
+// fail as if --width was still explicitly provided.
 func TestRunGraph_RejectsWidthWithTUI(t *testing.T) {
 	origTUI := graphTUI
 	origBy := graphBy
-	// Snapshot the original flag object so we can restore it
-	// completely — including the Changed bit — after the test.
-	origFlags := graphCmd.Flags()
-	_ = origFlags // placate the linter if we don't use it directly
 
 	t.Cleanup(func() {
 		graphTUI = origTUI
 		graphBy = origBy
-		// Defensive: explicitly reset both the value and the
-		// Changed bit. pflag exposes neither directly, so the
-		// only safe option is to look up the flag and clear it.
+		// pflag exposes neither default-restoration nor a way to
+		// clear Changed cleanly, so we hand-reset both fields.
 		if f := graphCmd.Flags().Lookup("width"); f != nil {
 			_ = f.Value.Set("0")
 			f.Changed = false
