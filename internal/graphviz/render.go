@@ -3,6 +3,7 @@ package graphviz
 import (
 	"image/color"
 	"strings"
+	"unicode"
 
 	"charm.land/lipgloss/v2"
 )
@@ -16,6 +17,15 @@ type RenderOpts struct {
 	Unstyled bool
 }
 
+// renderMaxDim caps the canvas dimensions Render is willing to
+// allocate. Callers (including CLIs that accept user-supplied
+// --width/--height) should also validate at their boundary, but
+// Render enforces a hard ceiling so a buggy caller can't trigger
+// gigabyte-scale allocations. Any dimension above the cap is
+// clamped down silently — Render is a best-effort visualiser, not
+// a strict-mode renderer.
+const renderMaxDim = 2000
+
 // Render produces a terminal-printable string representation of the
 // graph using box-drawing characters. Nodes render as a single dot
 // followed (when there's room) by an inline label. Edges are drawn
@@ -27,6 +37,12 @@ type RenderOpts struct {
 func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 	if width <= 0 || height <= 0 {
 		return ""
+	}
+	if width > renderMaxDim {
+		width = renderMaxDim
+	}
+	if height > renderMaxDim {
+		height = renderMaxDim
 	}
 	var o RenderOpts
 	if len(opts) > 0 {
@@ -59,9 +75,12 @@ func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 		// Label fits when its last rune lands inside the canvas.
 		// First rune sits at x+1, so the last rune is at
 		// x+utf8.RuneCountInString(label); that needs to be < width.
+		// Sanitize control characters out first so a label can't
+		// inject ANSI escapes or newlines into the rendered grid
+		// even when Unstyled is requested.
 		if n.Label != "" {
-			runes := []rune(n.Label)
-			if x+len(runes) < width {
+			runes := sanitizeLabelRunes(n.Label)
+			if len(runes) > 0 && x+len(runes) < width {
 				for i, r := range runes {
 					canvas.setStyled(x+1+i, y, r, labelStyle())
 				}
@@ -69,6 +88,20 @@ func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 		}
 	}
 	return canvas.String()
+}
+
+// sanitizeLabelRunes drops control characters (including ESC, CR, LF,
+// BEL, etc.) from a label so a maliciously-named catalog entry can't
+// smuggle ANSI escapes or row terminators into the rendered grid.
+// Allowed: printable runes per unicode.IsPrint.
+func sanitizeLabelRunes(label string) []rune {
+	out := make([]rune, 0, len(label))
+	for _, r := range label {
+		if unicode.IsPrint(r) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // worldToGrid clamps a [0,1] coordinate into integer grid space.

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -100,6 +101,10 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 	if policyPath := findPolicyPath(cfgFrom(cmd)); policyPath != "" {
 		policy, loadErr := compliance.LoadPolicy(policyPath)
 		if loadErr != nil {
+			// Surface the policy error on stderr the same way
+			// `klim score` does — without this, a user can get
+			// a worse badge with no visible explanation.
+			_, _ = fmt.Fprintf(os.Stderr, "  ⚠ Compliance policy error: %v\n", loadErr)
 			compErrStr = loadErr.Error()
 		} else {
 			r := compliance.Check(policy, tools, loadVulnSeveritiesForCompliance())

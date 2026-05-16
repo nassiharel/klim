@@ -20,24 +20,25 @@ expects, while the human-readable summary still prints to the terminal.
 Every command that produces structured data accepts:
 
 ```
---output text|json
+--output text|json|yaml
 ```
 
 * Default is `text` (human-readable).
 * `--json` is supported as a deprecated alias for `--output=json` and prints
   a deprecation warning.
-* When `--output=json` is set, only the JSON payload is written to stdout;
-  prose stays on stderr.
-* `--output=yaml` is reserved (the `OutputYAML` constant exists in the
-  helper) but no command currently emits YAML; passing `yaml` to a command
-  that doesn't support it returns a usage error and exits 2.
-* Unknown values (e.g. `--output=jsno`) are usage errors and exit 2 — they
-  do **not** silently fall back to text.
+* When `--output=json` (or `yaml`) is set, only the structured payload is
+  written to stdout; prose stays on stderr.
+* `--output=yaml` emits a YAML document on stdout. Commands that don't
+  support YAML return a usage error and exit 2 — they do **not** silently
+  fall back to text.
+* Unknown values (e.g. `--output=jsno`) are usage errors and exit 2.
 
-Currently supports JSON: `audit`, `check`, `compliance check`, `diff`,
-`doctor`, `info`, `list`, `score`, `search`, `share`, `tools path`,
-`trail log`, `trail show`, `trail diff`, `watch`, `why`, and `config
-marketplace list`. (`export` already emits YAML by design.)
+Currently supports `--output={json,yaml}` (wired via `addOutputFlag`):
+`audit`, `badge`, `check`, `compliance check`, `diff`, `doctor`, `haiku`,
+`info`, `list`, `score`, `search`, `share`, `tools path`, `trail log`,
+`trail show`, `trail diff`, `watch`, `why`, and `config marketplace list`.
+(`export` already emits YAML by design.) `graph` is text-only — its
+output is a force-directed terminal drawing, not structured data.
 
 ## Exit codes
 

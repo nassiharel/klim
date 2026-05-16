@@ -52,6 +52,15 @@ func init() {
 	// Registered in root.go.
 }
 
+// Hard caps for user-supplied dimensions and iteration counts. Render
+// allocates a width*height canvas, and Layout's inner loops are O(N²)
+// per iteration, so we cap user input here rather than risk OOM /
+// runaway CPU when somebody passes --width 999999 --iters 999999.
+const (
+	graphMaxAllowedDim   = 2000
+	graphMaxAllowedIters = 5000
+)
+
 // validGraphByValues is the closed set the --by flag accepts.
 // Any other value is a usage error (the help text used to lie:
 // unknown values produced a graph with nodes but no edges).
@@ -71,6 +80,15 @@ func runGraph(cmd *cobra.Command, _ []string) error {
 	}
 	if !valid {
 		return usageErrorf("--by %q is not supported (valid: %s)", graphBy, strings.Join(validGraphByValues, ", "))
+	}
+	if graphMaxIters < 0 || graphMaxIters > graphMaxAllowedIters {
+		return usageErrorf("--iters must be between 0 and %d (got %d)", graphMaxAllowedIters, graphMaxIters)
+	}
+	if graphTermWidth < 0 || graphTermWidth > graphMaxAllowedDim {
+		return usageErrorf("--width must be between 0 (autodetect) and %d (got %d)", graphMaxAllowedDim, graphTermWidth)
+	}
+	if graphTermHeight < 0 || graphTermHeight > graphMaxAllowedDim {
+		return usageErrorf("--height must be between 0 (autodetect) and %d (got %d)", graphMaxAllowedDim, graphTermHeight)
 	}
 	// --width/--height only configure the static snapshot renderer;
 	// the TUI sizes itself from WindowSizeMsg. Reject any explicit

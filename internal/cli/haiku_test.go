@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"errors"
 	"testing"
 )
 
 // TestHaikuCmd_RequiresOneArg verifies Cobra's Args validator rejects
 // both empty and multi-arg invocations with a UsageError (exit 2).
+// We assert errors.As(*UsageError) so a regression to a plain error
+// (which would silently change the CLI exit code from 2 to 1) is
+// caught.
 func TestHaikuCmd_RequiresOneArg(t *testing.T) {
 	cases := []struct {
 		name string
@@ -16,8 +20,13 @@ func TestHaikuCmd_RequiresOneArg(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := haikuCmd.Args(haikuCmd, tc.args); err == nil {
+			err := haikuCmd.Args(haikuCmd, tc.args)
+			if err == nil {
 				t.Fatalf("haikuCmd.Args(%v) returned nil; want UsageError", tc.args)
+			}
+			var ue *UsageError
+			if !errors.As(err, &ue) {
+				t.Errorf("haikuCmd.Args(%v) err = %v (%T); want *UsageError", tc.args, err, err)
 			}
 		})
 	}

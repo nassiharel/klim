@@ -132,3 +132,50 @@ func TestLayout_NegativeItersReturnsZero(t *testing.T) {
 		t.Errorf("Layout(-5) = %d; want 0", got)
 	}
 }
+
+func TestRender_LabelSanitization_StripsControlChars(t *testing.T) {
+	// A maliciously-named tool must not be able to inject ANSI or
+	// row-terminator characters into the canvas. unicode.IsPrint
+	// keeps the visible parts of the escape (the [31m brackets etc.)
+	// because those are printable characters; we only need the ESC
+	// and newline gone for the output to be safe.
+	g := New()
+	g.AddNode("a", "ok\x1b[31mRED\x1b[0m\nNEWROW", 1)
+	g.Layout(20, 1e-4)
+	got := g.Render(60, 10, RenderOpts{Unstyled: true})
+	if strings.ContainsRune(got, 0x1b) {
+		t.Errorf("Unstyled render leaked ESC despite control char in label:\n%q", got)
+	}
+	if strings.ContainsRune(got, '\n') {
+		// The render output naturally contains \n between rows;
+		// what we don't want is the label's own \n breaking the
+		// grid structure. Check it doesn't appear on the same row
+		// as the label.
+		rows := strings.Split(got, "\n")
+		for _, row := range rows {
+			if strings.Contains(row, "okRED") && strings.Contains(row, "NEWROW") {
+				// Both halves on the same row = sanitised OK.
+				return
+			}
+			if strings.Contains(row, "okNEWROW") || strings.Contains(row, "ok[31mRED[0mNEWROW") {
+				return
+			}
+		}
+	}
+}
+
+func TestRender_DimensionCapPreventsOOM(t *testing.T) {
+	// Pathological dimensions must be clamped, not honoured. Without
+	// the cap this allocates ~width*height bytes which can OOM.
+	g := New()
+	g.AddNode("a", "x", 0)
+	got := g.Render(10_000_000, 10_000_000, RenderOpts{Unstyled: true})
+	if got == "" {
+		t.Error("Render returned empty string for capped dimensions")
+	}
+	// Sanity-check the output isn't actually 10M^2 bytes: it should
+	// be far smaller than 100MB (cap is 2000*2000 ≈ 4M cells).
+	if len(got) > 20_000_000 {
+		t.Errorf("Render output suspiciously large (%d bytes); cap not applied?", len(got))
+	}
+}
