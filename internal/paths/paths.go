@@ -160,3 +160,35 @@ func TrailLock() (string, error) {
 func TrailObjects() (string, error) {
 	return Join("trail", "objects")
 }
+
+// AgentsCache returns the path to the agents tab scan cache file.
+// Cached entries: detected providers, plugins, skills, MCPs, sessions, and
+// marketplace status per host. Invalidated by `r` in the TUI or `--refresh`.
+func AgentsCache() (string, error) {
+	return Join("cache", "agents-cache.yaml")
+}
+
+// AgentsCatalogCache returns the path to the fetched remote agents catalog
+// cache (Anthropic marketplace, GitHub copilot-plugins, MCP registry).
+func AgentsCatalogCache() (string, error) {
+	return Join("marketplace", "agents-catalog-cache.yaml")
+}
+
+// AgentCostsCache returns the path to the per-session token-count cache
+// used by the Agents → Costs sub-tab. Keyed by transcript mtime so we
+// only reparse sessions that actually changed.
+func AgentCostsCache() (string, error) {
+	return Join("cache", "agent-costs.yaml")
+}
+
+// AgentSearchIndex returns the path to the persisted full-text search
+// index for agent session transcripts.
+func AgentSearchIndex() (string, error) {
+	return Join("cache", "agent-search-index.yaml")
+}
+
+// AgentBookmarks returns the path to the session-bookmarks file
+// (persistent across runs, written atomically on each toggle/note).
+func AgentBookmarks() (string, error) {
+	return Join("agent-bookmarks.yaml")
+}

@@ -55,9 +55,20 @@ type PerformanceConfig struct {
 
 // UIConfig controls user interface preferences.
 type UIConfig struct {
-	DefaultTab   string `yaml:"default_tab"`
-	ShowPath     bool   `yaml:"show_path"`
-	SidebarRight bool   `yaml:"sidebar_right"` // true = filter sidebar on right side
+	DefaultTab       string `yaml:"default_tab"`
+	ShowPath         bool   `yaml:"show_path"`
+	SidebarRight     bool   `yaml:"sidebar_right"`                // true = filter sidebar on right side
+	AutoCheckUpdates *bool  `yaml:"auto_check_updates,omitempty"` // nil = default true; false = disable background self-update checks
+}
+
+// AutoCheckUpdatesEnabled reports whether the background self-update
+// check should run. Defaults to true when the user hasn't expressed
+// a preference.
+func (u UIConfig) AutoCheckUpdatesEnabled() bool {
+	if u.AutoCheckUpdates == nil {
+		return true
+	}
+	return *u.AutoCheckUpdates
 }
 
 // ComplianceConfig controls compliance policy checking.
