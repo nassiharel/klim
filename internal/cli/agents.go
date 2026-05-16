@@ -72,7 +72,7 @@ Examples:
   klim agents plugins list
   klim agents launch --provider claude-code --skill summarize
   klim agents launch --print-only --session claude:home%2Fuser%2Frepo`,
-	RunE: runAgentsList,
+	RunE: func(cmd *cobra.Command, args []string) error { return runAgentsList(cmd, args, "") },
 }
 
 // ---------------- list ----------------
@@ -89,7 +89,7 @@ var (
 var agentsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List discovered agent entities",
-	RunE:  runAgentsList,
+	RunE:  func(cmd *cobra.Command, args []string) error { return runAgentsList(cmd, args, "") },
 }
 
 // ---------------- search ----------------
@@ -160,7 +160,10 @@ var agentsSearchFormatGetter func() (OutputFormat, error)
 func init() {
 	// list
 	agentsListCmd.Flags().StringVar(&agentsListType, "type", "", "filter by entity type: marketplace|plugin|skill|mcp|session")
-	agentsListCmd.Flags().StringVar(&agentsListProvider, "provider", "", "filter by provider id: claude-code|copilot-cli|mcp-registry")
+	// PR #77 review #3: --provider is declared as a persistent flag on
+	// the parent (agentsCmd) below; we no longer redeclare it here so
+	// passing `klim agents list --provider X` and `klim agents --provider X list`
+	// hit the same flag binding instead of fighting over the variable.
 	agentsListCmd.Flags().BoolVar(&agentsListInstalled, "installed", false, "show only installed entities (plugins/MCPs)")
 	agentsListCmd.Flags().BoolVar(&agentsListAvailable, "available", false, "show only available (non-installed) catalog entries")
 	agentsListCmd.Flags().StringVar(&agentsListSearch, "search", "", "filter by fuzzy match (same as `klim agents search …`)")
@@ -200,8 +203,12 @@ func init() {
 	agentsSessionsCmd.AddCommand(&cobra.Command{Use: "resume <id>", Short: "Resume a session (exec the agent CLI)", Args: cobra.ExactArgs(1), RunE: agentsResumeSession})
 	agentsSessionsCmd.AddCommand(&cobra.Command{Use: "delete <id>", Short: "Delete a session", Args: cobra.ExactArgs(1), RunE: agentsDeleteSession})
 
-	// Persistent --provider on agents so subcommands inherit it.
-	agentsCmd.PersistentFlags().StringVar(&agentsListProvider, "provider-filter", "", "limit subcommands to one provider (advanced)")
+	// PR #77 review #3: drop the confusingly-named `--provider-filter`
+	// persistent flag and replace it with a single `--provider` that
+	// every subcommand (including per-entity install/remove ops)
+	// inherits. The list-only `--provider` flag is now declared on
+	// the parent so all subcommands share one flag identity.
+	agentsCmd.PersistentFlags().StringVar(&agentsListProvider, "provider", "", "limit operation to one provider: claude-code|copilot-cli|mcp-registry")
 
 	agentsCmd.AddCommand(agentsListCmd)
 	agentsCmd.AddCommand(agentsSearchCmd)
@@ -219,7 +226,12 @@ func init() {
 
 // ---------------- list runners ----------------
 
-func runAgentsList(cmd *cobra.Command, _ []string) error {
+// runAgentsList resolves the snapshot for `klim agents list` and the
+// per-entity convenience subcommands. `entityFilter`, when non-empty,
+// overrides the `--type` flag — this lets per-entity wrappers narrow
+// the result set without mutating the package-level flag variable
+// (see PR #77 review #2).
+func runAgentsList(cmd *cobra.Command, _ []string, entityFilter agents.EntityType) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
 
@@ -229,8 +241,13 @@ func runAgentsList(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("agents list: %w", err)
 	}
 
+	// CLI-provided --type wins when no per-entity wrapper supplied one.
+	if entityFilter == "" {
+		entityFilter = agents.EntityType(strings.TrimSpace(agentsListType))
+	}
+
 	if agentsListSearch != "" {
-		return printSearchResults(svc.Search(agentsListSearch, agents.EntityType(agentsListType)))
+		return printSearchResults(svc.Search(agentsListSearch, entityFilter))
 	}
 
 	format, err := agentsListFormatGetter()
@@ -240,17 +257,16 @@ func runAgentsList(cmd *cobra.Command, _ []string) error {
 
 	switch format {
 	case OutputJSON:
-		return printJSON(filteredSnapshot(snap))
+		return printJSON(filteredSnapshot(snap, entityFilter))
 	case OutputYAML:
-		return printYAML(filteredSnapshot(snap))
+		return printYAML(filteredSnapshot(snap, entityFilter))
 	}
 
-	return renderSnapshotText(filteredSnapshot(snap))
+	return renderSnapshotText(filteredSnapshot(snap, entityFilter))
 }
 
-func filteredSnapshot(snap *agents.Snapshot) *agents.Snapshot {
+func filteredSnapshot(snap *agents.Snapshot, entityFilter agents.EntityType) *agents.Snapshot {
 	provider := agents.ProviderID(strings.TrimSpace(agentsListProvider))
-	entityFilter := agents.EntityType(strings.TrimSpace(agentsListType))
 
 	keepEntity := func(et agents.EntityType) bool {
 		return entityFilter == "" || entityFilter == et
@@ -516,8 +532,11 @@ func runAgentsLaunch(cmd *cobra.Command, _ []string) error {
 		fmt.Println(plan.CommandLine())
 		return nil
 	}
-	fmt.Fprintln(os.Stderr, "agents: ", plan.Note)
-	fmt.Fprintln(os.Stderr, "agents:  $ "+plan.CommandLine())
+	// PR #77 review #5: fmt.Fprintln inserts a space between args,
+	// which produced "agents:  <note>" (two spaces). Use Fprintf with
+	// an explicit format string so the spacing is exact.
+	fmt.Fprintf(os.Stderr, "agents: %s\n", plan.Note)
+	fmt.Fprintln(os.Stderr, "agents: $ "+plan.CommandLine())
 	return execPlanCLI(plan)
 }
 
@@ -538,6 +557,12 @@ func inferLaunchProvider(ctx context.Context, svc *agents.Service, skill, sessio
 		case strings.HasPrefix(session, "copilot:"):
 			return agents.ProviderCopilotCLI, "from session id prefix", nil
 		}
+		// PR #77 review #6: a bare session id with no provider prefix
+		// would otherwise fall through to the snapshot scan (which
+		// doesn't handle sessions) and emit the generic "no provider
+		// owns the requested entity" error. Surface a specific hint
+		// so users know they need to qualify the id.
+		return "", "", fmt.Errorf("session id %q is missing a provider prefix (expected claude:… or copilot:…)", session)
 	}
 
 	// Otherwise scan the snapshot and count provider matches.
@@ -648,25 +673,24 @@ func makeListSub(short string, run func(cmd *cobra.Command, args []string) error
 	return &cobra.Command{Use: "list", Short: short, RunE: run}
 }
 
+// PR #77 review #2: pass the per-entity filter explicitly instead of
+// mutating the package-level agentsListType global. This makes
+// repeated invocations / tests / future REPL embedding safe.
+
 func agentsListMarketplaces(cmd *cobra.Command, _ []string) error {
-	agentsListType = string(agents.EntityMarketplace)
-	return runAgentsList(cmd, nil)
+	return runAgentsList(cmd, nil, agents.EntityMarketplace)
 }
 func agentsListPlugins(cmd *cobra.Command, _ []string) error {
-	agentsListType = string(agents.EntityPlugin)
-	return runAgentsList(cmd, nil)
+	return runAgentsList(cmd, nil, agents.EntityPlugin)
 }
 func agentsListSkills(cmd *cobra.Command, _ []string) error {
-	agentsListType = string(agents.EntitySkill)
-	return runAgentsList(cmd, nil)
+	return runAgentsList(cmd, nil, agents.EntitySkill)
 }
 func agentsListMCPs(cmd *cobra.Command, _ []string) error {
-	agentsListType = string(agents.EntityMCP)
-	return runAgentsList(cmd, nil)
+	return runAgentsList(cmd, nil, agents.EntityMCP)
 }
 func agentsListSessions(cmd *cobra.Command, _ []string) error {
-	agentsListType = string(agents.EntitySession)
-	return runAgentsList(cmd, nil)
+	return runAgentsList(cmd, nil, agents.EntitySession)
 }
 
 func agentsAddMarketplace(cmd *cobra.Command, args []string) error {
@@ -743,14 +767,26 @@ func parsePluginRef(arg string) agents.PluginRef {
 	return agents.PluginRef{Name: arg}
 }
 
-// forEachProvider walks all registered providers and stops at the first
-// non-NotSupported success. Used by mutations where the provider isn't
-// disambiguated by the entity id.
+// forEachProvider walks providers (filtered by --provider when set)
+// and stops at the first non-NotSupported success. The PR #77 review
+// (#4) called this out as ambiguous: previously this walked every
+// registered provider in order, so `klim agents plugins install foo`
+// would hit whichever provider happened to be registered first.
+// We now honor the persistent --provider flag: when set, only that
+// provider is considered; otherwise we fall back to the historical
+// walk-and-pick behaviour so non-targeted ops still work.
 func forEachProvider(ctx context.Context, fn func(agents.Provider) error) error {
 	svc := newAgentsService()
 	providers := svc.Registry().Providers()
 	if len(providers) == 0 {
 		return errors.New("no agent providers registered")
+	}
+	if want := strings.TrimSpace(agentsListProvider); want != "" {
+		p := svc.ProviderFor(agents.ProviderID(want))
+		if p == nil {
+			return fmt.Errorf("--provider %q is not registered (known: claude-code, copilot-cli, mcp-registry)", want)
+		}
+		providers = []agents.Provider{p}
 	}
 	var lastErr error
 	for _, p := range providers {
@@ -764,7 +800,10 @@ func forEachProvider(ctx context.Context, fn func(agents.Provider) error) error 
 		lastErr = err
 	}
 	if lastErr == nil {
-		return errors.New("no provider could handle the request")
+		if want := strings.TrimSpace(agentsListProvider); want != "" {
+			return fmt.Errorf("provider %q does not support this operation", want)
+		}
+		return errors.New("no provider could handle the request (try `--provider claude-code` or `--provider copilot-cli`)")
 	}
 	return lastErr
 }

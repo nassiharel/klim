@@ -138,6 +138,15 @@ func (s *Service) scan(ctx context.Context) (*Snapshot, error) {
 			st := p.Detect(ctx)
 			results := scanProvider(ctx, p)
 
+			// PR #77 review #9: surface real errors (non-NotSupported)
+			// via ProviderStatus so the doctor command and provider-
+			// health pill can tell the user something is wrong. We
+			// merge results.scanErr into the Status.Error field
+			// without clobbering an existing Detect-time error.
+			if results.scanErr != nil && st.Error == nil {
+				st.Error = results.scanErr
+			}
+
 			mu.Lock()
 			defer mu.Unlock()
 			snap.ProviderStatus[p.ID()] = st
@@ -180,24 +189,52 @@ type providerResults struct {
 	skills       []Skill
 	mcps         []MCP
 	sessions     []Session
+	// scanErr captures the first non-ErrNotSupported error returned by
+	// any of the read methods (PR #77 review #9). Lets the scan
+	// surface real configuration problems via ProviderStatus.Error.
+	scanErr error
 }
 
 func scanProvider(ctx context.Context, p Provider) providerResults {
 	var r providerResults
+	record := func(err error) {
+		if err == nil || errors.Is(err, ErrNotSupported) {
+			return
+		}
+		if r.scanErr == nil {
+			r.scanErr = err
+		}
+	}
 	if v, err := p.Marketplaces(ctx); err == nil {
 		r.marketplaces = v
+	} else {
+		record(err)
 	}
 	if v, err := p.Plugins(ctx); err == nil {
 		r.plugins = v
+	} else {
+		record(err)
 	}
 	if v, err := p.Skills(ctx); err == nil {
 		r.skills = v
+	} else {
+		record(err)
 	}
 	if v, err := p.MCPs(ctx); err == nil {
 		r.mcps = v
+	} else {
+		record(err)
+		// mcp-registry now returns partial results + error on HTTP
+		// failure; keep whatever it gave us so a flaky 5xx on the
+		// last page doesn't lose the first page's entries.
+		if v != nil {
+			r.mcps = v
+		}
 	}
 	if v, err := p.Sessions(ctx); err == nil {
 		r.sessions = v
+	} else {
+		record(err)
 	}
 	return r
 }

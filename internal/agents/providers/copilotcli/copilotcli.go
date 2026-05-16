@@ -668,9 +668,40 @@ func (p *Provider) UninstallPlugin(ctx context.Context, id string) error {
 	return p.runCLI(ctx, "plugin", "uninstall", id)
 }
 
-// EnablePlugin toggles a plugin enabled/disabled via the provider CLI.
+// EnablePlugin returns ErrNotSupported — Copilot CLI doesn't expose
+// plugin enable/disable as separate CLI verbs in v1; the UI hides
+// the action when this is returned. (PR #77 review #7: doc/code matched.)
 func (p *Provider) EnablePlugin(ctx context.Context, id string, enabled bool) error {
 	return agents.ErrNotSupported
+}
+
+// UpdatePlugin upgrades a plugin via `copilot plugin update <id>`. The
+// subcommand is probed via `copilot plugin --help`; if `update` is
+// absent the caller gets a clear error rather than a silent
+// uninstall+install fallback.
+func (p *Provider) UpdatePlugin(ctx context.Context, id string) error {
+	bin := p.binary()
+	if bin == "" {
+		return agents.ErrProviderNotInstalled
+	}
+	if !p.pluginUpdateSupported(ctx) {
+		return errors.New("update not supported by copilot-cli")
+	}
+	return p.runCLI(ctx, "plugin", "update", id)
+}
+
+// PluginUpdateProbe lets tests stub the probe step.
+var PluginUpdateProbe func(ctx context.Context, bin string) bool
+
+func (p *Provider) pluginUpdateSupported(ctx context.Context) bool {
+	if PluginUpdateProbe != nil {
+		return PluginUpdateProbe(ctx, p.binary())
+	}
+	out, err := exec.CommandContext(ctx, p.binary(), "plugin", "--help").CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return bytes.Contains(bytes.ToLower(out), []byte("update"))
 }
 
 // AddMCP delegates to `copilot mcp add`. v1 only supports stdio + http;

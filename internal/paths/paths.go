@@ -173,3 +173,22 @@ func AgentsCache() (string, error) {
 func AgentsCatalogCache() (string, error) {
 	return Join("marketplace", "agents-catalog-cache.yaml")
 }
+
+// AgentCostsCache returns the path to the per-session token-count cache
+// used by the Agents → Costs sub-tab. Keyed by transcript mtime so we
+// only reparse sessions that actually changed.
+func AgentCostsCache() (string, error) {
+	return Join("cache", "agent-costs.yaml")
+}
+
+// AgentSearchIndex returns the path to the persisted full-text search
+// index for agent session transcripts.
+func AgentSearchIndex() (string, error) {
+	return Join("cache", "agent-search-index.yaml")
+}
+
+// AgentBookmarks returns the path to the session-bookmarks file
+// (persistent across runs, written atomically on each toggle/note).
+func AgentBookmarks() (string, error) {
+	return Join("agent-bookmarks.yaml")
+}

@@ -13,12 +13,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/costs"
+	"github.com/nassiharel/klim/internal/agents/search"
 )
 
 const defaultAPIURL = "https://registry.modelcontextprotocol.io/v0/servers"
@@ -47,9 +50,38 @@ func (p *Provider) ID() agents.ProviderID { return agents.ProviderMCPRegistry }
 // DisplayName returns the human-readable provider name.
 func (p *Provider) DisplayName() string { return "MCP Registry" }
 
-// Detect reports whether the provider binary is installed and its version.
-func (p *Provider) Detect(_ context.Context) agents.Status {
-	return agents.Status{Installed: true, Version: "v0"}
+// Detect reports whether the registry endpoint is reachable. PR #77
+// review #8 called out the old behaviour (always Installed=true,
+// regardless of network state), which made the doctor command lie.
+// We now do a short HEAD probe; failure flips Installed=false and
+// surfaces the error in agents.Status so the provider-health pill
+// reflects reality. The probe shares a 4-second budget with the
+// caller's context — overall scan latency stays low even when the
+// registry is unreachable.
+func (p *Provider) Detect(ctx context.Context) agents.Status {
+	api := p.APIURL
+	if api == "" {
+		api = defaultAPIURL
+	}
+	client := p.Client
+	if client == nil {
+		client = &http.Client{Timeout: 4 * time.Second}
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodHead, api, nil)
+	if err != nil {
+		return agents.Status{Installed: false, Error: err}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return agents.Status{Installed: false, Error: err}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+		return agents.Status{Installed: true, Version: "v0"}
+	}
+	return agents.Status{Installed: false, Error: fmt.Errorf("HEAD %s -> %d", api, resp.StatusCode)}
 }
 
 // Marketplaces returns the single registry as a marketplace entry.
@@ -78,8 +110,13 @@ func (p *Provider) Skills(_ context.Context) ([]agents.Skill, error) {
 }
 
 // MCPs fetches the registry catalog and returns each server as a
-// remote MCP entry. Best-effort — a fetch failure returns nil, no error,
-// so the broader scan stays green.
+// remote MCP entry. PR #77 reviews #10 + #9 reshaped error handling:
+// previously every URL/HTTP/JSON failure returned (nil, nil), so a
+// 5xx response was indistinguishable from "registry empty". We now
+// propagate the first error so the Service-level scan can attach it
+// to the provider's Status and the doctor command can surface it.
+// Any servers parsed before the failure are still returned alongside
+// the error so a partial-page response isn't lost.
 func (p *Provider) MCPs(ctx context.Context) ([]agents.MCP, error) {
 	api := p.APIURL
 	if api == "" {
@@ -103,21 +140,25 @@ func (p *Provider) MCPs(ctx context.Context) ([]agents.MCP, error) {
 	for page := 0; page < maxPages; page++ {
 		u, err := buildURL(api, limit, cursor)
 		if err != nil {
-			return nil, nil // bad URL — silent fail
+			return out, fmt.Errorf("mcp-registry: build url: %w", err)
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if err != nil {
-			return nil, nil
+			return out, fmt.Errorf("mcp-registry: build request: %w", err)
 		}
 		resp, err := client.Do(req)
 		if err != nil {
-			return nil, nil
+			return out, fmt.Errorf("mcp-registry: fetch: %w", err)
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			_ = resp.Body.Close()
+			return out, fmt.Errorf("mcp-registry: GET %s -> %d", u, resp.StatusCode)
 		}
 		var body registryResponse
 		err = json.NewDecoder(resp.Body).Decode(&body)
 		_ = resp.Body.Close()
 		if err != nil {
-			return nil, nil
+			return out, fmt.Errorf("mcp-registry: decode response: %w", err)
 		}
 		for _, s := range body.Servers {
 			out = append(out, p.toMCP(s))
@@ -157,6 +198,21 @@ func (p *Provider) UninstallPlugin(context.Context, string) error { return agent
 // EnablePlugin is unsupported.
 func (p *Provider) EnablePlugin(context.Context, string, bool) error {
 	return agents.ErrNotSupported
+}
+
+// UpdatePlugin is unsupported — the MCP registry is read-only.
+func (p *Provider) UpdatePlugin(context.Context, string) error {
+	return agents.ErrNotSupported
+}
+
+// TokenSamples is unsupported — the registry has no sessions.
+func (p *Provider) TokenSamples(context.Context) ([]costs.TokenSample, error) {
+	return nil, agents.ErrNotSupported
+}
+
+// SessionTexts is unsupported — the registry has no transcripts.
+func (p *Provider) SessionTexts(context.Context) ([]search.SessionText, error) {
+	return nil, agents.ErrNotSupported
 }
 
 // AddMCP is unsupported.

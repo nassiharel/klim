@@ -19,6 +19,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/bookmarks"
 	"github.com/nassiharel/klim/internal/agents/catalog"
 	"github.com/nassiharel/klim/internal/agents/providers/claudecode"
 	"github.com/nassiharel/klim/internal/agents/providers/copilotcli"
@@ -36,6 +37,14 @@ type agentsState struct {
 
 	cursor     int
 	detailOpen bool
+
+	// detailPage is the full-screen detail view, layered above the list.
+	// When true, renderView() short-circuits to renderAgentsDetailPage()
+	// and key dispatch routes through handleAgentsDetailKey. The
+	// detailStack lets users drill from marketplace -> plugin -> back
+	// without losing the original entry point.
+	detailPage  bool
+	detailStack []agentDetailFrame
 
 	searchActive bool
 	searchInput  string
@@ -66,6 +75,103 @@ type agentsState struct {
 
 	flash    string
 	flashEnd time.Time
+
+	// actionRunning is the human label of an in-flight action (e.g.
+	// "updating plugin foo…"). Cleared by handleAgentsMsg on result.
+	actionRunning string
+
+	// statusFilterValue carries a sub-tab-specific status string when
+	// the discrete agentsFilter enum can't express it (marketplace
+	// builtin/local, session active/completed/stopped). Empty means
+	// "no extra status restriction beyond statusFilter[subTab]".
+	statusFilterValue string
+
+	// providerFilter narrows rows to a single provider when set
+	// (claude-code / copilot-cli / mcp-registry). Empty string = all.
+	// Applies to every sub-tab.
+	providerFilter agents.ProviderID
+
+	// marketplaceFilter narrows the Plugins sub-tab to a single
+	// marketplace. Empty string = all.
+	marketplaceFilter string
+
+	// scopeFilter narrows Skills / MCPs by scope (user/project/plugin/remote).
+	scopeFilter agents.Scope
+
+	// transportFilter narrows MCPs by transport (stdio/http/sse).
+	transportFilter string
+
+	// Sidebar (Tools-style picker): per-sub-tab item list + cursor,
+	// only consulted when sidebarOpen is true.
+	sidebarOpen  bool
+	sidebarIdx   int
+	sidebarItems []agentSidebarItem
+
+	// costs is the Agents → Costs sub-tab state.
+	costs agentsCostsState
+
+	// healthSub is the Agents → Health sub-tab state.
+	healthSub agentsHealthState
+
+	// searchOverlay is the full-text search modal (key `?` on any
+	// Agents sub-tab). When Open=true it takes input precedence over
+	// the rest of the tab.
+	searchOverlay agentsSearchState
+
+	// promotePicker is the inline target-picker that opens from the
+	// detail-page Promote ▸ action.
+	promotePicker agentsPromoteState
+
+	// bookmarks is the persistent session-bookmarks store. Lazy-
+	// loaded on first access; ★ shown next to bookmarked rows and
+	// they pin to the top of the Sessions table.
+	bookmarks *bookmarks.Store
+
+	// noteInput drives the inline "edit note" prompt opened with `N`
+	// on a bookmarked session row.
+	noteOpen   bool
+	noteTarget string // session id being edited
+	noteBuffer string
+
+	// selected holds the row ids checked via Space for bulk operations.
+	// Keyed per sub-tab so each tab's selection is independent and
+	// cleared when the user switches tabs. The string keys mirror
+	// agentRow.id so the set survives re-scans (ids are stable across
+	// snapshot rebuilds even when the row order shifts).
+	selected map[int]map[string]bool
+
+	// bulkPrompt drives the inline "Apply X to N items?" confirmation.
+	// When non-empty the bulk-action keys (Shift+U/I/X etc.) have
+	// already been pressed and we're waiting for y/n.
+	bulkPrompt string
+	bulkAction func() tea.Cmd
+}
+
+// agentSidebarItem is one row of the Agents filter sidebar.
+//
+// Headers (`isHeader=true`) are styled but not selectable; the cursor
+// skips them. `section` names the filter dimension this item drives;
+// `value` is the filter value to set (empty string = "all of this
+// dimension"). `count` is the number of matching rows in the current
+// sub-tab snapshot.
+type agentSidebarItem struct {
+	label    string
+	section  string
+	value    string
+	count    int
+	isHeader bool
+}
+
+// agentDetailFrame is one entry in the detail-page navigation stack.
+// Identifies the displayed entity by sub-tab + stable id so that
+// after a re-scan we can resolve it against the fresh snapshot.
+type agentDetailFrame struct {
+	subTab     int    // which sub-tab the entity belongs to
+	entityID   string // agentRow.id at push time
+	listCursor int    // cursor to restore on pop (only set on the bottom frame)
+	actionIdx  int    // selected action button
+	bodyCursor int    // cursor inside the contextual body (e.g. plugin list)
+	scroll     int    // body scroll offset
 }
 
 // agentsFilter narrows a sub-tab's rows beyond the search box.
@@ -75,6 +181,8 @@ const (
 	agentsFilterAll       agentsFilter = iota
 	agentsFilterInstalled              // plugins: installed; MCPs: configured (scope ≠ remote)
 	agentsFilterCatalog                // remote / not installed
+	agentsFilterEnabled                // plugins/MCPs: enabled
+	agentsFilterDisabled               // plugins/MCPs: installed but disabled
 	agentsFilterCount
 )
 
@@ -101,7 +209,9 @@ const (
 	agentsSubSkills       = 2
 	agentsSubMCPs         = 3
 	agentsSubSessions     = 4
-	agentsSubCount        = 5
+	agentsSubCosts        = 5
+	agentsSubHealth       = 6
+	agentsSubCount        = 7
 )
 
 // agentsService factory. Swappable so tests can inject a fake.
@@ -135,6 +245,20 @@ func (a tuiCatalogAdapter) FetchAll(ctx context.Context) []agents.RemoteCatalogR
 
 func newAgentsState() *agentsState { return &agentsState{} }
 
+// agentsBookmarks lazy-loads the persistent bookmarks store the
+// first time it's accessed. Cached on the state so subsequent
+// reads/writes don't hit the disk twice per render.
+func agentsBookmarks(st *agentsState) *bookmarks.Store {
+	if st == nil {
+		return bookmarks.New()
+	}
+	if st.bookmarks == nil {
+		s, _ := bookmarks.Load()
+		st.bookmarks = s
+	}
+	return st.bookmarks
+}
+
 // ---------------- messages & commands ----------------
 
 type agentsLoadedMsg struct {
@@ -159,8 +283,12 @@ func launchAgentsCmd(plan agents.ExecPlan) tea.Cmd {
 	if plan.Cwd != "" {
 		c.Dir = plan.Cwd
 	}
+	// PR #77 review fix: never assign a non-nil c.Env unless we're
+	// adding to the inherited environment. Setting c.Env strips
+	// os.Environ() (PATH/HOME/etc.) and breaks the launched agent
+	// CLI; only override when the plan actually contributes extras.
 	if len(plan.Env) > 0 {
-		c.Env = append(c.Env, plan.Env...)
+		c.Env = append(os.Environ(), plan.Env...)
 	}
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return agentsLaunchedMsg{err: err}
@@ -178,16 +306,29 @@ func (m *Model) agentsInit() tea.Cmd {
 		st.sortMode = make(map[int]agentsSortMode)
 	}
 	if st.snapshot != nil && !st.loadedAt.IsZero() {
-		// Already loaded — trigger a background refresh if the cache
-		// is older than agentsCacheTTL. We keep showing the stale
-		// snapshot while the new one is fetched.
+		// A stale on-disk cache from before this feature shipped will
+		// have zero marketplaces; treat that as a forced refresh so
+		// the user doesn't have to press `r` themselves on first
+		// open. Same for plugins / sessions — if all three are empty
+		// it's almost certainly a stale or empty cache.
+		if len(st.snapshot.Marketplaces) == 0 && len(st.snapshot.Plugins) == 0 && len(st.snapshot.Sessions) == 0 {
+			st.loading = true
+			return loadAgentsCmd(true)
+		}
+		// Otherwise: refresh in the background once the TTL elapses,
+		// keep showing the stale snapshot in the meantime.
 		if time.Since(st.loadedAt) > agentsCacheTTL {
 			return loadAgentsCmd(true)
 		}
 		return nil
 	}
 	st.loading = true
-	return loadAgentsCmd(false)
+	// Skip the on-disk cache on first open of a session. The cache is
+	// helpful for warm-loads but tends to bite users with stale data
+	// after upgrades (e.g. a marketplace was added but the cache
+	// pre-dates the change). Fresh scans are still fast on Windows
+	// (~1s) so the latency hit is acceptable.
+	return loadAgentsCmd(true)
 }
 
 // handleAgentsKey processes keystrokes when the Agents tab is active.
@@ -205,6 +346,97 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		st.statusFilter = make(map[int]agentsFilter)
 	}
 
+	// Detail-page mode owns input — its own dispatcher handles every key.
+	if st.detailPage {
+		return m.handleAgentsDetailKey(msg)
+	}
+
+	// Full-text search overlay owns input when open.
+	if st.searchOverlay.Open {
+		return m.handleAgentsSearchKey(msg)
+	}
+
+	// Note prompt owns input while open (inline single-line editor).
+	if st.noteOpen {
+		switch msg.String() {
+		case "esc":
+			st.noteOpen = false
+			st.noteTarget = ""
+			st.noteBuffer = ""
+		case "enter":
+			id := st.noteTarget
+			note := strings.TrimSpace(st.noteBuffer)
+			bm := agentsBookmarks(st)
+			// Ensure the session is bookmarked so the note has somewhere
+			// to live; Add() preserves Created on existing entries.
+			bm.Add(id, note)
+			bm.SetNote(id, note)
+			_ = bm.Save()
+			st.noteOpen = false
+			st.noteTarget = ""
+			st.noteBuffer = ""
+			st.flash = "note saved"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+		case "backspace":
+			if len(st.noteBuffer) > 0 {
+				st.noteBuffer = st.noteBuffer[:len(st.noteBuffer)-1]
+			}
+		default:
+			k := msg.String()
+			if len(k) == 1 {
+				st.noteBuffer += k
+			} else if k == "space" {
+				st.noteBuffer += " "
+			}
+		}
+		return true, nil
+	}
+
+	// Costs sub-tab uses its own key handler. The handler returns
+	// false for keys it doesn't claim (e.g. number keys, tab) so the
+	// normal sub-tab routing below stays intact.
+	if st.subTab == agentsSubCosts {
+		if handled, cmd := m.handleAgentsCostsKey(msg); handled {
+			return true, cmd
+		}
+	}
+	// Health sub-tab — same pattern.
+	if st.subTab == agentsSubHealth {
+		if handled, cmd := m.handleAgentsHealthKey(msg); handled {
+			return true, cmd
+		}
+	}
+
+	// Sidebar (filter picker) owns input while open.
+	if st.sidebarOpen {
+		switch msg.String() {
+		case "esc", "q", "f":
+			st.sidebarOpen = false
+			return true, nil
+		case "down", "j":
+			agentsSidebarMove(st, 1)
+			return true, nil
+		case "up", "k":
+			agentsSidebarMove(st, -1)
+			return true, nil
+		case "enter", " ":
+			return true, agentsSidebarSelect(m)
+		case "X":
+			st.providerFilter = ""
+			st.marketplaceFilter = ""
+			st.scopeFilter = ""
+			st.transportFilter = ""
+			st.statusFilterValue = ""
+			st.statusFilter[st.subTab] = agentsFilterAll
+			st.cursor = 0
+			st.sidebarItems = buildAgentsSidebarItems(st)
+			st.flash = "filters cleared"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		return true, nil
+	}
+
 	// Help overlay closes on any key.
 	if st.helpOpen {
 		st.helpOpen = false
@@ -218,6 +450,24 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	}
+	// Bulk-confirmation prompt owns input while open.
+	if st.bulkPrompt != "" {
+		switch msg.String() {
+		case "y", "Y", "enter":
+			cmd := st.bulkAction
+			st.bulkPrompt = ""
+			st.bulkAction = nil
+			if cmd != nil {
+				return true, cmd()
+			}
+			return true, nil
+		case "esc", "n", "N":
+			st.bulkPrompt = ""
+			st.bulkAction = nil
+		}
+		return true, nil
+	}
+
 	// Delete confirmation owns input while open.
 	if st.deleteTarget != "" {
 		switch msg.String() {
@@ -272,6 +522,23 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, nil
 	}
 
+	// Bulk-action shortcuts win when there's an active selection on
+	// the current sub-tab. This lets us reuse single-letter keys
+	// (D, X, B) for both single-row and bulk modes without forcing
+	// the user to remember a different keystroke set.
+	if agentsBulkCapable(st.subTab) && agentsSelectionCount(st, st.subTab) > 0 {
+		if label, action, ok := agentsBulkActionForKey(m, msg.String()); ok {
+			n := agentsSelectionCount(st, st.subTab)
+			st.bulkPrompt = fmt.Sprintf("Apply %s to %d items?", label, n)
+			st.bulkAction = action
+			return true, nil
+		}
+		if msg.String() == "esc" {
+			agentsClearSelection(st, st.subTab)
+			return true, nil
+		}
+	}
+
 	switch msg.String() {
 	case "1":
 		st.setSubTab(agentsSubMarketplaces)
@@ -288,6 +555,12 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "5":
 		st.setSubTab(agentsSubSessions)
 		return true, nil
+	case "6":
+		st.setSubTab(agentsSubCosts)
+		return true, m.agentsCostsLoadCmd()
+	case "7":
+		st.setSubTab(agentsSubHealth)
+		return true, m.agentsHealthLoadCmd()
 	case "tab", "right":
 		// On the rightmost sub-tab, let the global handler advance to
 		// the next parent tab instead of wrapping inside Agents.
@@ -318,6 +591,22 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	case "enter":
+		// Push a full-screen detail page for the selected row. The old
+		// inline detail pane is kept available via Shift+D so users
+		// who relied on the quick-peek can still get it.
+		rows := m.agentsVisibleRows()
+		if st.cursor < 0 || st.cursor >= len(rows) {
+			return true, nil
+		}
+		st.detailPage = true
+		st.detailStack = []agentDetailFrame{{
+			subTab:     st.subTab,
+			entityID:   rows[st.cursor].id,
+			listCursor: st.cursor,
+		}}
+		return true, nil
+	case "D":
+		// Legacy inline-detail toggle (Shift+D).
 		st.detailOpen = !st.detailOpen
 		return true, nil
 	case "/":
@@ -358,18 +647,118 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			st.flashEnd = time.Now().Add(2 * time.Second)
 		}
 		return true, nil
-	case "f":
-		// Cycle status filter for the current sub-tab. Only Plugins and
-		// MCPs care; other sub-tabs treat the keystroke as a no-op flash.
-		if !agentsSupportsFilter(st.subTab) {
-			st.flash = "filter not applicable to this sub-tab"
+	case "b":
+		// Toggle a session bookmark. Only sessions are bookmarkable;
+		// other entities already have favorites or aren't worth pinning.
+		rows := m.agentsVisibleRows()
+		if st.cursor < 0 || st.cursor >= len(rows) || rows[st.cursor].session == nil {
+			st.flash = "bookmarks only apply to sessions"
 			st.flashEnd = time.Now().Add(2 * time.Second)
 			return true, nil
 		}
-		next := (st.statusFilter[st.subTab] + 1) % agentsFilterCount
-		st.statusFilter[st.subTab] = next
+		bm := agentsBookmarks(st)
+		on := bm.Toggle(rows[st.cursor].id)
+		_ = bm.Save()
+		if on {
+			st.flash = "★ bookmarked"
+		} else {
+			st.flash = "☆ removed"
+		}
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
+	case "N":
+		// Edit (or create) the note attached to the focused session
+		// bookmark. The inline note-prompt grabs input until Enter / Esc.
+		rows := m.agentsVisibleRows()
+		if st.cursor < 0 || st.cursor >= len(rows) || rows[st.cursor].session == nil {
+			st.flash = "notes only apply to sessions"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		id := rows[st.cursor].id
+		bm := agentsBookmarks(st)
+		// Prefill the buffer with the existing note (if any) so users
+		// can edit instead of retype.
+		st.noteOpen = true
+		st.noteTarget = id
+		if e, ok := bm.Get(id); ok {
+			st.noteBuffer = e.Note
+		} else {
+			st.noteBuffer = ""
+		}
+		return true, nil
+	case " ", "space":
+		// Toggle row selection for bulk operations. Only relevant on
+		// sub-tabs that support bulk actions (plugins / mcps /
+		// sessions); a no-op flash elsewhere.
+		if !agentsBulkCapable(st.subTab) {
+			st.flash = "bulk ops not available on this sub-tab"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		rows := m.agentsVisibleRows()
+		if st.cursor < 0 || st.cursor >= len(rows) {
+			return true, nil
+		}
+		agentsToggleSelection(st, st.subTab, rows[st.cursor].id)
+		// Advance the cursor like Updates-tab's space toggle so power
+		// users can hold space-down without re-aiming.
+		if st.cursor < len(rows)-1 {
+			st.cursor++
+		}
+		return true, nil
+	case "f":
+		// Open the filter sidebar (Tools-style picker). Builds the
+		// item list for the current sub-tab so counts are fresh.
+		st.sidebarItems = buildAgentsSidebarItems(st)
+		if len(st.sidebarItems) == 0 {
+			st.flash = "no filters for this sub-tab"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		st.sidebarOpen = true
+		// Park cursor on the first selectable (non-header) item.
+		st.sidebarIdx = 0
+		for i, it := range st.sidebarItems {
+			if !it.isHeader {
+				st.sidebarIdx = i
+				break
+			}
+		}
+		return true, nil
+	case "M", "P":
+		// Legacy quick-cycle keys still work but jump straight into
+		// the sidebar focused on the relevant section so users get a
+		// fuller picker without losing muscle memory.
+		st.sidebarItems = buildAgentsSidebarItems(st)
+		if len(st.sidebarItems) == 0 {
+			return true, nil
+		}
+		st.sidebarOpen = true
+		want := "provider"
+		if msg.String() == "M" {
+			want = "marketplace"
+		}
+		st.sidebarIdx = 0
+		for i, it := range st.sidebarItems {
+			if !it.isHeader && it.section == want {
+				st.sidebarIdx = i
+				break
+			}
+		}
+		return true, nil
+	case "X":
+		// Clear every active filter on the current sub-tab.
+		st.providerFilter = ""
+		st.marketplaceFilter = ""
+		st.scopeFilter = ""
+		st.transportFilter = ""
+		st.statusFilterValue = ""
+		st.statusFilter[st.subTab] = agentsFilterAll
+		st.searchInput = ""
 		st.cursor = 0
-		st.flash = "filter: " + filterName(next)
+		st.sidebarItems = buildAgentsSidebarItems(st)
+		st.flash = "filters cleared"
 		st.flashEnd = time.Now().Add(2 * time.Second)
 		return true, nil
 	case "d":
@@ -458,6 +847,10 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	case "?":
 		st.helpOpen = true
 		return true, nil
+	case "S":
+		// Full-text search overlay across every indexed transcript
+		// (Shift+S — `/` stays as the per-tab fuzzy filter).
+		return true, m.agentsSearchOpenCmd()
 	case "r":
 		st.loading = true
 		st.flash = "refreshing…"
@@ -549,9 +942,25 @@ func openBrowser(url string) error {
 func runtimeGOOS() string { return goos }
 
 func (st *agentsState) setSubTab(i int) {
+	if st.subTab != i {
+		// Tab change clears the previous tab's selection set so checks
+		// don't leak across views.
+		agentsClearSelection(st, st.subTab)
+	}
 	st.subTab = i
 	st.cursor = 0
 	st.detailOpen = false
+	// Sidebar is sub-tab-specific — recompute items when switching.
+	if st.sidebarOpen {
+		st.sidebarItems = buildAgentsSidebarItems(st)
+		st.sidebarIdx = 0
+		for k, it := range st.sidebarItems {
+			if !it.isHeader {
+				st.sidebarIdx = k
+				break
+			}
+		}
+	}
 }
 
 func (m *Model) agentsBuildLaunchPlan() (agents.ExecPlan, bool) {
@@ -598,6 +1007,16 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		st.loadedAt = time.Now()
 		st.snapshot = v.snap
 		st.loadErr = v.err
+		// Drop any lingering "refreshing…" / spinner flash so the user
+		// sees the fresh data without a stale status line on top.
+		if strings.HasPrefix(st.flash, "refreshing") || strings.HasPrefix(st.flash, "scanning") {
+			st.flash = ""
+			st.flashEnd = time.Time{}
+		}
+		// Rebuild sidebar items so counts reflect the new snapshot.
+		if st.sidebarOpen || len(st.sidebarItems) > 0 {
+			st.sidebarItems = buildAgentsSidebarItems(st)
+		}
 		return true, nil
 	case agentsLaunchedMsg:
 		if v.err != nil {
@@ -616,6 +1035,109 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		st.flash = fmt.Sprintf("deleted %s %s", v.typ, v.id)
 		st.flashEnd = time.Now().Add(3 * time.Second)
 		return true, loadAgentsCmd(true)
+	case agentActionResultMsg:
+		st.actionRunning = ""
+		if v.err != nil {
+			st.flash = "✗ " + v.label + ": " + v.err.Error()
+			st.flashEnd = time.Now().Add(5 * time.Second)
+			return true, nil
+		}
+		st.flash = "✓ " + v.label
+		st.flashEnd = time.Now().Add(3 * time.Second)
+		return true, loadAgentsCmd(true)
+	case agentTranscriptMsg:
+		st.actionRunning = ""
+		if v.err != nil {
+			st.flash = "view error: " + v.err.Error()
+			st.flashEnd = time.Now().Add(3 * time.Second)
+			return true, nil
+		}
+		st.viewerOpen = true
+		st.viewerTitle = v.path
+		st.viewerLines = v.lines
+		return true, nil
+	case agentLaunchPlanMsg:
+		st.actionRunning = ""
+		st.launchPlan = v.plan
+		st.launchPrompt = "Launch this command?"
+		return true, nil
+	case agentDrillPluginMsg:
+		// Push a Plugin frame for the currently focused marketplace
+		// plugin row.
+		if len(st.detailStack) == 0 {
+			return true, nil
+		}
+		top := st.detailStack[len(st.detailStack)-1]
+		row, ok := m.resolveDetailRow(top)
+		if !ok || row.marketplace == nil {
+			return true, nil
+		}
+		plugins := m.marketplacePlugins(row.marketplace)
+		if top.bodyCursor < 0 || top.bodyCursor >= len(plugins) {
+			st.flash = "no plugin focused — use ↑/↓ first"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		m.agentsPushDetail(agentsSubPlugins, plugins[top.bodyCursor].ID)
+		return true, nil
+	case agentsCostsLoadedMsg:
+		st.costs.loading = false
+		st.costs.loaded = true
+		st.costs.loadedAt = time.Now()
+		st.costs.loadErr = v.err
+		st.costs.samples = v.samples
+		if strings.HasPrefix(st.flash, "refreshing token") {
+			st.flash = ""
+			st.flashEnd = time.Time{}
+		}
+		return true, nil
+	case agentsSearchIndexLoadedMsg:
+		st.searchOverlay.Indexing = false
+		st.searchOverlay.IndexErr = v.err
+		st.searchOverlay.Index = v.idx
+		st.searchOverlay.refreshHits()
+		return true, nil
+	case agentsHealthLoadedMsg:
+		st.healthSub.loading = false
+		st.healthSub.loaded = true
+		st.healthSub.loadedAt = time.Now()
+		st.healthSub.issues = v.issues
+		if st.healthSub.cursor >= len(v.issues) {
+			st.healthSub.cursor = 0
+		}
+		if strings.HasPrefix(st.flash, "running diagnostics") {
+			st.flash = ""
+			st.flashEnd = time.Time{}
+		}
+		return true, nil
+	case agentsPromoteResultMsg:
+		st.promotePicker.Open = false
+		if v.err != nil {
+			st.flash = "✗ promote: " + v.err.Error()
+			st.flashEnd = time.Now().Add(5 * time.Second)
+			return true, nil
+		}
+		st.flash = "✓ promoted → " + v.summary
+		st.flashEnd = time.Now().Add(3 * time.Second)
+		// Re-scan so the new entry shows up.
+		return true, loadAgentsCmd(true)
+	case agentsBulkResultMsg:
+		// Bulk action finished; show "verb: ok/total (failed)" flash
+		// and clear the selection. A re-scan picks up any state
+		// changes (installed plugins, deleted sessions, etc.).
+		agentsClearSelection(st, st.subTab)
+		total := v.ok + v.failed
+		if v.failed == 0 {
+			st.flash = fmt.Sprintf("✓ %s: %d / %d", v.verb, v.ok, total)
+		} else {
+			extra := ""
+			if v.firstErr != nil {
+				extra = " — " + truncAgentRow(v.firstErr.Error(), 60)
+			}
+			st.flash = fmt.Sprintf("⚠ %s: %d ok, %d failed%s", v.verb, v.ok, v.failed, extra)
+		}
+		st.flashEnd = time.Now().Add(5 * time.Second)
+		return true, loadAgentsCmd(true)
 	}
 	return false, nil
 }
@@ -630,6 +1152,13 @@ type agentRow struct {
 	source   agents.Source
 	scope    agents.Scope
 	enabled  bool
+
+	// bookmarked is set on Session rows that the user has marked. The
+	// renderer prefixes the title with a ★, and sortAgentRows pins
+	// bookmarked sessions to the top of the list before any other
+	// ordering kicks in.
+	bookmarked bool
+	note       string
 
 	// Per-entity payloads — only one of these is set, matching the
 	// current sub-tab. The render layer pulls richer columns from
@@ -690,20 +1219,71 @@ func (m *Model) agentsVisibleRows() []agentRow {
 			})
 		}
 	case agentsSubSessions:
+		bm := agentsBookmarks(st)
 		for i := range st.snapshot.Sessions {
 			x := st.snapshot.Sessions[i]
 			label := x.Name
 			if label == "" {
 				label = sessionShortID(x.ID)
 			}
-			rows = append(rows, agentRow{
+			row := agentRow{
 				id: x.ID, name: label, subtitle: x.ProjectPath,
 				provider: x.Provider, source: x.Source,
 				session: &x,
-			})
+			}
+			if e, ok := bm.Get(x.ID); ok {
+				row.bookmarked = true
+				row.note = e.Note
+			}
+			rows = append(rows, row)
 		}
 	}
-	return sortAgentRows(applyStatusFilter(filterAgentRows(rows, q), st.subTab, st.statusFilter[st.subTab]), st.subTab, st.sortMode[st.subTab])
+	rows = filterAgentRows(rows, q)
+	rows = applyProviderFilter(rows, st.providerFilter)
+	rows = applyMarketplaceFilter(rows, st.subTab, st.marketplaceFilter)
+	rows = applyScopeFilter(rows, st.scopeFilter)
+	rows = applyTransportFilter(rows, st.transportFilter)
+	rows = applyStatusFilter(rows, st.subTab, st.statusFilter[st.subTab])
+	rows = applyStatusValueFilter(rows, st.subTab, st.statusFilterValue)
+	rows = applyBookmarkedFilter(rows, st.subTab, st.statusFilterValue)
+	rows = sortAgentRows(rows, st.subTab, st.sortMode[st.subTab])
+	if st.subTab == agentsSubSessions {
+		rows = pinBookmarkedFirst(rows)
+	}
+	return rows
+}
+
+// applyBookmarkedFilter narrows session rows to bookmarked-only when
+// the user picked "Bookmarked" in the sidebar STATUS section. A
+// no-op on every other sub-tab.
+func applyBookmarkedFilter(rows []agentRow, subTab int, statusValue string) []agentRow {
+	if subTab != agentsSubSessions || statusValue != "bookmarked" {
+		return rows
+	}
+	out := make([]agentRow, 0, len(rows))
+	for _, r := range rows {
+		if r.bookmarked {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// pinBookmarkedFirst moves bookmarked session rows to the top while
+// preserving relative order within both groups.
+func pinBookmarkedFirst(rows []agentRow) []agentRow {
+	if len(rows) < 2 {
+		return rows
+	}
+	var head, tail []agentRow
+	for _, r := range rows {
+		if r.bookmarked {
+			head = append(head, r)
+		} else {
+			tail = append(tail, r)
+		}
+	}
+	return append(head, tail...)
 }
 
 func sessionShortID(id string) string {
@@ -825,15 +1405,22 @@ func sortRowCTime(r agentRow) time.Time {
 // at a glance.
 func agentsProviderStyle(id agents.ProviderID) lipgloss.Style {
 	base := lipgloss.NewStyle().Bold(true)
+	return base.Foreground(providerBrandFG(id))
+}
+
+// providerBrandFG returns the brand foreground for a provider —
+// Anthropic orange for Claude, Copilot purple for Copilot, and the
+// amber accent for the MCP registry.
+func providerBrandFG(id agents.ProviderID) color.Color {
 	switch id {
 	case agents.ProviderClaudeCode:
-		return base.Foreground(cyberPrimary) // cyan
+		return claudeBrand
 	case agents.ProviderCopilotCLI:
-		return base.Foreground(cyberSecondary) // magenta
+		return copilotBrand
 	case agents.ProviderMCPRegistry:
-		return base.Foreground(cyberAccent) // amber
+		return mcpBrand
 	}
-	return base.Foreground(cyberFG)
+	return cyberFG
 }
 
 // agentsScopeStyle dims user scope and bolds project scope so a
@@ -856,7 +1443,7 @@ func (m *Model) renderAgentsView() string {
 	st := m.agents
 	var b strings.Builder
 
-	subs := []string{"Marketplaces", "Plugins", "Skills", "MCPs", "Sessions"}
+	subs := []string{"Marketplaces", "Plugins", "Skills", "MCPs", "Sessions", "Costs", "Health"}
 	counts := agentsSnapshotCounts(st.snapshot)
 	var parts []string
 	for i, label := range subs {
@@ -877,6 +1464,13 @@ func (m *Model) renderAgentsView() string {
 	}
 	b.WriteString("\n")
 
+	// Lazily build the sidebar so it's visible from the first render.
+	// `f` opens the picker; otherwise it stays inert with the current
+	// selection highlighted.
+	if st.snapshot != nil && len(st.sidebarItems) == 0 {
+		st.sidebarItems = buildAgentsSidebarItems(st)
+	}
+
 	switch {
 	case st.searchActive:
 		b.WriteString("  search: " + st.searchInput + "▌\n")
@@ -887,6 +1481,16 @@ func (m *Model) renderAgentsView() string {
 		// Single, subtle hint — full keymap lives behind ?.
 		b.WriteString("  " + dimVersion.Render("press ? for help") + "\n")
 	}
+
+	// Active-filter chip row — only rendered when at least one filter
+	// is set. Keeps the UI clean when filters are off.
+	if chips := agentsFilterChips(st); chips != "" {
+		b.WriteString("  " + chips + "\n")
+	}
+	// Bulk-selection summary row — only rendered when something is selected.
+	if summary := agentsBulkRenderSummary(st); summary != "" {
+		b.WriteString("  " + summary + "\n")
+	}
 	b.WriteString("\n")
 
 	if st.loading && st.snapshot == nil {
@@ -895,6 +1499,23 @@ func (m *Model) renderAgentsView() string {
 	}
 	if st.loadErr != nil {
 		b.WriteString("  load error: " + st.loadErr.Error() + "\n")
+		return b.String()
+	}
+
+	// Costs sub-tab renders its own body — skip the row/table layout.
+	if st.subTab == agentsSubCosts {
+		b.WriteString(m.renderAgentsCostsView())
+		if st.flash != "" && time.Now().Before(st.flashEnd) {
+			b.WriteString("\n  " + st.flash + "\n")
+		}
+		return b.String()
+	}
+	// Health sub-tab renders its own body too.
+	if st.subTab == agentsSubHealth {
+		b.WriteString(m.renderAgentsHealthView())
+		if st.flash != "" && time.Now().Before(st.flashEnd) {
+			b.WriteString("\n  " + st.flash + "\n")
+		}
 		return b.String()
 	}
 
@@ -918,17 +1539,42 @@ func (m *Model) renderAgentsView() string {
 	visible, windowStart, displayCursor, hiddenAbove, hiddenBelow := windowAgentRows(rows, st.cursor, maxRows)
 	_ = windowStart
 
+	// Build the table area into its own buffer so we can lay it out
+	// side-by-side with the sidebar when present.
+	var tbl strings.Builder
 	if hiddenAbove > 0 {
-		fmt.Fprintf(&b, "  %s\n", dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)))
+		fmt.Fprintf(&tbl, "  %s\n", dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)))
 	}
-	b.WriteString(renderAgentsTable(st.subTab, visible, displayCursor, st.sortMode[st.subTab], m.width))
+	tbl.WriteString(renderAgentsTable(st.subTab, visible, displayCursor, st.sortMode[st.subTab], m.width-agentsSidebarColWidth-3))
 	if hiddenBelow > 0 {
-		fmt.Fprintf(&b, "  %s\n", dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)))
+		fmt.Fprintf(&tbl, "  %s\n", dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)))
+	}
+	if st.detailOpen && st.cursor < len(rows) {
+		tbl.WriteString("\n  ─── detail ───\n")
+		tbl.WriteString(renderAgentDetail(rows[st.cursor], st.snapshot))
 	}
 
-	if st.detailOpen && st.cursor < len(rows) {
-		b.WriteString("\n  ─── detail ───\n")
-		b.WriteString(renderAgentDetail(rows[st.cursor], st.snapshot))
+	// Lay out sidebar | table when the sidebar has items.
+	if len(st.sidebarItems) > 0 {
+		tableLines := strings.Split(strings.TrimRight(tbl.String(), "\n"), "\n")
+		sideLines := buildAgentsSidebarLines(st, len(tableLines)+4)
+		total := len(tableLines)
+		if len(sideLines) > total {
+			total = len(sideLines)
+		}
+		for i := 0; i < total; i++ {
+			left := ""
+			if i < len(sideLines) {
+				left = sideLines[i]
+			}
+			right := ""
+			if i < len(tableLines) {
+				right = tableLines[i]
+			}
+			b.WriteString(fixedWidthANSI(left, agentsSidebarColWidth) + " │ " + right + "\n")
+		}
+	} else {
+		b.WriteString(tbl.String())
 	}
 
 	if st.flash != "" && time.Now().Before(st.flashEnd) {
@@ -953,6 +1599,10 @@ func (m *Model) renderAgentsView() string {
 		b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
 	}
 
+	if st.bulkPrompt != "" {
+		b.WriteString(renderBulkConfirmPrompt(st))
+	}
+
 	if st.viewerOpen {
 		b.WriteString("\n  ╔ Transcript ══════════════════════════════════════════╗\n")
 		b.WriteString("  ║ " + truncAgentRow(st.viewerTitle, 64) + "\n")
@@ -968,7 +1618,26 @@ func (m *Model) renderAgentsView() string {
 	if st.helpOpen {
 		b.WriteString(agentsHelpOverlay())
 	}
+	if st.searchOverlay.Open {
+		b.WriteString(m.renderAgentsSearchOverlay())
+	}
+	if st.noteOpen {
+		b.WriteString(renderAgentNotePrompt(st))
+	}
 
+	return b.String()
+}
+
+// renderAgentNotePrompt renders the inline single-line editor used to
+// attach (or edit) a note on a bookmarked session.
+func renderAgentNotePrompt(st *agentsState) string {
+	var b strings.Builder
+	header := lipgloss.NewStyle().Foreground(cyberAccent).Bold(true).Render("📝 note")
+	id := truncAgentRow(st.noteTarget, 40)
+	b.WriteString("\n  ╔ " + header + "  " + dimVersion.Render(id) + " ═════════════════╗\n")
+	b.WriteString("  ║ " + st.noteBuffer + lipgloss.NewStyle().Foreground(cyberAccent).Render("▌") + "\n")
+	b.WriteString("  ║ " + dimVersion.Render("Enter = save · Esc = cancel · Backspace = edit") + "\n")
+	b.WriteString("  ╚════════════════════════════════════════════════════════╝\n")
 	return b.String()
 }
 
@@ -1000,17 +1669,20 @@ func providerShort(id agents.ProviderID) string {
 }
 
 // agentsSnapshotCounts returns the per-sub-tab counts. Returns zeros
-// when snapshot is nil (mid-load).
-func agentsSnapshotCounts(s *agents.Snapshot) [5]int {
+// when snapshot is nil (mid-load). The last (Health) slot is filled
+// in by the Health sub-tab itself with `errors+warnings`.
+func agentsSnapshotCounts(s *agents.Snapshot) [7]int {
 	if s == nil {
-		return [5]int{}
+		return [7]int{}
 	}
-	return [5]int{
+	return [7]int{
 		len(s.Marketplaces),
 		len(s.Plugins),
 		len(s.Skills),
 		len(s.MCPs),
 		len(s.Sessions),
+		0,
+		0,
 	}
 }
 
@@ -1150,31 +1822,24 @@ func renderHeader(cols []column, sortColumn int) string {
 	return renderRow(cells, cols, "    ", false, 0)
 }
 
-// agentsProviderChip wraps the short provider label in a colored chip
-// (foreground=provider color, background=cyberChipBg). This is the
-// research-recommended replacement for the bare colored text used
-// previously.
+// agentsProviderChip renders the provider identifier as a coloured
+// circle followed by the short name. The dot uses each provider's
+// brand colour (Anthropic orange for Claude, GitHub Copilot purple
+// for Copilot, amber for the MCP registry); the label is bolded to
+// stay legible against the table's dim text.
 func agentsProviderChip(id agents.ProviderID) string {
 	label := providerShort(id)
-	fg := providerChipFG(id)
-	return lipgloss.NewStyle().
-		Foreground(fg).
-		Background(cyberChipBg).
-		Padding(0, 1).
-		Bold(true).
-		Render(label)
+	dot := lipgloss.NewStyle().Foreground(providerBrandFG(id)).Render("●")
+	name := lipgloss.NewStyle().Foreground(cyberFG).Bold(true).Render(label)
+	return dot + " " + name
 }
 
+// providerChipFG returns the foreground colour used for the
+// provider's brand chip. Kept exported (as a package-level helper)
+// for the few callers that still want the raw colour — most callers
+// should reach for agentsProviderChip / providerBrandFG instead.
 func providerChipFG(id agents.ProviderID) color.Color {
-	switch id {
-	case agents.ProviderClaudeCode:
-		return cyberPrimary
-	case agents.ProviderCopilotCLI:
-		return cyberSecondary
-	case agents.ProviderMCPRegistry:
-		return cyberAccent
-	}
-	return cyberFG
+	return providerBrandFG(id)
 }
 
 // agentsStatusChip is a colored chip for session status. Empty status
@@ -1216,13 +1881,16 @@ func sortColumnFor(subTab int, mode agentsSortMode) int {
 			return 1
 		}
 	case agentsSubSessions:
+		// Sessions columns: SOURCE(0) ID(1) TITLE(2) TYPE(3) STATUS(4)
+		// TURNS(5) MODIFIED(6) PROJECT(7). Created column was dropped
+		// in favour of TITLE; map agentsSortCreated to MODIFIED.
 		switch mode {
 		case agentsSortName:
 			return 1
 		case agentsSortCreated:
-			return 5
+			return 6
 		case agentsSortTurns:
-			return 4
+			return 5
 		case agentsSortModified:
 			return 6
 		}
@@ -1395,18 +2063,19 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agent
 		cols := computeColumnWidths([]column{
 			{header: "SOURCE", width: 10},
 			{header: "ID", width: 10},
-			{header: "TYPE", width: 12},
-			{header: "STATUS", width: 12},
-			{header: "TURNS", width: 6},
-			{header: "CREATED", width: 18},
-			{header: "MODIFIED", width: 14},
-			{header: "PROJECT", grow: true},
+			{header: "TITLE", grow: true},
+			{header: "TYPE", width: 11},
+			{header: "STATUS", width: 9},
+			{header: "TURNS", width: 5},
+			{header: "MODIFIED", width: 11},
+			{header: "PROJECT", width: 26},
 		}, totalWidth)
 		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			s := r.session
 			typ, project := "", r.subtitle
-			created, modified := "", ""
+			modified := ""
+			title := ""
 			var status agents.SessionStatus
 			turns := 0
 			if s != nil {
@@ -1415,16 +2084,22 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agent
 					typ = "interactive"
 				}
 				status = s.Status
-				created = humaniseTime(s.Created)
 				modified = humaniseTime(s.LastModified)
+				title = s.Title
+				if title == "" {
+					title = s.Name
+				}
+				if title == "" {
+					title = dimVersion.Render("(untitled)")
+				}
 			}
 			cells := []string{
 				agentsProviderChip(r.provider),
 				truncAgentRow(r.name, cols[1].width),
+				truncAgentRow(formatSessionTitle(r, title), cols[2].width),
 				typ,
 				agentsStatusChip(status),
 				dashOrInt(turns),
-				created,
 				modified,
 				truncAgentRow(project, cols[7].width),
 			}
@@ -1473,9 +2148,23 @@ func dashOrInt(n int) string {
 	return strconv.Itoa(n)
 }
 
-// humaniseTime renders a time in a column-friendly form: empty for zero,
-// a date for older than 24h, "HH:MM" for the same day, or a relative
-// "<n>m ago" / "<n>h ago" string for very recent events.
+// formatSessionTitle prefixes the title with a ★ when the session is
+// bookmarked and appends a small "📝" hint when a note is present.
+func formatSessionTitle(r agentRow, title string) string {
+	prefix := ""
+	if r.bookmarked {
+		prefix = lipgloss.NewStyle().Foreground(cyberAccent).Bold(true).Render("★ ")
+	}
+	suffix := ""
+	if r.note != "" {
+		suffix = " " + lipgloss.NewStyle().Foreground(cyberInfo).Render("📝")
+	}
+	return prefix + title + suffix
+}
+
+// humaniseTime renders a time in a column-friendly form. The output is
+// kept ≤11 chars so it fits in narrow CREATED/MODIFIED columns without
+// wrapping (which previously corrupted the Sessions table).
 func humaniseTime(t time.Time) string {
 	if t.IsZero() {
 		return "—"
@@ -1484,7 +2173,7 @@ func humaniseTime(t time.Time) string {
 	diff := now.Sub(t)
 	switch {
 	case diff < 0:
-		return t.Format("2006-01-02 15:04")
+		return t.Format("2006-01-02")
 	case diff < time.Minute:
 		return "just now"
 	case diff < time.Hour:
@@ -1494,7 +2183,7 @@ func humaniseTime(t time.Time) string {
 	case diff < 7*24*time.Hour:
 		return fmt.Sprintf("%dd ago", int(diff.Hours()/24))
 	default:
-		return t.Format("2006-01-02 15:04")
+		return t.Format("2006-01-02")
 	}
 }
 
@@ -1665,6 +2354,32 @@ func truncList(items []string, n int) []string {
 	return append(out, fmt.Sprintf("+%d more", len(items)-n))
 }
 
+// agentsFilterChips returns a one-line summary of every active filter
+// on the current sub-tab — provider, marketplace, status — colored as
+// chips. Returns "" when nothing is filtered so the row collapses.
+func agentsFilterChips(st *agentsState) string {
+	if st == nil {
+		return ""
+	}
+	var chips []string
+	chipStyle := lipgloss.NewStyle().Background(cyberChipBg).Padding(0, 1)
+	if st.providerFilter != "" {
+		chips = append(chips, chipStyle.Foreground(cyberPrimary).Render("provider:"+providerShort(st.providerFilter)))
+	}
+	if st.subTab == agentsSubPlugins && st.marketplaceFilter != "" {
+		chips = append(chips, chipStyle.Foreground(cyberAccent).Render("marketplace:"+st.marketplaceFilter))
+	}
+	if agentsSupportsFilter(st.subTab) {
+		if f := st.statusFilter[st.subTab]; f != agentsFilterAll {
+			chips = append(chips, chipStyle.Foreground(cyberOK).Render("status:"+filterName(f)))
+		}
+	}
+	if len(chips) == 0 {
+		return ""
+	}
+	return "filters: " + strings.Join(chips, " ") + "  " + dimVersion.Render("X clears all")
+}
+
 // agentsSupportsFilter reports whether `f` cycling applies to a sub-tab.
 func agentsSupportsFilter(subTab int) bool {
 	switch subTab {
@@ -1680,14 +2395,19 @@ func filterName(f agentsFilter) string {
 	case agentsFilterInstalled:
 		return "installed"
 	case agentsFilterCatalog:
-		return "catalog"
+		return "available"
+	case agentsFilterEnabled:
+		return "enabled"
+	case agentsFilterDisabled:
+		return "disabled"
 	}
 	return "all"
 }
 
 // applyStatusFilter narrows rows for the current sub-tab/filter. Default
-// is identity. Plugins: installed vs catalog (Installed bool). MCPs:
-// installed (scope ≠ remote) vs catalog (scope == remote).
+// is identity. Plugins: installed vs catalog vs enabled vs disabled.
+// MCPs: same axis (installed = scope ≠ remote, enabled/disabled use
+// the Enabled bool).
 func applyStatusFilter(rows []agentRow, subTab int, f agentsFilter) []agentRow {
 	if f == agentsFilterAll {
 		return rows
@@ -1700,16 +2420,30 @@ func applyStatusFilter(rows []agentRow, subTab int, f agentsFilter) []agentRow {
 			if r.plugin == nil {
 				continue
 			}
-			if (f == agentsFilterInstalled) == r.plugin.Installed {
-				keep = true
+			switch f {
+			case agentsFilterInstalled:
+				keep = r.plugin.Installed
+			case agentsFilterCatalog:
+				keep = !r.plugin.Installed
+			case agentsFilterEnabled:
+				keep = r.plugin.Installed && r.plugin.Enabled
+			case agentsFilterDisabled:
+				keep = r.plugin.Installed && !r.plugin.Enabled
 			}
 		case agentsSubMCPs:
 			if r.mcp == nil {
 				continue
 			}
 			installed := r.mcp.Scope != agents.ScopeRemote
-			if (f == agentsFilterInstalled) == installed {
-				keep = true
+			switch f {
+			case agentsFilterInstalled:
+				keep = installed
+			case agentsFilterCatalog:
+				keep = !installed
+			case agentsFilterEnabled:
+				keep = installed && r.mcp.Enabled
+			case agentsFilterDisabled:
+				keep = installed && !r.mcp.Enabled
 			}
 		default:
 			keep = true
@@ -1721,34 +2455,259 @@ func applyStatusFilter(rows []agentRow, subTab int, f agentsFilter) []agentRow {
 	return out
 }
 
+// applyScopeFilter narrows rows whose scope doesn't match. Empty = all.
+func applyScopeFilter(rows []agentRow, scope agents.Scope) []agentRow {
+	if scope == "" {
+		return rows
+	}
+	out := make([]agentRow, 0, len(rows))
+	for _, r := range rows {
+		if r.scope == scope {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// applyTransportFilter narrows MCPs by transport. No-op on other rows.
+func applyTransportFilter(rows []agentRow, transport string) []agentRow {
+	if transport == "" {
+		return rows
+	}
+	out := make([]agentRow, 0, len(rows))
+	for _, r := range rows {
+		if r.mcp == nil {
+			continue
+		}
+		if r.mcp.Transport == transport {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// applyStatusValueFilter handles the string-valued status filter — the
+// catch-all for marketplace/session statuses that don't fit the
+// agentsFilter enum.
+func applyStatusValueFilter(rows []agentRow, subTab int, value string) []agentRow {
+	if value == "" {
+		return rows
+	}
+	out := make([]agentRow, 0, len(rows))
+	for _, r := range rows {
+		keep := false
+		switch subTab {
+		case agentsSubMarketplaces:
+			if r.marketplace == nil {
+				continue
+			}
+			builtin := false
+			switch r.marketplace.Source {
+			case agents.SourceCatalogClaude, agents.SourceCatalogMCP, agents.SourceCatalogCopilot:
+				builtin = true
+			}
+			switch value {
+			case "builtin":
+				keep = builtin
+			case "local":
+				keep = !builtin
+			}
+		case agentsSubSessions:
+			if r.session == nil {
+				continue
+			}
+			keep = string(r.session.Status) == value
+		}
+		if keep {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// applyProviderFilter narrows rows to a single provider when set.
+func applyProviderFilter(rows []agentRow, provider agents.ProviderID) []agentRow {
+	if provider == "" {
+		return rows
+	}
+	out := make([]agentRow, 0, len(rows))
+	for _, r := range rows {
+		if r.provider == provider {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// applyMarketplaceFilter narrows the Plugins sub-tab to a marketplace.
+// No-op on other sub-tabs.
+func applyMarketplaceFilter(rows []agentRow, subTab int, marketplace string) []agentRow {
+	if marketplace == "" || subTab != agentsSubPlugins {
+		return rows
+	}
+	out := make([]agentRow, 0, len(rows))
+	for _, r := range rows {
+		if r.plugin != nil && r.plugin.Marketplace == marketplace {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// agentsAvailableMarketplaces returns the list of marketplace names
+// present in the current snapshot. Used to cycle the marketplace
+// filter through known values only.
+func agentsAvailableMarketplaces(s *agents.Snapshot) []string {
+	if s == nil {
+		return nil
+	}
+	seen := make(map[string]bool)
+	for _, mp := range s.Marketplaces {
+		if mp.Name != "" && !seen[mp.Name] {
+			seen[mp.Name] = true
+		}
+	}
+	// Also include marketplaces referenced by installed plugins even if
+	// not in the Marketplaces slice (defensive — partial-scan recovery).
+	for _, p := range s.Plugins {
+		if p.Marketplace != "" && !seen[p.Marketplace] {
+			seen[p.Marketplace] = true
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for name := range seen {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// agentsAvailableProviders returns the providers with at least one
+// row in the snapshot.
+func agentsAvailableProviders(s *agents.Snapshot) []agents.ProviderID {
+	if s == nil {
+		return nil
+	}
+	seen := make(map[agents.ProviderID]bool)
+	for _, mp := range s.Marketplaces {
+		seen[mp.Provider] = true
+	}
+	for _, p := range s.Plugins {
+		seen[p.Provider] = true
+	}
+	for _, sk := range s.Skills {
+		seen[sk.Provider] = true
+	}
+	for _, mc := range s.MCPs {
+		seen[mc.Provider] = true
+	}
+	for _, ss := range s.Sessions {
+		seen[ss.Provider] = true
+	}
+	order := []agents.ProviderID{agents.ProviderClaudeCode, agents.ProviderCopilotCLI, agents.ProviderMCPRegistry}
+	out := make([]agents.ProviderID, 0, len(order))
+	for _, id := range order {
+		if seen[id] {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// cycleProviderFilter advances the providerFilter through (empty → p1
+// → p2 → … → empty), restricted to providers present in the snapshot.
+func cycleProviderFilter(current agents.ProviderID, available []agents.ProviderID) agents.ProviderID {
+	if len(available) == 0 {
+		return ""
+	}
+	if current == "" {
+		return available[0]
+	}
+	for i, p := range available {
+		if p == current {
+			if i == len(available)-1 {
+				return ""
+			}
+			return available[i+1]
+		}
+	}
+	return available[0]
+}
+
+// cycleMarketplaceFilter advances the marketplaceFilter through
+// (empty → mp1 → mp2 → … → empty), restricted to known marketplaces.
+func cycleMarketplaceFilter(current string, available []string) string {
+	if len(available) == 0 {
+		return ""
+	}
+	if current == "" {
+		return available[0]
+	}
+	for i, name := range available {
+		if name == current {
+			if i == len(available)-1 {
+				return ""
+			}
+			return available[i+1]
+		}
+	}
+	return available[0]
+}
+
 // agentsHelpOverlay renders the keymap modal.
 func agentsHelpOverlay() string {
-	keymap := [][2]string{
-		{"1-5", "jump to sub-tab"},
+	listKeys := [][2]string{
+		{"1-7", "jump to sub-tab (1=Marketplaces … 6=Costs · 7=Health)"},
 		{"Tab / Shift-Tab", "next / previous sub-tab (or parent at edge)"},
 		{"j / k or ↓ / ↑", "move cursor"},
-		{"Enter", "toggle detail pane"},
+		{"Enter", "open detail page (Costs: open focused session)"},
+		{"Shift+D", "toggle inline quick-detail (legacy)"},
 		{"/", "search (fuzzy)"},
+		{"S", "full-text search across all session transcripts"},
+		{"b", "toggle session bookmark (★)"},
+		{"N", "edit note on the focused bookmarked session"},
+		{"Promote ▸", "(detail page action) copy skill/MCP/plugin to another provider"},
+		{"Space", "toggle row selection for bulk ops (plugins / MCPs / sessions)"},
+		{"Shift+I/U/X", "bulk install/update/uninstall plugins"},
+		{"Shift+E/D/R", "bulk enable/disable/remove MCPs"},
+		{"Shift+B/X", "bulk bookmark / delete sessions"},
 		{"s", "cycle sort mode"},
-		{"f", "cycle status filter (plugins, MCPs)"},
+		{"f", "open filter sidebar (STATUS / PROVIDER / MARKETPLACE / SCOPE / TRANSPORT)"},
+		{"M / P", "open sidebar focused on MARKETPLACE / PROVIDER"},
+		{"X", "clear every filter on the current sub-tab"},
+		{"←/→ (Costs)", "switch range (Today / 7d / 30d / All)"},
 		{"l", "launch session (skill / plugin / session)"},
 		{"o", "open primary URL in browser"},
 		{"c", "copy launch / install / config command"},
 		{"y", "yank entity id to clipboard"},
 		{"v", "view first 60 lines of session transcript"},
 		{"d", "delete current row (sessions / MCPs) — confirms first"},
-		{"r", "refresh (re-scan everything)"},
+		{"r", "refresh (Costs: re-scan transcripts)"},
 		{"?", "toggle this help overlay"},
-		{"Esc", "close overlay / cancel modal"},
+		{"Esc", "close overlay / sidebar / cancel modal"},
+	}
+	detailKeys := [][2]string{
+		{"←/→ or Tab/Shift-Tab", "move action focus"},
+		{"↑/↓ or j/k", "scroll body · move plugin cursor (marketplace)"},
+		{"Enter", "execute focused action · disabled buttons flash a reason"},
+		{"o", "open primary URL"},
+		{"c", "copy contextual command"},
+		{"r", "refresh"},
+		{"Esc / q", "pop one frame (or close detail page)"},
 	}
 	var b strings.Builder
-	b.WriteString("\n  ╔ Agents — keymap ════════════════════════════════════════════╗\n")
-	for _, row := range keymap {
-		b.WriteString(fmt.Sprintf("  ║ %-18s  %-40s ║\n", row[0], row[1]))
+	b.WriteString("\n  ╔ Agents — keymap (list) ════════════════════════════════════════╗\n")
+	for _, row := range listKeys {
+		b.WriteString(fmt.Sprintf("  ║ %-22s  %-40s ║\n", row[0], row[1]))
 	}
-	b.WriteString("  ║                                                                 ║\n")
-	b.WriteString("  ║ press any key to close                                          ║\n")
-	b.WriteString("  ╚═════════════════════════════════════════════════════════════════╝\n")
+	b.WriteString("  ╠════════════════════════════════════════════════════════════════╣\n")
+	b.WriteString("  ║ detail page                                                    ║\n")
+	for _, row := range detailKeys {
+		b.WriteString(fmt.Sprintf("  ║ %-22s  %-40s ║\n", row[0], row[1]))
+	}
+	b.WriteString("  ║                                                                ║\n")
+	b.WriteString("  ║ press any key to close                                         ║\n")
+	b.WriteString("  ╚════════════════════════════════════════════════════════════════╝\n")
 	return b.String()
 }
 

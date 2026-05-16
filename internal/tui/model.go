@@ -274,6 +274,12 @@ type Model struct {
 	// Status message (transient, e.g. error feedback).
 	statusMsg string
 
+	// updateAvailable, when set, surfaces a subtle hint in the title
+	// bar pointing the user at `klim update`. Populated by the
+	// background self-update check at startup (24h cached). Empty
+	// for dev builds and when no newer version is available.
+	updateAvailable string
+
 	// Action confirmation state.
 	pendingAction *pendingAction // nil = no pending confirmation
 
@@ -692,10 +698,14 @@ func (m Model) Init() tea.Cmd {
 	// Init has a value receiver and can't mutate the model. The
 	// 10 fps frameMsg loop drives every animation (HUD pulse, scan
 	// strip spinner, boot splash reveal) — no second ticker.
-	return tea.Batch(
+	batch := []tea.Cmd{
 		tickFrame(),
 		func() tea.Msg { return findToolsCmd(m.svc, false, gen)() },
-	)
+	}
+	if m.cfg == nil || m.cfg.UI.AutoCheckUpdatesEnabled() {
+		batch = append(batch, backgroundSelfUpdateCheck())
+	}
+	return tea.Batch(batch...)
 }
 
 // startScan prepares the model for a new scan, invalidating any in-flight
@@ -1264,6 +1274,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case selfUpdateCheckMsg:
+		if msg.background {
+			// Background result — only populate the persistent hint
+			// when there's actually a newer release. Silent on
+			// dev-builds, errors, and "already latest".
+			if msg.available && msg.current != "" && msg.latest != "" {
+				m.updateAvailable = msg.latest
+			}
+			return m, nil
+		}
 		switch {
 		case msg.devBuild:
 			m.statusMsg = "ℹ Dev build — self-update is disabled. Install a release binary to update."
@@ -1272,8 +1291,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.available:
 			m.statusMsg = fmt.Sprintf("⬆ Update available: %s → %s. Run 'klim update' from a shell to install.",
 				msg.current, msg.latest)
+			m.updateAvailable = msg.latest
 		default:
 			m.statusMsg = fmt.Sprintf("✓ Already on the latest version (%s)", msg.current)
+			m.updateAvailable = ""
 		}
 		return m, nil
 

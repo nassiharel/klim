@@ -94,6 +94,12 @@ func (m Model) renderView() string {
 		return m.renderDetailView(m.tools[m.detailIdx])
 	}
 
+	// Agents detail page (full-screen). Layered above the normal Agents
+	// tab list view; Esc/q pops one frame off the nav stack.
+	if m.activeTab == tabAgents && m.agents != nil && m.agents.detailPage {
+		return m.renderAgentsDetailPage()
+	}
+
 	// Pack detail view.
 	if m.showPackDetail && m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
 		return m.renderPackDetailView(m.packs[m.packDetailIdx])

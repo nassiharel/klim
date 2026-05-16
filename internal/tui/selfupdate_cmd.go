@@ -12,12 +12,17 @@ import (
 )
 
 // selfUpdateCheckMsg arrives after a CheckOnly self-update probe.
+// `background` distinguishes the startup auto-check from a user-
+// initiated `u` press on the Config tab: background results land in
+// the persistent title-bar hint, user results land in the status
+// line and announce verbose results regardless of state.
 type selfUpdateCheckMsg struct {
-	current   string
-	latest    string
-	available bool
-	devBuild  bool
-	err       error
+	current    string
+	latest     string
+	available  bool
+	devBuild   bool
+	background bool
+	err        error
 }
 
 // checkSelfUpdateCmd queries the configured release endpoint for the

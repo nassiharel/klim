@@ -1,6 +1,11 @@
 package agents
 
-import "context"
+import (
+	"context"
+
+	"github.com/nassiharel/klim/internal/agents/costs"
+	"github.com/nassiharel/klim/internal/agents/search"
+)
 
 // Provider is the abstraction over a single agent CLI's ecosystem.
 // All read methods are expected to be fast (filesystem reads + caching);
@@ -34,10 +39,30 @@ type Provider interface {
 	InstallPlugin(ctx context.Context, ref PluginRef) error
 	UninstallPlugin(ctx context.Context, id string) error
 	EnablePlugin(ctx context.Context, id string, enabled bool) error
+	// UpdatePlugin upgrades an installed plugin in place. Returns
+	// ErrNotSupported when the provider has no notion of plugin updates.
+	// Returns a clear "update not supported by <provider>" error when
+	// the provider exists but its CLI lacks an update subcommand — the
+	// caller surfaces that to the user instead of silently falling
+	// back to uninstall+install.
+	UpdatePlugin(ctx context.Context, id string) error
 	AddMCP(ctx context.Context, spec MCPSpec) error
 	RemoveMCP(ctx context.Context, name string) error
 	EnableMCP(ctx context.Context, name string, enabled bool) error
 	DeleteSession(ctx context.Context, id string) error
+
+	// TokenSamples returns per-assistant-message token-usage samples
+	// extracted from this provider's local session transcripts. Best-
+	// effort: missing usage fields are tolerated. Providers without
+	// usable token data return ErrNotSupported and the costs roll-up
+	// silently skips them.
+	TokenSamples(ctx context.Context) ([]costs.TokenSample, error)
+
+	// SessionTexts returns the searchable transcript content for every
+	// local session this provider knows about. Used by the Agents
+	// search overlay. Providers with no transcripts return
+	// ErrNotSupported; missing content fields are tolerated.
+	SessionTexts(ctx context.Context) ([]search.SessionText, error)
 
 	// BuildLaunch constructs the command to exec for a LaunchSpec.
 	// klim never spawns the agent itself — it returns the plan,

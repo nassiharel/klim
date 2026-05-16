@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nassiharel/klim/internal/agents"
@@ -200,4 +201,16 @@ func sliceEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func TestProvider_UpdatePlugin_UnsupportedSurfacesClearError(t *testing.T) {
+	p := &Provider{BinaryOverride: "/usr/bin/claude"}
+	prev := PluginUpdateProbe
+	PluginUpdateProbe = func(context.Context, string) bool { return false }
+	defer func() { PluginUpdateProbe = prev }()
+
+	err := p.UpdatePlugin(context.Background(), "anything")
+	if err == nil || !strings.Contains(err.Error(), "update not supported by claude-code") {
+		t.Errorf("got err=%v, want 'update not supported by claude-code'", err)
+	}
 }

@@ -116,6 +116,13 @@ func (m Model) buildHUDSegments() []string {
 	// 3. Health badge — secondary signal.
 	segs = append(segs, m.healthBadge())
 
+	// 4. klim self-update hint — only when a newer release is
+	// available. Rendered with an amber accent so it reads as a
+	// soft nudge rather than an error.
+	if m.updateAvailable != "" {
+		segs = append(segs, hudAlertStyle.Render("⚡ klim "+m.updateAvailable))
+	}
+
 	return segs
 }
 

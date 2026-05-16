@@ -595,6 +595,37 @@ func (p *Provider) EnablePlugin(ctx context.Context, id string, enabled bool) er
 	return agents.ErrNotSupported
 }
 
+// UpdatePlugin upgrades a plugin via `claude plugin update <id>`. The
+// subcommand surface is verified via `claude plugin --help`; when
+// `update` is missing the user gets a clear error rather than a
+// silent uninstall+install fallback.
+func (p *Provider) UpdatePlugin(ctx context.Context, id string) error {
+	bin := p.binary()
+	if bin == "" {
+		return agents.ErrProviderNotInstalled
+	}
+	if !p.pluginUpdateSupported(ctx) {
+		return errors.New("update not supported by claude-code")
+	}
+	return p.runCLI(ctx, "plugin", "update", id)
+}
+
+// PluginUpdateProbe lets tests assert UpdatePlugin without depending
+// on a real `claude` binary. Returning true means the probe step is
+// skipped and the shell-out is invoked directly.
+var PluginUpdateProbe func(ctx context.Context, bin string) bool
+
+func (p *Provider) pluginUpdateSupported(ctx context.Context) bool {
+	if PluginUpdateProbe != nil {
+		return PluginUpdateProbe(ctx, p.binary())
+	}
+	out, err := exec.CommandContext(ctx, p.binary(), "plugin", "--help").CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return bytes.Contains(bytes.ToLower(out), []byte("update"))
+}
+
 // AddMCP adds an MCP server via the provider CLI.
 func (p *Provider) AddMCP(ctx context.Context, spec agents.MCPSpec) error {
 	args := []string{"mcp", "add"}
@@ -624,7 +655,9 @@ func (p *Provider) RemoveMCP(ctx context.Context, name string) error {
 	return p.runCLI(ctx, "mcp", "remove", name)
 }
 
-// EnableMCP toggles an MCP server enabled/disabled via the provider CLI.
+// EnableMCP returns ErrNotSupported — Claude Code doesn't expose
+// MCP enable/disable as separate CLI verbs in v1; the UI hides the
+// action when this is returned. (PR #77 review #7: doc/code matched.)
 func (p *Provider) EnableMCP(ctx context.Context, name string, enabled bool) error {
 	return agents.ErrNotSupported
 }

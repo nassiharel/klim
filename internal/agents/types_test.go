@@ -2,7 +2,11 @@ package agents
 
 import (
 	"context"
+	"errors"
 	"testing"
+
+	"github.com/nassiharel/klim/internal/agents/costs"
+	"github.com/nassiharel/klim/internal/agents/search"
 )
 
 func TestSnapshotCount(t *testing.T) {
@@ -99,8 +103,58 @@ func (s *stubProvider) RemoveMarketplace(_ context.Context, _ string) error    {
 func (s *stubProvider) InstallPlugin(_ context.Context, _ PluginRef) error     { return nil }
 func (s *stubProvider) UninstallPlugin(_ context.Context, _ string) error      { return nil }
 func (s *stubProvider) EnablePlugin(_ context.Context, _ string, _ bool) error { return nil }
-func (s *stubProvider) AddMCP(_ context.Context, _ MCPSpec) error              { return nil }
-func (s *stubProvider) RemoveMCP(_ context.Context, _ string) error            { return nil }
-func (s *stubProvider) EnableMCP(_ context.Context, _ string, _ bool) error    { return nil }
-func (s *stubProvider) DeleteSession(_ context.Context, _ string) error        { return nil }
-func (s *stubProvider) BuildLaunch(_ LaunchSpec) (ExecPlan, error)             { return ExecPlan{Bin: "stub"}, nil }
+func (s *stubProvider) UpdatePlugin(_ context.Context, _ string) error         { return nil }
+func (s *stubProvider) TokenSamples(_ context.Context) ([]costs.TokenSample, error) {
+	return nil, nil
+}
+func (s *stubProvider) SessionTexts(_ context.Context) ([]search.SessionText, error) {
+	return nil, nil
+}
+func (s *stubProvider) AddMCP(_ context.Context, _ MCPSpec) error           { return nil }
+func (s *stubProvider) RemoveMCP(_ context.Context, _ string) error         { return nil }
+func (s *stubProvider) EnableMCP(_ context.Context, _ string, _ bool) error { return nil }
+func (s *stubProvider) DeleteSession(_ context.Context, _ string) error     { return nil }
+func (s *stubProvider) BuildLaunch(_ LaunchSpec) (ExecPlan, error)          { return ExecPlan{Bin: "stub"}, nil }
+
+// errProvider is a stubProvider whose read methods return errors so
+// the scan-error surface (PR #77 review #9) can be exercised.
+type errProvider struct {
+	stubProvider
+	pluginsErr error
+}
+
+func (e *errProvider) Plugins(_ context.Context) ([]Plugin, error) {
+	if e.pluginsErr != nil {
+		return nil, e.pluginsErr
+	}
+	return nil, nil
+}
+
+func TestScan_SurfacesProviderErrorsOnStatus(t *testing.T) {
+	want := errors.New("malformed config")
+	p := &errProvider{stubProvider: stubProvider{id: "bad"}, pluginsErr: want}
+	svc := NewService(2, p)
+	snap, err := svc.LoadAll(context.Background(), LoadOpts{Refresh: true})
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	status, ok := snap.ProviderStatus["bad"]
+	if !ok {
+		t.Fatal("provider status missing")
+	}
+	if status.Error == nil || status.Error.Error() != "malformed config" {
+		t.Errorf("Status.Error = %v, want 'malformed config'", status.Error)
+	}
+}
+
+func TestScan_SkipsErrNotSupported(t *testing.T) {
+	// A provider whose method returns ErrNotSupported should NOT
+	// pollute ProviderStatus.Error — that sentinel is the "this
+	// backend doesn't implement the call" signal, not a failure.
+	p := &errProvider{stubProvider: stubProvider{id: "polite"}, pluginsErr: ErrNotSupported}
+	svc := NewService(2, p)
+	snap, _ := svc.LoadAll(context.Background(), LoadOpts{Refresh: true})
+	if status := snap.ProviderStatus["polite"]; status.Error != nil {
+		t.Errorf("ErrNotSupported should not surface on Status.Error; got %v", status.Error)
+	}
+}
