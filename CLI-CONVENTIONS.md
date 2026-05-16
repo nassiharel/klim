@@ -34,7 +34,7 @@ Every command that produces structured data accepts:
 * Unknown values (e.g. `--output=jsno`) are usage errors and exit 2.
 
 Currently supports `--output={json,yaml}` (wired via `addOutputFlag`):
-`audit`, `badge`, `check`, `compliance check`, `diff`, `doctor`, `haiku`,
+`audit`, `badge`, `check`, `compliance check`, `diff`, `doctor`,
 `info`, `list`, `score`, `search`, `share`, `tools path`, `trail log`,
 `trail show`, `trail diff`, `watch`, `why`, and `config marketplace list`.
 (`export` already emits YAML by design.) `graph` is text-only — its
