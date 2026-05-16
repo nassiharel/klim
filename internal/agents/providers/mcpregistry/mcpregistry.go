@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/nassiharel/klim/internal/agents"
@@ -276,14 +275,21 @@ func itoa(n int) string {
 }
 
 type registryResponse struct {
-	Servers []struct {
-		Server registryServer `json:"server"`
-		Meta   any            `json:"_meta,omitempty"`
-	} `json:"servers"`
+	Servers  []registryServerEntry `json:"servers"`
 	Metadata struct {
 		NextCursor string `json:"nextCursor,omitempty"`
 		Count      int    `json:"count,omitempty"`
 	} `json:"metadata,omitempty"`
+}
+
+// registryServerEntry is one element of registryResponse.Servers. PR
+// #77 review: extracted as a named type so the JSON envelope shape
+// is declared in one place — previously toMCP took an anonymous
+// struct that re-declared the shape and would silently drift out of
+// sync with registryResponse.Servers' element type.
+type registryServerEntry struct {
+	Server registryServer `json:"server"`
+	Meta   any            `json:"_meta,omitempty"`
 }
 
 type registryServer struct {
@@ -306,19 +312,20 @@ type registryServer struct {
 	} `json:"packages,omitempty"`
 }
 
-func (p *Provider) toMCP(in struct {
-	Server registryServer `json:"server"`
-	Meta   any            `json:"_meta,omitempty"`
-}) agents.MCP {
+func (p *Provider) toMCP(in registryServerEntry) agents.MCP {
 	s := in.Server
 	transport := "stdio"
-	url := ""
+	// PR #77 review: local was named `url`, shadowing the imported
+	// `net/url` package. Renamed to `remoteURL` so the package alias
+	// stays usable in this function (and to make the variable's
+	// purpose more obvious).
+	remoteURL := ""
 	if len(s.Remotes) > 0 {
 		transport = s.Remotes[0].Type
 		if transport == "streamable-http" {
 			transport = "http"
 		}
-		url = s.Remotes[0].URL
+		remoteURL = s.Remotes[0].URL
 	}
 	name := s.Title
 	if name == "" {
@@ -329,7 +336,7 @@ func (p *Provider) toMCP(in struct {
 		Name:      name,
 		Provider:  p.ID(),
 		Transport: transport,
-		URL:       url,
+		URL:       remoteURL,
 		Scope:     agents.ScopeRemote,
 		Enabled:   false,
 		Source:    agents.SourceCatalogMCP,
@@ -338,10 +345,3 @@ func (p *Provider) toMCP(in struct {
 
 // Compile-time check.
 var _ agents.Provider = (*Provider)(nil)
-
-func init() {
-	// Defensive: ensure ProviderMCPRegistry sorts after the two main
-	// providers when iterating. Not used at runtime — the Service
-	// preserves registration order — but documented here for clarity.
-	_ = strings.Compare
-}

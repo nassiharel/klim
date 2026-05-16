@@ -220,18 +220,16 @@ func scanProvider(ctx context.Context, p Provider) providerResults {
 	} else {
 		record(err)
 	}
-	if v, err := p.MCPs(ctx); err == nil {
-		r.mcps = v
-	} else {
+	// PR #77 review: collapsed the MCP branch — mcp-registry returns
+	// (earlier-pages, err) on per-page failures, so assigning the
+	// returned slice unconditionally preserves whatever the provider
+	// gave us (nil is harmless, equivalent to "no MCPs from this
+	// provider"). A partially-decoded page within a failing page is
+	// NOT preserved; json.Decode is all-or-nothing per page.
+	v, err := p.MCPs(ctx)
+	r.mcps = v
+	if err != nil {
 		record(err)
-		// mcp-registry returns (successfully-parsed earlier pages,
-		// err) on per-page failures; preserve whatever it gave us so
-		// a 5xx on the second page doesn't lose the first page's
-		// entries. Note: a partially-decoded page is NOT preserved
-		// (json.Decode is all-or-nothing per page).
-		if v != nil {
-			r.mcps = v
-		}
 	}
 	if v, err := p.Sessions(ctx); err == nil {
 		r.sessions = v

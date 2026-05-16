@@ -70,8 +70,14 @@ func selfUpdateCachePath() (string, error) {
 // to the title-bar hint slot instead of the status line.
 func backgroundSelfUpdateCheck() tea.Cmd {
 	return func() tea.Msg {
-		// Dev builds never auto-check; skip the network round-trip.
 		current := build.VersionOnly()
+		// PR #77 review: actually short-circuit on dev builds rather
+		// than discovering them by ErrDevBuild after a full network
+		// round-trip. selfupdate.Update treats VersionOnly()=="dev"
+		// as a dev build, so we can pre-empt the call here.
+		if current == "dev" {
+			return selfUpdateCheckMsg{current: current, devBuild: true, background: true}
+		}
 		if c, ok := loadSelfUpdateCache(); ok && time.Since(c.CheckedAt) < selfUpdateCheckTTL {
 			return selfUpdateCheckMsg{
 				current:    c.CurrentVersion,

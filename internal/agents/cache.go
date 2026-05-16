@@ -9,11 +9,13 @@ import (
 )
 
 // Cache is the on-disk Snapshot cache. Same pattern as scancache —
-// atomic write through fileutil, per-host.
+// atomic write through fileutil.
 type Cache struct {
-	// HostID disambiguates caches between hosts that share a home dir
-	// (rare, but consistent with scancache convention).
-	HostID    string    `yaml:"host_id,omitempty"`
+	// PR #77 review: HostID was previously declared here as a
+	// scancache parity placeholder but never populated or read.
+	// Dropped to avoid stale-schema drift; if multi-host
+	// disambiguation becomes necessary later we can wire it up
+	// alongside the read/write paths.
 	WrittenAt time.Time `yaml:"written_at"`
 	Snapshot  Snapshot  `yaml:"snapshot"`
 }

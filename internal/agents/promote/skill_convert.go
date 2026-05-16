@@ -2,6 +2,7 @@ package promote
 
 import (
 	"bytes"
+	"os"
 
 	"gopkg.in/yaml.v3"
 )
@@ -87,15 +88,7 @@ func readSkillBody(path string) []byte {
 	return data
 }
 
-// skillFileRead is a tiny indirection so tests can stub file reads
-// without touching the OS layer.
-var skillFileRead = func(path string) ([]byte, error) {
-	return osReadFile(path)
-}
-
-// osReadFile defers to os.ReadFile via a typed function variable to
-// keep the test seam tiny. Wrapped to avoid importing "os" in tests
-// that don't need it.
-var osReadFile = func(path string) ([]byte, error) {
-	return readFileBridge(path)
-}
+// skillFileRead reads a SKILL.md file. PR #77 review: collapsed
+// three stacked test seams (skillFileRead -> osReadFile ->
+// readFileBridge) into one. Tests override skillFileRead directly.
+var skillFileRead = os.ReadFile
