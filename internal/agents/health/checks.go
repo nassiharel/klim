@@ -18,8 +18,11 @@ type checkMCPReach struct {
 	HTTPProbe func(ctx context.Context, url string) error
 }
 
+// ID returns the check's stable identifier (used in Issue.CheckID).
 func (c *checkMCPReach) ID() string { return "mcp-reach" }
 
+// Run probes each configured MCP for reachability — stdio commands
+// must resolve on PATH; http/sse endpoints get a short HTTP probe.
 func (c *checkMCPReach) Run(ctx context.Context, snap Snapshot) []Issue {
 	var issues []Issue
 	for _, m := range snap.MCPs {
@@ -134,8 +137,11 @@ func DefaultHTTPProbe(ctx context.Context, url string) error {
 
 type checkDuplicateMCP struct{}
 
+// ID returns the check's stable identifier.
 func (c *checkDuplicateMCP) ID() string { return "mcp-duplicate" }
 
+// Run flags MCP servers configured at more than one scope within a
+// single provider.
 func (c *checkDuplicateMCP) Run(_ context.Context, snap Snapshot) []Issue {
 	type key struct{ name, provider string }
 	seen := map[key][]MCPRef{}
@@ -173,8 +179,11 @@ func (c *checkDuplicateMCP) Run(_ context.Context, snap Snapshot) []Issue {
 
 type checkShadowedSkill struct{}
 
+// ID returns the check's stable identifier.
 func (c *checkShadowedSkill) ID() string { return "skill-shadowed" }
 
+// Run flags plugin-shipped skills shadowed by a user/project skill
+// of the same name (user wins; the plugin's version never runs).
 func (c *checkShadowedSkill) Run(_ context.Context, snap Snapshot) []Issue {
 	type key struct{ name, provider string }
 	hasUser := map[key]bool{}
@@ -201,7 +210,7 @@ func (c *checkShadowedSkill) Run(_ context.Context, snap Snapshot) []Issue {
 			Subject:  ref.Name,
 			Provider: ref.Provider,
 			Title:    fmt.Sprintf("skill %q from plugin %q is shadowed", ref.Name, ref.SourcePlugin),
-			Detail:   fmt.Sprintf("A user/project skill with the same name takes precedence; the plugin's version will not be invoked."),
+			Detail:   "A user/project skill with the same name takes precedence; the plugin's version will not be invoked.",
 			Hint:     "Rename one of the skills or remove the duplicate.",
 		})
 	}
@@ -212,8 +221,11 @@ func (c *checkShadowedSkill) Run(_ context.Context, snap Snapshot) []Issue {
 
 type checkPluginManifest struct{}
 
+// ID returns the check's stable identifier.
 func (c *checkPluginManifest) ID() string { return "plugin-manifest" }
 
+// Run flags plugins with missing required fields, missing version
+// metadata, or whose install path no longer exists on disk.
 func (c *checkPluginManifest) Run(_ context.Context, snap Snapshot) []Issue {
 	var issues []Issue
 	for _, p := range snap.Plugins {
@@ -263,8 +275,12 @@ func (c *checkPluginManifest) Run(_ context.Context, snap Snapshot) []Issue {
 
 type checkBrokenJSON struct{}
 
+// ID returns the check's stable identifier.
 func (c *checkBrokenJSON) ID() string { return "config-json" }
 
+// Run attempts to parse each registered agent config file as JSON
+// and flags any whose syntax is invalid (providers typically refuse
+// to start with a malformed config).
 func (c *checkBrokenJSON) Run(_ context.Context, snap Snapshot) []Issue {
 	var issues []Issue
 	for _, f := range snap.ConfigFiles {
@@ -273,15 +289,15 @@ func (c *checkBrokenJSON) Run(_ context.Context, snap Snapshot) []Issue {
 			// Missing config files are fine — many users don't have them.
 			continue
 		}
-		var any interface{}
-		if err := json.Unmarshal(data, &any); err != nil {
+		var doc any
+		if err := json.Unmarshal(data, &doc); err != nil {
 			issues = append(issues, Issue{
 				CheckID:  c.ID(),
 				Severity: SeverityError,
 				Kind:     KindConfigFile,
 				Subject:  filepath.Base(f.Path),
 				Provider: f.Provider,
-				Title:    fmt.Sprintf("%s is not valid JSON", filepath.Base(f.Path)),
+				Title:    filepath.Base(f.Path) + " is not valid JSON",
 				Detail:   err.Error(),
 				Hint:     "Open the file and fix the syntax — the provider may refuse to start otherwise.",
 			})
@@ -297,8 +313,11 @@ type checkStaleCatalog struct {
 	NowFunc       func() time.Time // override in tests
 }
 
+// ID returns the check's stable identifier.
 func (c *checkStaleCatalog) ID() string { return "catalog-stale" }
 
+// Run flags marketplaces whose last_synced timestamp is older than
+// ThresholdDays (default 14).
 func (c *checkStaleCatalog) Run(_ context.Context, snap Snapshot) []Issue {
 	threshold := c.ThresholdDays
 	if threshold <= 0 {
@@ -331,8 +350,11 @@ func (c *checkStaleCatalog) Run(_ context.Context, snap Snapshot) []Issue {
 
 type checkProviderInstalled struct{}
 
+// ID returns the check's stable identifier.
 func (c *checkProviderInstalled) ID() string { return "provider-binary" }
 
+// Run flags agent providers whose CLI binary is not on PATH. Klim
+// can still render cached data; mutations and launch will fail.
 func (c *checkProviderInstalled) Run(_ context.Context, snap Snapshot) []Issue {
 	var issues []Issue
 	for _, p := range snap.Providers {

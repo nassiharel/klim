@@ -214,16 +214,6 @@ func agentsBulkRenderSummary(st *agentsState) string {
 	return agentsBulkSummary(st)
 }
 
-func agentsBulkSelectionMark(st *agentsState, id string) string {
-	if st == nil || !agentsBulkCapable(st.subTab) {
-		return ""
-	}
-	if agentsSelected(st, st.subTab)[id] {
-		return lipgloss.NewStyle().Foreground(cyberAccent).Bold(true).Render("☑")
-	}
-	return lipgloss.NewStyle().Foreground(cyberFGDim).Render("☐")
-}
-
 func renderBulkConfirmPrompt(st *agentsState) string {
 	if st.bulkPrompt == "" {
 		return ""

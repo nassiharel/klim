@@ -480,12 +480,6 @@ func TestMarketplaceDetailListsPlugins(t *testing.T) {
 	}
 }
 
-// stubUpdateProvider records calls to UpdatePlugin and returns a
-// configurable error. Used by the action-routing tests below.
-type stubUpdateProvider struct {
-	called string
-}
-
 // The plugin-update tests run against the real claude-code provider
 // because rewiring agentsService() requires its own infrastructure;
 // what we verify is the provider-level behaviour. See

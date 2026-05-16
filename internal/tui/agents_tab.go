@@ -1834,14 +1834,6 @@ func agentsProviderChip(id agents.ProviderID) string {
 	return dot + " " + name
 }
 
-// providerChipFG returns the foreground colour used for the
-// provider's brand chip. Kept exported (as a package-level helper)
-// for the few callers that still want the raw colour — most callers
-// should reach for agentsProviderChip / providerBrandFG instead.
-func providerChipFG(id agents.ProviderID) color.Color {
-	return providerBrandFG(id)
-}
-
 // agentsStatusChip is a colored chip for session status. Empty status
 // renders as a single dim em-dash without a background fill.
 func agentsStatusChip(s agents.SessionStatus) string {
@@ -2579,38 +2571,6 @@ func agentsAvailableMarketplaces(s *agents.Snapshot) []string {
 		out = append(out, name)
 	}
 	sort.Strings(out)
-	return out
-}
-
-// agentsAvailableProviders returns the providers with at least one
-// row in the snapshot.
-func agentsAvailableProviders(s *agents.Snapshot) []agents.ProviderID {
-	if s == nil {
-		return nil
-	}
-	seen := make(map[agents.ProviderID]bool)
-	for _, mp := range s.Marketplaces {
-		seen[mp.Provider] = true
-	}
-	for _, p := range s.Plugins {
-		seen[p.Provider] = true
-	}
-	for _, sk := range s.Skills {
-		seen[sk.Provider] = true
-	}
-	for _, mc := range s.MCPs {
-		seen[mc.Provider] = true
-	}
-	for _, ss := range s.Sessions {
-		seen[ss.Provider] = true
-	}
-	order := []agents.ProviderID{agents.ProviderClaudeCode, agents.ProviderCopilotCLI, agents.ProviderMCPRegistry}
-	out := make([]agents.ProviderID, 0, len(order))
-	for _, id := range order {
-		if seen[id] {
-			out = append(out, id)
-		}
-	}
 	return out
 }
 

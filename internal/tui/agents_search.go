@@ -258,11 +258,12 @@ func (m *Model) renderAgentsSearchOverlay() string {
 
 	// Hits list.
 	var hitLines []string
-	if ov.Indexing {
+	switch {
+	case ov.Indexing:
 		hitLines = append(hitLines, dimVersion.Render("  building search index…"))
-	} else if ov.Query == "" {
+	case ov.Query == "":
 		hitLines = append(hitLines, dimVersion.Render("  type to search · Enter opens viewer · Esc closes"))
-	} else if len(ov.Hits) == 0 {
+	case len(ov.Hits) == 0:
 		hitLines = append(hitLines, dimVersion.Render("  no matches"))
 	}
 	const maxHits = 12
@@ -337,8 +338,7 @@ func renderAgentsTranscriptViewer(ov *agentsSearchState, width int) string {
 	var lines []string
 	header := lipgloss.NewStyle().Bold(true).Foreground(cyberPrimary).
 		Render("📜 transcript  ") + dimVersion.Render(truncAgentRow(ov.ViewerPath, width-12))
-	lines = append(lines, header)
-	lines = append(lines, "")
+	lines = append(lines, header, "")
 
 	for i := start; i < end; i++ {
 		l := ov.ViewerLines[i]

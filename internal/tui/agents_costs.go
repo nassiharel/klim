@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -255,16 +256,16 @@ func renderTokenBars(rows []tokenBarRow, total int) string {
 	if len(rows) == 0 {
 		return ""
 	}
-	max := rows[0].value
-	if total > max {
-		max = total
+	peak := rows[0].value
+	if total > peak {
+		peak = total
 	}
 	const barWidth = 24
 	var b strings.Builder
 	for _, r := range rows {
 		filled := 0
-		if max > 0 {
-			filled = r.value * barWidth / max
+		if peak > 0 {
+			filled = r.value * barWidth / peak
 		}
 		if filled < 0 {
 			filled = 0
@@ -322,19 +323,19 @@ func renderSparkline(buckets []int) string {
 		return ""
 	}
 	glyphs := []rune("▁▂▃▄▅▆▇█")
-	max := 0
+	peak := 0
 	for _, v := range buckets {
-		if v > max {
-			max = v
+		if v > peak {
+			peak = v
 		}
 	}
 	var b strings.Builder
 	for _, v := range buckets {
-		if max == 0 || v == 0 {
+		if peak == 0 || v == 0 {
 			b.WriteString(" ")
 			continue
 		}
-		idx := (v * (len(glyphs) - 1)) / max
+		idx := (v * (len(glyphs) - 1)) / peak
 		if idx >= len(glyphs) {
 			idx = len(glyphs) - 1
 		}
@@ -350,5 +351,5 @@ func formatTokens(n int) string {
 	if n >= 1_000 {
 		return fmt.Sprintf("%.1fK", float64(n)/1_000)
 	}
-	return fmt.Sprintf("%d", n)
+	return strconv.Itoa(n)
 }

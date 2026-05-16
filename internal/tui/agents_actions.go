@@ -57,9 +57,7 @@ func (m *Model) actionsForMarketplace(frame agentDetailFrame, row agentRow) []ag
 	}
 	url := mp.URL
 	return []agentAction{
-		{label: "Refresh", highlight: true, run: func() tea.Cmd {
-			return refreshAgentsCmd()
-		}},
+		{label: "Refresh", highlight: true, run: refreshAgentsCmd},
 		{label: "Remove", disabled: mp.Source == agents.SourceCatalogClaude || mp.Source == agents.SourceCatalogMCP, reason: "built-in marketplace cannot be removed",
 			run: func() tea.Cmd {
 				return providerActionCmd("removed marketplace "+mp.Name, func(ctx context.Context, p agents.Provider) error {
@@ -73,9 +71,7 @@ func (m *Model) actionsForMarketplace(frame agentDetailFrame, row agentRow) []ag
 			return copyTextCmd(url, "marketplace URL")
 		}},
 		{label: "Open plugin →", disabled: m.marketplacePluginCount(mp) == 0, reason: "no plugins from this marketplace in the current snapshot",
-			run: func() tea.Cmd {
-				return drillMarketplacePluginCmd()
-			}},
+			run: drillMarketplacePluginCmd},
 	}
 }
 

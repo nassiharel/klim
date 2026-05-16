@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// Plan inspects the snapshot and the spec and returns a runnable
+// Build inspects the snapshot and the spec and returns a runnable
 // Plan or one whose Conflict explains why it can't run. The planner
 // never mutates the filesystem or shells out — it just decides what
 // the executor would have to do.

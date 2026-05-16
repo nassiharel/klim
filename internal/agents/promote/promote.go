@@ -190,9 +190,8 @@ type Snapshot struct {
 // HasSkill returns true if the snapshot already has a skill with
 // (name, provider, scope) matching `s`.
 func (snap Snapshot) HasSkill(name, provider, scope string) bool {
-	name = strings.ToLower(name)
 	for _, sk := range snap.Skills {
-		if strings.ToLower(sk.Name) == name && sk.Provider == provider && (scope == "" || sk.Scope == scope) {
+		if strings.EqualFold(sk.Name, name) && sk.Provider == provider && (scope == "" || sk.Scope == scope) {
 			return true
 		}
 	}
@@ -202,9 +201,8 @@ func (snap Snapshot) HasSkill(name, provider, scope string) bool {
 // HasMCP returns true if the snapshot already has an MCP with
 // (name, provider) matching the args (scope is informational only).
 func (snap Snapshot) HasMCP(name, provider string) bool {
-	name = strings.ToLower(name)
 	for _, m := range snap.MCPs {
-		if strings.ToLower(m.Name) == name && m.Provider == provider {
+		if strings.EqualFold(m.Name, name) && m.Provider == provider {
 			return true
 		}
 	}
@@ -214,9 +212,8 @@ func (snap Snapshot) HasMCP(name, provider string) bool {
 // HasPlugin returns true if the plugin is already installed at the
 // target provider.
 func (snap Snapshot) HasPlugin(name, provider string) bool {
-	name = strings.ToLower(name)
 	for _, p := range snap.Plugins {
-		if strings.ToLower(p.Name) == name && p.Provider == provider && p.Installed {
+		if strings.EqualFold(p.Name, name) && p.Provider == provider && p.Installed {
 			return true
 		}
 	}

@@ -153,6 +153,7 @@ func runPromoteCmd(st *agentsState, spec promote.Spec) tea.Cmd {
 // promoteExecutor adapts agents.Service for promote.Executor.
 type promoteExecutor struct{ svc *agents.Service }
 
+// AddMCP routes a promote.OpAddMCP to the target provider's AddMCP.
 func (e *promoteExecutor) AddMCP(ctx context.Context, providerID string, op promote.ProviderOp) error {
 	p := e.svc.ProviderFor(agents.ProviderID(providerID))
 	if p == nil {
@@ -172,6 +173,8 @@ func (e *promoteExecutor) AddMCP(ctx context.Context, providerID string, op prom
 	})
 }
 
+// InstallPlugin routes a promote.OpInstallPlugin to the target
+// provider's InstallPlugin.
 func (e *promoteExecutor) InstallPlugin(ctx context.Context, providerID string, op promote.ProviderOp) error {
 	p := e.svc.ProviderFor(agents.ProviderID(providerID))
 	if p == nil {
@@ -290,9 +293,11 @@ func renderAgentsPromotePicker(st *agentsState, width int) string {
 	if pk.Force {
 		forceState = lipgloss.NewStyle().Foreground(cyberAccent).Render("on")
 	}
-	lines = append(lines, "")
-	lines = append(lines, dimVersion.Render(fmt.Sprintf("  Force overwrite: %s   (press F to toggle)", forceState)))
-	lines = append(lines, dimVersion.Render("  ↑/↓ pick · Enter run · Esc cancel"))
+	lines = append(lines,
+		"",
+		dimVersion.Render(fmt.Sprintf("  Force overwrite: %s   (press F to toggle)", forceState)),
+		dimVersion.Render("  ↑/↓ pick · Enter run · Esc cancel"),
+	)
 	return "\n" + box.Render(strings.Join(lines, "\n")) + "\n"
 }
 

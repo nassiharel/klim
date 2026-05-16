@@ -391,15 +391,15 @@ func renderAgentDetailFull(row agentRow, snap *agents.Snapshot) string {
 	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(cyberInfo)
 	switch {
 	case row.marketplace != nil:
-		fmt.Fprintln(tw, "  "+headerStyle.Render("Marketplace"))
+		_, _ = fmt.Fprintln(tw, "  "+headerStyle.Render("Marketplace"))
 	case row.plugin != nil:
-		fmt.Fprintln(tw, "  "+headerStyle.Render("Plugin"))
+		_, _ = fmt.Fprintln(tw, "  "+headerStyle.Render("Plugin"))
 	case row.skill != nil:
-		fmt.Fprintln(tw, "  "+headerStyle.Render("Skill"))
+		_, _ = fmt.Fprintln(tw, "  "+headerStyle.Render("Skill"))
 	case row.mcp != nil:
-		fmt.Fprintln(tw, "  "+headerStyle.Render("MCP server"))
+		_, _ = fmt.Fprintln(tw, "  "+headerStyle.Render("MCP server"))
 	case row.session != nil:
-		fmt.Fprintln(tw, "  "+headerStyle.Render("Session"))
+		_, _ = fmt.Fprintln(tw, "  "+headerStyle.Render("Session"))
 	}
 	_ = tw.Flush()
 	b.WriteString(renderAgentDetail(row, snap))
@@ -418,7 +418,7 @@ func renderAgentActionBar(actions []agentAction, focus, totalWidth int) string {
 		switch {
 		case a.disabled:
 			style = lipgloss.NewStyle().Foreground(cyberFGDim).Background(cyberChipBg).Padding(0, 1)
-			label = label + " ✗"
+			label += " ✗"
 		case i == focus:
 			style = lipgloss.NewStyle().Foreground(cyberSelectedBg).Background(cyberPrimary).Bold(true).Padding(0, 1)
 		case a.highlight:

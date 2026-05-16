@@ -24,10 +24,13 @@ type CachedEntry struct {
 	Days            map[string]Totals `yaml:"days,omitempty"`
 }
 
+// NewCache returns an empty Cache ready to be populated.
 func NewCache() *Cache {
 	return &Cache{Version: 1, Sessions: map[string]CachedEntry{}}
 }
 
+// LoadCache reads the on-disk cache. Missing file returns an empty
+// cache without error so callers treat that as a cold start.
 func LoadCache() (*Cache, error) {
 	path, err := paths.AgentCostsCache()
 	if err != nil {
@@ -47,6 +50,7 @@ func LoadCache() (*Cache, error) {
 	return c, nil
 }
 
+// Save writes the cache atomically. A nil receiver is a no-op.
 func (c *Cache) Save() error {
 	if c == nil {
 		return nil
@@ -58,6 +62,9 @@ func (c *Cache) Save() error {
 	return fileutil.WriteYAML(path, c, "# klim agent-costs cache - auto-generated\n")
 }
 
+// Samples flattens every cached entry into a TokenSample slice, one
+// sample per (session, day) bucket. Used by Build() so the Costs
+// report sees the full historical record.
 func (c *Cache) Samples() []TokenSample {
 	if c == nil {
 		return nil
@@ -83,6 +90,9 @@ func (c *Cache) Samples() []TokenSample {
 	return out
 }
 
+// AggregateSession folds the supplied samples for one session into
+// a CachedEntry, recording the transcript's mtime so subsequent
+// loads can skip reparsing unchanged files.
 func AggregateSession(samples []TokenSample, transcriptMtime time.Time) CachedEntry {
 	if len(samples) == 0 {
 		return CachedEntry{TranscriptMtime: transcriptMtime, Days: map[string]Totals{}}
@@ -110,6 +120,9 @@ func AggregateSession(samples []TokenSample, transcriptMtime time.Time) CachedEn
 	return entry
 }
 
+// PruneMissing drops cache entries whose session IDs are absent
+// from the present set. Used after every scan to keep the cache
+// from growing forever as the user deletes sessions.
 func (c *Cache) PruneMissing(present map[string]bool) {
 	if c == nil {
 		return
