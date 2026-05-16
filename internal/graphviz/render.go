@@ -17,14 +17,17 @@ type RenderOpts struct {
 	Unstyled bool
 }
 
-// renderMaxDim caps the canvas dimensions Render is willing to
-// allocate. Callers (including CLIs that accept user-supplied
-// --width/--height) should also validate at their boundary, but
-// Render enforces a hard ceiling so a buggy caller can't trigger
-// gigabyte-scale allocations. Any dimension above the cap is
-// clamped down silently — Render is a best-effort visualiser, not
-// a strict-mode renderer.
-const renderMaxDim = 2000
+// renderMaxDim caps each individual dimension; renderMaxArea caps
+// the total cell count to keep memory bounded even when both
+// dimensions are at their limit. Each cell carries a lipgloss style,
+// so 2000*2000 cells would be hundreds of MB under -race. The area
+// cap (~250k cells, roughly 500x500) keeps allocation under ~20 MB.
+// Anything above the limits is clamped down silently — Render is a
+// best-effort visualiser, not a strict-mode renderer.
+const (
+	renderMaxDim  = 2000
+	renderMaxArea = 250_000
+)
 
 // Render produces a terminal-printable string representation of the
 // graph using box-drawing characters. Nodes render as a single dot
@@ -43,6 +46,25 @@ func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 	}
 	if height > renderMaxDim {
 		height = renderMaxDim
+	}
+	// Area cap: shrink the larger dimension proportionally until
+	// width*height fits under renderMaxArea. The aspect ratio is
+	// preserved so the rendered graph looks the same, just smaller.
+	if int64(width)*int64(height) > int64(renderMaxArea) {
+		scale := float64(renderMaxArea) / (float64(width) * float64(height))
+		s := 1.0
+		// sqrt without importing math: small Newton step is enough.
+		for i := 0; i < 8; i++ {
+			s = 0.5 * (s + scale/s)
+		}
+		width = int(float64(width) * s)
+		height = int(float64(height) * s)
+		if width < 1 {
+			width = 1
+		}
+		if height < 1 {
+			height = 1
+		}
 	}
 	var o RenderOpts
 	if len(opts) > 0 {

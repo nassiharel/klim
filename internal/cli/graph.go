@@ -243,7 +243,11 @@ func groupByEdges(g *graphviz.Graph, tools []registry.Tool, getBuckets func(regi
 				if a > b {
 					a, b = b, a
 				}
-				key := a + "|" + b
+				// Use a length-prefixed pair key so a tool name
+				// containing the separator can't collide with a
+				// different pair. ("a|b","c") and ("a","b|c")
+				// both collapsed to "a|b|c" under the old key.
+				key := fmt.Sprintf("%d:%s\x00%d:%s", len(a), a, len(b), b)
 				if seen[key] {
 					continue
 				}

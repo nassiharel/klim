@@ -98,3 +98,21 @@ func TestGroupByEdges_DeterministicOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestGroupByEdges_NoKeyCollisionOnPipeCharacter(t *testing.T) {
+	// Regression: under the old "a|b" key scheme, the unordered
+	// pairs (a, b|c) and (a|b, c) both produced key "a|b|c", so
+	// only one edge would be drawn. With length-prefixed keys both
+	// pairs must produce distinct entries.
+	tools := []registry.Tool{
+		{Name: "a", Category: "shared"},
+		{Name: "b|c", Category: "shared"},
+		{Name: "a|b", Category: "shared"},
+		{Name: "c", Category: "shared"},
+	}
+	g := buildToolGraph(tools, "category")
+	// 4 nodes in one bucket → C(4,2) = 6 distinct edges.
+	if got := len(g.Edges); got != 6 {
+		t.Errorf("len(edges) = %d; want 6 (one per unique pair, including pipe-containing names)", got)
+	}
+}

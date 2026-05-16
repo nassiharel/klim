@@ -2,14 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/klim/internal/audit"
 	"github.com/nassiharel/klim/internal/badge"
-	"github.com/nassiharel/klim/internal/compliance"
-	"github.com/nassiharel/klim/internal/doctor"
 	"github.com/nassiharel/klim/internal/registry"
 	"github.com/nassiharel/klim/internal/score"
 )
@@ -93,35 +89,10 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 	}
 	sp.Stop()
 
-	// Reuse the existing inputs the score CLI builds — keep them in
-	// sync so `klim score` and `klim badge` never disagree.
-	doctorIssues := doctor.Diagnose(tools, doctor.ScanMeta{})
-	var compResult *compliance.Result
-	var compErrStr string
-	if policyPath := findPolicyPath(cfgFrom(cmd)); policyPath != "" {
-		policy, loadErr := compliance.LoadPolicy(policyPath)
-		if loadErr != nil {
-			// Surface the policy error on stderr the same way
-			// `klim score` does — without this, a user can get
-			// a worse badge with no visible explanation.
-			_, _ = fmt.Fprintf(os.Stderr, "  ⚠ Compliance policy error: %v\n", loadErr)
-			compErrStr = loadErr.Error()
-		} else {
-			r := compliance.Check(policy, tools, loadVulnSeveritiesForCompliance())
-			compResult = &r
-		}
-	}
-	findings, _ := audit.Analyze(tools)
-	auditWarns, auditInfos := audit.CountBySeverity(findings)
-
-	result := score.Compute(score.Input{
-		Tools:         tools,
-		DoctorIssues:  doctorIssues,
-		AuditWarnings: auditWarns,
-		AuditInfos:    auditInfos,
-		CompResult:    compResult,
-		ComplianceErr: compErrStr,
-	})
+	// Share the score-input assembly with runScore so the two
+	// commands can't disagree on what counts as the canonical
+	// inputs (doctor + compliance + audit) for a given scan.
+	result, auditWarns, auditInfos := buildScoreInputs(cmd, tools)
 
 	pct := 0
 	if result.MaxTotal > 0 {

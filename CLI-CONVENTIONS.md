@@ -34,10 +34,11 @@ Every command that produces structured data accepts a subset of:
   usage error and exits 2 — it does **not** silently fall back to text.
 * Unknown values (e.g. `--output=jsno`) are usage errors and exit 2.
 
-Commands that wire `OutputText, OutputJSON` (JSON + text only): `audit`,
-`check`, `compliance check`, `diff`, `doctor`, `info`, `list`, `score`,
-`search`, `share`, `tools path`, `trail log`, `trail show`, `trail diff`,
-`watch`, `why`, and `config marketplace list`.
+Commands that wire `OutputText, OutputJSON` (JSON + text only): `apply`,
+`audit`, `check`, `compliance check`, `diff`, `doctor`, `health path`,
+`info`, `install`, `list`, `marketplace list`, `plan`, `remove`,
+`rollback`, `score`, `search`, `security vuln`, `share`, `tools path`,
+`trail log`, `trail show`, `trail diff`, `upgrade`, `watch`, `why`.
 
 Commands that additionally wire `OutputYAML`: `agents list`,
 `agents search`, `badge`, `env`. (`export` already emits YAML by design.)

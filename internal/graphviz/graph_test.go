@@ -179,3 +179,25 @@ func TestRender_DimensionCapPreventsOOM(t *testing.T) {
 		t.Errorf("Render output suspiciously large (%d bytes); cap not applied?", len(got))
 	}
 }
+
+func TestRender_AreaCap(t *testing.T) {
+	// Dimensions inside the per-axis cap can still exceed the area
+	// cap (2000 * 2000 = 4M cells). Render must scale them down
+	// before allocating the canvas.
+	g := New()
+	g.AddNode("a", "x", 0)
+	got := g.Render(2000, 2000, RenderOpts{Unstyled: true})
+	if got == "" {
+		t.Fatal("Render returned empty for 2000x2000")
+	}
+	// Each rendered row ends with '\n'. Count rows: should be far
+	// below 2000 because the area cap shrinks both axes.
+	rows := strings.Count(got, "\n")
+	if rows >= 2000 {
+		t.Errorf("Render at 2000x2000 produced %d rows; area cap not applied", rows)
+	}
+	// Total output bytes should be well under the un-capped size.
+	if len(got) > 5_000_000 {
+		t.Errorf("Render output %d bytes; area cap not applied", len(got))
+	}
+}

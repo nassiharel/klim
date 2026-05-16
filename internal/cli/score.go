@@ -7,9 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/klim/internal/audit"
-	"github.com/nassiharel/klim/internal/compliance"
-	"github.com/nassiharel/klim/internal/doctor"
 	"github.com/nassiharel/klim/internal/score"
 )
 
@@ -49,34 +46,7 @@ func runScore(cmd *cobra.Command, args []string) error {
 	}
 	sp.Stop()
 
-	// Run doctor.
-	doctorIssues := doctor.Diagnose(tools, doctor.ScanMeta{})
-
-	// Run compliance if configured.
-	var compResult *compliance.Result
-	var compErrStr string
-	if policyPath := findPolicyPath(cfgFrom(cmd)); policyPath != "" {
-		policy, loadErr := compliance.LoadPolicy(policyPath)
-		if loadErr != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "  ⚠ Compliance policy error: %v\n", loadErr)
-			compErrStr = loadErr.Error()
-		} else {
-			r := compliance.Check(policy, tools, loadVulnSeveritiesForCompliance())
-			compResult = &r
-		}
-	}
-
-	findings, _ := audit.Analyze(tools)
-	auditWarns, auditInfos := audit.CountBySeverity(findings)
-
-	result := score.Compute(score.Input{
-		Tools:         tools,
-		DoctorIssues:  doctorIssues,
-		AuditWarnings: auditWarns,
-		AuditInfos:    auditInfos,
-		CompResult:    compResult,
-		ComplianceErr: compErrStr,
-	})
+	result, _, _ := buildScoreInputs(cmd, tools)
 
 	if scoreBadgeFlag {
 		fmt.Println(score.BadgeURL(result))
