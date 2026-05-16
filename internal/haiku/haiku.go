@@ -43,6 +43,11 @@ type Options struct {
 
 // Haiku is the rendered three-line poem.
 type Haiku struct {
+	// Seed is the actual int64 seed used to generate this poem,
+	// after resolving Options.Seed==0 to defaultSeed(name). Callers
+	// rendering structured output should report Haiku.Seed (not
+	// Options.Seed) so consumers can reproduce the exact poem.
+	Seed  int64
 	Lines [3]string
 }
 
@@ -67,7 +72,7 @@ func Generate(t Tool, opts Options) Haiku {
 	line1 := buildLine(rand.New(rand.NewSource(seed^0xA5A5A5A5)), line5Templates, 5, pal, t) //nolint:gosec
 	line2 := buildLine(rand.New(rand.NewSource(seed^0x5A5A5A5A)), line7Templates, 7, pal, t) //nolint:gosec
 	line3 := buildLine(rand.New(rand.NewSource(seed^0x3C3C3C3C)), line5Templates, 5, pal, t) //nolint:gosec
-	return Haiku{Lines: [3]string{line1, line2, line3}}
+	return Haiku{Seed: seed, Lines: [3]string{line1, line2, line3}}
 }
 
 // defaultSeed derives a stable int64 seed from a tool name so the

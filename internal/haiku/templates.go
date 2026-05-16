@@ -217,17 +217,15 @@ func buildLine(rng *rand.Rand, pool []template, target int, pal palette, t Tool)
 }
 
 // fallbackLine returns a line guaranteed to count to `target`
-// syllables via CountLine. We do this by composing a pool of
-// pre-counted phrase fragments and picking whichever combination
-// hits the goal. If even the safest combination fails (e.g. a tool
-// name with weird-counted syllables), we pad with "and so" / "yes
-// then" until we reach the target — clumsy but always valid.
+// syllables via CountLine. We try a pool of name-aware templates
+// first; if none match (rare — e.g. a tool name whose syllable count
+// the heuristic gets unusually wrong) we fall through to a hard-coded
+// constant per target, verified by TestFallback_HardLines.
 //
 // PR-78 review: previously fallbackLine returned hand-written
 // strings that broke the 5-7-5 contract for many tool names.
 func fallbackLine(name string, target int) string {
 	name = capitalise(strings.TrimSpace(name))
-	nameSyl := CountSyllables(name)
 
 	// 5-syllable templates first; each has a fixed syllable count
 	// excluding the name. We pick the first one whose remaining
@@ -265,7 +263,6 @@ func fallbackLine(name string, target int) string {
 	default:
 		return name
 	}
-	_ = nameSyl // reserved for future name-aware refinement
 	for _, o := range pool {
 		candidate := o.prefix + name + o.suffix
 		if CountLine(candidate) == target {

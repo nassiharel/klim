@@ -94,3 +94,41 @@ func TestEdge_UnknownNodesAreNoOps(t *testing.T) {
 		t.Errorf("displacement < 0 with unknown edge node: %v", d)
 	}
 }
+
+func TestRender_UnstyledHasNoANSIEscapes(t *testing.T) {
+	// PR-78 review: regression guard for README/pipe rendering.
+	// When RenderOpts.Unstyled is true the output must contain no
+	// ANSI escape (\x1b) characters so it can be pasted into a
+	// markdown code fence or piped into a file unchanged.
+	g := New()
+	g.AddNode("a", "Alpha", 1)
+	g.AddNode("b", "Beta", 2)
+	g.AddEdge("a", "b")
+	g.Layout(50, 1e-4)
+	got := g.Render(40, 10, RenderOpts{Unstyled: true})
+	if strings.ContainsRune(got, 0x1b) {
+		t.Errorf("Unstyled render still contains ANSI escape (\\x1b):\n%q", got)
+	}
+}
+
+func TestRender_StyledMayContainANSIEscapes(t *testing.T) {
+	// Counterpart sanity check: the default styled path *does*
+	// use lipgloss styling, so the absence of escapes there would
+	// mean lipgloss became a no-op (worth knowing).
+	g := New()
+	g.AddNode("a", "Alpha", 1)
+	g.Layout(10, 1e-4)
+	got := g.Render(40, 10)
+	if !strings.ContainsRune(got, 0x1b) {
+		t.Logf("note: styled render produced no ANSI escapes; lipgloss may have disabled colour (e.g. NO_COLOR)")
+	}
+}
+
+func TestLayout_NegativeItersReturnsZero(t *testing.T) {
+	// PR-78 review: contract is "iterations actually executed".
+	g := New()
+	g.AddNode("a", "A", 0)
+	if got := g.Layout(-5, 1e-4); got != 0 {
+		t.Errorf("Layout(-5) = %d; want 0", got)
+	}
+}

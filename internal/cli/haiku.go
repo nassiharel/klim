@@ -43,6 +43,9 @@ func init() {
 }
 
 // haikuReport is the structured shape for --output json|yaml.
+// Seed always reports the resolved int64 used to generate Lines
+// (NOT the user-supplied --seed override), so a downstream consumer
+// can reproduce the exact same haiku by passing it back.
 type haikuReport struct {
 	Tool  string    `json:"tool" yaml:"tool"`
 	Seed  int64     `json:"seed" yaml:"seed"`
@@ -79,9 +82,9 @@ func runHaiku(cmd *cobra.Command, args []string) error {
 
 	switch out {
 	case OutputJSON:
-		return printJSON(haikuReport{Tool: tool.Name, Seed: haikuSeed, Lines: h.Lines})
+		return printJSON(haikuReport{Tool: tool.Name, Seed: h.Seed, Lines: h.Lines})
 	case OutputYAML:
-		return printYAML(haikuReport{Tool: tool.Name, Seed: haikuSeed, Lines: h.Lines})
+		return printYAML(haikuReport{Tool: tool.Name, Seed: h.Seed, Lines: h.Lines})
 	}
 
 	fmt.Println(h.String())

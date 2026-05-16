@@ -17,12 +17,11 @@ import (
 )
 
 var (
-	graphTUI         bool
-	graphBy          string
-	graphMaxIters    int
-	graphTermWidth   int
-	graphTermHeight  int
-	graphRefreshFlag bool
+	graphTUI        bool
+	graphBy         string
+	graphMaxIters   int
+	graphTermWidth  int
+	graphTermHeight int
 )
 
 var graphCmd = &cobra.Command{
@@ -48,9 +47,8 @@ func init() {
 	graphCmd.Flags().BoolVar(&graphTUI, "tui", false, "open the animated fullscreen TUI viewer")
 	graphCmd.Flags().StringVar(&graphBy, "by", "category", "edge meaning: category|tag|pm")
 	graphCmd.Flags().IntVar(&graphMaxIters, "iters", 200, "max layout iterations for the static snapshot")
-	graphCmd.Flags().IntVar(&graphTermWidth, "width", 0, "render width (0 = autodetect)")
-	graphCmd.Flags().IntVar(&graphTermHeight, "height", 0, "render height (0 = autodetect)")
-	graphCmd.Flags().BoolVar(&graphRefreshFlag, "refresh", false, "ignore the scan cache and rescan")
+	graphCmd.Flags().IntVar(&graphTermWidth, "width", 0, "render width (0 = autodetect; static snapshot only — ignored / rejected with --tui)")
+	graphCmd.Flags().IntVar(&graphTermHeight, "height", 0, "render height (0 = autodetect; static snapshot only — ignored / rejected with --tui)")
 	// Registered in root.go.
 }
 
@@ -75,8 +73,18 @@ func runGraph(cmd *cobra.Command, _ []string) error {
 	if !valid {
 		return usageErrorf("--by %q is not supported (valid: %s)", graphBy, strings.Join(validGraphByValues, ", "))
 	}
+	// PR-78 review: --width/--height only configure the static
+	// snapshot renderer; the TUI sizes itself from WindowSizeMsg.
+	// Silently dropping them surprises users, so reject the combo.
+	if graphTUI && (graphTermWidth > 0 || graphTermHeight > 0) {
+		return usageErrorf("--width/--height are static-snapshot only; the --tui viewer sizes itself from the terminal")
+	}
 	svc := svcFrom(cmd)
-	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), graphRefreshFlag)
+	// PR-78 review: graph only needs installed/not + instance
+	// sources; full version resolution is wasted work (cold cache
+	// can fan out package-manager subprocesses for every catalog
+	// tool). ScanOnly gives us exactly what buildToolGraph reads.
+	tools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("klim graph: %w", err)
 	}
@@ -94,10 +102,10 @@ func runGraph(cmd *cobra.Command, _ []string) error {
 	g.Layout(graphMaxIters, 1e-4)
 	w, h := resolveGraphDimensions(graphTermWidth, graphTermHeight)
 
-	// When stdout isn't a TTY, render unstyled (no ANSI escapes) so
-	// the snapshot is friendly to README-paste / pipe-to-file.
 	unstyled := !isStdoutTerminal()
-	fmt.Println(g.Render(w, h, graphviz.RenderOpts{Unstyled: unstyled}))
+	// PR-78 review: Render already terminates each row with '\n',
+	// so fmt.Println would add a trailing blank line.
+	fmt.Print(g.Render(w, h, graphviz.RenderOpts{Unstyled: unstyled}))
 	return nil
 }
 

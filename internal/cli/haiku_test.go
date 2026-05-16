@@ -1,0 +1,90 @@
+package cli
+
+import (
+	"errors"
+	"testing"
+)
+
+// TestHaikuCmd_RequiresOneArg verifies Cobra's Args validator rejects
+// both empty and multi-arg invocations with a UsageError (exit 2).
+func TestHaikuCmd_RequiresOneArg(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"no args", []string{}},
+		{"too many args", []string{"a", "b"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := haikuCmd.Args(haikuCmd, tc.args); err == nil {
+				t.Fatalf("haikuCmd.Args(%v) returned nil; want UsageError", tc.args)
+			}
+		})
+	}
+}
+
+// TestHaikuCmd_HasOutputFlag confirms --output is wired so JSON/YAML
+// callers don't silently fall back to text.
+func TestHaikuCmd_HasOutputFlag(t *testing.T) {
+	if haikuCmd.Flags().Lookup("output") == nil {
+		t.Error("haikuCmd is missing --output flag")
+	}
+	if haikuCmd.Flags().Lookup("seed") == nil {
+		t.Error("haikuCmd is missing --seed flag")
+	}
+}
+
+// TestHaikuReport_SeedFieldType protects the canonical structured
+// shape: tool name (string), resolved seed (int64), three lines.
+func TestHaikuReport_SeedFieldType(t *testing.T) {
+	r := haikuReport{Tool: "t", Seed: 42, Lines: [3]string{"a", "b", "c"}}
+	if r.Seed != 42 {
+		t.Errorf("Seed not preserved: got %d", r.Seed)
+	}
+	if len(r.Lines) != 3 {
+		t.Errorf("Lines length = %d; want 3", len(r.Lines))
+	}
+}
+
+// TestHaikuCmd_LongHelp_NoMisleadingNetworkClaim guards against
+// re-introducing the standalone "No network. No agent. Pure delight."
+// promise (PR-78 review). The current help is allowed to mention
+// network in context (e.g. explaining when a cache refresh happens).
+func TestHaikuCmd_LongHelp_NoMisleadingNetworkClaim(t *testing.T) {
+	if got := haikuCmd.Long; got == "" {
+		t.Fatal("haikuCmd.Long is empty")
+	} else if containsCaseInsensitive(got, "No network. No agent.") {
+		t.Errorf("haikuCmd.Long still contains the misleading 'No network. No agent.' promise:\n%s", got)
+	}
+}
+
+// Tiny case-insensitive helper kept local — strings.Contains with
+// ToLower elsewhere in cli/ would be fine too, but isolating it
+// makes the test's intent obvious.
+func containsCaseInsensitive(s, substr string) bool {
+	if len(substr) == 0 {
+		return true
+	}
+	ls, lsub := lowerCopy(s), lowerCopy(substr)
+	for i := 0; i+len(lsub) <= len(ls); i++ {
+		if ls[i:i+len(lsub)] == lsub {
+			return true
+		}
+	}
+	return false
+}
+
+func lowerCopy(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if c >= 'A' && c <= 'Z' {
+			b[i] = c + 32
+		}
+	}
+	return string(b)
+}
+
+// Touch errors import so future test additions importing UsageError
+// don't surprise the linter with a missing import.
+var _ = errors.New

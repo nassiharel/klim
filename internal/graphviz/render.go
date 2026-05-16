@@ -35,9 +35,18 @@ func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 	}
 	canvas := newCanvas(width, height, o.Unstyled)
 
+	// PR-78 review: build an ID->Node lookup once per Render so
+	// edgePositions is O(1) per edge instead of O(N). klim graph --tui
+	// re-renders at ~10fps over potentially dense edge sets.
+	byID := make(map[string]Node, len(g.Nodes))
+	for _, n := range g.Nodes {
+		byID[n.ID] = n
+	}
+
 	for _, e := range g.Edges {
-		a, b, ok := g.edgePositions(e)
-		if !ok {
+		a, aok := byID[e.From]
+		b, bok := byID[e.To]
+		if !aok || !bok {
 			continue
 		}
 		x1, y1 := worldToGrid(a.x, a.y, width, height)
@@ -63,18 +72,7 @@ func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 	return canvas.String()
 }
 
-func (g *Graph) edgePositions(e Edge) (a, b Node, ok bool) {
-	for _, n := range g.Nodes {
-		if n.ID == e.From {
-			a = n
-		}
-		if n.ID == e.To {
-			b = n
-		}
-	}
-	return a, b, a.ID != "" && b.ID != ""
-}
-
+// worldToGrid clamps a [0,1] coordinate into integer grid space.
 func worldToGrid(x, y float64, width, height int) (int, int) {
 	gx := int(x * float64(width-1))
 	gy := int(y * float64(height-1))
