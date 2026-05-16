@@ -118,10 +118,18 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 		ComplianceErr: compErrStr,
 	})
 
+	pct := 0
+	if result.MaxTotal > 0 {
+		pct = result.Total * 100 / result.MaxTotal
+	}
 	in := badge.Inputs{
-		ScorePoints:  result.Total,
-		ScoreMax:     result.MaxTotal,
-		ScoreGrade:   result.Grade,
+		ScorePoints: result.Total,
+		ScoreMax:    result.MaxTotal,
+		ScoreGrade:  result.Grade,
+		// PR-78 review: route the score badge's colour through the
+		// same helper `klim score --badge` uses so the two commands
+		// never disagree on the same input.
+		ScoreColor:   score.BadgeColor(pct),
 		ToolCount:    countInstalled(tools),
 		AuditIssues:  auditWarns + auditInfos,
 		FreshPercent: freshPercent(tools),

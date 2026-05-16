@@ -66,25 +66,36 @@ func Compute(input Input) Result {
 }
 
 // BadgeURL returns a shields.io badge URL for the score.
+// BadgeURL returns a shields.io badge URL for the score. The color
+// uses BadgeColor so any caller building their own score badge stays
+// in sync with this canonical URL builder.
 func BadgeURL(r Result) string {
 	pct := 0
 	if r.MaxTotal > 0 {
 		pct = r.Total * 100 / r.MaxTotal
 	}
-	color := "brightgreen"
-	switch {
-	case pct < 50:
-		color = "red"
-	case pct < 70:
-		color = "orange"
-	case pct < 85:
-		color = "yellow"
-	case pct < 95:
-		color = "yellowgreen"
-	}
+	color := BadgeColor(pct)
 	label := url.PathEscape("klim score")
 	value := url.PathEscape(fmt.Sprintf("%d/%d %s", r.Total, r.MaxTotal, r.Grade))
 	return fmt.Sprintf("https://img.shields.io/badge/%s-%s-%s", label, value, color)
+}
+
+// BadgeColor returns the Shields.io color name for the given
+// percentage 0..100. Public so other packages can render
+// score-equivalent badges without duplicating the threshold table
+// (and silently drifting from `klim score --badge`'s colors).
+func BadgeColor(pct int) string {
+	switch {
+	case pct < 50:
+		return "red"
+	case pct < 70:
+		return "orange"
+	case pct < 85:
+		return "yellow"
+	case pct < 95:
+		return "yellowgreen"
+	}
+	return "brightgreen"
 }
 
 func grade(points, maximum int) string {

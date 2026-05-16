@@ -16,15 +16,19 @@
 //
 // # Colour thresholds
 //
-// Score / Fresh follow a "percent of max" scale (see colorByPercent
-// and colorByFreshness in badge.go):
+// Score: routes through internal/score.BadgeColor so it always
+// matches `klim score --badge`. Callers should set Inputs.ScoreColor
+// to score.BadgeColor(percent) for that alignment; when ScoreColor
+// is empty Build falls back to a local "good enough" table
+// (colorByPercent below) so the package stays usable without a
+// score dependency.
 //
-//	      Score              Fresh
-//	>=  90  brightgreen      ==100  brightgreen
-//	>=  75  green            >=90   green
-//	>=  60  yellow           >=75   yellow
-//	>=  40  orange           else   red
-//	else    red
+// Fresh:
+//
+//	==100  brightgreen
+//	>=90   green
+//	>=75   yellow
+//	else   red
 //
 // Tools is informational: blue when >=1 installed, lightgrey when 0.
 //
@@ -75,6 +79,13 @@ type Inputs struct {
 	ScoreMax    int    // max score (avoid div-by-zero issues)
 	ScoreGrade  string // A+/A/B/… per score.Result
 
+	// ScoreColor, when non-empty, overrides the colour the score
+	// badge would otherwise compute. PR-78 review: the cleanest way
+	// to keep `klim badge` and `klim score --badge` in sync is to
+	// let the caller pass `score.BadgeColor(percent)` here, so both
+	// commands route through the same canonical helper.
+	ScoreColor string
+
 	ToolCount int // count of installed tools
 
 	AuditIssues int // total vuln findings (errors+warnings)
@@ -116,11 +127,15 @@ func ByID(in Inputs, ids ...string) []Badge {
 func scoreBadge(in Inputs) Badge {
 	pct := pctOf(in.ScorePoints, in.ScoreMax)
 	value := fmt.Sprintf("%d/%d %s", in.ScorePoints, in.ScoreMax, strings.TrimSpace(in.ScoreGrade))
+	color := in.ScoreColor
+	if color == "" {
+		color = colorByPercent(pct)
+	}
 	return Badge{
 		ID:    "score",
 		Label: "klim score",
 		Value: value,
-		Color: colorByPercent(pct),
+		Color: color,
 	}
 }
 

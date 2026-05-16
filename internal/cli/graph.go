@@ -40,6 +40,7 @@ Examples:
   klim graph --tui                 # animated 10fps fullscreen
   klim graph --by tag              # connect tools that share any tag
   klim graph --by pm               # connect tools that share an installed PM`,
+	Args: cobra.NoArgs,
 	RunE: runGraph,
 }
 
