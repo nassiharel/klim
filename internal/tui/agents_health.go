@@ -157,7 +157,10 @@ func (m *Model) renderAgentsHealthView() string {
 		return b.String()
 	}
 	if !hs.loaded {
-		b.WriteString("  press 7 (or r) to scan the agent ecosystem for problems\n")
+		// PR #77 review: `7` now switches to the Health *parent* tab,
+		// not a scan inside Agents → Health. The actual refresh key
+		// handled in handleAgentsHealthKey is `r`.
+		b.WriteString("  press r to scan the agent ecosystem for problems\n")
 		return b.String()
 	}
 

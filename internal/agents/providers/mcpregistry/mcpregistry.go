@@ -115,8 +115,12 @@ func (p *Provider) Skills(_ context.Context) ([]agents.Skill, error) {
 // 5xx response was indistinguishable from "registry empty". We now
 // propagate the first error so the Service-level scan can attach it
 // to the provider's Status and the doctor command can surface it.
-// Any servers parsed before the failure are still returned alongside
-// the error so a partial-page response isn't lost.
+//
+// On a per-page failure (build URL, HTTP request, non-2xx response,
+// or JSON decode) any successfully-parsed earlier pages are returned
+// alongside the error. The decoder is all-or-nothing within a single
+// page — partially-decoded servers from the failing page itself are
+// NOT preserved.
 func (p *Provider) MCPs(ctx context.Context) ([]agents.MCP, error) {
 	api := p.APIURL
 	if api == "" {

@@ -224,9 +224,11 @@ func scanProvider(ctx context.Context, p Provider) providerResults {
 		r.mcps = v
 	} else {
 		record(err)
-		// mcp-registry now returns partial results + error on HTTP
-		// failure; keep whatever it gave us so a flaky 5xx on the
-		// last page doesn't lose the first page's entries.
+		// mcp-registry returns (successfully-parsed earlier pages,
+		// err) on per-page failures; preserve whatever it gave us so
+		// a 5xx on the second page doesn't lose the first page's
+		// entries. Note: a partially-decoded page is NOT preserved
+		// (json.Decode is all-or-nothing per page).
 		if v != nil {
 			r.mcps = v
 		}

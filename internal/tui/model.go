@@ -702,7 +702,12 @@ func (m Model) Init() tea.Cmd {
 		tickFrame(),
 		func() tea.Msg { return findToolsCmd(m.svc, false, gen)() },
 	}
-	if m.cfg == nil || m.cfg.UI.AutoCheckUpdatesEnabled() {
+	// PR #77 review: when m.cfg is nil (early bootstrap / error
+	// recovery paths) we now skip the background self-update check
+	// rather than silently hitting GitHub. Users on a valid cfg
+	// still get the auto-check unless they opt out via
+	// ui.auto_check_updates: false.
+	if m.cfg != nil && m.cfg.UI.AutoCheckUpdatesEnabled() {
 		batch = append(batch, backgroundSelfUpdateCheck())
 	}
 	return tea.Batch(batch...)

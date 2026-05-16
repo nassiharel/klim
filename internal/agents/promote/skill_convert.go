@@ -2,7 +2,6 @@ package promote
 
 import (
 	"bytes"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -100,6 +99,3 @@ var skillFileRead = func(path string) ([]byte, error) {
 var osReadFile = func(path string) ([]byte, error) {
 	return readFileBridge(path)
 }
-
-// strings import is kept indirectly via convertSkillFrontmatter callers.
-var _ = strings.HasPrefix
