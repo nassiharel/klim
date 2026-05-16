@@ -45,6 +45,17 @@ var (
 	// ── Rules / borders ─────────────────────────────────────────
 	cyberRule       = lipgloss.Color("#1f2d40") // subtle separator
 	cyberRuleBright = lipgloss.Color("#3b6080") // mid-tier divider / active boundary
+
+	// ── Brand colours for the Agents tab ────────────────────────
+	// Anthropic's signature warm orange — used as the circle dot
+	// next to "claude" entities. Sampled from the Claude product
+	// chrome (the brand colour Anthropic uses on claude.ai).
+	claudeBrand = lipgloss.Color("#cc785c")
+	// GitHub Copilot's product purple — used for "copilot" entities.
+	copilotBrand = lipgloss.Color("#8957e5")
+	// MCP Registry gets the same amber accent we use for warnings
+	// — distinct from the two CLI providers.
+	mcpBrand = lipgloss.Color("#ffb000")
 )
 
 // Reusable style tokens — every render path should reach for one of
