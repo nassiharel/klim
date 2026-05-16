@@ -45,6 +45,7 @@ const (
 	tabDoctor // Security parent (Audit + Compliance)
 	tabProfile
 	tabHealth // Environment Health parent (Issues + PATH)
+	tabAgents // Agents parent (Marketplaces / Plugins / Skills / MCPs / Sessions)
 	tabCount  // sentinel: total number of tab constants. Cycling is
 	// driven by parentTabOrder/parentIndex below — do not use
 	// tabCount for `(activeTab+1)%tabCount` cycling, since that
@@ -69,6 +70,7 @@ var parentTabOrder = []int{
 	tabDiscover,  // Marketplace
 	tabProject,
 	tabDashboard,
+	tabAgents,  // Agents (Marketplaces / Plugins / Skills / MCPs / Sessions)
 	tabProfile, // My Profile
 	tabHealth,  // Health (Issues + PATH)
 	tabDoctor,  // Security (Audit + Compliance)
@@ -89,16 +91,18 @@ func parentIndex(tab int) int {
 		return 2
 	case tabDashboard:
 		return 3
-	case tabProfile:
+	case tabAgents:
 		return 4
-	case tabHealth:
+	case tabProfile:
 		return 5
-	case tabDoctor:
+	case tabHealth:
 		return 6
-	case tabBackup:
+	case tabDoctor:
 		return 7
-	case tabConfig:
+	case tabBackup:
 		return 8
+	case tabConfig:
+		return 9
 	}
 	return 0
 }
@@ -270,6 +274,12 @@ type Model struct {
 	// Status message (transient, e.g. error feedback).
 	statusMsg string
 
+	// updateAvailable, when set, surfaces a subtle hint in the title
+	// bar pointing the user at `klim update`. Populated by the
+	// background self-update check at startup (24h cached). Empty
+	// for dev builds and when no newer version is available.
+	updateAvailable string
+
 	// Action confirmation state.
 	pendingAction *pendingAction // nil = no pending confirmation
 
@@ -398,6 +408,9 @@ type Model struct {
 	healthPathShadowIdx int    // selected shadowed copy under that tool
 	healthPathDirIdx    int    // selected row in By-PATH-dir view
 	healthPathStatus    string // transient banner: last uninstall result
+
+	// Agents tab — self-contained state. See agents_tab.go.
+	agents *agentsState
 
 	// Health → Issues "fix wizard" modal. Zero value means closed.
 	// See health_fix_modal.go for the rendering + key handling.
@@ -577,31 +590,34 @@ func (m *Model) gotoParentTab(parent int) (tea.Model, tea.Cmd) {
 	case tabDashboard:
 		_, cmd := m.switchToTabByNumber("4")
 		return *m, cmd
-	case tabProfile:
+	case tabAgents:
 		_, cmd := m.switchToTabByNumber("5")
 		return *m, cmd
-	case tabHealth:
+	case tabProfile:
 		_, cmd := m.switchToTabByNumber("6")
 		return *m, cmd
-	case tabDoctor:
+	case tabHealth:
 		_, cmd := m.switchToTabByNumber("7")
 		return *m, cmd
-	case tabBackup:
+	case tabDoctor:
 		_, cmd := m.switchToTabByNumber("8")
 		return *m, cmd
-	case tabConfig:
+	case tabBackup:
 		_, cmd := m.switchToTabByNumber("9")
+		return *m, cmd
+	case tabConfig:
+		_, cmd := m.switchToTabByNumber("0")
 		return *m, cmd
 	}
 	return *m, nil
 }
 
-// switchToTabByNumber handles "1".."9" key presses by switching to the
-// corresponding parent tab. Returns (handled, cmd). If !handled the key
-// was not a recognised tab number.
+// switchToTabByNumber handles "1".."9" + "0" key presses by switching
+// to the corresponding parent tab. Returns (handled, cmd). If !handled
+// the key was not a recognised tab number.
 //
 // New mapping (1=My Tools, 2=Marketplace, 3=Project, 4=Dashboard,
-// 5=My Profile, 6=Health, 7=Security, 8=Backup, 9=Config).
+// 5=Agents, 6=My Profile, 7=Health, 8=Security, 9=Backup, 0=Config).
 func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 	switch key {
 	case "1":
@@ -629,6 +645,11 @@ func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 		m.myBackupFiles = scanBackupsDir()
 		return true, nil
 	case "5":
+		m.activeTab = tabAgents
+		m.cursor = 0
+		cmd := m.agentsInit()
+		return true, cmd
+	case "6":
 		m.activeTab = tabProfile
 		m.cursor = 0
 		// Defer env build until the initial scan finishes — the
@@ -646,21 +667,21 @@ func (m *Model) switchToTabByNumber(key string) (bool, tea.Cmd) {
 		}
 		cmd := m.startEnvSubview()
 		return true, cmd
-	case "6":
+	case "7":
 		m.activeTab = tabHealth
 		m.cursor = 0
 		m.healthScroll = 0
 		return true, nil
-	case "7":
+	case "8":
 		m.activeTab = tabDoctor
 		m.cursor = 0
 		m.doctorScroll = 0
 		return true, nil
-	case "8":
+	case "9":
 		m.activeTab = tabBackup
 		m.cursor = 0
 		return true, nil
-	case "9":
+	case "0":
 		m.activeTab = tabConfig
 		m.cursor = 0
 		m.configScroll = 0
@@ -677,10 +698,19 @@ func (m Model) Init() tea.Cmd {
 	// Init has a value receiver and can't mutate the model. The
 	// 10 fps frameMsg loop drives every animation (HUD pulse, scan
 	// strip spinner, boot splash reveal) — no second ticker.
-	return tea.Batch(
+	batch := []tea.Cmd{
 		tickFrame(),
 		func() tea.Msg { return findToolsCmd(m.svc, false, gen)() },
-	)
+	}
+	// PR #77 review: when m.cfg is nil (early bootstrap / error
+	// recovery paths) we now skip the background self-update check
+	// rather than silently hitting GitHub. Users on a valid cfg
+	// still get the auto-check unless they opt out via
+	// ui.auto_check_updates: false.
+	if m.cfg != nil && m.cfg.UI.AutoCheckUpdatesEnabled() {
+		batch = append(batch, backgroundSelfUpdateCheck())
+	}
+	return tea.Batch(batch...)
 }
 
 // startScan prepares the model for a new scan, invalidating any in-flight
@@ -756,6 +786,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tickFrame()
 		}
 		m.animTicking = false
+		return m, nil
+
+	case agentsLoadedMsg, agentsLaunchedMsg, agentsDeletedMsg:
+		mp := &m
+		if handled, cmd := mp.handleAgentsMsg(msg); handled {
+			return *mp, cmd
+		}
 		return m, nil
 
 	case scanResultMsg:
@@ -1242,6 +1279,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case selfUpdateCheckMsg:
+		if msg.background {
+			// Background result — only populate the persistent hint
+			// when there's actually a newer release. Silent on
+			// dev-builds, errors, and "already latest".
+			if msg.available && msg.current != "" && msg.latest != "" {
+				m.updateAvailable = msg.latest
+			}
+			return m, nil
+		}
 		switch {
 		case msg.devBuild:
 			m.statusMsg = "ℹ Dev build — self-update is disabled. Install a release binary to update."
@@ -1250,8 +1296,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.available:
 			m.statusMsg = fmt.Sprintf("⬆ Update available: %s → %s. Run 'klim update' from a shell to install.",
 				msg.current, msg.latest)
+			m.updateAvailable = msg.latest
 		default:
 			m.statusMsg = fmt.Sprintf("✓ Already on the latest version (%s)", msg.current)
+			m.updateAvailable = ""
 		}
 		return m, nil
 
@@ -1916,6 +1964,15 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleKeyProject(msg)
 	}
 
+	// Agents tab has its own key handler. We use a pointer receiver via
+	// a temporary so the embedded state mutations are picked up.
+	if m.activeTab == tabAgents {
+		mp := &m
+		if handled, cmd := mp.handleAgentsKey(msg); handled {
+			return *mp, cmd
+		}
+	}
+
 	// Health tab — interactive, has its own key handler.
 	if m.activeTab == tabHealth {
 		return m.handleKeyHealth(msg)
@@ -2138,7 +2195,7 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		prev := parentTabOrder[(parentIndex(m.activeTab)+len(parentTabOrder)-1)%len(parentTabOrder)]
 		return m.gotoParentTab(prev)
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9", "0":
 		if handled, cmd := m.switchToTabByNumber(msg.String()); handled {
 			return m, cmd
 		}

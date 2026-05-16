@@ -94,6 +94,12 @@ func (m Model) renderView() string {
 		return m.renderDetailView(m.tools[m.detailIdx])
 	}
 
+	// Agents detail page (full-screen). Layered above the normal Agents
+	// tab list view; Esc/q pops one frame off the nav stack.
+	if m.activeTab == tabAgents && m.agents != nil && m.agents.detailPage {
+		return m.renderAgentsDetailPage()
+	}
+
 	// Pack detail view.
 	if m.showPackDetail && m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
 		return m.renderPackDetailView(m.packs[m.packDetailIdx])
@@ -186,6 +192,27 @@ func (m Model) renderView() string {
 			visibleRows = 5
 		}
 		fitted, scroll, total := fitToVisibleRows(m.renderDashboardView(), m.dashboardScroll, visibleRows)
+		body.WriteString(fitted)
+		if scroll > 0 {
+			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
+		} else if total > visibleRows {
+			footer = "  " + dimVersion.Render("↓ scroll down") + "    " + footer
+		}
+		return m.layoutWithFooter(body.String(), footer)
+	}
+
+	// Agents tab — self-contained renderer in agents_tab.go.
+	if m.activeTab == tabAgents {
+		footer := m.renderHelp()
+		footerRows := m.footerHeight()
+		headerRows := 4 + m.subtabRows()
+		const minGap = 1
+		visibleRows := m.height - headerRows - footerRows - minGap
+		if visibleRows < 5 {
+			visibleRows = 5
+		}
+		mp := &m
+		fitted, scroll, total := fitToVisibleRows(mp.renderAgentsView(), 0, visibleRows)
 		body.WriteString(fitted)
 		if scroll > 0 {
 			footer = "  " + dimVersion.Render("↑/↓ scroll   Home top") + "    " + footer
@@ -489,6 +516,7 @@ func (m Model) renderTabBar() string {
 		{"Marketplace", tabDiscover},
 		{"Project", tabProject},
 		{"Dashboard", tabDashboard},
+		{"Agents", tabAgents},
 		{"My Profile", tabProfile},
 		{"Health", tabHealth},
 		{"Security", tabDoctor},
