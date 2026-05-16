@@ -7,15 +7,18 @@ import (
 
 // template is a haiku line skeleton. Each template has fixed prefix
 // + variable slot + fixed suffix; total syllables = fixedSyllables +
-// CountSyllables(slot fill). The builder picks templates whose
-// fixedSyllables leave room for a real word from the palette.
+// CountSyllables(slot fill). fixedSyllables is computed automatically
+// in init() from CountLine(prefix+suffix) so template authors can't
+// drift the metadata away from the syllable heuristic (a previous
+// hand-maintained list had several entries whose declared count
+// disagreed with CountLine, silently disqualifying every candidate).
+// The builder picks templates whose fixedSyllables leave room for a
+// real word from the palette.
 type template struct {
-	prefix          string // text before the {} placeholder
-	suffix          string // text after the {} placeholder
-	fixedSyllables  int    // total syllables of prefix+suffix
-	slotKind        slot   // which palette bucket the slot draws from
-	minSlotSyllable int    // floor on syllable count of the chosen word
-	maxSlotSyllable int    // ceiling — 0 means no max
+	prefix         string // text before the {} placeholder
+	suffix         string // text after the {} placeholder
+	fixedSyllables int    // auto-computed; do not set by hand
+	slotKind       slot   // which palette bucket the slot draws from
 }
 
 // slot names where the variable word is sourced from.
@@ -37,41 +40,53 @@ const (
 // rng meaningful variety so lines 1 and 3 don't collapse to the
 // same string.
 var line5Templates = []template{
-	// fixed=2, slot=3 syllables
-	{prefix: "", suffix: " breathes slow", fixedSyllables: 2, slotKind: slotName, minSlotSyllable: 3, maxSlotSyllable: 3},
-	{prefix: "", suffix: " hums on", fixedSyllables: 2, slotKind: slotName, minSlotSyllable: 3, maxSlotSyllable: 3},
-	{prefix: "", suffix: " stands tall", fixedSyllables: 2, slotKind: slotName, minSlotSyllable: 3, maxSlotSyllable: 3},
-	// fixed=3, slot=2 syllables
-	{prefix: "Quiet ", suffix: " waits", fixedSyllables: 3, slotKind: slotName, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "", suffix: " dreams in code", fixedSyllables: 3, slotKind: slotName, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "Through ", suffix: " I walk", fixedSyllables: 3, slotKind: slotCategory, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "Tools of ", suffix: " — silent", fixedSyllables: 3, slotKind: slotCategory, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "", suffix: " — a soft chime", fixedSyllables: 3, slotKind: slotName, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "Calm ", suffix: " mornings", fixedSyllables: 3, slotKind: slotCategory, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "The ", suffix: " of dawn", fixedSyllables: 3, slotKind: slotCategory, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "Each ", suffix: " runs true", fixedSyllables: 3, slotKind: slotName, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "", suffix: " — silent flame", fixedSyllables: 3, slotKind: slotName, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "Yes, ", suffix: " glows on", fixedSyllables: 3, slotKind: slotName, minSlotSyllable: 2, maxSlotSyllable: 2},
-	// fixed=4, slot=1 syllable
-	{prefix: "", suffix: " stirs the soil", fixedSyllables: 4, slotKind: slotName, minSlotSyllable: 1, maxSlotSyllable: 1},
-	{prefix: "Old ", suffix: " whispers home", fixedSyllables: 4, slotKind: slotName, minSlotSyllable: 1, maxSlotSyllable: 1},
-	{prefix: "Just one ", suffix: " on the wind", fixedSyllables: 4, slotKind: slotName, minSlotSyllable: 1, maxSlotSyllable: 1},
-	{prefix: "Cold steel ", suffix: " falls slow", fixedSyllables: 4, slotKind: slotName, minSlotSyllable: 1, maxSlotSyllable: 1},
+	{prefix: "", suffix: " breathes slow", slotKind: slotName},
+	{prefix: "", suffix: " hums on", slotKind: slotName},
+	{prefix: "", suffix: " stands tall", slotKind: slotName},
+	{prefix: "Quiet ", suffix: " waits", slotKind: slotName},
+	{prefix: "", suffix: " dreams in code", slotKind: slotName},
+	{prefix: "Through ", suffix: " I walk", slotKind: slotCategory},
+	{prefix: "Tools of ", suffix: " — silent", slotKind: slotCategory},
+	{prefix: "", suffix: " — a soft chime", slotKind: slotName},
+	{prefix: "Calm ", suffix: " mornings", slotKind: slotCategory},
+	{prefix: "The ", suffix: " of dawn", slotKind: slotCategory},
+	{prefix: "Each ", suffix: " runs true", slotKind: slotName},
+	{prefix: "", suffix: " — silent flame", slotKind: slotName},
+	{prefix: "Yes, ", suffix: " glows on", slotKind: slotName},
+	{prefix: "", suffix: " stirs the soil", slotKind: slotName},
+	{prefix: "Old ", suffix: " whispers home", slotKind: slotName},
+	{prefix: "Just one ", suffix: " on the wind", slotKind: slotName},
+	{prefix: "Cold steel ", suffix: " falls slow", slotKind: slotName},
 }
 
 // line7Templates produce 7-syllable lines (the middle line).
 var line7Templates = []template{
-	{prefix: "Sharp ", suffix: " threads weave the day", fixedSyllables: 5, slotKind: slotName, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "I trust ", suffix: " with my prompts", fixedSyllables: 5, slotKind: slotName, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "", suffix: " sings of paths gone", fixedSyllables: 4, slotKind: slotName, minSlotSyllable: 3, maxSlotSyllable: 3},
-	{prefix: "A clean ", suffix: " holds the world", fixedSyllables: 5, slotKind: slotName, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "Whispers of ", suffix: " in the shell", fixedSyllables: 6, slotKind: slotCategory, minSlotSyllable: 1, maxSlotSyllable: 1},
-	{prefix: "Whispers of ", suffix: " in shells", fixedSyllables: 5, slotKind: slotCategory, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "Each ", suffix: " is its own kind world", fixedSyllables: 6, slotKind: slotName, minSlotSyllable: 1, maxSlotSyllable: 1},
-	{prefix: "Many ", suffix: " bloom in the night", fixedSyllables: 6, slotKind: slotCategory, minSlotSyllable: 1, maxSlotSyllable: 1},
-	{prefix: "Quiet hands ", suffix: " the running streams", fixedSyllables: 5, slotKind: slotAnyWord, minSlotSyllable: 2, maxSlotSyllable: 2},
-	{prefix: "An old ", suffix: " breathes again at dawn", fixedSyllables: 6, slotKind: slotName, minSlotSyllable: 1, maxSlotSyllable: 1},
-	{prefix: "Day breaks; ", suffix: " starts the slow climb", fixedSyllables: 5, slotKind: slotName, minSlotSyllable: 2, maxSlotSyllable: 2},
+	{prefix: "Sharp ", suffix: " threads weave the day", slotKind: slotName},
+	{prefix: "I trust ", suffix: " with my prompts", slotKind: slotName},
+	{prefix: "", suffix: " sings of paths gone", slotKind: slotName},
+	{prefix: "A clean ", suffix: " holds the world", slotKind: slotName},
+	{prefix: "Whispers of ", suffix: " in the shell", slotKind: slotCategory},
+	{prefix: "Whispers of ", suffix: " in shells", slotKind: slotCategory},
+	{prefix: "Each ", suffix: " is its own kind world", slotKind: slotName},
+	{prefix: "Many ", suffix: " bloom in the night", slotKind: slotCategory},
+	{prefix: "Quiet hands ", suffix: " the running streams", slotKind: slotAnyWord},
+	{prefix: "An old ", suffix: " breathes again at dawn", slotKind: slotName},
+	{prefix: "Day breaks; ", suffix: " starts the slow climb", slotKind: slotName},
+}
+
+// init auto-computes each template's fixedSyllables from
+// CountLine(prefix+suffix) so the metadata can never drift from the
+// syllable heuristic. Callers should leave the field at its zero
+// value (or any value — it's overwritten here). Without this, a
+// template whose declared count disagreed with CountLine would be
+// silently rejected by buildLine for every candidate.
+func init() {
+	for i := range line5Templates {
+		line5Templates[i].fixedSyllables = CountLine(line5Templates[i].prefix + line5Templates[i].suffix)
+	}
+	for i := range line7Templates {
+		line7Templates[i].fixedSyllables = CountLine(line7Templates[i].prefix + line7Templates[i].suffix)
+	}
 }
 
 // palette holds the words available to fill template slots, bucketed
@@ -176,30 +191,21 @@ func buildLine(rng *rand.Rand, pool []template, target int, pal palette, t Tool)
 		if needed < 1 {
 			continue
 		}
-		// Apply template-specific syllable bounds.
-		lo := tpl.minSlotSyllable
-		hi := tpl.maxSlotSyllable
-		if lo == 0 {
-			lo = needed
-		}
-		if hi == 0 {
-			hi = needed
-		}
-		if needed < lo || needed > hi {
-			continue
-		}
+		// fixedSyllables is auto-computed in init() so the gap is
+		// always accurate; pickSlotWord uses (needed, needed) as
+		// both the floor and the ceiling, so any palette word that
+		// counts to `needed` syllables fills the slot.
 		word := pickSlotWord(rng, pal, tpl.slotKind, needed, needed)
 		if word == "" {
 			continue
 		}
 		candidate := tpl.prefix + capitalise(word) + tpl.suffix
-		// PR-78 review: validate the built line against the same
-		// syllable counter we use to score templates. Template
-		// metadata can drift from CountLine — when it does (e.g.
-		// a contraction we didn't account for, or a word in the
-		// prefix whose count surprises us), reject the candidate
-		// and try the next template rather than emit a line that
-		// breaks the 5-7-5 contract.
+		// Validate the built line against the same syllable
+		// counter that ranked templates. Template authors can't
+		// always anticipate CountLine's edge cases (contractions,
+		// silent-e shapes, acronyms), so reject any candidate
+		// whose total count doesn't match the target rather than
+		// emit a line that breaks the 5-7-5 contract.
 		if CountLine(candidate) != target {
 			continue
 		}
@@ -217,13 +223,10 @@ func buildLine(rng *rand.Rand, pool []template, target int, pal palette, t Tool)
 }
 
 // fallbackLine returns a line guaranteed to count to `target`
-// syllables via CountLine. We try a pool of name-aware templates
-// first; if none match (rare — e.g. a tool name whose syllable count
-// the heuristic gets unusually wrong) we fall through to a hard-coded
-// constant per target, verified by TestFallback_HardLines.
-//
-// PR-78 review: previously fallbackLine returned hand-written
-// strings that broke the 5-7-5 contract for many tool names.
+// syllables via CountLine. It tries a pool of name-aware phrases
+// first; if none of those match (rare — e.g. a tool name whose
+// syllable count the heuristic gets unusually wrong) it falls
+// through to a constant per target, verified by TestFallback_HardLines.
 func fallbackLine(name string, target int) string {
 	name = capitalise(strings.TrimSpace(name))
 

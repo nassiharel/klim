@@ -83,10 +83,11 @@ type Inputs struct {
 	ScoreGrade  string // A+/A/B/… per score.Result
 
 	// ScoreColor, when non-empty, overrides the colour the score
-	// badge would otherwise compute. PR-78 review: the cleanest way
-	// to keep `klim badge` and `klim score --badge` in sync is to
-	// let the caller pass `score.BadgeColor(percent)` here, so both
-	// commands route through the same canonical helper.
+	// badge would otherwise compute. Pass score.BadgeColor(percent)
+	// here to keep this package's score badge aligned with
+	// `klim score --badge`; leave empty to use the local table
+	// (colorByPercent), which is intentionally separate so callers
+	// without a score dependency stay functional.
 	ScoreColor string
 
 	ToolCount int // count of installed tools
@@ -158,14 +159,18 @@ func toolsBadge(in Inputs) Badge {
 func auditBadge(in Inputs) Badge {
 	value := "clean"
 	color := "brightgreen"
+	noun := "issues"
+	if in.AuditIssues == 1 {
+		noun = "issue"
+	}
 	switch {
 	case in.AuditIssues == 0:
 		// keep defaults
 	case in.AuditIssues <= 3:
-		value = fmt.Sprintf("%d issues", in.AuditIssues)
+		value = fmt.Sprintf("%d %s", in.AuditIssues, noun)
 		color = "yellow"
 	default:
-		value = fmt.Sprintf("%d issues", in.AuditIssues)
+		value = fmt.Sprintf("%d %s", in.AuditIssues, noun)
 		color = "red"
 	}
 	return Badge{

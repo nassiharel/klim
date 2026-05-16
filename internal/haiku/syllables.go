@@ -97,7 +97,7 @@ var overrides = map[string]int{
 	"terraform": 3,
 	"helm":      1,
 	"vault":     1,
-	"awscli":    3, // a-w-s + cli
+	"awscli":    4, // "a-w-s c-l-i" — 6 letters, but cli pronounced as one chunk → 4
 	"gh":        2, // g-h
 	"jq":        2, // j-q
 	"yq":        2, // y-q
@@ -132,4 +132,36 @@ var overrides = map[string]int{
 	"rbenv":     2,
 	"nvm":       3, // n-v-m
 	"sdkman":    2,
+
+	// Standalone acronyms that appear in catalog category / tag /
+	// description fields. Without these the heuristic treats them
+	// as one-syllable words (vowel-group count = 1), which lets
+	// CountLine sign off on lines that don't actually scan as 5-7-5
+	// when a human reads them aloud. Spelled as the letters are
+	// vocalised, not as the word is typed.
+	"aws":  3, // a-w-s
+	"cli":  3, // c-l-i
+	"vcs":  3, // v-c-s
+	"iac":  3, // i-a-c
+	"ai":   2, // a-i
+	"ci":   2, // c-i
+	"cd":   2, // c-d
+	"gui":  3, // g-u-i
+	"api":  3, // a-p-i
+	"sql":  3, // s-q-l
+	"db":   2, // d-b
+	"k8s":  3, // kay-eight-ess
+	"k9s":  3, // kay-nine-ess
+	"os":   2, // o-s
+	"sdk":  3, // s-d-k
+	"ide":  3, // i-d-e
+	"vm":   2, // v-m
+	"url":  3, // u-r-l
+	"ssh":  3, // s-s-h
+	"tls":  3, // t-l-s
+	"http": 4, // h-t-t-p
+	"json": 2, // jay-son
+	"yaml": 2, // yam-uhl
+	"toml": 2, // tom-uhl
+	"xml":  3, // x-m-l
 }

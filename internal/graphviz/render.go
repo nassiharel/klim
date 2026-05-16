@@ -10,9 +10,8 @@ import (
 // RenderOpts tunes Render's output.
 //
 // Unstyled disables all ANSI escapes so the snapshot is safe to paste
-// into a Markdown code fence, an issue body, or a log file. PR-78
-// review: stdout is now treated as untrustworthy for ANSI when the
-// caller passes Unstyled=true.
+// into a Markdown code fence, an issue body, or a log file — useful
+// when Render's caller knows the output target is not a TTY.
 type RenderOpts struct {
 	Unstyled bool
 }
@@ -35,9 +34,9 @@ func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 	}
 	canvas := newCanvas(width, height, o.Unstyled)
 
-	// PR-78 review: build an ID->Node lookup once per Render so
-	// edgePositions is O(1) per edge instead of O(N). klim graph --tui
-	// re-renders at ~10fps over potentially dense edge sets.
+	// Build an ID->Node lookup once per Render so edge resolution
+	// is O(1) per edge — critical for klim graph --tui which
+	// re-renders ~10fps over potentially dense edge sets.
 	byID := make(map[string]Node, len(g.Nodes))
 	for _, n := range g.Nodes {
 		byID[n.ID] = n

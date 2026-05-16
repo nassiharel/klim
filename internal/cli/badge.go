@@ -126,9 +126,10 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 		ScorePoints: result.Total,
 		ScoreMax:    result.MaxTotal,
 		ScoreGrade:  result.Grade,
-		// PR-78 review: route the score badge's colour through the
-		// same helper `klim score --badge` uses so the two commands
-		// never disagree on the same input.
+		// Use score.BadgeColor so `klim badge --score` and
+		// `klim score --badge` always agree on colour for the
+		// same input. Passing nothing here would fall back to the
+		// package's local table, which can drift.
 		ScoreColor:   score.BadgeColor(pct),
 		ToolCount:    countInstalled(tools),
 		AuditIssues:  auditWarns + auditInfos,

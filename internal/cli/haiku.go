@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -46,10 +47,17 @@ func init() {
 // Seed always reports the resolved int64 used to generate Lines
 // (NOT the user-supplied --seed override), so a downstream consumer
 // can reproduce the exact same haiku by passing it back.
+//
+// SeedString is the same value rendered as a decimal string. JSON
+// numbers larger than 2^53 lose precision in JavaScript consumers,
+// and FNV-derived seeds routinely sit in the 2^62 range, so we
+// include both: number form for the typed case, string form for
+// JS-safe round-tripping.
 type haikuReport struct {
-	Tool  string    `json:"tool" yaml:"tool"`
-	Seed  int64     `json:"seed" yaml:"seed"`
-	Lines [3]string `json:"lines" yaml:"lines"`
+	Tool       string    `json:"tool" yaml:"tool"`
+	Seed       int64     `json:"seed" yaml:"seed"`
+	SeedString string    `json:"seed_string" yaml:"seed_string"`
+	Lines      [3]string `json:"lines" yaml:"lines"`
 }
 
 func runHaiku(cmd *cobra.Command, args []string) error {
@@ -82,9 +90,9 @@ func runHaiku(cmd *cobra.Command, args []string) error {
 
 	switch out {
 	case OutputJSON:
-		return printJSON(haikuReport{Tool: tool.Name, Seed: h.Seed, Lines: h.Lines})
+		return printJSON(haikuReport{Tool: tool.Name, Seed: h.Seed, SeedString: strconv.FormatInt(h.Seed, 10), Lines: h.Lines})
 	case OutputYAML:
-		return printYAML(haikuReport{Tool: tool.Name, Seed: h.Seed, Lines: h.Lines})
+		return printYAML(haikuReport{Tool: tool.Name, Seed: h.Seed, SeedString: strconv.FormatInt(h.Seed, 10), Lines: h.Lines})
 	}
 
 	fmt.Println(h.String())

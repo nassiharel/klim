@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"testing"
 )
 
@@ -36,11 +35,12 @@ func TestHaikuCmd_HasOutputFlag(t *testing.T) {
 }
 
 // TestHaikuReport_SeedFieldType protects the canonical structured
-// shape: tool name (string), resolved seed (int64), three lines.
+// shape: tool name (string), resolved seed (int64 + decimal string
+// for JS-safe round-trip), three lines.
 func TestHaikuReport_SeedFieldType(t *testing.T) {
-	r := haikuReport{Tool: "t", Seed: 42, Lines: [3]string{"a", "b", "c"}}
-	if r.Seed != 42 {
-		t.Errorf("Seed not preserved: got %d", r.Seed)
+	r := haikuReport{Tool: "t", Seed: 42, SeedString: "42", Lines: [3]string{"a", "b", "c"}}
+	if r.Seed != 42 || r.SeedString != "42" {
+		t.Errorf("Seed fields not preserved: %+v", r)
 	}
 	if len(r.Lines) != 3 {
 		t.Errorf("Lines length = %d; want 3", len(r.Lines))
@@ -85,6 +85,5 @@ func lowerCopy(s string) string {
 	return string(b)
 }
 
-// Touch errors import so future test additions importing UsageError
-// don't surprise the linter with a missing import.
-var _ = errors.New
+// (no global errors stub — add an `errors` import only when a test
+// actually needs *UsageError or similar wrapping.)

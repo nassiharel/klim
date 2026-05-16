@@ -53,9 +53,8 @@ func init() {
 }
 
 // validGraphByValues is the closed set the --by flag accepts.
-// PR-78 review: invalid values used to fall through the switch and
-// render a graph with nodes but no edges. We now reject unknown
-// values with a UsageError so the help text doesn't lie.
+// Any other value is a usage error (the help text used to lie:
+// unknown values produced a graph with nodes but no edges).
 var validGraphByValues = []string{"category", "tag", "pm"}
 
 func runGraph(cmd *cobra.Command, _ []string) error {
@@ -73,17 +72,20 @@ func runGraph(cmd *cobra.Command, _ []string) error {
 	if !valid {
 		return usageErrorf("--by %q is not supported (valid: %s)", graphBy, strings.Join(validGraphByValues, ", "))
 	}
-	// PR-78 review: --width/--height only configure the static
-	// snapshot renderer; the TUI sizes itself from WindowSizeMsg.
-	// Silently dropping them surprises users, so reject the combo.
-	if graphTUI && (graphTermWidth > 0 || graphTermHeight > 0) {
-		return usageErrorf("--width/--height are static-snapshot only; the --tui viewer sizes itself from the terminal")
+	// --width/--height only configure the static snapshot renderer;
+	// the TUI sizes itself from WindowSizeMsg. Reject any explicit
+	// dimension (positive or negative) when --tui is set so user
+	// input isn't silently dropped.
+	if graphTUI {
+		if cmd.Flags().Changed("width") || cmd.Flags().Changed("height") {
+			return usageErrorf("--width/--height are static-snapshot only; the --tui viewer sizes itself from the terminal")
+		}
 	}
 	svc := svcFrom(cmd)
-	// PR-78 review: graph only needs installed/not + instance
-	// sources; full version resolution is wasted work (cold cache
-	// can fan out package-manager subprocesses for every catalog
-	// tool). ScanOnly gives us exactly what buildToolGraph reads.
+	// graph only needs installed/not + instance sources, so use
+	// ScanOnly instead of LoadAndResolveCached — version resolution
+	// would otherwise fan out package-manager subprocesses for every
+	// catalog tool on a cold cache.
 	tools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
 		return fmt.Errorf("klim graph: %w", err)
@@ -103,8 +105,8 @@ func runGraph(cmd *cobra.Command, _ []string) error {
 	w, h := resolveGraphDimensions(graphTermWidth, graphTermHeight)
 
 	unstyled := !isStdoutTerminal()
-	// PR-78 review: Render already terminates each row with '\n',
-	// so fmt.Println would add a trailing blank line.
+	// Render already terminates each row with '\n'; fmt.Println
+	// would add a trailing blank line.
 	fmt.Print(g.Render(w, h, graphviz.RenderOpts{Unstyled: unstyled}))
 	return nil
 }
@@ -178,7 +180,13 @@ func buildToolGraph(tools []registry.Tool, by string) *graphviz.Graph {
 			var out []string
 			for _, inst := range t.Instances {
 				s := string(inst.Source)
-				if s == "" || seen[s] {
+				// Skip empty + "manual" (the fallback bucket
+				// finder/finder.go uses when it can't attribute
+				// a binary to any package manager). Grouping
+				// every unattributed install together produces
+				// a misleading clique that's not really sharing
+				// a PM in any user-meaningful sense.
+				if s == "" || s == string(registry.SourceManual) || seen[s] {
 					continue
 				}
 				seen[s] = true

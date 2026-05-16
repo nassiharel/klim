@@ -35,17 +35,24 @@ func TestRunGraph_RejectsInvalidBy(t *testing.T) {
 }
 
 // TestRunGraph_RejectsWidthWithTUI exercises the --tui + --width/--height
-// guard (PR-78 review).
+// guard (Round 5: now keyed on cmd.Flags().Changed, not raw value).
 func TestRunGraph_RejectsWidthWithTUI(t *testing.T) {
-	origTUI, origW := graphTUI, graphTermWidth
+	origTUI := graphTUI
+	origBy := graphBy
 	t.Cleanup(func() {
 		graphTUI = origTUI
-		graphTermWidth = origW
+		graphBy = origBy
+		// Reset the width flag back to default so other tests
+		// see a pristine state.
+		_ = graphCmd.Flags().Set("width", "0")
+		_ = graphCmd.Flags().Lookup("width") // force re-read
 	})
 
 	graphBy = "category"
 	graphTUI = true
-	graphTermWidth = 80
+	if err := graphCmd.Flags().Set("width", "80"); err != nil {
+		t.Fatalf("flag set: %v", err)
+	}
 	err := runGraph(graphCmd, nil)
 	if err == nil {
 		t.Fatal("runGraph with --tui and --width returned nil; want UsageError")
