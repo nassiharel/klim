@@ -117,7 +117,7 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 
 	switch out {
 	case OutputJSON:
-		return printJSON(buildBadgeReport(result, badges))
+		return printStructured(out, buildBadgeReport(result, badges))
 	case OutputYAML:
 		return printYAML(buildBadgeReport(result, badges))
 	}

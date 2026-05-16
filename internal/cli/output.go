@@ -130,8 +130,6 @@ func printJSON(v any) error {
 }
 
 // printYAML marshals v to stdout as YAML.
-//
-//nolint:unused // Reserved for future commands that adopt --output=yaml.
 func printYAML(v any) error {
 	b, err := yaml.Marshal(v)
 	if err != nil {
@@ -141,4 +139,23 @@ func printYAML(v any) error {
 		return fmt.Errorf("writing YAML: %w", err)
 	}
 	return nil
+}
+
+// printStructured dispatches to printJSON or printYAML based on the
+// caller's resolved OutputFormat. Calling with OutputText (or any
+// non-structured format) is a programming error and panics — callers
+// must guard with `format == OutputJSON || format == OutputYAML`
+// before invoking this helper.
+func printStructured(format OutputFormat, v any) error {
+	switch format {
+	case OutputJSON:
+		return printJSON(v)
+	case OutputYAML:
+		return printYAML(v)
+	default:
+		// Surface the misuse loudly during development. In
+		// release builds this still returns an error rather
+		// than crashing the process.
+		return fmt.Errorf("printStructured: unsupported format %q", format)
+	}
 }

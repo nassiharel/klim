@@ -186,13 +186,13 @@ func init() {
 	// log
 	trailLogCmd.Flags().IntVarP(&trailLogLimit, "limit", "n", 0, "Maximum number of entries to print (0 = no limit)")
 	trailLogCmd.Flags().StringVar(&trailLogSince, "since", "", "Only entries newer than this duration ago (e.g. 7d, 24h)")
-	trailLogOutput = addOutputFlag(trailLogCmd, OutputText, OutputJSON)
+	trailLogOutput = addOutputFlag(trailLogCmd, OutputText, OutputJSON, OutputYAML)
 
 	// show
-	trailShowOutput = addOutputFlag(trailShowCmd, OutputText, OutputJSON)
+	trailShowOutput = addOutputFlag(trailShowCmd, OutputText, OutputJSON, OutputYAML)
 
 	// diff
-	trailDiffOutput = addOutputFlag(trailDiffCmd, OutputText, OutputJSON)
+	trailDiffOutput = addOutputFlag(trailDiffCmd, OutputText, OutputJSON, OutputYAML)
 
 	// prune
 	trailPruneCmd.Flags().IntVar(&trailPruneKeep, "keep", 0, "Maximum number of newest entries to retain")
@@ -329,8 +329,8 @@ func runTrailLog(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if out == OutputJSON {
-		return printJSON(map[string]any{
+	if out == OutputJSON || out == OutputYAML {
+		return printStructured(out, map[string]any{
 			"entries": entries,
 			"count":   len(entries),
 		})
@@ -412,8 +412,8 @@ func runTrailShow(cmd *cobra.Command, args []string) error {
 		return trailRefError(err)
 	}
 
-	if out == OutputJSON {
-		return printJSON(trailShowOutputJSON{Entry: *entry, Snapshot: snap})
+	if out == OutputJSON || out == OutputYAML {
+		return printStructured(out, trailShowOutputJSON{Entry: *entry, Snapshot: snap})
 	}
 
 	// Widen the header ref to the shortest unambiguous prefix across
@@ -460,8 +460,8 @@ func runTrailDiff(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return trailRefError(err)
 	}
-	if out == OutputJSON {
-		return printJSON(map[string]any{
+	if out == OutputJSON || out == OutputYAML {
+		return printStructured(out, map[string]any{
 			"from": a,
 			"to":   b,
 			"diff": d,

@@ -30,7 +30,7 @@ Examples:
 }
 
 func init() {
-	watchOutputFmt = addOutputFlag(watchCmd, OutputText, OutputJSON)
+	watchOutputFmt = addOutputFlag(watchCmd, OutputText, OutputJSON, OutputYAML)
 	// Registered in root.go with command group.
 }
 
@@ -79,8 +79,8 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if out == OutputJSON {
-		return printJSON(watchReport{
+	if out == OutputJSON || out == OutputYAML {
+		return printStructured(out, watchReport{
 			Updates:    updates,
 			TotalTools: installed,
 			UpToDate:   installed - len(updates),

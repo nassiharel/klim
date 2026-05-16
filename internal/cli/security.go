@@ -111,7 +111,7 @@ func init() {
 	vulnCmd.Flags().BoolVar(&vulnForceRefreshFlag, "force-refresh-vulns", false, "Force re-fetch from the OSV endpoint, bypassing the cache")
 	vulnCmd.Flags().StringVar(&vulnFailOnFlag, "fail-on", "", "Exit non-zero when any finding meets this severity: critical|high|medium|low")
 	vulnCmd.Flags().StringVar(&vulnURLFlag, "url", "", "OSV-compatible endpoint (overrides config vuln.url; default https://api.osv.dev)")
-	vulnOutputFormat = addOutputFlag(vulnCmd, OutputText, OutputJSON)
+	vulnOutputFormat = addOutputFlag(vulnCmd, OutputText, OutputJSON, OutputYAML)
 }
 
 func runVuln(cmd *cobra.Command, args []string) error {
@@ -164,8 +164,8 @@ func runVuln(cmd *cobra.Command, args []string) error {
 	}
 
 	switch out {
-	case OutputJSON:
-		if err := printJSON(report); err != nil {
+	case OutputJSON, OutputYAML:
+		if err := printStructured(out, report); err != nil {
 			return err
 		}
 	default:

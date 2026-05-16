@@ -26,7 +26,7 @@ Grade scale: A+ (95+), A (90+), B (80+), C (70+), D (60+), F (<60)`,
 }
 
 func init() {
-	scoreOutput = addOutputFlag(scoreCmd, OutputText, OutputJSON)
+	scoreOutput = addOutputFlag(scoreCmd, OutputText, OutputJSON, OutputYAML)
 	scoreCmd.Flags().BoolVar(&scoreBadgeFlag, "badge", false, "Output shields.io badge URL")
 	scoreCmd.Flags().BoolVar(&scoreRefreshFlag, "refresh", false, "Force fresh scan")
 	// Registered in root.go with command group.
@@ -53,8 +53,8 @@ func runScore(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if out == OutputJSON {
-		return printJSON(result)
+	if out == OutputJSON || out == OutputYAML {
+		return printStructured(out, result)
 	}
 
 	// Human output.

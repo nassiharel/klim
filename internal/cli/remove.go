@@ -33,5 +33,5 @@ Examples:
 
 func init() {
 	removeFlags = addActionFlags(removeCmd)
-	removeOutputFmt = addOutputFlag(removeCmd, OutputText, OutputJSON)
+	removeOutputFmt = addOutputFlag(removeCmd, OutputText, OutputJSON, OutputYAML)
 }

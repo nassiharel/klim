@@ -155,7 +155,7 @@ func TestPrintAuditJSON(t *testing.T) {
 	// CLI exits with a non-zero status. Use a clean run here so we
 	// can assert success.
 	out := captureStdout(t, func() {
-		if err := printAuditJSON(nil, 5, 0, 0, map[string]int{"MIT": 5}); err != nil {
+		if err := printAuditJSON(OutputJSON, nil, 5, 0, 0, map[string]int{"MIT": 5}); err != nil {
 			t.Errorf("clean printAuditJSON: %v", err)
 		}
 	})
@@ -168,7 +168,7 @@ func TestPrintAuditJSON(t *testing.T) {
 	}
 
 	// And separately: with warnings > 0 the helper signals via error.
-	err := printAuditJSON(
+	err := printAuditJSON(OutputJSON,
 		[]audit.Finding{{Severity: "warning", Tool: "git", Category: "Unmanaged"}},
 		1, 1, 0, nil,
 	)
@@ -186,7 +186,7 @@ func TestPrintCheckJSON(t *testing.T) {
 		{Tool: teamfile.RequiredTool{Name: "git"}, Status: teamfile.StatusOK, Version: "2.50"},
 	}
 	out := captureStdout(t, func() {
-		if err := printCheckJSON(tf, "/path/to/.klim.yaml", results, 1, 0, 0, 0); err != nil {
+		if err := printCheckJSON(OutputJSON, tf, "/path/to/.klim.yaml", results, 1, 0, 0, 0); err != nil {
 			t.Errorf("printCheckJSON ok: %v", err)
 		}
 	})
@@ -205,7 +205,7 @@ func TestPrintCheckJSON(t *testing.T) {
 	// CLI exits non-zero. Capture and discard its stdout to avoid
 	// noise; assert the error shape.
 	captureStdout(t, func() {
-		err := printCheckJSON(tf, "/p", []teamfile.CheckResult{
+		err := printCheckJSON(OutputJSON, tf, "/p", []teamfile.CheckResult{
 			{Tool: teamfile.RequiredTool{Name: "kubectl"}, Status: teamfile.StatusMissing},
 		}, 0, 1, 0, 0)
 		if err == nil {
@@ -297,7 +297,7 @@ func TestSplitLines(t *testing.T) {
 func TestPrintDoctorJSON(t *testing.T) {
 	// Healthy case: no issues, no error.
 	out := captureStdout(t, func() {
-		if err := printDoctorJSON(nil, 0, 0, 0); err != nil {
+		if err := printDoctorJSON(OutputJSON, nil, 0, 0, 0); err != nil {
 			t.Errorf("clean printDoctorJSON: %v", err)
 		}
 	})
@@ -307,7 +307,7 @@ func TestPrintDoctorJSON(t *testing.T) {
 
 	// With errors: returns an error so CLI exits non-zero.
 	captureStdout(t, func() {
-		err := printDoctorJSON([]doctor.Issue{
+		err := printDoctorJSON(OutputJSON, []doctor.Issue{
 			{Severity: doctor.SeverityError, Title: "PATH issue"},
 		}, 1, 0, 0)
 		if err == nil {

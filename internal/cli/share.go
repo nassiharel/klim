@@ -27,7 +27,7 @@ Usage:
 }
 
 func init() {
-	shareOutputFmt = addOutputFlag(shareCmd, OutputText, OutputJSON)
+	shareOutputFmt = addOutputFlag(shareCmd, OutputText, OutputJSON, OutputYAML)
 	shareCmd.AddCommand(openCmd)
 	// rootCmd.AddCommand done in root.go via group assignment.
 }
@@ -70,10 +70,10 @@ func runShareGenerate(cmd *cobra.Command, args []string) error {
 	sort.Strings(names)
 
 	if len(names) == 0 {
-		if out == OutputJSON {
+		if out == OutputJSON || out == OutputYAML {
 			// Token is intentionally omitted (omitempty) so callers can
 			// distinguish "no tools" from a real share payload.
-			return printJSON(shareReport{Tools: names})
+			return printStructured(out, shareReport{Tools: names})
 		}
 		fmt.Fprintln(os.Stderr, "No installed tools found.")
 		return nil
@@ -84,8 +84,8 @@ func runShareGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("encoding share token: %w", err)
 	}
 
-	if out == OutputJSON {
-		return printJSON(shareReport{Token: token, ToolCount: len(names), Tools: names})
+	if out == OutputJSON || out == OutputYAML {
+		return printStructured(out, shareReport{Token: token, ToolCount: len(names), Tools: names})
 	}
 
 	fmt.Fprintf(os.Stderr, "\nShare token (%d tools):\n\n", len(names))

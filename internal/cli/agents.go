@@ -256,10 +256,8 @@ func runAgentsList(cmd *cobra.Command, _ []string, entityFilter agents.EntityTyp
 	}
 
 	switch format {
-	case OutputJSON:
-		return printJSON(filteredSnapshot(snap, entityFilter))
-	case OutputYAML:
-		return printYAML(filteredSnapshot(snap, entityFilter))
+	case OutputJSON, OutputYAML:
+		return printStructured(format, filteredSnapshot(snap, entityFilter))
 	}
 
 	return renderSnapshotText(filteredSnapshot(snap, entityFilter))
@@ -470,10 +468,8 @@ func runAgentsSearch(cmd *cobra.Command, query string) error {
 		return err
 	}
 	switch format {
-	case OutputJSON:
-		return printJSON(results)
-	case OutputYAML:
-		return printYAML(results)
+	case OutputJSON, OutputYAML:
+		return printStructured(format, results)
 	}
 	return printSearchResults(results)
 }

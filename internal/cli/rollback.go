@@ -42,7 +42,7 @@ installed after the checkpoint (i.e. tools not in the snapshot).`,
 }
 
 func init() {
-	rollbackOutput = addOutputFlag(rollbackCmd, OutputText, OutputJSON)
+	rollbackOutput = addOutputFlag(rollbackCmd, OutputText, OutputJSON, OutputYAML)
 	rollbackCmd.Flags().BoolVar(&rollbackRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	rollbackCmd.Flags().BoolVar(&rollbackIncludeRemoveFlag, "remove-extras", false, "Also propose removing tools added after the checkpoint")
 	rootCmd.AddCommand(rollbackCmd)
@@ -98,7 +98,7 @@ func runRollback(cmd *cobra.Command, args []string) error {
 	}
 	p := plan.Build(tools, opts)
 
-	if out == OutputJSON {
+	if out == OutputJSON || out == OutputYAML {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(struct {

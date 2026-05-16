@@ -40,7 +40,7 @@ Exit codes:
 }
 
 func init() {
-	healthPathOutput = addOutputFlag(healthPathCmd, OutputText, OutputJSON)
+	healthPathOutput = addOutputFlag(healthPathCmd, OutputText, OutputJSON, OutputYAML)
 	healthPathCmd.Flags().BoolVar(&healthPathRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	doctorCmd.AddCommand(healthPathCmd)
 }
@@ -61,7 +61,7 @@ func runHealthPath(cmd *cobra.Command, _ []string) error {
 
 	report := pathconflict.Analyze(tools)
 
-	if out == OutputJSON {
+	if out == OutputJSON || out == OutputYAML {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(report); err != nil {
