@@ -1,0 +1,253 @@
+package cli
+
+import (
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/spf13/cobra"
+
+	"github.com/nassiharel/klim/internal/graphviz"
+	"github.com/nassiharel/klim/internal/registry"
+)
+
+var (
+	graphTUI         bool
+	graphBy          string
+	graphMaxIters    int
+	graphTermWidth   int
+	graphTermHeight  int
+	graphRefreshFlag bool
+)
+
+var graphCmd = &cobra.Command{
+	Use:   "graph",
+	Short: "Render a force-directed graph of installed tools",
+	Long: `Visualise the relationships between every tool klim has detected
+on PATH. Nodes are tools; edges connect tools that share a property
+(default: category; alternatives: tag, pm).
+
+By default the command prints a static snapshot to stdout, ready to
+paste into a README. Use --tui for an animated, fullscreen version.
+
+Examples:
+  klim graph                       # static snapshot, default --by category
+  klim graph --tui                 # animated 10fps fullscreen
+  klim graph --by tag              # connect tools that share any tag
+  klim graph --by pm               # connect tools that share an installed PM`,
+	RunE: runGraph,
+}
+
+func init() {
+	graphCmd.Flags().BoolVar(&graphTUI, "tui", false, "open the animated fullscreen TUI viewer")
+	graphCmd.Flags().StringVar(&graphBy, "by", "category", "edge meaning: category|tag|pm")
+	graphCmd.Flags().IntVar(&graphMaxIters, "iters", 200, "max layout iterations for the static snapshot")
+	graphCmd.Flags().IntVar(&graphTermWidth, "width", 0, "render width (0 = autodetect)")
+	graphCmd.Flags().IntVar(&graphTermHeight, "height", 0, "render height (0 = autodetect)")
+	graphCmd.Flags().BoolVar(&graphRefreshFlag, "refresh", false, "ignore the scan cache and rescan")
+	// Registered in root.go.
+}
+
+func runGraph(cmd *cobra.Command, args []string) error {
+	_ = args
+	svc := svcFrom(cmd)
+	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), graphRefreshFlag)
+	if err != nil {
+		return fmt.Errorf("klim graph: %w", err)
+	}
+	installed := installedOnly(tools)
+	if len(installed) == 0 {
+		return errors.New("klim graph: no installed tools to draw")
+	}
+
+	g := buildToolGraph(installed, graphBy)
+
+	if graphTUI {
+		return runGraphTUI(g)
+	}
+
+	g.Layout(graphMaxIters, 1e-4)
+	w, h := resolveGraphDimensions(graphTermWidth, graphTermHeight)
+	fmt.Println(g.Render(w, h))
+	return nil
+}
+
+// installedOnly filters the tool list down to tools the user has
+// installed locally. The graph is most interesting when it reflects
+// the user's actual environment.
+func installedOnly(tools []registry.Tool) []registry.Tool {
+	out := make([]registry.Tool, 0, len(tools))
+	for _, t := range tools {
+		if t.IsInstalled() {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// buildToolGraph constructs a graph where each installed tool is a
+// node and edges are drawn between tools that share a property.
+func buildToolGraph(tools []registry.Tool, by string) *graphviz.Graph {
+	g := graphviz.New()
+
+	// Sort tools so node colour assignment is stable across runs.
+	sort.SliceStable(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
+
+	// Map category -> colour index for stable colouring.
+	colorByCategory := map[string]int{}
+	var cats []string
+	for _, t := range tools {
+		if t.Category != "" {
+			if _, ok := colorByCategory[t.Category]; !ok {
+				colorByCategory[t.Category] = len(cats) % 8
+				cats = append(cats, t.Category)
+			}
+		}
+	}
+
+	for _, t := range tools {
+		color := colorByCategory[t.Category]
+		// Keep the label short — terminals are narrow.
+		label := t.Name
+		if len(label) > 10 {
+			label = label[:10]
+		}
+		g.AddNode(t.Name, label, color)
+	}
+
+	// Build edges per the --by mode. Each pair of nodes that shares a
+	// property gets exactly one edge.
+	key := strings.ToLower(strings.TrimSpace(by))
+	switch key {
+	case "category", "":
+		groupByEdges(g, tools, func(t registry.Tool) []string {
+			if t.Category == "" {
+				return nil
+			}
+			return []string{t.Category}
+		})
+	case "tag":
+		groupByEdges(g, tools, func(t registry.Tool) []string { return append([]string(nil), t.Tags...) })
+	case "pm":
+		groupByEdges(g, tools, func(t registry.Tool) []string {
+			seen := make(map[string]bool)
+			var out []string
+			for _, inst := range t.Instances {
+				s := string(inst.Source)
+				if s == "" || seen[s] {
+					continue
+				}
+				seen[s] = true
+				out = append(out, s)
+			}
+			return out
+		})
+	}
+	return g
+}
+
+// groupByEdges adds one edge between every pair of tools that share
+// at least one bucket. Buckets come from getBuckets(tool); pairs
+// already linked stay linked (we don't add duplicates).
+func groupByEdges(g *graphviz.Graph, tools []registry.Tool, getBuckets func(registry.Tool) []string) {
+	buckets := map[string][]string{}
+	for _, t := range tools {
+		for _, b := range getBuckets(t) {
+			buckets[b] = append(buckets[b], t.Name)
+		}
+	}
+	seen := map[string]bool{}
+	for _, members := range buckets {
+		for i := 0; i < len(members); i++ {
+			for j := i + 1; j < len(members); j++ {
+				a, b := members[i], members[j]
+				if a > b {
+					a, b = b, a
+				}
+				key := a + "|" + b
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				g.AddEdge(a, b)
+			}
+		}
+	}
+}
+
+// resolveGraphDimensions returns (width, height) for the renderer.
+// Zero values fall back to a sensible terminal-friendly default.
+func resolveGraphDimensions(w, h int) (int, int) {
+	if w <= 0 {
+		w = 80
+	}
+	if h <= 0 {
+		h = 24
+	}
+	return w, h
+}
+
+// ----- TUI mode -----
+
+type graphTickMsg time.Time
+
+type graphModel struct {
+	g     *graphviz.Graph
+	w, h  int
+	frame int
+}
+
+// Init starts the periodic redraw tick.
+func (m graphModel) Init() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg { return graphTickMsg(t) })
+}
+
+// Update advances the simulation one step on each tick and handles
+// window resize / quit keys.
+func (m graphModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case graphTickMsg:
+		m.g.Step()
+		m.frame++
+		return m, tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg { return graphTickMsg(t) })
+	case tea.WindowSizeMsg:
+		m.w = msg.Width
+		// Reserve one row for the footer; tea's WindowSizeMsg gives
+		// us total area.
+		m.h = msg.Height - 2
+		return m, nil
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "q", "esc", "ctrl+c":
+			return m, tea.Quit
+		}
+	}
+	return m, nil
+}
+
+// View renders the current frame plus a one-line footer.
+func (m graphModel) View() tea.View {
+	w := m.w
+	h := m.h
+	if w <= 0 {
+		w = 80
+	}
+	if h <= 0 {
+		h = 22
+	}
+	body := m.g.Render(w, h)
+	footer := fmt.Sprintf("klim graph · %d nodes · frame %d · q to quit", len(m.g.Nodes), m.frame)
+	v := tea.NewView(body + "\n" + footer)
+	v.AltScreen = true
+	return v
+}
+
+func runGraphTUI(g *graphviz.Graph) error {
+	model := graphModel{g: g}
+	p := tea.NewProgram(model)
+	_, err := p.Run()
+	return err
+}
