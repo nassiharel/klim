@@ -105,11 +105,16 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 	var tools []registry.Tool
 	if needVersions {
 		// Need installed/not + latest versions: full resolve.
+		// In practice this covers everything except the
+		// `--tools`-only case (no audit, no fresh, no score, no
+		// structured output), which is the one path that can use
+		// the cheap ScanOnly fast lane below.
 		tools, _, _, err = svc.LoadAndResolveCached(cmd.Context(), badgeRefreshFlag)
 	} else {
-		// tools / audit / no-flag-but-not-structured don't need
-		// latest versions — ScanOnly skips per-tool version
-		// resolution which is the expensive bit on a cold cache.
+		// `klim badge --tools` (text only) only needs the
+		// installed-or-not state — ScanOnly skips per-tool
+		// version resolution which is the expensive bit on a
+		// cold cache.
 		tools, _, err = svc.ScanOnly(cmd.Context())
 	}
 	if err != nil {
@@ -126,8 +131,8 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 	switch {
 	case needScorePipeline:
 		// Full pipeline: doctor + compliance + audit + score.Compute.
-		// Shared with `klim score` via buildScoreInputs.
-		result, auditWarns, auditInfos = buildScoreInputs(cmd, tools)
+		// Shared with `klim score` via computeScoreReport.
+		result, auditWarns, auditInfos = computeScoreReport(cmd, tools)
 	case wantAudit:
 		// Audit badge only: skip doctor and compliance entirely,
 		// which means no spurious compliance-policy warning when

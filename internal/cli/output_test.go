@@ -6,9 +6,15 @@ import (
 )
 
 type structuredCase struct {
-	OptIn    string `json:"opt_in" yaml:"opt_in"`
-	OmitMe   string `json:"omit_me,omitempty" yaml:"omit_me,omitempty"`
-	MaxTotal int    `json:"max_total" yaml:"max_total"`
+	// Intentionally json-only tags — no yaml: counterpart — so the
+	// YAML test below actually proves the JSON-roundtrip in
+	// printYAML preserves the JSON tag names (yaml.v3 would
+	// otherwise lowercase the Go field names to opt_in / max_total
+	// only by coincidence, but more importantly to OmitMe instead
+	// of dropping it).
+	OptIn    string `json:"opt_in"`
+	OmitMe   string `json:"omit_me,omitempty"`
+	MaxTotal int    `json:"max_total"`
 }
 
 // TestPrintStructured_JSON_PreservesTagsAndOmitempty pins the JSON

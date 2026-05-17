@@ -74,11 +74,13 @@ func (m *Model) handleAgentsDetailKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	case "down", "j":
-		// For marketplace pages with a plugin list, j/k navigates that
-		// list. Other pages: scroll the body.
-		if top.subTab == agentsSubMarketplaces && row.marketplace != nil {
-			n := m.marketplacePluginCount(row.marketplace)
-			if n > 0 && top.bodyCursor < n-1 {
+		// For pages whose body renders a windowed list with a
+		// cursor (marketplace plugins, plugin's contained skills,
+		// MCP tools), j/k navigates that list via bodyCursor —
+		// which is what the windowing renderer reads. Other pages
+		// fall back to top.scroll for free-form body scroll.
+		if bodyCursorLen, ok := detailBodyCursorLen(m, *top, row); ok {
+			if top.bodyCursor < bodyCursorLen-1 {
 				top.bodyCursor++
 			}
 		} else {
@@ -86,7 +88,7 @@ func (m *Model) handleAgentsDetailKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	case "up", "k":
-		if top.subTab == agentsSubMarketplaces && row.marketplace != nil {
+		if _, ok := detailBodyCursorLen(m, *top, row); ok {
 			if top.bodyCursor > 0 {
 				top.bodyCursor--
 			}
@@ -216,6 +218,41 @@ func (m *Model) resolveDetailRow(frame agentDetailFrame) (agentRow, bool) {
 }
 
 // ---------- render ----------
+
+// detailBodyCursorLen returns the length of the windowed body list
+// currently rendered for the given detail frame, plus a bool that
+// reports whether the body uses cursor-driven navigation at all.
+//
+// Three detail-body renderers (marketplace plugin list, plugin's
+// contained skills, MCP tools) window their list around
+// frame.bodyCursor, so the key handler has to update bodyCursor —
+// not top.scroll — when the user presses ↑/↓ on those pages.
+// Returning a length lets the handler clamp to the list bounds.
+func detailBodyCursorLen(m *Model, frame agentDetailFrame, row agentRow) (int, bool) {
+	switch {
+	case frame.subTab == agentsSubMarketplaces && row.marketplace != nil:
+		return m.marketplacePluginCount(row.marketplace), true
+	case row.plugin != nil:
+		// Contained-skills list (snapshot lookup mirrors renderPluginBody).
+		st := m.agents
+		if st == nil || st.snapshot == nil {
+			return 0, false
+		}
+		n := 0
+		for _, s := range st.snapshot.Skills {
+			if s.Provider == row.plugin.Provider && s.SourcePlugin == row.plugin.Name {
+				n++
+			}
+		}
+		if n == 0 {
+			return 0, false
+		}
+		return n, true
+	case row.mcp != nil && len(row.mcp.Tools) > 0:
+		return len(row.mcp.Tools), true
+	}
+	return 0, false
+}
 
 // renderAgentsDetailPage renders the full-screen Agents detail view.
 func (m *Model) renderAgentsDetailPage() string {

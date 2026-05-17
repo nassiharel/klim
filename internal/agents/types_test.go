@@ -2,8 +2,11 @@ package agents
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/nassiharel/klim/internal/agents/costs"
 	"github.com/nassiharel/klim/internal/agents/search"
@@ -156,5 +159,60 @@ func TestScan_SkipsErrNotSupported(t *testing.T) {
 	snap, _ := svc.LoadAll(context.Background(), LoadOpts{Refresh: true})
 	if status := snap.ProviderStatus["polite"]; status.Error != "" {
 		t.Errorf("ErrNotSupported should not surface on Status.Error; got %v", status.Error)
+	}
+}
+
+func TestMarketplaceMarshalJSON_OmitsZeroLastSynced(t *testing.T) {
+	m := Marketplace{ID: "m1", Name: "core", Provider: ProviderClaudeCode, Source: SourceConfig}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if strings.Contains(string(raw), "last_synced") || strings.Contains(string(raw), "0001-01-01") {
+		t.Errorf("zero LastSynced should be omitted; got %s", raw)
+	}
+}
+
+func TestMarketplaceMarshalJSON_KeepsNonZeroLastSynced(t *testing.T) {
+	ts := time.Date(2026, 5, 17, 9, 0, 0, 0, time.UTC)
+	m := Marketplace{ID: "m1", Name: "core", Provider: ProviderClaudeCode, Source: SourceConfig, LastSynced: ts}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), "last_synced") {
+		t.Errorf("non-zero LastSynced should be present; got %s", raw)
+	}
+	if !strings.Contains(string(raw), "2026-05-17") {
+		t.Errorf("LastSynced value should be serialized; got %s", raw)
+	}
+}
+
+func TestSessionMarshalJSON_OmitsZeroTimes(t *testing.T) {
+	s := Session{ID: "s1", Provider: ProviderClaudeCode, Source: SourceLocalClaude}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	out := string(raw)
+	if strings.Contains(out, "created") || strings.Contains(out, "last_modified") {
+		t.Errorf("zero time fields should be omitted; got %s", out)
+	}
+	if strings.Contains(out, "0001-01-01") {
+		t.Errorf("zero time placeholder leaked; got %s", out)
+	}
+}
+
+func TestSessionMarshalJSON_KeepsNonZeroTimes(t *testing.T) {
+	created := time.Date(2026, 5, 17, 9, 0, 0, 0, time.UTC)
+	modified := time.Date(2026, 5, 17, 10, 0, 0, 0, time.UTC)
+	s := Session{ID: "s1", Provider: ProviderClaudeCode, Source: SourceLocalClaude, Created: created, LastModified: modified}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	out := string(raw)
+	if !strings.Contains(out, "created") || !strings.Contains(out, "last_modified") {
+		t.Errorf("non-zero time fields should be present; got %s", out)
 	}
 }

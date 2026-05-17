@@ -46,7 +46,7 @@ func runScore(cmd *cobra.Command, args []string) error {
 	}
 	sp.Stop()
 
-	result, _, _ := buildScoreInputs(cmd, tools)
+	result, _, _ := computeScoreReport(cmd, tools)
 
 	if scoreBadgeFlag {
 		fmt.Println(score.BadgeURL(result))

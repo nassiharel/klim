@@ -13,7 +13,7 @@ import (
 	"github.com/nassiharel/klim/internal/score"
 )
 
-// buildScoreInputs runs doctor.Diagnose, compliance (if configured),
+// computeScoreReport runs doctor.Diagnose, compliance (if configured),
 // and audit.Analyze for the supplied tools, then assembles a
 // score.Result. Returns the result plus the audit warning / info
 // counts callers may want to surface separately (e.g. the audit
@@ -23,7 +23,7 @@ import (
 // counts as a "canonical" score for a given scan — they share this
 // single assembly path. Compliance policy load errors are written
 // to stderr exactly once, here.
-func buildScoreInputs(cmd *cobra.Command, tools []registry.Tool) (score.Result, int, int) {
+func computeScoreReport(cmd *cobra.Command, tools []registry.Tool) (score.Result, int, int) {
 	doctorIssues := doctor.Diagnose(tools, doctor.ScanMeta{})
 
 	var compResult *compliance.Result
