@@ -101,7 +101,7 @@ func runEnvIDPrint(cmd *cobra.Command, _ []string) error {
 
 	switch out {
 	case OutputJSON:
-		if err := printJSON(p); err != nil {
+		if err := printStructured(out, p); err != nil {
 			return err
 		}
 	case OutputYAML:

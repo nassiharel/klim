@@ -557,24 +557,26 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, nil
 	case "6":
 		st.setSubTab(agentsSubCosts)
-		return true, m.agentsCostsLoadCmd()
+		return true, m.agentsSubTabEnterCmd(agentsSubCosts)
 	case "7":
 		st.setSubTab(agentsSubHealth)
-		return true, m.agentsHealthLoadCmd()
+		return true, m.agentsSubTabEnterCmd(agentsSubHealth)
 	case "tab", "right":
 		// On the rightmost sub-tab, let the global handler advance to
 		// the next parent tab instead of wrapping inside Agents.
 		if st.subTab == agentsSubCount-1 {
 			return false, nil
 		}
-		st.setSubTab((st.subTab + 1) % agentsSubCount)
-		return true, nil
+		next := (st.subTab + 1) % agentsSubCount
+		st.setSubTab(next)
+		return true, m.agentsSubTabEnterCmd(next)
 	case "shift+tab", "left":
 		if st.subTab == 0 {
 			return false, nil
 		}
-		st.setSubTab((st.subTab + agentsSubCount - 1) % agentsSubCount)
-		return true, nil
+		next := (st.subTab + agentsSubCount - 1) % agentsSubCount
+		st.setSubTab(next)
+		return true, m.agentsSubTabEnterCmd(next)
 	case "down", "j":
 		st.cursor++
 		if n := len(m.agentsVisibleRows()); st.cursor >= n && n > 0 {
@@ -940,6 +942,34 @@ func openBrowser(url string) error {
 }
 
 func runtimeGOOS() string { return goos }
+
+// agentsSubTabEnterCmd returns the background loader cmd appropriate
+// for entering a given Agents sub-tab. The Costs and Health sub-tabs
+// have async loaders that previously only fired when the user hit
+// the numeric shortcut (6 / 7); Tab navigation skipped them and left
+// the page showing "press r to scan" — visually indistinguishable
+// from "stuck". This helper makes Tab entry behave the same as the
+// numeric shortcut. Returns nil for sub-tabs with no loader (or when
+// the data is already loaded and isn't stale).
+func (m *Model) agentsSubTabEnterCmd(sub int) tea.Cmd {
+	st := m.agents
+	if st == nil {
+		return nil
+	}
+	switch sub {
+	case agentsSubCosts:
+		if st.costs.loaded || st.costs.loading {
+			return nil
+		}
+		return m.agentsCostsLoadCmd()
+	case agentsSubHealth:
+		if st.healthSub.loaded || st.healthSub.loading {
+			return nil
+		}
+		return m.agentsHealthLoadCmd()
+	}
+	return nil
+}
 
 func (st *agentsState) setSubTab(i int) {
 	if st.subTab != i {
@@ -1535,7 +1565,19 @@ func (m *Model) renderAgentsView() string {
 		}
 	}
 
-	const maxRows = 25
+	// Budget the table window from actual terminal height so the
+	// bottom of the body isn't silently clipped by the outer view
+	// wrapper. The header / sub-tab strip / filter chips / footer
+	// together consume ~12 rows; everything else is data the user
+	// is here to read. Floor at 6 rows so very small terminals still
+	// show something usable.
+	maxRows := m.height - 12
+	if maxRows > 25 {
+		maxRows = 25
+	}
+	if maxRows < 6 {
+		maxRows = 6
+	}
 	visible, windowStart, displayCursor, hiddenAbove, hiddenBelow := windowAgentRows(rows, st.cursor, maxRows)
 	_ = windowStart
 

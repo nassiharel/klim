@@ -74,11 +74,13 @@ func (m *Model) handleAgentsDetailKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	case "down", "j":
-		// For marketplace pages with a plugin list, j/k navigates that
-		// list. Other pages: scroll the body.
-		if top.subTab == agentsSubMarketplaces && row.marketplace != nil {
-			n := m.marketplacePluginCount(row.marketplace)
-			if n > 0 && top.bodyCursor < n-1 {
+		// For pages whose body renders a windowed list with a
+		// cursor (marketplace plugins, plugin's contained skills,
+		// MCP tools), j/k navigates that list via bodyCursor —
+		// which is what the windowing renderer reads. Other pages
+		// fall back to top.scroll for free-form body scroll.
+		if bodyCursorLen, ok := detailBodyCursorLen(m, *top, row); ok {
+			if top.bodyCursor < bodyCursorLen-1 {
 				top.bodyCursor++
 			}
 		} else {
@@ -86,7 +88,7 @@ func (m *Model) handleAgentsDetailKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	case "up", "k":
-		if top.subTab == agentsSubMarketplaces && row.marketplace != nil {
+		if _, ok := detailBodyCursorLen(m, *top, row); ok {
 			if top.bodyCursor > 0 {
 				top.bodyCursor--
 			}
@@ -217,6 +219,58 @@ func (m *Model) resolveDetailRow(frame agentDetailFrame) (agentRow, bool) {
 
 // ---------- render ----------
 
+// dimVersionDetailHint renders a tiny "↑ N above · ↓ M below" hint
+// for the detail page's outer scroll. Both counts may be zero; the
+// returned string is empty when neither direction has hidden lines.
+func dimVersionDetailHint(above, below int) string {
+	if above == 0 && below == 0 {
+		return ""
+	}
+	switch {
+	case above > 0 && below > 0:
+		return dimVersion.Render(fmt.Sprintf("↑ %d above · ↓ %d below", above, below))
+	case above > 0:
+		return dimVersion.Render(fmt.Sprintf("↑ %d above", above))
+	default:
+		return dimVersion.Render(fmt.Sprintf("↓ %d below", below))
+	}
+}
+
+// detailBodyCursorLen returns the length of the windowed body list
+// currently rendered for the given detail frame, plus a bool that
+// reports whether the body uses cursor-driven navigation at all.
+//
+// Three detail-body renderers (marketplace plugin list, plugin's
+// contained skills, MCP tools) window their list around
+// frame.bodyCursor, so the key handler has to update bodyCursor —
+// not top.scroll — when the user presses ↑/↓ on those pages.
+// Returning a length lets the handler clamp to the list bounds.
+func detailBodyCursorLen(m *Model, frame agentDetailFrame, row agentRow) (int, bool) {
+	switch {
+	case frame.subTab == agentsSubMarketplaces && row.marketplace != nil:
+		return m.marketplacePluginCount(row.marketplace), true
+	case row.plugin != nil:
+		// Contained-skills list (snapshot lookup mirrors renderPluginBody).
+		st := m.agents
+		if st == nil || st.snapshot == nil {
+			return 0, false
+		}
+		n := 0
+		for _, s := range st.snapshot.Skills {
+			if s.Provider == row.plugin.Provider && s.SourcePlugin == row.plugin.Name {
+				n++
+			}
+		}
+		if n == 0 {
+			return 0, false
+		}
+		return n, true
+	case row.mcp != nil && len(row.mcp.Tools) > 0:
+		return len(row.mcp.Tools), true
+	}
+	return 0, false
+}
+
 // renderAgentsDetailPage renders the full-screen Agents detail view.
 func (m *Model) renderAgentsDetailPage() string {
 	st := m.agents
@@ -273,12 +327,63 @@ func (m *Model) renderAgentsDetailPage() string {
 		footer.WriteString("  " + st.flash + "\n")
 	}
 
-	// Pad with blank lines so footer reaches the bottom of the screen.
+	// Pad with blank lines so footer reaches the bottom of the screen,
+	// OR clip the body from the bottom when it would push the footer
+	// off-screen. The previous version clamped gap to 1 but did NOT
+	// trim the body — so a marketplace with many plugins (or a
+	// session with a long detail block) overflowed the terminal,
+	// hiding the action bar and footer.
 	body0 := b.String()
-	bodyRows := strings.Count(body0, "\n")
 	footerStr := footer.String()
 	footerRows := strings.Count(footerStr, "\n")
 	if m.height > 0 {
+		maxBody := m.height - footerRows - 1
+		if maxBody < 1 {
+			maxBody = 1
+		}
+		lines := strings.Split(strings.TrimRight(body0, "\n"), "\n")
+		total := len(lines)
+		// Apply the page's free-form scroll offset (top.scroll,
+		// driven by ↑/↓ on non-windowed pages). Clamp so we can't
+		// scroll past the bottom of the visible window.
+		maxScroll := total - maxBody
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		scroll := top.scroll
+		if scroll < 0 {
+			scroll = 0
+		}
+		if scroll > maxScroll {
+			scroll = maxScroll
+		}
+		if scroll > 0 {
+			lines = lines[scroll:]
+		}
+		// Cap the displayed window so the action bar and footer
+		// always stay on-screen. Plugin / MCP detail bodies append
+		// tail sections (Keywords / EnvKeys) after their windowed
+		// list — those lines are now reachable via top.scroll, but
+		// if the user hasn't scrolled and the body still overflows
+		// we trim from the bottom to keep the footer visible.
+		hiddenAbove := scroll
+		hiddenBelow := 0
+		if len(lines) > maxBody {
+			hiddenBelow = len(lines) - maxBody
+			lines = lines[:maxBody]
+		}
+		// Surface scroll hints inside the body so the user knows
+		// content extends beyond the viewport.
+		if hiddenAbove > 0 || hiddenBelow > 0 {
+			hint := dimVersionDetailHint(hiddenAbove, hiddenBelow)
+			if hint != "" && len(lines) > 0 {
+				// Replace the last visible line with itself + hint
+				// so we don't reserve another row.
+				lines[len(lines)-1] = lines[len(lines)-1] + "  " + hint
+			}
+		}
+		body0 = strings.Join(lines, "\n") + "\n"
+		bodyRows := strings.Count(body0, "\n")
 		gap := m.height - bodyRows - footerRows - 1
 		if gap < 1 {
 			gap = 1
@@ -440,9 +545,9 @@ func renderAgentDetailBody(m *Model, frame agentDetailFrame, row agentRow) strin
 	case row.marketplace != nil:
 		return renderMarketplaceBody(m, frame, row.marketplace)
 	case row.plugin != nil:
-		return renderPluginBody(m, row.plugin)
+		return renderPluginBody(m, frame, row.plugin)
 	case row.mcp != nil:
-		return renderMCPBody(row.mcp)
+		return renderMCPBody(m, frame, row.mcp)
 	case row.session != nil:
 		return renderSessionBody(row.session)
 	case row.skill != nil:
@@ -460,7 +565,12 @@ func renderMarketplaceBody(m *Model, frame agentDetailFrame, mp *agents.Marketpl
 		b.WriteString("  " + dimVersion.Render("none discovered in the current snapshot") + "\n")
 		return b.String()
 	}
-	for i, p := range plugins {
+	start, end := windowDetailList(m.height, len(plugins), frame.bodyCursor)
+	if start > 0 {
+		b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↑ %d above", start)) + "\n")
+	}
+	for i := start; i < end; i++ {
+		p := plugins[i]
 		marker := "    "
 		if i == frame.bodyCursor {
 			marker = "  ▸ "
@@ -483,15 +593,59 @@ func renderMarketplaceBody(m *Model, frame agentDetailFrame, mp *agents.Marketpl
 		}
 		b.WriteString(line + "  " + dimVersion.Render(status) + "\n")
 	}
+	if end < len(plugins) {
+		b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↓ %d below", len(plugins)-end)) + "\n")
+	}
 	b.WriteString("  " + dimVersion.Render("↑/↓ pick · Enter (with action 'Open plugin →') drills in") + "\n")
 	return b.String()
 }
 
-func renderPluginBody(m *Model, p *agents.Plugin) string {
+// windowDetailList returns a [start, end) range over a body list so
+// the visible slice fits inside a detail page on a terminal of the
+// given total height. Pass the body cursor for cursor-following
+// scroll; if the list is short enough to fit entirely, [0, n) is
+// returned and start/end indicators are suppressed by the caller.
+//
+// Budget rationale: the detail page header section (title bar +
+// breadcrumb + title row + blank + 3-6 metadata rows + action bar
+// + blank) plus the body's own header / hint rows + footer (3) is
+// ≈ 14 rows. Floored at 5 so very small terminals still show
+// something useful.
+func windowDetailList(termHeight, total, cursor int) (start, end int) {
+	if total == 0 {
+		return 0, 0
+	}
+	maxRows := termHeight - 14
+	if maxRows < 5 {
+		maxRows = 5
+	}
+	if maxRows >= total {
+		return 0, total
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= maxRows {
+		start = cursor - maxRows + 1
+	}
+	end = start + maxRows
+	if end > total {
+		end = total
+		if end-maxRows >= 0 {
+			start = end - maxRows
+		}
+	}
+	return start, end
+}
+
+func renderPluginBody(m *Model, frame agentDetailFrame, p *agents.Plugin) string {
 	st := m.agents
 	var b strings.Builder
 	header := lipgloss.NewStyle().Bold(true).Foreground(cyberInfo)
-	// Contained skills (snapshot lookup).
+	// Contained skills (snapshot lookup). Windowed around bodyCursor
+	// so a plugin with many skills can't push the action bar / footer
+	// off-screen — same scroll behaviour as the marketplace's plugin
+	// list (↑/↓ to walk, indicators tell you the rest is below).
 	if st != nil && st.snapshot != nil {
 		var skills []string
 		for _, s := range st.snapshot.Skills {
@@ -500,9 +654,20 @@ func renderPluginBody(m *Model, p *agents.Plugin) string {
 			}
 		}
 		if len(skills) > 0 {
-			fmt.Fprintf(&b, "  %s\n", header.Render("Contained skills"))
-			for _, name := range skills {
-				b.WriteString("    • " + name + "\n")
+			fmt.Fprintf(&b, "  %s  %s\n", header.Render("Contained skills"), dimVersion.Render(fmt.Sprintf("(%d)", len(skills))))
+			start, end := windowDetailList(m.height, len(skills), frame.bodyCursor)
+			if start > 0 {
+				b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↑ %d above", start)) + "\n")
+			}
+			for i := start; i < end; i++ {
+				marker := "    • "
+				if i == frame.bodyCursor {
+					marker = "  ▸ • "
+				}
+				b.WriteString(marker + skills[i] + "\n")
+			}
+			if end < len(skills) {
+				b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↓ %d below", len(skills)-end)) + "\n")
 			}
 		}
 	}
@@ -513,13 +678,27 @@ func renderPluginBody(m *Model, p *agents.Plugin) string {
 	return b.String()
 }
 
-func renderMCPBody(mc *agents.MCP) string {
+func renderMCPBody(m *Model, frame agentDetailFrame, mc *agents.MCP) string {
 	var b strings.Builder
 	header := lipgloss.NewStyle().Bold(true).Foreground(cyberInfo)
+	// Tools windowed around bodyCursor — some MCPs (filesystem,
+	// shell, etc.) expose dozens of tools and the body otherwise
+	// overflows the terminal.
 	if len(mc.Tools) > 0 {
-		fmt.Fprintf(&b, "  %s\n", header.Render("Tools"))
-		for _, t := range mc.Tools {
-			b.WriteString("    • " + t + "\n")
+		fmt.Fprintf(&b, "  %s  %s\n", header.Render("Tools"), dimVersion.Render(fmt.Sprintf("(%d)", len(mc.Tools))))
+		start, end := windowDetailList(m.height, len(mc.Tools), frame.bodyCursor)
+		if start > 0 {
+			b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↑ %d above", start)) + "\n")
+		}
+		for i := start; i < end; i++ {
+			marker := "    • "
+			if i == frame.bodyCursor {
+				marker = "  ▸ • "
+			}
+			b.WriteString(marker + mc.Tools[i] + "\n")
+		}
+		if end < len(mc.Tools) {
+			b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↓ %d below", len(mc.Tools)-end)) + "\n")
 		}
 	}
 	if len(mc.EnvKeys) > 0 {

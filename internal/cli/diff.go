@@ -39,7 +39,7 @@ Exit codes:
 
 func init() {
 	diffCmd.Flags().BoolVar(&diffRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
-	diffOutputFmt = addOutputFlag(diffCmd, OutputText, OutputJSON)
+	diffOutputFmt = addOutputFlag(diffCmd, OutputText, OutputJSON, OutputYAML)
 	// Registered in root.go with command group.
 }
 
@@ -162,8 +162,8 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	// Print results.
-	if out == OutputJSON {
-		return printDiffJSON(target, remoteName, entries, matches, differs, localOnly, remoteOnly)
+	if out == OutputJSON || out == OutputYAML {
+		return printDiffJSON(out, target, remoteName, entries, matches, differs, localOnly, remoteOnly)
 	}
 
 	fmt.Fprintf(os.Stderr, "\nComparing local vs %s\n\n", remoteName)
@@ -217,7 +217,7 @@ type diffJSONSummary struct {
 	RemoteOnly int `json:"remote_only"`
 }
 
-func printDiffJSON(target, label string, entries []diffEntry, matches, differs, localOnly, remoteOnly int) error {
+func printDiffJSON(format OutputFormat, target, label string, entries []diffEntry, matches, differs, localOnly, remoteOnly int) error {
 	report := diffJSONReport{
 		Target:      target,
 		TargetLabel: label,
@@ -245,7 +245,7 @@ func printDiffJSON(target, label string, entries []diffEntry, matches, differs, 
 		}
 		report.Entries = append(report.Entries, entry)
 	}
-	if err := printJSON(report); err != nil {
+	if err := printStructured(format, report); err != nil {
 		return err
 	}
 	if differs > 0 || localOnly > 0 || remoteOnly > 0 {

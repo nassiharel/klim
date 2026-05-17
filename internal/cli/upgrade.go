@@ -37,5 +37,5 @@ Examples:
 
 func init() {
 	upgradeFlags = addActionFlags(upgradeCmd)
-	upgradeOutputFmt = addOutputFlag(upgradeCmd, OutputText, OutputJSON)
+	upgradeOutputFmt = addOutputFlag(upgradeCmd, OutputText, OutputJSON, OutputYAML)
 }

@@ -34,7 +34,7 @@ Flags:
   --source <name>      Show only tools from a specific install source (e.g. brew, winget, apt)
   --categories         Print available category names and exit
   --refresh            Force a fresh scan, ignoring the on-disk cache
-  --output text|json   Output format (default: text)
+  --output text|json|yaml   Output format (default: text)
 
 Examples:
   klim list                          # all installed tools
@@ -52,7 +52,7 @@ func init() {
 	listCmd.Flags().StringVar(&listSourceFlag, "source", "", "Filter by install source (e.g. brew, winget, apt)")
 	listCmd.Flags().BoolVar(&listCategoriesFlag, "categories", false, "Print available category names and exit")
 	listCmd.Flags().BoolVar(&listRefreshFlag, "refresh", false, "Force a fresh scan, ignoring the on-disk cache")
-	listOutput = addOutputFlag(listCmd, OutputText, OutputJSON)
+	listOutput = addOutputFlag(listCmd, OutputText, OutputJSON, OutputYAML)
 }
 
 func runList(cmd *cobra.Command, args []string) error {
@@ -102,16 +102,16 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	// --categories: print available categories and exit.
 	if listCategoriesFlag {
-		if out == OutputJSON {
-			return printJSON(collectListCategories(tools))
+		if out == OutputJSON || out == OutputYAML {
+			return printStructured(out, collectListCategories(tools))
 		}
 		printCategories(tools)
 		return nil
 	}
 
 	// JSON output: emit structured tool list and skip the human table.
-	if out == OutputJSON {
-		return printListJSON(tools)
+	if out == OutputJSON || out == OutputYAML {
+		return printListJSON(out, tools)
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
@@ -226,7 +226,7 @@ type listJSONOutput struct {
 	Tools []listJSONTool `json:"tools"`
 }
 
-func printListJSON(tools []registry.Tool) error {
+func printListJSON(format OutputFormat, tools []registry.Tool) error {
 	out := listJSONOutput{
 		OS:   runtime.GOOS,
 		Arch: runtime.GOARCH,
@@ -259,10 +259,9 @@ func printListJSON(tools []registry.Tool) error {
 		}
 		out.Tools = append(out.Tools, entry)
 	}
-	return printJSON(out)
+	return printStructured(format, out)
 }
 
-// listJSONCategory is the per-category JSON shape for --categories --output json.
 type listJSONCategory struct {
 	Name      string `json:"name"`
 	Installed int    `json:"installed"`

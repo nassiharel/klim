@@ -612,3 +612,42 @@ func TestApplyStatusValueFilter_Marketplaces(t *testing.T) {
 		t.Errorf("local filter: %+v", got)
 	}
 }
+
+func TestUpdate_AgentsCostsLoadedMsg_ClearsLoadingFlag(t *testing.T) {
+	// Regression for the "scanning transcripts… forever" bug.
+	// Previously the outer Update switch only dispatched
+	// agentsLoaded / Launched / Deleted to handleAgentsMsg, so
+	// agentsCostsLoadedMsg arrived but cs.loading was never cleared.
+	m := Model{agents: &agentsState{}}
+	m.agents.costs.loading = true
+
+	updated, _ := m.Update(agentsCostsLoadedMsg{samples: nil, err: nil})
+	mp, ok := updated.(Model)
+	if !ok {
+		t.Fatalf("Update did not return *Model; got %T", updated)
+	}
+	if mp.agents.costs.loading {
+		t.Error("costs.loading was not cleared after agentsCostsLoadedMsg")
+	}
+	if !mp.agents.costs.loaded {
+		t.Error("costs.loaded was not set after agentsCostsLoadedMsg")
+	}
+}
+
+func TestUpdate_AgentsHealthLoadedMsg_ClearsLoadingFlag(t *testing.T) {
+	// Same regression guard for Health.
+	m := Model{agents: &agentsState{}}
+	m.agents.healthSub.loading = true
+
+	updated, _ := m.Update(agentsHealthLoadedMsg{issues: nil})
+	mp, ok := updated.(Model)
+	if !ok {
+		t.Fatalf("Update did not return *Model; got %T", updated)
+	}
+	if mp.agents.healthSub.loading {
+		t.Error("healthSub.loading was not cleared after agentsHealthLoadedMsg")
+	}
+	if !mp.agents.healthSub.loaded {
+		t.Error("healthSub.loaded was not set after agentsHealthLoadedMsg")
+	}
+}

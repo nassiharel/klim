@@ -26,7 +26,7 @@ Examples:
 }
 
 func init() {
-	whyOutputFmt = addOutputFlag(whyCmd, OutputText, OutputJSON)
+	whyOutputFmt = addOutputFlag(whyCmd, OutputText, OutputJSON, OutputYAML)
 	// Registered in root.go with command group.
 }
 
@@ -83,8 +83,8 @@ func runWhy(cmd *cobra.Command, args []string) error {
 
 	report := buildWhyReport(cmd, toolName, t, tools)
 
-	if out == OutputJSON {
-		return printJSON(report)
+	if out == OutputJSON || out == OutputYAML {
+		return printStructured(out, report)
 	}
 
 	renderWhyText(report)

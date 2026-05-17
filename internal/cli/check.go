@@ -35,7 +35,7 @@ Usage:
 
 func init() {
 	checkCmd.Flags().StringVarP(&checkFileFlag, "file", "f", "", "Path to .klim.yaml (default: auto-detect)")
-	checkOutput = addOutputFlag(checkCmd, OutputText, OutputJSON)
+	checkOutput = addOutputFlag(checkCmd, OutputText, OutputJSON, OutputYAML)
 	checkCmd.Flags().BoolVar(&checkRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	// Registered in root.go with command group.
 }
@@ -107,8 +107,8 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 	_ = teamfile.AddProject(filepath.Dir(path), name, len(tf.Tools)+len(tf.Optional))
 
-	if out == OutputJSON {
-		return printCheckJSON(tf, path, results, ok, missing, outdated, unknown)
+	if out == OutputJSON || out == OutputYAML {
+		return printCheckJSON(out, tf, path, results, ok, missing, outdated, unknown)
 	}
 
 	// Human output.
@@ -176,7 +176,7 @@ func printCheckLine(r teamfile.CheckResult) {
 	fmt.Fprintf(os.Stderr, "    %s %-20s %-12s %s\n", icon, r.Tool.Name, ver, constraint)
 }
 
-func printCheckJSON(tf *teamfile.TeamFile, path string, results []teamfile.CheckResult, ok, missing, outdated, unknown int) error {
+func printCheckJSON(format OutputFormat, tf *teamfile.TeamFile, path string, results []teamfile.CheckResult, ok, missing, outdated, unknown int) error {
 	out := jsonCheckOutput{
 		Project:      tf.Name,
 		File:         path,
@@ -206,7 +206,7 @@ func printCheckJSON(tf *teamfile.TeamFile, path string, results []teamfile.Check
 		})
 	}
 
-	if err := printJSON(out); err != nil {
+	if err := printStructured(format, out); err != nil {
 		return err
 	}
 

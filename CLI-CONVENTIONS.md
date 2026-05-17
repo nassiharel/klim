@@ -17,27 +17,35 @@ expects, while the human-readable summary still prints to the terminal.
 
 ## Output format
 
-Every command that produces structured data accepts:
+Every command that produces structured data accepts a subset of:
 
 ```
---output text|json
+--output text|json|yaml
 ```
 
 * Default is `text` (human-readable).
 * `--json` is supported as a deprecated alias for `--output=json` and prints
   a deprecation warning.
-* When `--output=json` is set, only the JSON payload is written to stdout;
-  prose stays on stderr.
-* `--output=yaml` is reserved (the `OutputYAML` constant exists in the
-  helper) but no command currently emits YAML; passing `yaml` to a command
-  that doesn't support it returns a usage error and exits 2.
-* Unknown values (e.g. `--output=jsno`) are usage errors and exit 2 — they
-  do **not** silently fall back to text.
+* When `--output=json` (or `yaml`) is set, only the structured payload is
+  written to stdout; prose stays on stderr.
+* Each command opts in to specific formats via `addOutputFlag(cmd,
+  OutputText, OutputJSON[, OutputYAML])`. Passing a format the command
+  didn't opt in to (e.g. `--output=yaml` to a JSON-only command) returns a
+  usage error and exits 2 — it does **not** silently fall back to text.
+* Unknown values (e.g. `--output=jsno`) are usage errors and exit 2.
 
-Currently supports JSON: `audit`, `check`, `compliance check`, `diff`,
-`doctor`, `info`, `list`, `score`, `search`, `share`, `tools path`,
-`trail log`, `trail show`, `trail diff`, `watch`, `why`, and `config
-marketplace list`. (`export` already emits YAML by design.)
+Commands that wire `OutputText, OutputJSON, OutputYAML` (the full
+matrix — pick whichever format your tooling consumes): `apply`,
+`audit`, `check`, `config marketplace list`, `diff`, `health`,
+`health path`, `info`, `install`, `list`, `plan`, `remove`,
+`rollback`, `score`, `search`, `security compliance check`,
+`security vuln`, `share`, `tools path`, `trail log`, `trail show`,
+`trail diff`, `upgrade`, `watch`, `why`, plus `agents list`,
+`agents search`, `badge`, `env`. (`export` already emits YAML by
+design.)
+
+`graph` is text-only — its output is a force-directed terminal drawing,
+not structured data.
 
 ## Exit codes
 
