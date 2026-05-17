@@ -205,3 +205,28 @@ func TestRender_AreaCap(t *testing.T) {
 		t.Errorf("Render output %d bytes; area cap not applied", len(got))
 	}
 }
+
+func TestRender_NodesAuthoritativeOverLabels(t *testing.T) {
+	// Regression: with single-pass rendering, a later node's label
+	// could overwrite an earlier node's '●'. With the two-pass fix
+	// node glyphs are drawn last, so dense layouts can't under-
+	// report visible nodes. Force two nodes onto the same row by
+	// hand-positioning them adjacent in normalised space.
+	g := New()
+	g.AddNode("a", "longlabel", 1)
+	g.AddNode("b", "x", 2)
+	// Place a left, b just to its right — close enough that a's
+	// label runes will overlap b's '●' cell in any sensible
+	// width/height pair.
+	g.Nodes[0].x, g.Nodes[0].y = 0.1, 0.5
+	g.Nodes[1].x, g.Nodes[1].y = 0.18, 0.5
+
+	got := g.Render(60, 8, RenderOpts{Unstyled: true})
+
+	// We should see two '●' glyphs in the output. Pre-fix this
+	// could drop to one (b's '●' was overwritten by 'longlabel').
+	if strings.Count(got, "●") != 2 {
+		t.Errorf("expected two node glyphs in render output; got %d.\nfull output:\n%s",
+			strings.Count(got, "●"), got)
+	}
+}

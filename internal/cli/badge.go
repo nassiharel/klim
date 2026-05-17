@@ -91,7 +91,12 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 	// Structured output always carries the full score block, so a
 	// `klim badge --tools --output yaml` still needs the score path.
 	needScorePipeline := wantScore || wantStructured
-	needVersions := wantFresh || needScorePipeline
+	// audit.Analyze surfaces "No Version" / "Outdated" findings,
+	// which depend on a tool's resolved Latest field. Without
+	// version resolution those findings are silently dropped — the
+	// audit count under-reports. So treat --audit as needing
+	// versions too (matches what `klim audit` does internally).
+	needVersions := wantFresh || wantAudit || needScorePipeline
 	_ = wantTools // every badge needs tools data; tracked here only for symmetry
 
 	svc := svcFrom(cmd)

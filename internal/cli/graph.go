@@ -150,7 +150,14 @@ func installedOnly(tools []registry.Tool) []registry.Tool {
 }
 
 // buildToolGraph constructs a graph where each installed tool is a
-// node and edges are drawn between tools that share a property.
+// node. Edges are drawn between tools that share a property
+// (category / tag / package manager). Buckets up to
+// maxBucketCliqueSize members produce a full clique (every pair
+// gets an edge); larger buckets degrade to a star pattern rooted at
+// the lexicographically-first member so a single very-shared tag
+// (e.g. "cli" across 200 tools) doesn't fan out to O(n²) edges and
+// pin the force simulation. See groupByEdges for the topology
+// details.
 func buildToolGraph(tools []registry.Tool, by string) *graphviz.Graph {
 	g := graphviz.New()
 

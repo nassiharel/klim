@@ -142,7 +142,7 @@ func TestScan_SurfacesProviderErrorsOnStatus(t *testing.T) {
 	if !ok {
 		t.Fatal("provider status missing")
 	}
-	if status.Error == nil || status.Error.Error() != "malformed config" {
+	if status.Error == "" || status.Error != "malformed config" {
 		t.Errorf("Status.Error = %v, want 'malformed config'", status.Error)
 	}
 }
@@ -154,7 +154,7 @@ func TestScan_SkipsErrNotSupported(t *testing.T) {
 	p := &errProvider{stubProvider: stubProvider{id: "polite"}, pluginsErr: ErrNotSupported}
 	svc := NewService(2, p)
 	snap, _ := svc.LoadAll(context.Background(), LoadOpts{Refresh: true})
-	if status := snap.ProviderStatus["polite"]; status.Error != nil {
+	if status := snap.ProviderStatus["polite"]; status.Error != "" {
 		t.Errorf("ErrNotSupported should not surface on Status.Error; got %v", status.Error)
 	}
 }

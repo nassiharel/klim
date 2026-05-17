@@ -92,12 +92,19 @@ func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 		canvas.line(x1, y1, x2, y2, '·')
 	}
 
+	// Two-pass node draw so node glyphs stay authoritative:
+	//   1. labels — may collide with other nodes' positions, but
+	//      labels are subordinate visual information.
+	//   2. node markers — drawn last so '●' always wins where a
+	//      later node sits on cells an earlier label wrote into.
+	// Without the split, dense layouts under-report visible nodes
+	// because an adjacent node's label overwrites the '●' of the
+	// node drawn first.
 	for _, n := range g.Nodes {
 		x, y := worldToGrid(n.x, n.y, width, height)
-		canvas.setStyled(x, y, '●', nodeStyle(n.Color))
 		// Label fits when its last rune lands inside the canvas.
 		// First rune sits at x+1, so the last rune is at
-		// x+utf8.RuneCountInString(label); that needs to be < width.
+		// x+RuneCountInString(label); that needs to be < width.
 		// Sanitize control characters out first so a label can't
 		// inject ANSI escapes or newlines into the rendered grid
 		// even when Unstyled is requested.
@@ -109,6 +116,10 @@ func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 				}
 			}
 		}
+	}
+	for _, n := range g.Nodes {
+		x, y := worldToGrid(n.x, n.y, width, height)
+		canvas.setStyled(x, y, '●', nodeStyle(n.Color))
 	}
 	return canvas.String()
 }

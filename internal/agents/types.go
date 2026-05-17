@@ -15,6 +15,7 @@
 package agents
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -67,11 +68,15 @@ const (
 )
 
 // Status reports whether a provider's binary is installed and detected.
+// Error carries the *message* (not the underlying error value) so the
+// JSON / YAML schema is a useful string instead of '{}' — encoding/json
+// renders interface error values as their concrete type, which for
+// standard errors is an empty struct.
 type Status struct {
 	Installed bool   `json:"installed" yaml:"installed"`
 	Version   string `json:"version,omitempty" yaml:"version,omitempty"`
 	BinPath   string `json:"bin_path,omitempty" yaml:"bin_path,omitempty"`
-	Error     error  `json:"error,omitempty" yaml:"error,omitempty"`
+	Error     string `json:"error,omitempty" yaml:"error,omitempty"`
 }
 
 // Source records where an entity record came from in the merged snapshot.
@@ -269,3 +274,63 @@ var ErrNotSupported = errors.New("agents: operation not supported by this provid
 // ErrProviderNotInstalled is returned when a mutation requires the
 // underlying agent CLI but the binary isn't on PATH.
 var ErrProviderNotInstalled = errors.New("agents: provider binary not installed")
+
+// ---------- structured-output helpers ----------
+//
+// encoding/json's `omitempty` does NOT recognise a zero-value
+// time.Time as empty (only nil pointers / zero scalars trigger it).
+// printYAML now routes through JSON, so without these custom
+// marshalers a Marketplace with no LastSynced would emit
+// '"last_synced": "0001-01-01T00:00:00Z"' — visually broken in
+// both JSON and YAML output. The helpers below pre-render each
+// struct into a map with the zero-time fields omitted entirely.
+
+// MarshalJSON omits a zero LastSynced.
+func (m Marketplace) MarshalJSON() ([]byte, error) {
+	type alias Marketplace
+	type out struct {
+		alias
+		LastSynced *time.Time `json:"last_synced,omitempty"`
+	}
+	o := out{alias: alias(m)}
+	if !m.LastSynced.IsZero() {
+		ls := m.LastSynced
+		o.LastSynced = &ls
+	}
+	// alias still carries LastSynced; null it out via a second map
+	// step. Cheap and explicit.
+	raw, err := json.Marshal(o)
+	if err != nil {
+		return nil, err
+	}
+	var generic map[string]any
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return nil, err
+	}
+	// alias-embedding emits the inner field too — drop the zero copy.
+	if m.LastSynced.IsZero() {
+		delete(generic, "last_synced")
+	}
+	return json.Marshal(generic)
+}
+
+// MarshalJSON omits zero Created / LastModified on Sessions.
+func (s Session) MarshalJSON() ([]byte, error) {
+	type alias Session
+	a := alias(s)
+	raw, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	var generic map[string]any
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return nil, err
+	}
+	if s.Created.IsZero() {
+		delete(generic, "created")
+	}
+	if s.LastModified.IsZero() {
+		delete(generic, "last_modified")
+	}
+	return json.Marshal(generic)
+}

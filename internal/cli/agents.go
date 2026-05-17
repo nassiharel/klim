@@ -655,8 +655,8 @@ func runAgentsDoctor(cmd *cobra.Command, _ []string) error {
 	for _, p := range svc.Registry().Providers() {
 		st := snap.ProviderStatus[p.ID()]
 		notes := ""
-		if st.Error != nil {
-			notes = st.Error.Error()
+		if st.Error != "" {
+			notes = st.Error
 		}
 		_, _ = fmt.Fprintf(w, "%s\t%v\t%s\t%s\t%s\n", p.ID(), st.Installed, st.Version, st.BinPath, notes)
 	}
