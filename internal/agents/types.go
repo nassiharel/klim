@@ -68,10 +68,10 @@ const (
 
 // Status reports whether a provider's binary is installed and detected.
 type Status struct {
-	Installed bool
-	Version   string
-	BinPath   string
-	Error     error
+	Installed bool   `json:"installed" yaml:"installed"`
+	Version   string `json:"version,omitempty" yaml:"version,omitempty"`
+	BinPath   string `json:"bin_path,omitempty" yaml:"bin_path,omitempty"`
+	Error     error  `json:"error,omitempty" yaml:"error,omitempty"`
 }
 
 // Source records where an entity record came from in the merged snapshot.
@@ -91,76 +91,76 @@ const (
 
 // Marketplace is a named registry of plugins/MCPs.
 type Marketplace struct {
-	ID          string     `yaml:"id"`
-	Name        string     `yaml:"name"`
-	DisplayName string     `yaml:"display_name,omitempty"`
-	Description string     `yaml:"description,omitempty"`
-	Provider    ProviderID `yaml:"provider"`
-	URL         string     `yaml:"url,omitempty"`
-	Owner       string     `yaml:"owner,omitempty"`
-	PluginCount int        `yaml:"plugin_count,omitempty"`
-	LastSynced  time.Time  `yaml:"last_synced,omitempty"`
-	Source      Source     `yaml:"source"`
+	ID          string     `json:"id" yaml:"id"`
+	Name        string     `json:"name" yaml:"name"`
+	DisplayName string     `json:"display_name,omitempty" yaml:"display_name,omitempty"`
+	Description string     `json:"description,omitempty" yaml:"description,omitempty"`
+	Provider    ProviderID `json:"provider" yaml:"provider"`
+	URL         string     `json:"url,omitempty" yaml:"url,omitempty"`
+	Owner       string     `json:"owner,omitempty" yaml:"owner,omitempty"`
+	PluginCount int        `json:"plugin_count,omitempty" yaml:"plugin_count,omitempty"`
+	LastSynced  time.Time  `json:"last_synced,omitempty" yaml:"last_synced,omitempty"`
+	Source      Source     `json:"source" yaml:"source"`
 }
 
 // Plugin is an installable bundle that may contain skills, MCP servers,
 // agents, commands, hooks, and LSP servers.
 type Plugin struct {
-	ID          string     `yaml:"id"`
-	Name        string     `yaml:"name"`
-	DisplayName string     `yaml:"display_name,omitempty"`
-	Description string     `yaml:"description,omitempty"`
-	Version     string     `yaml:"version,omitempty"`
-	Author      string     `yaml:"author,omitempty"`
-	Homepage    string     `yaml:"homepage,omitempty"`
-	Repository  string     `yaml:"repository,omitempty"`
-	License     string     `yaml:"license,omitempty"`
-	Keywords    []string   `yaml:"keywords,omitempty"`
-	Provider    ProviderID `yaml:"provider"`
-	Marketplace string     `yaml:"marketplace,omitempty"`
-	Installed   bool       `yaml:"installed"`
-	Enabled     bool       `yaml:"enabled"`
-	InstallPath string     `yaml:"install_path,omitempty"`
-	Scope       Scope      `yaml:"scope,omitempty"`
-	SkillCount  int        `yaml:"skill_count,omitempty"`
-	MCPCount    int        `yaml:"mcp_count,omitempty"`
-	Source      Source     `yaml:"source"`
+	ID          string     `json:"id" yaml:"id"`
+	Name        string     `json:"name" yaml:"name"`
+	DisplayName string     `json:"display_name,omitempty" yaml:"display_name,omitempty"`
+	Description string     `json:"description,omitempty" yaml:"description,omitempty"`
+	Version     string     `json:"version,omitempty" yaml:"version,omitempty"`
+	Author      string     `json:"author,omitempty" yaml:"author,omitempty"`
+	Homepage    string     `json:"homepage,omitempty" yaml:"homepage,omitempty"`
+	Repository  string     `json:"repository,omitempty" yaml:"repository,omitempty"`
+	License     string     `json:"license,omitempty" yaml:"license,omitempty"`
+	Keywords    []string   `json:"keywords,omitempty" yaml:"keywords,omitempty"`
+	Provider    ProviderID `json:"provider" yaml:"provider"`
+	Marketplace string     `json:"marketplace,omitempty" yaml:"marketplace,omitempty"`
+	Installed   bool       `json:"installed" yaml:"installed"`
+	Enabled     bool       `json:"enabled" yaml:"enabled"`
+	InstallPath string     `json:"install_path,omitempty" yaml:"install_path,omitempty"`
+	Scope       Scope      `json:"scope,omitempty" yaml:"scope,omitempty"`
+	SkillCount  int        `json:"skill_count,omitempty" yaml:"skill_count,omitempty"`
+	MCPCount    int        `json:"mcp_count,omitempty" yaml:"mcp_count,omitempty"`
+	Source      Source     `json:"source" yaml:"source"`
 }
 
 // Skill is an individual skill definition (typically a SKILL.md directory).
 type Skill struct {
-	ID                 string     `yaml:"id"`
-	Name               string     `yaml:"name"`
-	Description        string     `yaml:"description,omitempty"`
-	WhenToUse          string     `yaml:"when_to_use,omitempty"`
-	AllowedTools       string     `yaml:"allowed_tools,omitempty"`
-	ArgumentHint       string     `yaml:"argument_hint,omitempty"`
-	Model              string     `yaml:"model,omitempty"`
-	DisableModelInvoke bool       `yaml:"disable_model_invocation,omitempty"`
-	UserInvocable      bool       `yaml:"user_invocable,omitempty"`
-	Provider           ProviderID `yaml:"provider"`
-	SourcePlugin       string     `yaml:"source_plugin,omitempty"`
-	Scope              Scope      `yaml:"scope"`
-	Path               string     `yaml:"path,omitempty"`
-	Enabled            bool       `yaml:"enabled"`
-	Source             Source     `yaml:"source"`
+	ID                 string     `json:"id" yaml:"id"`
+	Name               string     `json:"name" yaml:"name"`
+	Description        string     `json:"description,omitempty" yaml:"description,omitempty"`
+	WhenToUse          string     `json:"when_to_use,omitempty" yaml:"when_to_use,omitempty"`
+	AllowedTools       string     `json:"allowed_tools,omitempty" yaml:"allowed_tools,omitempty"`
+	ArgumentHint       string     `json:"argument_hint,omitempty" yaml:"argument_hint,omitempty"`
+	Model              string     `json:"model,omitempty" yaml:"model,omitempty"`
+	DisableModelInvoke bool       `json:"disable_model_invocation,omitempty" yaml:"disable_model_invocation,omitempty"`
+	UserInvocable      bool       `json:"user_invocable,omitempty" yaml:"user_invocable,omitempty"`
+	Provider           ProviderID `json:"provider" yaml:"provider"`
+	SourcePlugin       string     `json:"source_plugin,omitempty" yaml:"source_plugin,omitempty"`
+	Scope              Scope      `json:"scope" yaml:"scope"`
+	Path               string     `json:"path,omitempty" yaml:"path,omitempty"`
+	Enabled            bool       `json:"enabled" yaml:"enabled"`
+	Source             Source     `json:"source" yaml:"source"`
 }
 
 // MCP describes a configured Model Context Protocol server.
 type MCP struct {
-	ID        string            `yaml:"id"`
-	Name      string            `yaml:"name"`
-	Provider  ProviderID        `yaml:"provider"`
-	Transport string            `yaml:"transport,omitempty"` // "stdio" | "http" | "sse"
-	Command   string            `yaml:"command,omitempty"`
-	Args      []string          `yaml:"args,omitempty"`
-	URL       string            `yaml:"url,omitempty"`
-	EnvKeys   []string          `yaml:"env_keys,omitempty"` // keys only; values are not surfaced
-	Headers   map[string]string `yaml:"headers,omitempty"`
-	Tools     []string          `yaml:"tools,omitempty"`
-	Scope     Scope             `yaml:"scope"`
-	Enabled   bool              `yaml:"enabled"`
-	Source    Source            `yaml:"source"`
+	ID        string            `json:"id" yaml:"id"`
+	Name      string            `json:"name" yaml:"name"`
+	Provider  ProviderID        `json:"provider" yaml:"provider"`
+	Transport string            `json:"transport,omitempty" yaml:"transport,omitempty"` // "stdio" | "http" | "sse"
+	Command   string            `json:"command,omitempty" yaml:"command,omitempty"`
+	Args      []string          `json:"args,omitempty" yaml:"args,omitempty"`
+	URL       string            `json:"url,omitempty" yaml:"url,omitempty"`
+	EnvKeys   []string          `json:"env_keys,omitempty" yaml:"env_keys,omitempty"` // keys only; values are not surfaced
+	Headers   map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
+	Tools     []string          `json:"tools,omitempty" yaml:"tools,omitempty"`
+	Scope     Scope             `json:"scope" yaml:"scope"`
+	Enabled   bool              `json:"enabled" yaml:"enabled"`
+	Source    Source            `json:"source" yaml:"source"`
 }
 
 // SessionStatus categorizes a session's lifecycle state.
@@ -176,18 +176,18 @@ const (
 
 // Session is a saved or recent agent session.
 type Session struct {
-	ID             string        `yaml:"id"`
-	Name           string        `yaml:"name,omitempty"`
-	Provider       ProviderID    `yaml:"provider"`
-	ProjectPath    string        `yaml:"project_path,omitempty"`
-	Created        time.Time     `yaml:"created,omitempty"`       // first event (session.start)
-	LastModified   time.Time     `yaml:"last_modified,omitempty"` // last event / dir mtime
-	TurnCount      int           `yaml:"turn_count,omitempty"`
-	Title          string        `yaml:"title,omitempty"`
-	Type           string        `yaml:"type,omitempty"`   // e.g. "interactive", "background", "ado"
-	Status         SessionStatus `yaml:"status,omitempty"` // active | completed | stopped | ""
-	TranscriptPath string        `yaml:"transcript_path,omitempty"`
-	Source         Source        `yaml:"source"`
+	ID             string        `json:"id" yaml:"id"`
+	Name           string        `json:"name,omitempty" yaml:"name,omitempty"`
+	Provider       ProviderID    `json:"provider" yaml:"provider"`
+	ProjectPath    string        `json:"project_path,omitempty" yaml:"project_path,omitempty"`
+	Created        time.Time     `json:"created,omitempty" yaml:"created,omitempty"`             // first event (session.start)
+	LastModified   time.Time     `json:"last_modified,omitempty" yaml:"last_modified,omitempty"` // last event / dir mtime
+	TurnCount      int           `json:"turn_count,omitempty" yaml:"turn_count,omitempty"`
+	Title          string        `json:"title,omitempty" yaml:"title,omitempty"`
+	Type           string        `json:"type,omitempty" yaml:"type,omitempty"`     // e.g. "interactive", "background", "ado"
+	Status         SessionStatus `json:"status,omitempty" yaml:"status,omitempty"` // active | completed | stopped | ""
+	TranscriptPath string        `json:"transcript_path,omitempty" yaml:"transcript_path,omitempty"`
+	Source         Source        `json:"source" yaml:"source"`
 }
 
 // PluginRef identifies a plugin to install. Either a marketplace-qualified

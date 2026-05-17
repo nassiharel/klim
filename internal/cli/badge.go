@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nassiharel/klim/internal/audit"
 	"github.com/nassiharel/klim/internal/badge"
 	"github.com/nassiharel/klim/internal/registry"
 	"github.com/nassiharel/klim/internal/score"
@@ -80,37 +81,55 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	// Decide what work is needed BEFORE doing it.
+	ids := selectedBadgeIDs()
+	wantScore := needsBadge(ids, "score")
+	wantTools := needsBadge(ids, "tools")
+	wantAudit := needsBadge(ids, "audit")
+	wantFresh := needsBadge(ids, "fresh")
+	wantStructured := out == OutputJSON || out == OutputYAML
+	// Structured output always carries the full score block, so a
+	// `klim badge --tools --output yaml` still needs the score path.
+	needScorePipeline := wantScore || wantStructured
+	needVersions := wantFresh || needScorePipeline
+	_ = wantTools // every badge needs tools data; tracked here only for symmetry
+
 	svc := svcFrom(cmd)
 	sp := spinnerFor(out, "Scanning…")
-	tools, _, _, err := svc.LoadAndResolveCached(cmd.Context(), badgeRefreshFlag)
+
+	var tools []registry.Tool
+	if needVersions {
+		// Need installed/not + latest versions: full resolve.
+		tools, _, _, err = svc.LoadAndResolveCached(cmd.Context(), badgeRefreshFlag)
+	} else {
+		// tools / audit / no-flag-but-not-structured don't need
+		// latest versions — ScanOnly skips per-tool version
+		// resolution which is the expensive bit on a cold cache.
+		tools, _, err = svc.ScanOnly(cmd.Context())
+	}
 	if err != nil {
 		sp.Fail(err.Error())
 		return fmt.Errorf("klim badge: %w", err)
 	}
 	sp.Stop()
 
-	// Resolve which badges the user actually asked for FIRST, so we
-	// can skip the doctor/compliance/audit scan for runs that don't
-	// need score or audit inputs (e.g. `klim badge --tools --fresh`).
-	ids := selectedBadgeIDs()
-	wantScore := needsBadge(ids, "score")
-	wantAudit := needsBadge(ids, "audit")
-	wantStructured := out == OutputJSON || out == OutputYAML
-
 	var (
-		result            score.Result
-		auditWarns        int
-		auditInfos        int
-		havePolicyOrAudit bool
+		result     score.Result
+		auditWarns int
+		auditInfos int
 	)
-	// Structured output always carries the full score block, so
-	// fall through to the heavy path for --output json/yaml even
-	// when the user only asked for one badge.
-	if wantScore || wantAudit || wantStructured {
+	switch {
+	case needScorePipeline:
+		// Full pipeline: doctor + compliance + audit + score.Compute.
+		// Shared with `klim score` via buildScoreInputs.
 		result, auditWarns, auditInfos = buildScoreInputs(cmd, tools)
-		havePolicyOrAudit = true
+	case wantAudit:
+		// Audit badge only: skip doctor and compliance entirely,
+		// which means no spurious compliance-policy warning when
+		// the user asked only for `--audit`.
+		findings, _ := audit.Analyze(tools)
+		auditWarns, auditInfos = audit.CountBySeverity(findings)
 	}
-	_ = havePolicyOrAudit
 
 	pct := 0
 	if result.MaxTotal > 0 {

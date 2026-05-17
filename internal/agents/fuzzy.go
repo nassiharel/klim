@@ -6,15 +6,17 @@ import (
 	"unicode"
 )
 
-// SearchResult is one hit from a Service.Search call.
+// SearchResult is one hit from a Service.Search call. The JSON/YAML
+// schema is intentionally snake_case so consumers piping through jq
+// or yq see consistent keys regardless of --output choice.
 type SearchResult struct {
-	Score    int
-	Type     EntityType
-	ID       string
-	Name     string
-	Subtitle string
-	Provider ProviderID
-	Matches  []int // indices into Name of matched characters (for UI highlighting)
+	Score    int        `json:"score" yaml:"score"`
+	Type     EntityType `json:"type" yaml:"type"`
+	ID       string     `json:"id" yaml:"id"`
+	Name     string     `json:"name" yaml:"name"`
+	Subtitle string     `json:"subtitle,omitempty" yaml:"subtitle,omitempty"`
+	Provider ProviderID `json:"provider" yaml:"provider"`
+	Matches  []int      `json:"matches,omitempty" yaml:"matches,omitempty"` // indices into Name of matched characters (for UI highlighting)
 }
 
 // FuzzyMatch scores a candidate string against a query using a
