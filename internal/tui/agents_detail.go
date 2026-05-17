@@ -273,12 +273,35 @@ func (m *Model) renderAgentsDetailPage() string {
 		footer.WriteString("  " + st.flash + "\n")
 	}
 
-	// Pad with blank lines so footer reaches the bottom of the screen.
+	// Pad with blank lines so footer reaches the bottom of the screen,
+	// OR clip the body from the bottom when it would push the footer
+	// off-screen. The previous version clamped gap to 1 but did NOT
+	// trim the body — so a marketplace with many plugins (or a
+	// session with a long detail block) overflowed the terminal,
+	// hiding the action bar and footer.
 	body0 := b.String()
 	bodyRows := strings.Count(body0, "\n")
 	footerStr := footer.String()
 	footerRows := strings.Count(footerStr, "\n")
 	if m.height > 0 {
+		maxBody := m.height - footerRows - 1
+		if maxBody < 1 {
+			maxBody = 1
+		}
+		if bodyRows > maxBody {
+			// Trim from the bottom — losing detail-body tail lines is
+			// recoverable (cursor scrolls within the windowed list);
+			// losing the footer / action bar leaves the page unusable.
+			lines := strings.Split(body0, "\n")
+			if len(lines) > maxBody {
+				lines = lines[:maxBody]
+			}
+			body0 = strings.Join(lines, "\n")
+			if !strings.HasSuffix(body0, "\n") {
+				body0 += "\n"
+			}
+			bodyRows = strings.Count(body0, "\n")
+		}
 		gap := m.height - bodyRows - footerRows - 1
 		if gap < 1 {
 			gap = 1
@@ -460,7 +483,39 @@ func renderMarketplaceBody(m *Model, frame agentDetailFrame, mp *agents.Marketpl
 		b.WriteString("  " + dimVersion.Render("none discovered in the current snapshot") + "\n")
 		return b.String()
 	}
-	for i, p := range plugins {
+	// Window the plugin list around the cursor so the body can't
+	// outgrow the terminal height (which would push the action bar
+	// and footer off-screen — visually 'no footer / no scroll').
+	// Budget: terminal_height - (title 1 + breadcrumb 1 + title row 1
+	// + blank 1 + metadata 3-6 + action bar 1 + blank 1 + plugin
+	// header 1 + plugin hint 1 + footer 3) ≈ m.height - 14. Floor
+	// at 5 so very small terminals still show something.
+	maxRows := m.height - 14
+	if maxRows < 5 {
+		maxRows = 5
+	}
+	if maxRows > len(plugins) {
+		maxRows = len(plugins)
+	}
+	start := 0
+	if frame.bodyCursor >= maxRows {
+		start = frame.bodyCursor - maxRows + 1
+	}
+	if start < 0 {
+		start = 0
+	}
+	end := start + maxRows
+	if end > len(plugins) {
+		end = len(plugins)
+		if end-maxRows >= 0 {
+			start = end - maxRows
+		}
+	}
+	if start > 0 {
+		b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↑ %d above", start)) + "\n")
+	}
+	for i := start; i < end; i++ {
+		p := plugins[i]
 		marker := "    "
 		if i == frame.bodyCursor {
 			marker = "  ▸ "
@@ -482,6 +537,9 @@ func renderMarketplaceBody(m *Model, frame agentDetailFrame, mp *agents.Marketpl
 			line = cyberSelectedRowStyle.Render(line)
 		}
 		b.WriteString(line + "  " + dimVersion.Render(status) + "\n")
+	}
+	if end < len(plugins) {
+		b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↓ %d below", len(plugins)-end)) + "\n")
 	}
 	b.WriteString("  " + dimVersion.Render("↑/↓ pick · Enter (with action 'Open plugin →') drills in") + "\n")
 	return b.String()
