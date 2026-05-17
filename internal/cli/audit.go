@@ -40,7 +40,7 @@ Exit codes:
 }
 
 func init() {
-	auditOutput = addOutputFlag(auditCmd, OutputText, OutputJSON)
+	auditOutput = addOutputFlag(auditCmd, OutputText, OutputJSON, OutputYAML)
 	auditCmd.Flags().BoolVar(&auditRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	auditCmd.Flags().BoolVar(&auditSBOMFlag, "sbom", false, "Generate CycloneDX SBOM instead of audit report")
 	// Registered in root.go with command group.
@@ -63,6 +63,14 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	out, err := auditOutput()
 	if err != nil {
 		return err
+	}
+
+	// Validate flag combinations BEFORE the expensive scan so a
+	// bad invocation fails fast (no package-manager probes, no
+	// spinner). SBOM emits CycloneDX, which is JSON-by-spec; YAML
+	// has no place there.
+	if auditSBOMFlag && out == OutputYAML {
+		return usageErrorf("--sbom emits CycloneDX JSON; --output yaml is not supported with --sbom")
 	}
 
 	sp := spinnerFor(out, "Scanning installed tools...")
@@ -93,8 +101,8 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	findings, licenses := audit.Analyze(tools)
 	warnings, infos := audit.CountBySeverity(findings)
 
-	if out == OutputJSON {
-		return printAuditJSON(findings, installedCount, warnings, infos, licenses)
+	if out == OutputJSON || out == OutputYAML {
+		return printAuditJSON(out, findings, installedCount, warnings, infos, licenses)
 	}
 
 	// Human output.
@@ -131,14 +139,14 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func printAuditJSON(findings []auditFinding, total, warnings, infos int, licenses map[string]int) error {
+func printAuditJSON(format OutputFormat, findings []auditFinding, total, warnings, infos int, licenses map[string]int) error {
 	report := auditReport{Findings: findings}
 	report.Summary.TotalInstalled = total
 	report.Summary.Warnings = warnings
 	report.Summary.Infos = infos
 	report.Summary.Licenses = licenses
 
-	if err := printJSON(report); err != nil {
+	if err := printStructured(format, report); err != nil {
 		return err
 	}
 

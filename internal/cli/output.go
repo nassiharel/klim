@@ -131,8 +131,47 @@ func printJSON(v any) error {
 
 // printYAML marshals v to stdout as YAML.
 //
-//nolint:unused // Reserved for future commands that adopt --output=yaml.
+// Routing path: marshal to JSON first, decode into a generic
+// interface{}, then YAML-marshal that. This is intentional — many
+// structured-output reports in klim only carry `json:` tags, and
+// yaml.v3 doesn't honour those (it lowercases the field name and
+// ignores `,omitempty`). Round-tripping through JSON preserves the
+// exact JSON schema (key names, omitempty, custom MarshalJSON
+// implementations), so `klim ... --output yaml` produces a YAML
+// document with the same keys a JSON consumer would see.
+//
+// For types whose authoritative serialization is YAML — e.g. the
+// agents Snapshot, Plugin, MCP, Session types that have native
+// yaml: tags and a pre-existing JSON schema that uses Go field
+// names — use printYAMLDirect instead so the yaml tags drive the
+// output.
 func printYAML(v any) error {
+	jsonBytes, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("encoding YAML: %w", err)
+	}
+	var generic any
+	if err := json.Unmarshal(jsonBytes, &generic); err != nil {
+		return fmt.Errorf("encoding YAML (decode): %w", err)
+	}
+	b, err := yaml.Marshal(generic)
+	if err != nil {
+		return fmt.Errorf("encoding YAML: %w", err)
+	}
+	if _, err := os.Stdout.WriteString(string(b)); err != nil {
+		return fmt.Errorf("writing YAML: %w", err)
+	}
+	return nil
+}
+
+// printYAMLDirect marshals v as YAML using yaml.v3's tag/struct
+// rules directly — no JSON round-trip. Use this for types that
+// have explicit yaml: tags and whose JSON output (separately) is
+// kept on a stable schema that doesn't match the YAML one. Agents
+// list / search are the canonical callers: their pre-existing JSON
+// schema uses Go field names, while their YAML output uses
+// snake_case yaml tags.
+func printYAMLDirect(v any) error {
 	b, err := yaml.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("encoding YAML: %w", err)
@@ -141,4 +180,20 @@ func printYAML(v any) error {
 		return fmt.Errorf("writing YAML: %w", err)
 	}
 	return nil
+}
+
+// printStructured dispatches to printJSON or printYAML based on the
+// caller's resolved OutputFormat. Calling with OutputText (or any
+// non-structured format) is a programming error: this helper returns
+// an error in that case so the misuse is visible but doesn't crash
+// the process.
+func printStructured(format OutputFormat, v any) error {
+	switch format {
+	case OutputJSON:
+		return printJSON(v)
+	case OutputYAML:
+		return printYAML(v)
+	default:
+		return fmt.Errorf("printStructured: unsupported format %q", format)
+	}
 }

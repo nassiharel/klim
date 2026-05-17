@@ -110,8 +110,8 @@ func runAction(cmd *cobra.Command, args []string, action Action, flags *actionFl
 	sourceHint := resolveSource(flags.source, cfg)
 	plan := buildActionPlan(action, targets, regMap, sourceHint)
 
-	if output == OutputJSON {
-		return runActionJSON(cmd, action, plan, flags)
+	if output == OutputJSON || output == OutputYAML {
+		return runActionJSON(cmd, output, action, plan, flags)
 	}
 	return runActionText(cmd, action, plan, flags)
 }
@@ -150,11 +150,12 @@ func runActionText(cmd *cobra.Command, action Action, plan actionSummary, flags 
 	return nil
 }
 
-// runActionJSON emits a structured result on stdout and (unless dry-run)
-// executes plans without an interactive prompt. A human-readable plan
-// summary is also written to stderr so the user can see what is about
-// to happen even when stdout is piped to a file or jq.
-func runActionJSON(cmd *cobra.Command, action Action, plan actionSummary, flags *actionFlags) error {
+// runActionJSON emits a structured result on stdout (JSON or YAML
+// depending on `output`) and (unless dry-run) executes plans without
+// an interactive prompt. A human-readable plan summary is also
+// written to stderr so the user can see what is about to happen
+// even when stdout is piped to a file or jq.
+func runActionJSON(cmd *cobra.Command, output OutputFormat, action Action, plan actionSummary, flags *actionFlags) error {
 	// Plan summary on stderr — keeps stdout pristine for the final
 	// JSON object that scripts will parse.
 	printActionSummary(plan)
@@ -195,7 +196,7 @@ func runActionJSON(cmd *cobra.Command, action Action, plan actionSummary, flags 
 	addSkipNames("no_package_manager", plan.noPkgMgr)
 
 	if flags.dryRun || len(plan.toExec) == 0 {
-		return printJSON(res)
+		return printStructured(output, res)
 	}
 
 	// JSON mode: subprocess stdout MUST NOT touch our stdout — the
@@ -217,7 +218,7 @@ func runActionJSON(cmd *cobra.Command, action Action, plan actionSummary, flags 
 		res.Errors = append(res.Errors, fmt.Sprintf("invalidate scan cache: %v", err))
 	}
 
-	if err := printJSON(res); err != nil {
+	if err := printStructured(output, res); err != nil {
 		return err
 	}
 	if failed := len(res.Failed); failed > 0 {

@@ -143,8 +143,8 @@ func (s *Service) scan(ctx context.Context) (*Snapshot, error) {
 			// health pill can tell the user something is wrong. We
 			// merge results.scanErr into the Status.Error field
 			// without clobbering an existing Detect-time error.
-			if results.scanErr != nil && st.Error == nil {
-				st.Error = results.scanErr
+			if results.scanErr != nil && st.Error == "" {
+				st.Error = results.scanErr.Error()
 			}
 
 			mu.Lock()

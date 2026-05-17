@@ -34,7 +34,7 @@ Useful for piping into other tools or for inspection:
 }
 
 func init() {
-	toolsPathOutputFmt = addOutputFlag(toolsPathCmd, OutputText, OutputJSON)
+	toolsPathOutputFmt = addOutputFlag(toolsPathCmd, OutputText, OutputJSON, OutputYAML)
 	toolsCmd.AddCommand(toolsPathCmd)
 }
 
@@ -51,8 +51,8 @@ func runToolsPath(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("resolving catalog cache path: %w", err)
 	}
-	if out == OutputJSON {
-		return printJSON(toolsPathReport{CachePath: path})
+	if out == OutputJSON || out == OutputYAML {
+		return printStructured(out, toolsPathReport{CachePath: path})
 	}
 	fmt.Println(path)
 	return nil

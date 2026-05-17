@@ -788,7 +788,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.animTicking = false
 		return m, nil
 
-	case agentsLoadedMsg, agentsLaunchedMsg, agentsDeletedMsg:
+	// Any message from the agents subsystem flows through the
+	// agents-tab handler. Bug history: this used to enumerate only
+	// agentsLoadedMsg / agentsLaunchedMsg / agentsDeletedMsg, so
+	// newer messages (agentsCostsLoadedMsg, agentsHealthLoadedMsg,
+	// agentsPromoteResultMsg, agentsSearchIndexLoadedMsg,
+	// agentsBulkResultMsg, agentDrillPluginMsg, agentTranscriptMsg,
+	// agentLaunchPlanMsg, agentActionResultMsg) were silently
+	// dropped — leaving the Costs sub-tab stuck on
+	// "scanning transcripts…" because cs.loading was never cleared.
+	// Keep this list exhaustive when adding any new agent-related
+	// message type or you'll hit the same trap.
+	case agentsLoadedMsg,
+		agentsLaunchedMsg,
+		agentsDeletedMsg,
+		agentsCostsLoadedMsg,
+		agentsHealthLoadedMsg,
+		agentsPromoteResultMsg,
+		agentsSearchIndexLoadedMsg,
+		agentsBulkResultMsg,
+		agentDrillPluginMsg,
+		agentTranscriptMsg,
+		agentLaunchPlanMsg,
+		agentActionResultMsg:
 		mp := &m
 		if handled, cmd := mp.handleAgentsMsg(msg); handled {
 			return *mp, cmd

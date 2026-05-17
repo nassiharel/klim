@@ -76,7 +76,7 @@ Exit codes:
 
 func init() {
 	applyFlags = addActionFlags(applyCmd)
-	applyOutputFmt = addOutputFlag(applyCmd, OutputText, OutputJSON)
+	applyOutputFmt = addOutputFlag(applyCmd, OutputText, OutputJSON, OutputYAML)
 	applyCmd.Flags().BoolVar(&applyNoCheckpoint, "no-checkpoint", false, "Skip the pre-apply checkpoint")
 	applyCmd.Flags().BoolVar(&applyNoPostcheck, "no-postcheck", false, "Skip the post-apply validation pass")
 	applyCmd.Flags().IntVar(&applyPostcheckConcurrency, "postcheck-concurrency", 0, "Max parallel binary probes during postcheck (0 = NumCPU)")

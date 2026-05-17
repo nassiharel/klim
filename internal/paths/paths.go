@@ -18,7 +18,18 @@ import (
 // terraform, helm, etc. — tools developers tend to want in one
 // predictable place. Cross-platform `os.UserHomeDir()` resolves to
 // `$HOME` on Unix and `%USERPROFILE%` on Windows.
+//
+// KLIM_HOME overrides the default. This is primarily a test hook —
+// it lets `t.Setenv("KLIM_HOME", t.TempDir())` actually isolate a
+// test from the real user dotfile (a previous version of the
+// self-update cache test ignored this and polluted real users'
+// caches when `go test ./...` ran). Production users shouldn't
+// normally need to set it; if they do, every klim path moves with
+// it as a unit (no per-file overrides).
 func BaseDir() (string, error) {
+	if v := os.Getenv("KLIM_HOME"); v != "" {
+		return v, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -189,6 +200,19 @@ func AgentSearchIndex() (string, error) {
 
 // AgentBookmarks returns the path to the session-bookmarks file
 // (persistent across runs, written atomically on each toggle/note).
+//
+// Klim < 0.1.4 wrote this file directly at the root of ~/.klim/ —
+// the only state file not nested under a subdirectory. From 0.1.4
+// on, it lives at ~/.klim/agents/bookmarks.yaml alongside other
+// agent-specific state. bookmarks.Load() migrates the legacy file
+// transparently on first read.
 func AgentBookmarks() (string, error) {
+	return Join("agents", "bookmarks.yaml")
+}
+
+// AgentBookmarksLegacy returns the pre-0.1.4 location of the
+// agent-bookmarks file (~/.klim/agent-bookmarks.yaml). Used by the
+// bookmarks package's migration path; new callers should not use it.
+func AgentBookmarksLegacy() (string, error) {
 	return Join("agent-bookmarks.yaml")
 }

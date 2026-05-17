@@ -9,6 +9,7 @@
 package bookmarks
 
 import (
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -41,6 +42,13 @@ func New() *Store {
 
 // Load reads the persistent bookmarks file. Missing file returns an
 // empty (but valid) store — callers treat that as a cold cache.
+//
+// Klim < 0.1.4 wrote the file directly to ~/.klim/agent-bookmarks.yaml.
+// On first read in a newer klim we migrate that legacy file to the
+// new location (~/.klim/agents/bookmarks.yaml) and remove the old
+// one. The migration surfaces read/parse errors on the legacy file
+// so a corrupt or temporarily unreadable file doesn't silently make
+// the user's bookmarks vanish.
 func Load() (*Store, error) {
 	s := New()
 	path, err := paths.AgentBookmarks()
@@ -51,14 +59,75 @@ func Load() (*Store, error) {
 	if err != nil {
 		return New(), err
 	}
-	if !found || s.Bookmarks == nil {
-		return New(), nil
+	if found {
+		if s.Bookmarks == nil {
+			return New(), nil
+		}
+		if s.Version == 0 {
+			s.Version = 1
+		}
+		return s, nil
+	}
+	// New-location miss: try the legacy path and migrate on hit.
+	// migrateFromLegacy distinguishes "no file" (returns nil, nil)
+	// from "found but unreadable" (returns nil, err) so the caller
+	// sees a real read error instead of treating it as cold.
+	migrated, err := migrateFromLegacy(path)
+	if err != nil {
+		return New(), err
+	}
+	if migrated != nil {
+		return migrated, nil
+	}
+	return New(), nil
+}
+
+// migrateFromLegacy reads the pre-0.1.4 bookmarks file (if present)
+// and rewrites it at `newPath`, then removes the legacy file. Return
+// values:
+//
+//   - (store, nil) — legacy file found and successfully read.
+//   - (nil, nil)   — no legacy file (cold start).
+//   - (nil, err)   — legacy file existed but was unreadable / corrupt.
+//     Caller should surface this rather than silently
+//     discarding the user's existing bookmarks.
+//
+// The new-location write is best-effort; on failure we still return
+// the loaded data so a read-only volume doesn't lose data.
+func migrateFromLegacy(newPath string) (*Store, error) {
+	legacy, err := paths.AgentBookmarksLegacy()
+	if err != nil {
+		return nil, err
+	}
+	s := New()
+	found, err := fileutil.ReadYAML(legacy, s)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil
+	}
+	if s.Bookmarks == nil {
+		s.Bookmarks = map[string]Entry{}
 	}
 	if s.Version == 0 {
 		s.Version = 1
 	}
+	// Write to the new location atomically, then remove the legacy
+	// file. Ignore errors on the delete — having both files is a
+	// harmless transient state since Load reads new-path first.
+	if err := fileutil.WriteYAML(newPath, s, "# klim agent session bookmarks - auto-generated\n"); err == nil {
+		_ = os.Remove(legacy)
+	}
 	return s, nil
 }
+
+// migrateFromLegacy reads the pre-0.1.4 bookmarks file (if present)
+// and rewrites it at `newPath`, then removes the legacy file. The
+// returned bool is true when a legacy file was found AND
+// successfully read into the returned Store. The new-location write
+// is best-effort; on failure we still return the loaded data so a
+// read-only volume doesn't lose the user's bookmarks.
 
 // Save writes the store atomically.
 func (s *Store) Save() error {

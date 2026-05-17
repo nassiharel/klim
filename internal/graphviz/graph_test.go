@@ -1,0 +1,232 @@
+package graphviz
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestStep_NonNegativeDisplacement(t *testing.T) {
+	g := New()
+	g.AddNode("a", "A", 0)
+	g.AddNode("b", "B", 1)
+	g.AddEdge("a", "b")
+	d := g.Step()
+	if d < 0 {
+		t.Errorf("displacement < 0: %v", d)
+	}
+}
+
+func TestLayout_Converges(t *testing.T) {
+	g := New()
+	for i, name := range []string{"a", "b", "c", "d", "e"} {
+		g.AddNode(name, name, i%4)
+	}
+	g.AddEdge("a", "b")
+	g.AddEdge("b", "c")
+	g.AddEdge("c", "d")
+	g.AddEdge("d", "e")
+	g.AddEdge("a", "e")
+	// PR-78 review: previously this test logged but never failed.
+	// Assert that Layout converges well under the iteration ceiling
+	// for this small graph; if a future tunable change blows past
+	// the threshold we want the test to fail loudly.
+	iters := g.Layout(500, 1e-4)
+	if iters >= 500 {
+		t.Errorf("layout did not converge under 500 iterations (last threshold reached at %d)", iters)
+	}
+}
+
+func TestRender_ProducesNonEmptyOutput(t *testing.T) {
+	g := New()
+	g.AddNode("a", "Alpha", 0)
+	g.AddNode("b", "Beta", 1)
+	g.AddEdge("a", "b")
+	g.Layout(50, 0)
+	out := g.Render(40, 10)
+	if strings.TrimSpace(out) == "" {
+		t.Error("expected non-empty render output")
+	}
+	if strings.Count(out, "\n") < 10 {
+		t.Errorf("expected at least 10 newlines, got %d", strings.Count(out, "\n"))
+	}
+}
+
+func TestRender_HandlesZeroDimensions(t *testing.T) {
+	g := New()
+	g.AddNode("a", "A", 0)
+	if g.Render(0, 0) != "" {
+		t.Error("zero dimensions should return empty string")
+	}
+	if g.Render(-1, 10) != "" {
+		t.Error("negative width should return empty string")
+	}
+}
+
+func TestStep_DeterministicWithSameSeed(t *testing.T) {
+	mk := func() *Graph {
+		g := New()
+		g.Seed = 42
+		g.AddNode("a", "", 0)
+		g.AddNode("b", "", 1)
+		g.AddNode("c", "", 2)
+		g.AddEdge("a", "b")
+		return g
+	}
+	a := mk()
+	b := mk()
+	for i := 0; i < 20; i++ {
+		a.Step()
+		b.Step()
+	}
+	for i := range a.Nodes {
+		if a.Nodes[i].x != b.Nodes[i].x || a.Nodes[i].y != b.Nodes[i].y {
+			t.Errorf("node %d positions diverge: %v vs %v", i, a.Nodes[i], b.Nodes[i])
+		}
+	}
+}
+
+func TestEdge_UnknownNodesAreNoOps(t *testing.T) {
+	g := New()
+	g.AddNode("a", "", 0)
+	g.AddNode("b", "", 1)
+	g.AddEdge("a", "ghost") // ghost doesn't exist
+	if d := g.Step(); d < 0 {
+		t.Errorf("displacement < 0 with unknown edge node: %v", d)
+	}
+}
+
+func TestRender_UnstyledHasNoANSIEscapes(t *testing.T) {
+	// PR-78 review: regression guard for README/pipe rendering.
+	// When RenderOpts.Unstyled is true the output must contain no
+	// ANSI escape (\x1b) characters so it can be pasted into a
+	// markdown code fence or piped into a file unchanged.
+	g := New()
+	g.AddNode("a", "Alpha", 1)
+	g.AddNode("b", "Beta", 2)
+	g.AddEdge("a", "b")
+	g.Layout(50, 1e-4)
+	got := g.Render(40, 10, RenderOpts{Unstyled: true})
+	if strings.ContainsRune(got, 0x1b) {
+		t.Errorf("Unstyled render still contains ANSI escape (\\x1b):\n%q", got)
+	}
+}
+
+func TestRender_StyledMayContainANSIEscapes(t *testing.T) {
+	// Counterpart sanity check: the default styled path *does*
+	// use lipgloss styling, so the absence of escapes there would
+	// mean lipgloss became a no-op (worth knowing).
+	g := New()
+	g.AddNode("a", "Alpha", 1)
+	g.Layout(10, 1e-4)
+	got := g.Render(40, 10)
+	if !strings.ContainsRune(got, 0x1b) {
+		t.Logf("note: styled render produced no ANSI escapes; lipgloss may have disabled colour (e.g. NO_COLOR)")
+	}
+}
+
+func TestLayout_NegativeItersReturnsZero(t *testing.T) {
+	// PR-78 review: contract is "iterations actually executed".
+	g := New()
+	g.AddNode("a", "A", 0)
+	if got := g.Layout(-5, 1e-4); got != 0 {
+		t.Errorf("Layout(-5) = %d; want 0", got)
+	}
+}
+
+func TestRender_LabelSanitization_StripsControlChars(t *testing.T) {
+	// A maliciously-named tool must not be able to inject ANSI or
+	// row-terminator characters into the canvas. unicode.IsPrint
+	// keeps the visible parts of the escape (the [31m brackets etc.)
+	// because those are printable characters; we only need the ESC
+	// and the label's own '\n' gone for the output to be safe.
+	const label = "ok\x1b[31mRED\x1b[0m\nNEWROW"
+	g := New()
+	g.AddNode("a", label, 1)
+	g.Layout(20, 1e-4)
+	got := g.Render(60, 10, RenderOpts{Unstyled: true})
+
+	if strings.ContainsRune(got, 0x1b) {
+		t.Errorf("Unstyled render leaked ESC despite control char in label:\n%q", got)
+	}
+	// Render itself separates rows with '\n', so we can't just
+	// count newlines. The proof the label's own '\n' was stripped:
+	// the prefix "ok" and the suffix "NEWROW" must appear on the
+	// same rendered row.
+	sameRow := false
+	for _, row := range strings.Split(got, "\n") {
+		if strings.Contains(row, "ok") && strings.Contains(row, "NEWROW") {
+			sameRow = true
+			break
+		}
+	}
+	if !sameRow {
+		t.Fatalf("label's embedded \\n was not stripped: 'ok' and 'NEWROW' landed on different rows.\nfull output:\n%s", got)
+	}
+}
+
+func TestRender_DimensionCapPreventsOOM(t *testing.T) {
+	// Pathological dimensions must be clamped, not honoured. Per-axis
+	// cap is 2000, and the area cap further scales both axes down so
+	// width*height ≤ renderMaxArea (≈250k cells). Without the caps a
+	// 10M×10M ask could OOM the process.
+	g := New()
+	g.AddNode("a", "x", 0)
+	got := g.Render(10_000_000, 10_000_000, RenderOpts{Unstyled: true})
+	if got == "" {
+		t.Error("Render returned empty string for capped dimensions")
+	}
+	// Sanity-check the output isn't unbounded: after the per-axis
+	// cap (≤2000) and the area cap (≈250k cells), even a 10M×10M
+	// request renders to under ~2MB of styled output.
+	if len(got) > 5_000_000 {
+		t.Errorf("Render output suspiciously large (%d bytes); caps not applied?", len(got))
+	}
+}
+
+func TestRender_AreaCap(t *testing.T) {
+	// Dimensions inside the per-axis cap (≤2000) can still exceed
+	// the area cap. Render must scale both axes down so the cell
+	// count fits under renderMaxArea (≈250k) before allocating
+	// the canvas.
+	g := New()
+	g.AddNode("a", "x", 0)
+	got := g.Render(2000, 2000, RenderOpts{Unstyled: true})
+	if got == "" {
+		t.Fatal("Render returned empty for 2000x2000")
+	}
+	// Each rendered row ends with '\n'. Count rows: should be far
+	// below 2000 because the area cap shrinks both axes.
+	rows := strings.Count(got, "\n")
+	if rows >= 2000 {
+		t.Errorf("Render at 2000x2000 produced %d rows; area cap not applied", rows)
+	}
+	// Total output bytes should be well under the un-capped size.
+	if len(got) > 5_000_000 {
+		t.Errorf("Render output %d bytes; area cap not applied", len(got))
+	}
+}
+
+func TestRender_NodesAuthoritativeOverLabels(t *testing.T) {
+	// Regression: with single-pass rendering, a later node's label
+	// could overwrite an earlier node's '●'. With the two-pass fix
+	// node glyphs are drawn last, so dense layouts can't under-
+	// report visible nodes. Force two nodes onto the same row by
+	// hand-positioning them adjacent in normalised space.
+	g := New()
+	g.AddNode("a", "longlabel", 1)
+	g.AddNode("b", "x", 2)
+	// Place a left, b just to its right — close enough that a's
+	// label runes will overlap b's '●' cell in any sensible
+	// width/height pair.
+	g.Nodes[0].x, g.Nodes[0].y = 0.1, 0.5
+	g.Nodes[1].x, g.Nodes[1].y = 0.18, 0.5
+
+	got := g.Render(60, 8, RenderOpts{Unstyled: true})
+
+	// We should see two '●' glyphs in the output. Pre-fix this
+	// could drop to one (b's '●' was overwritten by 'longlabel').
+	if strings.Count(got, "●") != 2 {
+		t.Errorf("expected two node glyphs in render output; got %d.\nfull output:\n%s",
+			strings.Count(got, "●"), got)
+	}
+}

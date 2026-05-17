@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -47,7 +46,7 @@ Exit codes:
 }
 
 func init() {
-	planOutput = addOutputFlag(planCmd, OutputText, OutputJSON)
+	planOutput = addOutputFlag(planCmd, OutputText, OutputJSON, OutputYAML)
 	planCmd.Flags().BoolVar(&planRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	planCmd.Flags().StringVarP(&planFileFlag, "file", "f", "", "Plan against a .klim.yaml target manifest")
 	planCmd.Flags().BoolVar(&planDetailedExitFlag, "detailed-exitcode", false, "Exit 3 when changes are pending (mirrors 'terraform plan -detailed-exitcode')")
@@ -87,10 +86,8 @@ func runPlan(cmd *cobra.Command, args []string) error {
 
 	p := plan.Build(tools, opts)
 
-	if out == OutputJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(p); err != nil {
+	if out == OutputJSON || out == OutputYAML {
+		if err := printStructured(out, p); err != nil {
 			return err
 		}
 		return planExitCode(p)

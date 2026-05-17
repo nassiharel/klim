@@ -63,7 +63,7 @@ func (p *Provider) Detect(ctx context.Context) agents.Status {
 	}
 	out, err := exec.CommandContext(ctx, bin, "--version").Output()
 	if err != nil {
-		return agents.Status{Installed: true, BinPath: bin, Error: err}
+		return agents.Status{Installed: true, BinPath: bin, Error: err.Error()}
 	}
 	return agents.Status{
 		Installed: true,

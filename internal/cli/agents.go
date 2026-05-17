@@ -257,9 +257,14 @@ func runAgentsList(cmd *cobra.Command, _ []string, entityFilter agents.EntityTyp
 
 	switch format {
 	case OutputJSON:
+		// Pre-existing JSON shape uses Go field names; preserved
+		// exactly as before this PR — no schema change.
 		return printJSON(filteredSnapshot(snap, entityFilter))
 	case OutputYAML:
-		return printYAML(filteredSnapshot(snap, entityFilter))
+		// YAML uses agents-native yaml: tags via direct marshaling
+		// so snake_case keys / omitempty are honoured without
+		// disturbing the JSON contract above.
+		return printYAMLDirect(filteredSnapshot(snap, entityFilter))
 	}
 
 	return renderSnapshotText(filteredSnapshot(snap, entityFilter))
@@ -471,9 +476,11 @@ func runAgentsSearch(cmd *cobra.Command, query string) error {
 	}
 	switch format {
 	case OutputJSON:
+		// Pre-existing JSON schema used Go field names — preserved.
 		return printJSON(results)
 	case OutputYAML:
-		return printYAML(results)
+		// YAML honours SearchResult's yaml: tags directly.
+		return printYAMLDirect(results)
 	}
 	return printSearchResults(results)
 }
@@ -659,8 +666,8 @@ func runAgentsDoctor(cmd *cobra.Command, _ []string) error {
 	for _, p := range svc.Registry().Providers() {
 		st := snap.ProviderStatus[p.ID()]
 		notes := ""
-		if st.Error != nil {
-			notes = st.Error.Error()
+		if st.Error != "" {
+			notes = st.Error
 		}
 		_, _ = fmt.Fprintf(w, "%s\t%v\t%s\t%s\t%s\n", p.ID(), st.Installed, st.Version, st.BinPath, notes)
 	}
