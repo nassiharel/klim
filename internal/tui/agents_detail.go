@@ -219,6 +219,23 @@ func (m *Model) resolveDetailRow(frame agentDetailFrame) (agentRow, bool) {
 
 // ---------- render ----------
 
+// dimVersionDetailHint renders a tiny "↑ N above · ↓ M below" hint
+// for the detail page's outer scroll. Both counts may be zero; the
+// returned string is empty when neither direction has hidden lines.
+func dimVersionDetailHint(above, below int) string {
+	if above == 0 && below == 0 {
+		return ""
+	}
+	switch {
+	case above > 0 && below > 0:
+		return dimVersion.Render(fmt.Sprintf("↑ %d above · ↓ %d below", above, below))
+	case above > 0:
+		return dimVersion.Render(fmt.Sprintf("↑ %d above", above))
+	default:
+		return dimVersion.Render(fmt.Sprintf("↓ %d below", below))
+	}
+}
+
 // detailBodyCursorLen returns the length of the windowed body list
 // currently rendered for the given detail frame, plus a bool that
 // reports whether the body uses cursor-driven navigation at all.
@@ -317,7 +334,6 @@ func (m *Model) renderAgentsDetailPage() string {
 	// session with a long detail block) overflowed the terminal,
 	// hiding the action bar and footer.
 	body0 := b.String()
-	bodyRows := strings.Count(body0, "\n")
 	footerStr := footer.String()
 	footerRows := strings.Count(footerStr, "\n")
 	if m.height > 0 {
@@ -325,20 +341,49 @@ func (m *Model) renderAgentsDetailPage() string {
 		if maxBody < 1 {
 			maxBody = 1
 		}
-		if bodyRows > maxBody {
-			// Trim from the bottom — losing detail-body tail lines is
-			// recoverable (cursor scrolls within the windowed list);
-			// losing the footer / action bar leaves the page unusable.
-			lines := strings.Split(body0, "\n")
-			if len(lines) > maxBody {
-				lines = lines[:maxBody]
-			}
-			body0 = strings.Join(lines, "\n")
-			if !strings.HasSuffix(body0, "\n") {
-				body0 += "\n"
-			}
-			bodyRows = strings.Count(body0, "\n")
+		lines := strings.Split(strings.TrimRight(body0, "\n"), "\n")
+		total := len(lines)
+		// Apply the page's free-form scroll offset (top.scroll,
+		// driven by ↑/↓ on non-windowed pages). Clamp so we can't
+		// scroll past the bottom of the visible window.
+		maxScroll := total - maxBody
+		if maxScroll < 0 {
+			maxScroll = 0
 		}
+		scroll := top.scroll
+		if scroll < 0 {
+			scroll = 0
+		}
+		if scroll > maxScroll {
+			scroll = maxScroll
+		}
+		if scroll > 0 {
+			lines = lines[scroll:]
+		}
+		// Cap the displayed window so the action bar and footer
+		// always stay on-screen. Plugin / MCP detail bodies append
+		// tail sections (Keywords / EnvKeys) after their windowed
+		// list — those lines are now reachable via top.scroll, but
+		// if the user hasn't scrolled and the body still overflows
+		// we trim from the bottom to keep the footer visible.
+		hiddenAbove := scroll
+		hiddenBelow := 0
+		if len(lines) > maxBody {
+			hiddenBelow = len(lines) - maxBody
+			lines = lines[:maxBody]
+		}
+		// Surface scroll hints inside the body so the user knows
+		// content extends beyond the viewport.
+		if hiddenAbove > 0 || hiddenBelow > 0 {
+			hint := dimVersionDetailHint(hiddenAbove, hiddenBelow)
+			if hint != "" && len(lines) > 0 {
+				// Replace the last visible line with itself + hint
+				// so we don't reserve another row.
+				lines[len(lines)-1] = lines[len(lines)-1] + "  " + hint
+			}
+		}
+		body0 = strings.Join(lines, "\n") + "\n"
+		bodyRows := strings.Count(body0, "\n")
 		gap := m.height - bodyRows - footerRows - 1
 		if gap < 1 {
 			gap = 1

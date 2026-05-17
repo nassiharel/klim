@@ -139,6 +139,12 @@ func printJSON(v any) error {
 // exact JSON schema (key names, omitempty, custom MarshalJSON
 // implementations), so `klim ... --output yaml` produces a YAML
 // document with the same keys a JSON consumer would see.
+//
+// For types whose authoritative serialization is YAML — e.g. the
+// agents Snapshot, Plugin, MCP, Session types that have native
+// yaml: tags and a pre-existing JSON schema that uses Go field
+// names — use printYAMLDirect instead so the yaml tags drive the
+// output.
 func printYAML(v any) error {
 	jsonBytes, err := json.Marshal(v)
 	if err != nil {
@@ -149,6 +155,24 @@ func printYAML(v any) error {
 		return fmt.Errorf("encoding YAML (decode): %w", err)
 	}
 	b, err := yaml.Marshal(generic)
+	if err != nil {
+		return fmt.Errorf("encoding YAML: %w", err)
+	}
+	if _, err := os.Stdout.WriteString(string(b)); err != nil {
+		return fmt.Errorf("writing YAML: %w", err)
+	}
+	return nil
+}
+
+// printYAMLDirect marshals v as YAML using yaml.v3's tag/struct
+// rules directly — no JSON round-trip. Use this for types that
+// have explicit yaml: tags and whose JSON output (separately) is
+// kept on a stable schema that doesn't match the YAML one. Agents
+// list / search are the canonical callers: their pre-existing JSON
+// schema uses Go field names, while their YAML output uses
+// snake_case yaml tags.
+func printYAMLDirect(v any) error {
+	b, err := yaml.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("encoding YAML: %w", err)
 	}

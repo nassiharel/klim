@@ -114,12 +114,12 @@ func (r *Registry) Get(id ProviderID) Provider {
 // TUI and CLI consumers. The JSON/YAML schema is snake_case so
 // consumers piping through jq/yq see consistent keys.
 type Snapshot struct {
-	Marketplaces   []Marketplace         `json:"marketplaces" yaml:"marketplaces"`
-	Plugins        []Plugin              `json:"plugins" yaml:"plugins"`
-	Skills         []Skill               `json:"skills" yaml:"skills"`
-	MCPs           []MCP                 `json:"mcps" yaml:"mcps"`
-	Sessions       []Session             `json:"sessions" yaml:"sessions"`
-	ProviderStatus map[ProviderID]Status `json:"provider_status,omitempty" yaml:"provider_status,omitempty"`
+	Marketplaces   []Marketplace         `yaml:"marketplaces"`
+	Plugins        []Plugin              `yaml:"plugins"`
+	Skills         []Skill               `yaml:"skills"`
+	MCPs           []MCP                 `yaml:"mcps"`
+	Sessions       []Session             `yaml:"sessions"`
+	ProviderStatus map[ProviderID]Status `yaml:"provider_status,omitempty"`
 }
 
 // Count returns the count of entities of the given type.

@@ -10,13 +10,13 @@ import (
 // schema is intentionally snake_case so consumers piping through jq
 // or yq see consistent keys regardless of --output choice.
 type SearchResult struct {
-	Score    int        `json:"score" yaml:"score"`
-	Type     EntityType `json:"type" yaml:"type"`
-	ID       string     `json:"id" yaml:"id"`
-	Name     string     `json:"name" yaml:"name"`
-	Subtitle string     `json:"subtitle,omitempty" yaml:"subtitle,omitempty"`
-	Provider ProviderID `json:"provider" yaml:"provider"`
-	Matches  []int      `json:"matches,omitempty" yaml:"matches,omitempty"` // indices into Name of matched characters (for UI highlighting)
+	Score    int        `yaml:"score"`
+	Type     EntityType `yaml:"type"`
+	ID       string     `yaml:"id"`
+	Name     string     `yaml:"name"`
+	Subtitle string     `yaml:"subtitle,omitempty"`
+	Provider ProviderID `yaml:"provider"`
+	Matches  []int      `yaml:"matches,omitempty"` // indices into Name of matched characters (for UI highlighting)
 }
 
 // FuzzyMatch scores a candidate string against a query using a

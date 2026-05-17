@@ -168,7 +168,7 @@ func TestMarketplaceMarshalJSON_OmitsZeroLastSynced(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	if strings.Contains(string(raw), "last_synced") || strings.Contains(string(raw), "0001-01-01") {
+	if strings.Contains(string(raw), "LastSynced") || strings.Contains(string(raw), "0001-01-01") {
 		t.Errorf("zero LastSynced should be omitted; got %s", raw)
 	}
 }
@@ -180,7 +180,7 @@ func TestMarketplaceMarshalJSON_KeepsNonZeroLastSynced(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	if !strings.Contains(string(raw), "last_synced") {
+	if !strings.Contains(string(raw), "LastSynced") {
 		t.Errorf("non-zero LastSynced should be present; got %s", raw)
 	}
 	if !strings.Contains(string(raw), "2026-05-17") {
@@ -195,7 +195,7 @@ func TestSessionMarshalJSON_OmitsZeroTimes(t *testing.T) {
 		t.Fatalf("Marshal: %v", err)
 	}
 	out := string(raw)
-	if strings.Contains(out, "created") || strings.Contains(out, "last_modified") {
+	if strings.Contains(out, "Created") || strings.Contains(out, "LastModified") {
 		t.Errorf("zero time fields should be omitted; got %s", out)
 	}
 	if strings.Contains(out, "0001-01-01") {
@@ -212,7 +212,7 @@ func TestSessionMarshalJSON_KeepsNonZeroTimes(t *testing.T) {
 		t.Fatalf("Marshal: %v", err)
 	}
 	out := string(raw)
-	if !strings.Contains(out, "created") || !strings.Contains(out, "last_modified") {
+	if !strings.Contains(out, "Created") || !strings.Contains(out, "LastModified") {
 		t.Errorf("non-zero time fields should be present; got %s", out)
 	}
 }

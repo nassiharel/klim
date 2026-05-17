@@ -256,8 +256,15 @@ func runAgentsList(cmd *cobra.Command, _ []string, entityFilter agents.EntityTyp
 	}
 
 	switch format {
-	case OutputJSON, OutputYAML:
-		return printStructured(format, filteredSnapshot(snap, entityFilter))
+	case OutputJSON:
+		// Pre-existing JSON shape uses Go field names; preserved
+		// exactly as before this PR — no schema change.
+		return printJSON(filteredSnapshot(snap, entityFilter))
+	case OutputYAML:
+		// YAML uses agents-native yaml: tags via direct marshaling
+		// so snake_case keys / omitempty are honoured without
+		// disturbing the JSON contract above.
+		return printYAMLDirect(filteredSnapshot(snap, entityFilter))
 	}
 
 	return renderSnapshotText(filteredSnapshot(snap, entityFilter))
@@ -468,8 +475,12 @@ func runAgentsSearch(cmd *cobra.Command, query string) error {
 		return err
 	}
 	switch format {
-	case OutputJSON, OutputYAML:
-		return printStructured(format, results)
+	case OutputJSON:
+		// Pre-existing JSON schema used Go field names — preserved.
+		return printJSON(results)
+	case OutputYAML:
+		// YAML honours SearchResult's yaml: tags directly.
+		return printYAMLDirect(results)
 	}
 	return printSearchResults(results)
 }
