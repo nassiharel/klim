@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"embed"
 	"fmt"
 	"io/fs"
 	"sort"
@@ -10,18 +9,16 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/marketplace/marketplaces"
 )
-
-//go:embed discoverable/*.yaml
-var discoverableFS embed.FS
 
 // discoverableEntry is the on-disk YAML schema for a single
 // well-known agent marketplace. The catalog package loads every
-// `discoverable/*.yaml` file into a copy of this struct and then
-// expands it into one agents.Marketplace per provider.
+// `marketplace/marketplaces/*.yaml` file into a copy of this struct
+// and then expands it into one agents.Marketplace per provider.
 //
-// See internal/agents/catalog/discoverable/README.md for the full
-// schema documentation.
+// See marketplace/marketplaces/README.md for the full schema
+// documentation.
 type discoverableEntry struct {
 	ID          string              `yaml:"id"`
 	Name        string              `yaml:"name"`
@@ -58,9 +55,9 @@ func sourceForProvider(p agents.ProviderID) agents.Source {
 // (DiscoverableMarketplaces) ignore the error and use the entries that
 // did parse, so a single bad YAML never blocks the whole UI.
 func loadDiscoverable() ([]agents.Marketplace, error) {
-	files, err := fs.ReadDir(discoverableFS, "discoverable")
+	files, err := fs.ReadDir(marketplaces.FS, ".")
 	if err != nil {
-		return nil, fmt.Errorf("catalog: read discoverable dir: %w", err)
+		return nil, fmt.Errorf("catalog: read marketplaces dir: %w", err)
 	}
 	var (
 		out  []agents.Marketplace
@@ -70,8 +67,7 @@ func loadDiscoverable() ([]agents.Marketplace, error) {
 		if f.IsDir() || !strings.HasSuffix(f.Name(), ".yaml") {
 			continue
 		}
-		path := "discoverable/" + f.Name()
-		body, err := fs.ReadFile(discoverableFS, path)
+		body, err := fs.ReadFile(marketplaces.FS, f.Name())
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", f.Name(), err))
 			continue
@@ -125,7 +121,7 @@ func loadDiscoverable() ([]agents.Marketplace, error) {
 }
 
 // DiscoverableMarketplaces returns the curated list of discoverable
-// agent marketplaces loaded from internal/agents/catalog/discoverable/.
+// agent marketplaces loaded from marketplace/marketplaces/.
 // Each entry's Installed field is false; the snapshot merge in
 // agents.Service flips it to true (or drops the discoverable copy
 // entirely) once the same marketplace is also reported by a provider.
