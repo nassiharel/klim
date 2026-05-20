@@ -33,15 +33,24 @@ func (m Model) renderForYouList() string {
 	if itemsPerPage < 2 {
 		itemsPerPage = 2
 	}
+	// Reserve one line each for above/below indicators when needed.
+	total := len(m.recommendations)
+	windowSize := itemsPerPage
+	if total > itemsPerPage {
+		windowSize = itemsPerPage - 1
+		if windowSize < 1 {
+			windowSize = 1
+		}
+	}
+	start, _, hiddenAbove, hiddenBelow := windowRange(total, m.cursor, windowSize)
 
-	start := 0
-	if m.cursor >= itemsPerPage {
-		start = m.cursor - itemsPerPage + 1
+	if hiddenAbove > 0 {
+		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)) + "\n")
 	}
 
-	end := start + itemsPerPage
-	if end > len(m.recommendations) {
-		end = len(m.recommendations)
+	end := start + windowSize
+	if end > total {
+		end = total
 	}
 
 	for vi := start; vi < end; vi++ {
@@ -55,9 +64,19 @@ func (m Model) renderForYouList() string {
 		}
 	}
 
+	if hiddenBelow > 0 {
+		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)) + "\n")
+	}
+
 	// Pad remaining lines to prevent layout jitter.
 	renderedItems := end - start
 	renderedLines := renderedItems*2 + max(renderedItems-1, 0)
+	if hiddenAbove > 0 {
+		renderedLines++
+	}
+	if hiddenBelow > 0 {
+		renderedLines++
+	}
 	for i := renderedLines; i < visibleLines; i++ {
 		b.WriteString("\n")
 	}
@@ -109,14 +128,23 @@ func (m Model) renderOnboardList() string {
 	if itemsPerPage < 2 {
 		itemsPerPage = 2
 	}
-
-	start := 0
-	if m.cursor >= itemsPerPage {
-		start = m.cursor - itemsPerPage + 1
+	total := len(m.onboardTools)
+	windowSize := itemsPerPage
+	if total > itemsPerPage {
+		windowSize = itemsPerPage - 1
+		if windowSize < 1 {
+			windowSize = 1
+		}
 	}
-	end := start + itemsPerPage
-	if end > len(m.onboardTools) {
-		end = len(m.onboardTools)
+	start, _, hiddenAbove, hiddenBelow := windowRange(total, m.cursor, windowSize)
+
+	if hiddenAbove > 0 {
+		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)) + "\n")
+	}
+
+	end := start + windowSize
+	if end > total {
+		end = total
 	}
 
 	for vi := start; vi < end; vi++ {
@@ -128,9 +156,19 @@ func (m Model) renderOnboardList() string {
 		}
 	}
 
+	if hiddenBelow > 0 {
+		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)) + "\n")
+	}
+
 	// Pad remaining lines.
 	renderedItems := end - start
 	renderedLines := renderedItems*2 + max(renderedItems-1, 0)
+	if hiddenAbove > 0 {
+		renderedLines++
+	}
+	if hiddenBelow > 0 {
+		renderedLines++
+	}
 	for i := renderedLines; i < visibleLines; i++ {
 		b.WriteString("\n")
 	}

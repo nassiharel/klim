@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -66,6 +67,40 @@ func fitToVisibleRows(content string, scroll, rows int) (body string, clampedScr
 		lines = append(lines, "")
 	}
 	return strings.Join(lines, "\n"), scroll, total
+}
+
+// windowRange centers a fixed-size window of `maxRows` items around
+// `cursor` over a list of `total` items. Returns the window's start
+// index, the cursor position inside the window, and the counts of
+// items hidden above and below — so callers can show "↑ N above" /
+// "↓ N below" scroll indicators without scrolling state in the model.
+// Mirrors windowAgentRows but works on counts so any list (tools,
+// packs, recommendations) can adopt the same centred-cursor scroll
+// pattern without duplicating arithmetic.
+func windowRange(total, cursor, maxRows int) (start, displayCursor, hiddenAbove, hiddenBelow int) {
+	if total <= 0 || maxRows <= 0 {
+		return 0, 0, 0, 0
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= total {
+		cursor = total - 1
+	}
+	if total <= maxRows {
+		return 0, cursor, 0, 0
+	}
+	start = cursor - maxRows/2
+	if start < 0 {
+		start = 0
+	}
+	if start+maxRows > total {
+		start = total - maxRows
+	}
+	displayCursor = cursor - start
+	hiddenAbove = start
+	hiddenBelow = total - start - maxRows
+	return
 }
 
 // truncateLinesToWidth runs truncateANSI on every newline-separated line
@@ -1142,7 +1177,9 @@ func (m Model) buildToolLines(maxRows int) []string {
 
 	// Tool rows.
 	// Header + optional banner take 1-2 lines from maxRows, so the
-	// effective data capacity shrinks accordingly.
+	// effective data capacity shrinks accordingly. We also reserve
+	// one row for each scroll indicator (↑ N above / ↓ N below) so
+	// the header/footer chrome stays stable as the cursor moves.
 	usedHeaderRows := 1
 	if bannerRow != "" {
 		usedHeaderRows = 2
@@ -1151,18 +1188,34 @@ func (m Model) buildToolLines(maxRows int) []string {
 	if dataRows < 1 {
 		dataRows = 1
 	}
-	start := 0
-	if m.cursor >= dataRows {
-		start = m.cursor - dataRows + 1
+	// Window the visible slice around the cursor (agents-tab style),
+	// reserving rows for the optional above/below indicators.
+	total := len(m.filteredIndex)
+	windowSize := dataRows
+	if total > dataRows {
+		// One row each for the indicators when we know they'll show.
+		windowSize = dataRows - 2
+		if windowSize < 1 {
+			windowSize = 1
+		}
+	}
+	start, _, hiddenAbove, hiddenBelow := windowRange(total, m.cursor, windowSize)
+
+	if hiddenAbove > 0 {
+		lines = append(lines, "  "+dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)))
 	}
 
 	rowCount := 0
-	for vi := start; vi < len(m.filteredIndex) && rowCount < dataRows; vi++ {
+	for vi := start; vi < total && rowCount < windowSize; vi++ {
 		toolIdx := m.filteredIndex[vi]
 		tool := m.tools[toolIdx]
 		selected := vi == m.cursor && !m.categoryPicker
 		lines = append(lines, m.renderRow(tool, toolIdx, selected))
 		rowCount++
+	}
+
+	if hiddenBelow > 0 {
+		lines = append(lines, "  "+dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)))
 	}
 
 	// Empty state.
