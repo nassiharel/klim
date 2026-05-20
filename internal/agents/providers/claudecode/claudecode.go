@@ -6,7 +6,8 @@
 //	~/.claude/skills/<name>/        Personal skill (directory with SKILL.md)
 //	~/.claude/agents/<name>.md      Personal subagent definitions
 //	~/.claude/projects/<repo>/      Auto-memory + session transcripts
-//	~/.claude/plugins/              Plugin install cache (best-effort scan)
+//	~/.claude/plugins/marketplaces/<name>/   Installed marketplace clones
+//	~/.claude/plugins/known_marketplaces.json Registry of `claude plugin marketplace add` entries
 //	<project>/.claude/skills/       Project skills
 //	<project>/.mcp.json             Project MCP servers
 //
@@ -130,44 +131,138 @@ func (p *Provider) claudeDir() string {
 
 // ---------- Marketplaces ----------
 
-// Marketplaces returns the marketplaces Claude Code knows about. v1
-// returns the canonical built-in `claude-plugins-official` plus any
-// added via `claude plugin marketplace add` (parsed best-effort from
-// the install cache directory tree). When the `claude` binary is
-// installed, we shell out to `claude plugin marketplace list` if
-// available; otherwise we synthesize from disk.
+// Marketplaces returns the marketplaces Claude Code knows about.
+//
+// The authoritative source is ~/.claude/plugins/known_marketplaces.json,
+// which `claude plugin marketplace add` writes when the user registers a
+// new marketplace (e.g. `/plugin marketplace add openai/codex-plugin-cc`
+// inside a Claude session). We parse that file for repo + install path +
+// last-updated metadata, then also list ~/.claude/plugins/marketplaces/
+// to surface any cloned-but-not-registered marketplaces. The canonical
+// `claude-plugins-official` is always included.
 func (p *Provider) Marketplaces(ctx context.Context) ([]agents.Marketplace, error) {
-	// Always include the canonical Anthropic marketplace.
-	ms := []agents.Marketplace{
-		{
-			ID:          "claude-plugins-official",
-			Name:        "claude-plugins-official",
-			DisplayName: "Anthropic Official",
-			Description: "Anthropic's curated Claude Code plugin marketplace",
-			Provider:    p.ID(),
-			Owner:       "anthropics",
-			URL:         "https://github.com/anthropics/claude-plugins-official",
-			Source:      agents.SourceCatalogClaude,
-		},
+	seen := make(map[string]bool)
+	var ms []agents.Marketplace
+
+	add := func(m agents.Marketplace) {
+		if m.Name == "" || seen[m.Name] {
+			return
+		}
+		seen[m.Name] = true
+		if m.ID == "" {
+			m.ID = m.Name
+		}
+		if m.Provider == "" {
+			m.Provider = p.ID()
+		}
+		ms = append(ms, m)
 	}
 
-	// Detect installed marketplaces by listing subdirs of the plugin cache.
-	root := filepath.Join(p.claudeDir(), "plugins")
-	entries, err := os.ReadDir(root)
-	if err == nil {
+	add(agents.Marketplace{
+		ID:          "claude-plugins-official",
+		Name:        "claude-plugins-official",
+		DisplayName: "Anthropic Official",
+		Description: "Anthropic's curated Claude Code plugin marketplace",
+		Owner:       "anthropics",
+		URL:         "https://github.com/anthropics/claude-plugins-official",
+		Source:      agents.SourceCatalogClaude,
+	})
+
+	for _, km := range p.readKnownMarketplaces() {
+		add(km)
+	}
+
+	for _, dir := range p.marketplaceRoots() {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
 		for _, e := range entries {
-			if !e.IsDir() || e.Name() == "claude-plugins-official" {
+			if !e.IsDir() {
 				continue
 			}
-			ms = append(ms, agents.Marketplace{
-				ID:       e.Name(),
-				Name:     e.Name(),
-				Provider: p.ID(),
-				Source:   agents.SourceLocalClaude,
+			// Skip the marketplaces/ parent itself and other known
+			// non-marketplace directories that live under plugins/.
+			name := e.Name()
+			if name == "marketplaces" || strings.HasPrefix(name, ".") {
+				continue
+			}
+			add(agents.Marketplace{
+				Name:   name,
+				Source: agents.SourceLocalClaude,
 			})
 		}
 	}
+
 	return ms, nil
+}
+
+// knownMarketplaceEntry mirrors the schema of
+// ~/.claude/plugins/known_marketplaces.json.
+type knownMarketplaceEntry struct {
+	Source struct {
+		Source string `json:"source"`
+		Repo   string `json:"repo,omitempty"`
+		URL    string `json:"url,omitempty"`
+	} `json:"source"`
+	InstallLocation string `json:"installLocation,omitempty"`
+	LastUpdated     string `json:"lastUpdated,omitempty"`
+}
+
+// readKnownMarketplaces returns marketplaces registered via
+// `claude plugin marketplace add`. Returns nil on any read/parse error.
+func (p *Provider) readKnownMarketplaces() []agents.Marketplace {
+	cd := p.claudeDir()
+	if cd == "" {
+		return nil
+	}
+	data, err := os.ReadFile(filepath.Join(cd, "plugins", "known_marketplaces.json"))
+	if err != nil {
+		return nil
+	}
+	var raw map[string]knownMarketplaceEntry
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	out := make([]agents.Marketplace, 0, len(raw))
+	for name, e := range raw {
+		m := agents.Marketplace{
+			ID:     name,
+			Name:   name,
+			Source: agents.SourceLocalClaude,
+		}
+		switch e.Source.Source {
+		case "github":
+			if e.Source.Repo != "" {
+				if i := strings.IndexByte(e.Source.Repo, '/'); i > 0 {
+					m.Owner = e.Source.Repo[:i]
+				}
+				m.URL = "https://github.com/" + e.Source.Repo
+			}
+		case "url":
+			m.URL = e.Source.URL
+		}
+		if t, err := time.Parse(time.RFC3339, e.LastUpdated); err == nil {
+			m.LastSynced = t
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// marketplaceRoots returns directories that may contain installed
+// marketplace clones. The real path used by Claude Code is
+// ~/.claude/plugins/marketplaces; the bare ~/.claude/plugins path is
+// kept for backward compatibility with older fixtures.
+func (p *Provider) marketplaceRoots() []string {
+	cd := p.claudeDir()
+	if cd == "" {
+		return nil
+	}
+	return []string{
+		filepath.Join(cd, "plugins", "marketplaces"),
+		filepath.Join(cd, "plugins"),
+	}
 }
 
 // ---------- Plugins ----------
@@ -187,63 +282,72 @@ type pluginManifest struct {
 	Keywords   []string `json:"keywords,omitempty"`
 }
 
-// Plugins scans ~/.claude/plugins/<marketplace>/<plugin>/.claude-plugin/plugin.json.
-// The plugin cache path is undocumented [TBV]; we look at three
-// likely roots and pick the first that exists.
+// Plugins discovers installed plugins by scanning the marketplace
+// clones. Real Claude Code layout nests plugins under
+// `<mp>/plugins/<plugin>` and `<mp>/external_plugins/<plugin>`; older
+// test fixtures put them at `<mp>/<plugin>` directly. We accept all
+// three.
 func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
-	roots := p.pluginCacheRoots()
-
 	var plugins []agents.Plugin
 	seen := make(map[string]bool)
 
-	for _, root := range roots {
-		entries, err := os.ReadDir(root)
+	for _, root := range p.marketplaceRoots() {
+		mEntries, err := os.ReadDir(root)
 		if err != nil {
 			continue
 		}
-		for _, mp := range entries {
+		for _, mp := range mEntries {
 			if !mp.IsDir() {
 				continue
 			}
 			mpName := mp.Name()
 			mpDir := filepath.Join(root, mpName)
-			pluginEntries, err := os.ReadDir(mpDir)
-			if err != nil {
-				continue
+
+			// Candidate plugin parent dirs within a marketplace clone.
+			candidates := []string{
+				mpDir,                                  // legacy: <mp>/<plugin>
+				filepath.Join(mpDir, "plugins"),        // real: first-party plugins
+				filepath.Join(mpDir, "external_plugins"), // real: third-party plugins
 			}
-			for _, pe := range pluginEntries {
-				if !pe.IsDir() {
-					continue
-				}
-				pluginDir := filepath.Join(mpDir, pe.Name())
-				manifestPath := filepath.Join(pluginDir, ".claude-plugin", "plugin.json")
-				m, err := readPluginManifest(manifestPath)
+			for _, parent := range candidates {
+				pluginEntries, err := os.ReadDir(parent)
 				if err != nil {
 					continue
 				}
-				id := mpName + "/" + m.Name
-				if seen[id] {
-					continue
+				for _, pe := range pluginEntries {
+					if !pe.IsDir() {
+						continue
+					}
+					pluginDir := filepath.Join(parent, pe.Name())
+					manifestPath := filepath.Join(pluginDir, ".claude-plugin", "plugin.json")
+					m, err := readPluginManifest(manifestPath)
+					if err != nil {
+						continue
+					}
+					id := mpName + "/" + m.Name
+					if seen[id] {
+						continue
+					}
+					seen[id] = true
+					plugins = append(plugins, agents.Plugin{
+						ID:          id,
+						Name:        m.Name,
+						Description: m.Description,
+						Version:     m.Version,
+						Author:      m.Author.Name,
+						Homepage:    m.Homepage,
+						Repository:  m.Repository,
+						License:     m.License,
+						Keywords:    m.Keywords,
+						Provider:    p.ID(),
+						Marketplace: mpName,
+						Installed:   true,
+						Enabled:     true,
+						InstallPath: pluginDir,
+						Scope:       agents.ScopeUser,
+						Source:      agents.SourceLocalClaude,
+					})
 				}
-				seen[id] = true
-				plugins = append(plugins, agents.Plugin{
-					ID:          id,
-					Name:        m.Name,
-					Description: m.Description,
-					Version:     m.Version,
-					Author:      m.Author.Name,
-					Homepage:    m.Homepage,
-					Repository:  m.Repository,
-					License:     m.License,
-					Keywords:    m.Keywords,
-					Provider:    p.ID(),
-					Marketplace: mpName,
-					Installed:   true,
-					Enabled:     true,
-					InstallPath: pluginDir,
-					Scope:       agents.ScopeUser,
-					Source:      agents.SourceLocalClaude,
-				})
 			}
 		}
 	}
@@ -251,15 +355,11 @@ func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
 	return plugins, nil
 }
 
+// pluginCacheRoots returns parent dirs that may contain marketplace
+// clones for the plugin / skill scanners. Kept for Skills which walks
+// the same structure.
 func (p *Provider) pluginCacheRoots() []string {
-	h := p.claudeDir()
-	if h == "" {
-		return nil
-	}
-	return []string{
-		filepath.Join(h, "plugins"),
-		filepath.Join(h, "marketplaces"),
-	}
+	return p.marketplaceRoots()
 }
 
 func readPluginManifest(path string) (*pluginManifest, error) {
@@ -300,16 +400,24 @@ func (p *Provider) Skills(ctx context.Context) ([]agents.Skill, error) {
 			if !mp.IsDir() {
 				continue
 			}
-			plugins, err := os.ReadDir(filepath.Join(root, mp.Name()))
-			if err != nil {
-				continue
+			mpDir := filepath.Join(root, mp.Name())
+			pluginParents := []string{
+				mpDir,
+				filepath.Join(mpDir, "plugins"),
+				filepath.Join(mpDir, "external_plugins"),
 			}
-			for _, pe := range plugins {
-				if !pe.IsDir() {
+			for _, parent := range pluginParents {
+				plugins, err := os.ReadDir(parent)
+				if err != nil {
 					continue
 				}
-				skillsDir := filepath.Join(root, mp.Name(), pe.Name(), "skills")
-				skills = append(skills, scanSkillDir(skillsDir, p.ID(), agents.ScopePlugin, pe.Name())...)
+				for _, pe := range plugins {
+					if !pe.IsDir() {
+						continue
+					}
+					skillsDir := filepath.Join(parent, pe.Name(), "skills")
+					skills = append(skills, scanSkillDir(skillsDir, p.ID(), agents.ScopePlugin, pe.Name())...)
+				}
 			}
 		}
 	}
