@@ -11,7 +11,7 @@ import (
 // splash stays on screen, even if the catalog load + PATH scan
 // finishes faster (e.g. on a warm cache hit). Gives the brand
 // reveal animation time to actually be seen.
-const bootSplashMinDuration = 5 * time.Second
+const bootSplashMinDuration = 3 * time.Second
 
 // klimASCII is the bootscreen logo. Each row is exactly 34 runes
 // (mixed spaces + █ FULL BLOCK glyphs) so the reveal animation
