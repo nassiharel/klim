@@ -264,6 +264,13 @@ type Model struct {
 	// a static page.
 	animTicking bool
 
+	// bootStart records the wall-clock moment the splash began
+	// displaying (set in NewModel and on every startScan). The
+	// renderer keeps the splash visible until at least
+	// bootSplashMinDuration has elapsed, even if the underlying
+	// scan finishes sooner — so the brand reveal is always seen.
+	bootStart time.Time
+
 	// Layout.
 	width  int
 	height int
@@ -524,6 +531,7 @@ func NewModel() Model {
 		// future restarts (startScan, etc.) know they don't need
 		// to schedule a duplicate ticker.
 		animTicking: true,
+		bootStart:   time.Now(),
 	}
 }
 
@@ -726,6 +734,7 @@ func (m *Model) startScan() tea.Cmd {
 
 	m.loading = true
 	m.phase = phaseLoading
+	m.bootStart = time.Now()
 	m.tools = nil
 	m.filteredIndex = nil
 	m.cursor = 0

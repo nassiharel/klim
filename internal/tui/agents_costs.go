@@ -92,6 +92,10 @@ func loadCostSamples() ([]costs.TokenSample, error) {
 }
 
 // handleAgentsCostsKey routes keys when the Costs sub-tab is active.
+// Left/right arrows are deliberately NOT claimed here so they keep
+// driving sub-tab navigation; the range selector instead uses `[` / `]`
+// (and `,` / `.` as alternates) which don't collide with the global
+// navigation chord.
 func (m *Model) handleAgentsCostsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	st := m.agents
 	if st == nil {
@@ -99,11 +103,11 @@ func (m *Model) handleAgentsCostsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	}
 	cs := &st.costs
 	switch msg.String() {
-	case "right", "l":
+	case "]", ".":
 		cs.rng = (cs.rng + 1) % costs.RangeCount
 		cs.cursor = 0
 		return true, nil
-	case "left", "h":
+	case "[", ",":
 		cs.rng = (cs.rng + costs.RangeCount - 1) % costs.RangeCount
 		cs.cursor = 0
 		return true, nil
@@ -176,7 +180,7 @@ func (m *Model) renderAgentsCostsView() string {
 			ranges = append(ranges, dimVersion.Render(" "+label+" "))
 		}
 	}
-	b.WriteString("  " + strings.Join(ranges, "  ") + "  " + dimVersion.Render("←/→ switch · r refresh") + "\n\n")
+	b.WriteString("  " + strings.Join(ranges, "  ") + "  " + dimVersion.Render("[ / ] switch · r refresh") + "\n\n")
 
 	// Totals + sparkline.
 	totalLine := fmt.Sprintf("%s tokens   in %s · out %s",

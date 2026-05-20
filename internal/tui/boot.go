@@ -2,9 +2,16 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 )
+
+// bootSplashMinDuration is the minimum wall-clock time the boot
+// splash stays on screen, even if the catalog load + PATH scan
+// finishes faster (e.g. on a warm cache hit). Gives the brand
+// reveal animation time to actually be seen.
+const bootSplashMinDuration = 5 * time.Second
 
 // klimASCII is the bootscreen logo. Each row is exactly 34 runes
 // (mixed spaces + █ FULL BLOCK glyphs) so the reveal animation
@@ -22,13 +29,14 @@ var klimASCII = []string{
 
 // renderBootSplash draws a full-screen, cyber-styled boot splash:
 // the KLIM logo with a left-to-right character reveal animation, a
-// brand subtitle ("// AI-CLASS DEVELOPER COMMAND DECK"), a
+// brand subtitle ("// Reignite Dev Experience"), a
 // rotating cyber spinner, and a horizontal boot-progress bar that
 // fills left-to-right.
 //
-// The splash is shown only while m.phase == phaseLoading. Once the
-// catalog finishes loading we drop straight into the normal layout —
-// keeping the splash short is the point.
+// The splash is shown while m.phase == phaseLoading OR while less
+// than bootSplashMinDuration has elapsed since model start, whichever
+// is longer — so cache-hit launches still display the brand reveal
+// for a noticeable beat instead of flashing past.
 func (m Model) renderBootSplash() string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
@@ -80,7 +88,7 @@ func (m Model) renderBootSplash() string {
 	subtitle := ""
 	if reveal >= maxRow {
 		spinner := cyberSpinner(m.animFrame)
-		brand := bootSubtitleStyle.Render("AI-CLASS DEVELOPER COMMAND DECK")
+		brand := bootSubtitleStyle.Render("Reignite Dev Experience")
 		boot := bootScanStyle.Render(scanProgress(m.animFrame))
 		subtitle = "  " + spinner + "  " + brand + "  " + boot
 	}

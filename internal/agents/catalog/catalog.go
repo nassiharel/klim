@@ -226,15 +226,15 @@ func mergeKeywords(a, b []string) []string {
 // ---- cache ----
 
 // cachedFile wraps a cached marketplace.json with its fetch timestamp.
-// Stored under ~/.klim/marketplace/agents-catalog-<source>.yaml so each
-// source is independent.
+// Stored under ~/.klim/agents/catalog/<source>.yaml so each source is
+// independent.
 type cachedFile struct {
 	WrittenAt time.Time `yaml:"written_at"`
 	Body      []byte    `yaml:"body"`
 }
 
 func cacheFilePath(source string) (string, error) {
-	return paths.Join("marketplace", "agents-catalog-"+sanitize(source)+".yaml")
+	return paths.Join("agents", "catalog", sanitize(source)+".yaml")
 }
 
 func sanitize(s string) string {

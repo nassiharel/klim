@@ -3,6 +3,7 @@ package tui
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/mattn/go-runewidth"
@@ -67,6 +68,25 @@ func fitToVisibleRows(content string, scroll, rows int) (body string, clampedScr
 	return strings.Join(lines, "\n"), scroll, total
 }
 
+// truncateLinesToWidth runs truncateANSI on every newline-separated line
+// in s so the result has no line wider than maxWidth. Used by
+// layoutWithFooter: visualRows assumes a wrapping terminal, but some
+// terminals clip instead, which would push the footer off the bottom.
+// Pre-truncating keeps split-line count == visible row count regardless
+// of how the host terminal handles overflow.
+func truncateLinesToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		if lipgloss.Width(l) > maxWidth {
+			lines[i] = truncateANSI(l, maxWidth)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (m Model) renderView() string {
 	if m.quitting {
 		return ""
@@ -107,7 +127,9 @@ func (m Model) renderView() string {
 
 	// Boot splash — full-screen cyber cold-start visual. Drawn
 	// only after the modal/detail layers above have declined.
-	if m.phase == phaseLoading {
+	// Stays up while the scan is in flight OR until the minimum
+	// splash duration has elapsed (whichever is longer).
+	if m.phase == phaseLoading || (!m.bootStart.IsZero() && time.Since(m.bootStart) < bootSplashMinDuration) {
 		return m.renderBootSplash()
 	}
 
@@ -393,6 +415,15 @@ func (m Model) layoutWithFooter(body, footer string) string {
 	// Normalize: ensure body ends with exactly one newline so subsequent line
 	// counting and padding are predictable.
 	body = strings.TrimRight(body, "\n") + "\n"
+
+	// Truncate any line that exceeds the terminal width. visualRows assumes
+	// the host terminal wraps on overflow, but some terminals clip instead;
+	// pre-truncation makes split-line count == visible row count regardless
+	// of host behavior, which is what keeps the footer pinned to the bottom.
+	if m.width > 0 {
+		body = truncateLinesToWidth(body, m.width)
+		footer = truncateLinesToWidth(footer, m.width)
+	}
 
 	// Always reserve at least one blank separator line between body and footer.
 	const minGap = 1
