@@ -824,7 +824,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		agentsBulkResultMsg,
 		agentTranscriptMsg,
 		agentLaunchPlanMsg,
-		agentActionResultMsg:
+		agentActionResultMsg,
+		agentViewMarketplacePluginsMsg,
+		agentViewPluginSkillsMsg:
 		mp := &m
 		if handled, cmd := mp.handleAgentsMsg(msg); handled {
 			return *mp, cmd
