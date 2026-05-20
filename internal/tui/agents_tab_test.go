@@ -94,13 +94,73 @@ func TestApplyStatusFilter_MCPs(t *testing.T) {
 	}
 }
 
+func TestApplyStatusFilter_Marketplaces(t *testing.T) {
+	rows := []agentRow{
+		{name: "registered", marketplace: &agents.Marketplace{Installed: true}},
+		{name: "discoverable", marketplace: &agents.Marketplace{Installed: false}},
+	}
+	inst := applyStatusFilter(rows, agentsSubMarketplaces, agentsFilterInstalled)
+	if len(inst) != 1 || inst[0].name != "registered" {
+		t.Errorf("installed marketplaces: %+v", inst)
+	}
+	avail := applyStatusFilter(rows, agentsSubMarketplaces, agentsFilterCatalog)
+	if len(avail) != 1 || avail[0].name != "discoverable" {
+		t.Errorf("available marketplaces: %+v", avail)
+	}
+}
+
+func TestMarketplaceActions_AvailableSurfacesAddToLibrary(t *testing.T) {
+	m := detailTestModel()
+	mp := &agents.Marketplace{
+		ID: "openai-codex-plugin-cc", Name: "openai-codex-plugin-cc",
+		Provider:    agents.ProviderClaudeCode,
+		URL:         "https://github.com/openai/codex-plugin-cc",
+		InstallSpec: "openai/codex-plugin-cc",
+		Installed:   false,
+	}
+	row := agentRow{marketplace: mp, provider: mp.Provider}
+	actions := m.actionsForMarketplace(agentDetailFrame{}, row)
+	if len(actions) == 0 {
+		t.Fatal("expected actions for available marketplace")
+	}
+	if actions[0].label != "Add to library" {
+		t.Errorf("primary action = %q, want 'Add to library'", actions[0].label)
+	}
+	if !actions[0].highlight {
+		t.Error("'Add to library' should be highlighted")
+	}
+	if actions[0].disabled {
+		t.Errorf("'Add to library' should be enabled (spec recorded); reason: %q", actions[0].reason)
+	}
+	for _, a := range actions {
+		if a.label == "Remove" {
+			t.Error("Remove action should be hidden for available marketplaces")
+		}
+		if a.label == "View all plugins →" {
+			t.Error("View-all-plugins should be hidden for available marketplaces")
+		}
+	}
+}
+
+func TestMarketplaceActions_AvailableDisablesAddWhenNoSpec(t *testing.T) {
+	m := detailTestModel()
+	mp := &agents.Marketplace{Name: "x", Provider: agents.ProviderClaudeCode, Installed: false}
+	actions := m.actionsForMarketplace(agentDetailFrame{}, agentRow{marketplace: mp, provider: mp.Provider})
+	if len(actions) == 0 {
+		t.Fatal("expected actions")
+	}
+	if actions[0].label != "Add to library" || !actions[0].disabled {
+		t.Errorf("Add to library should be disabled without spec; got %+v", actions[0])
+	}
+}
+
 func TestAgentsSupportsFilter(t *testing.T) {
-	for _, sub := range []int{agentsSubPlugins, agentsSubMCPs} {
+	for _, sub := range []int{agentsSubMarketplaces, agentsSubPlugins, agentsSubMCPs} {
 		if !agentsSupportsFilter(sub) {
 			t.Errorf("sub %d should support filter", sub)
 		}
 	}
-	for _, sub := range []int{agentsSubMarketplaces, agentsSubSkills, agentsSubSessions} {
+	for _, sub := range []int{agentsSubSkills, agentsSubSessions} {
 		if agentsSupportsFilter(sub) {
 			t.Errorf("sub %d should NOT support filter", sub)
 		}
@@ -383,7 +443,7 @@ func detailTestModel() Model {
 	m.agents = newAgentsState()
 	m.agents.snapshot = &agents.Snapshot{
 		Marketplaces: []agents.Marketplace{
-			{ID: "mp1", Name: "mp1", Provider: agents.ProviderCopilotCLI, URL: "https://example.test", Source: agents.SourceLocalCopilot},
+			{ID: "mp1", Name: "mp1", Provider: agents.ProviderCopilotCLI, URL: "https://example.test", Source: agents.SourceLocalCopilot, Installed: true},
 		},
 		Plugins: []agents.Plugin{
 			{ID: "pl1", Name: "pl1", Provider: agents.ProviderCopilotCLI, Marketplace: "mp1", Installed: true, Enabled: true, Version: "1.0.0"},

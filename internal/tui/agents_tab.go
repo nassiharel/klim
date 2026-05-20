@@ -240,9 +240,10 @@ func (a tuiCatalogAdapter) FetchAll(ctx context.Context) []agents.RemoteCatalogR
 	out := make([]agents.RemoteCatalogResult, 0, len(in))
 	for _, r := range in {
 		out = append(out, agents.RemoteCatalogResult{
-			SourceName: r.Source.Name,
-			Plugins:    r.Plugins,
-			Err:        r.Err,
+			SourceName:   r.Source.Name,
+			Plugins:      r.Plugins,
+			Marketplaces: r.Marketplaces,
+			Err:          r.Err,
 		})
 	}
 	return out
@@ -771,11 +772,15 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		st.flashEnd = time.Now().Add(2 * time.Second)
 		return true, nil
 	case "i":
-		// Toggle the Installed-only filter on the Plugins sub-tab.
-		// Quick keyboard shortcut alternative to the sidebar STATUS
-		// section.
-		if st.subTab != agentsSubPlugins {
+		// Toggle the Installed-only filter on Plugins or Marketplaces
+		// sub-tabs. Quick keyboard shortcut alternative to the sidebar
+		// STATUS section.
+		if st.subTab != agentsSubPlugins && st.subTab != agentsSubMarketplaces {
 			return true, nil
+		}
+		entity := "plugins"
+		if st.subTab == agentsSubMarketplaces {
+			entity = "marketplaces"
 		}
 		if st.statusFilter[st.subTab] == agentsFilterInstalled {
 			st.statusFilter[st.subTab] = agentsFilterAll
@@ -783,7 +788,7 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		} else {
 			st.statusFilter[st.subTab] = agentsFilterInstalled
 			st.statusFilterValue = ""
-			st.flash = "showing installed plugins only"
+			st.flash = "showing installed " + entity + " only"
 		}
 		st.cursor = 0
 		st.sidebarItems = buildAgentsSidebarItems(st)
@@ -2035,6 +2040,7 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agent
 		cols := computeColumnWidths([]column{
 			{header: "SOURCE", width: 10},
 			{header: "NAME", width: 28},
+			{header: "STATUS", width: 11},
 			{header: "OWNER", width: 14},
 			{header: "PLUGINS", width: 8},
 			{header: "URL", grow: true},
@@ -2042,16 +2048,20 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agent
 		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			mp := r.marketplace
-			owner, url, count := "", "", 0
+			owner, url, count, status := "", "", 0, "available"
 			if mp != nil {
 				owner, url, count = mp.Owner, mp.URL, mp.PluginCount
+				if mp.Installed {
+					status = "installed"
+				}
 			}
 			cells := []string{
 				agentsProviderChip(r.provider),
 				truncAgentRow(r.name, cols[1].width),
-				truncAgentRow(owner, cols[2].width),
+				agentsPluginStatusChip(status),
+				truncAgentRow(owner, cols[3].width),
 				dashOrInt(count),
-				truncAgentRow(url, cols[4].width),
+				truncAgentRow(url, cols[5].width),
 			}
 			b.WriteString(renderRow(cells, cols, rowLead(i, cursor), i == cursor, totalWidth))
 		}
@@ -2474,7 +2484,7 @@ func agentsFilterChips(st *agentsState) string {
 // agentsSupportsFilter reports whether `f` cycling applies to a sub-tab.
 func agentsSupportsFilter(subTab int) bool {
 	switch subTab {
-	case agentsSubPlugins, agentsSubMCPs:
+	case agentsSubMarketplaces, agentsSubPlugins, agentsSubMCPs:
 		return true
 	}
 	return false
@@ -2535,6 +2545,16 @@ func applyStatusFilter(rows []agentRow, subTab int, f agentsFilter) []agentRow {
 				keep = installed && r.mcp.Enabled
 			case agentsFilterDisabled:
 				keep = installed && !r.mcp.Enabled
+			}
+		case agentsSubMarketplaces:
+			if r.marketplace == nil {
+				continue
+			}
+			switch f {
+			case agentsFilterInstalled:
+				keep = r.marketplace.Installed
+			case agentsFilterCatalog:
+				keep = !r.marketplace.Installed
 			}
 		default:
 			keep = true

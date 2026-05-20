@@ -173,6 +173,53 @@ func TestMarketplaceMarshalJSON_OmitsZeroLastSynced(t *testing.T) {
 	}
 }
 
+// fakeRemoteCatalog returns a fixed list of marketplaces so we can
+// exercise the snapshot-merge logic without touching the network.
+type fakeRemoteCatalog struct {
+	marketplaces []Marketplace
+}
+
+func (f fakeRemoteCatalog) FetchAll(_ context.Context) []RemoteCatalogResult {
+	return []RemoteCatalogResult{{SourceName: "fake", Marketplaces: f.marketplaces}}
+}
+
+func TestScan_MergesDiscoverableMarketplaces(t *testing.T) {
+	// One provider already exposes "mp-installed"; the remote catalog
+	// adds it again plus a new "mp-available". The merge must (a) keep
+	// the provider's Installed=true copy as the canonical entry and
+	// (b) append the new one with Installed=false.
+	p := &installedMarketplaceProvider{stubProvider: stubProvider{id: ProviderClaudeCode}}
+	svc := NewService(2, p)
+	svc.RemoteCatalog = fakeRemoteCatalog{marketplaces: []Marketplace{
+		{Name: "mp-installed", Provider: ProviderClaudeCode, Installed: false},
+		{Name: "mp-available", Provider: ProviderClaudeCode, Installed: false},
+	}}
+
+	snap, err := svc.LoadAll(context.Background(), LoadOpts{Refresh: true})
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	got := map[string]bool{}
+	for _, m := range snap.Marketplaces {
+		if existing, dup := got[m.Name]; dup && existing == m.Installed {
+			t.Errorf("duplicate marketplace %q", m.Name)
+		}
+		got[m.Name] = m.Installed
+	}
+	if !got["mp-installed"] {
+		t.Errorf("mp-installed should have Installed=true; got %v", got)
+	}
+	if got["mp-available"] {
+		t.Errorf("mp-available should have Installed=false; got %v", got)
+	}
+}
+
+type installedMarketplaceProvider struct{ stubProvider }
+
+func (i *installedMarketplaceProvider) Marketplaces(_ context.Context) ([]Marketplace, error) {
+	return []Marketplace{{Name: "mp-installed", Provider: i.id, Installed: true}}, nil
+}
+
 func TestMarketplaceMarshalJSON_KeepsNonZeroLastSynced(t *testing.T) {
 	ts := time.Date(2026, 5, 17, 9, 0, 0, 0, time.UTC)
 	m := Marketplace{ID: "m1", Name: "core", Provider: ProviderClaudeCode, Source: SourceConfig, LastSynced: ts}

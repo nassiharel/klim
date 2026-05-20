@@ -56,6 +56,31 @@ func (m *Model) actionsForMarketplace(frame agentDetailFrame, row agentRow) []ag
 		return nil
 	}
 	url := mp.URL
+	spec := mp.InstallSpec
+	if spec == "" {
+		spec = url
+	}
+	if !mp.Installed {
+		// Discoverable (not yet installed) marketplace: surface
+		// "Add to library" as the primary action and hide
+		// install-only actions like Remove.
+		return []agentAction{
+			{label: "Add to library", highlight: true, disabled: spec == "",
+				reason: "no install spec recorded for this marketplace",
+				run: func() tea.Cmd {
+					return providerActionCmd("added marketplace "+mp.Name, func(ctx context.Context, p agents.Provider) error {
+						return p.AddMarketplace(ctx, spec)
+					}, mp.Provider)
+				}},
+			{label: "Open URL", disabled: url == "", reason: "no URL recorded", run: func() tea.Cmd {
+				return openURLCmd(url)
+			}},
+			{label: "Copy URL", disabled: url == "", reason: "no URL recorded", run: func() tea.Cmd {
+				return copyTextCmd(url, "marketplace URL")
+			}},
+			{label: "Refresh", run: refreshAgentsCmd},
+		}
+	}
 	return []agentAction{
 		{label: "View all plugins →", highlight: true, disabled: m.marketplacePluginCount(mp) == 0,
 			reason: "no plugins from this marketplace in the current snapshot",

@@ -46,9 +46,10 @@ func (a catalogAdapter) FetchAll(ctx context.Context) []agents.RemoteCatalogResu
 	out := make([]agents.RemoteCatalogResult, 0, len(in))
 	for _, r := range in {
 		out = append(out, agents.RemoteCatalogResult{
-			SourceName: r.Source.Name,
-			Plugins:    r.Plugins,
-			Err:        r.Err,
+			SourceName:   r.Source.Name,
+			Plugins:      r.Plugins,
+			Marketplaces: r.Marketplaces,
+			Err:          r.Err,
 		})
 	}
 	return out

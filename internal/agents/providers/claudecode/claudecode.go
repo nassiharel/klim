@@ -155,6 +155,7 @@ func (p *Provider) Marketplaces(ctx context.Context) ([]agents.Marketplace, erro
 		if m.Provider == "" {
 			m.Provider = p.ID()
 		}
+		m.Installed = true
 		ms = append(ms, m)
 	}
 
