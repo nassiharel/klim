@@ -11,9 +11,9 @@ func TestWindowDetailList(t *testing.T) {
 		{"empty list", 30, 0, 0, 0, 0},
 		{"fits entirely", 30, 8, 3, 0, 8},
 		{"cursor near top, windowed", 24, 100, 2, 0, 10},
-		{"cursor mid, follows down", 24, 100, 20, 11, 21},
+		{"cursor mid, centered", 24, 100, 20, 15, 25},
 		{"cursor at end, clamps", 24, 100, 99, 90, 100},
-		{"tiny terminal floors at 5", 5, 100, 50, 46, 51},
+		{"tiny terminal floors at 5, centered", 5, 100, 50, 48, 53},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -602,9 +602,11 @@ func renderMarketplaceBody(m *Model, frame agentDetailFrame, mp *agents.Marketpl
 
 // windowDetailList returns a [start, end) range over a body list so
 // the visible slice fits inside a detail page on a terminal of the
-// given total height. Pass the body cursor for cursor-following
-// scroll; if the list is short enough to fit entirely, [0, n) is
-// returned and start/end indicators are suppressed by the caller.
+// given total height. The cursor is centered in the window (the same
+// scroll style used by the Agents tab table) so the user can always
+// see context above and below the highlighted row. If the list is
+// short enough to fit entirely, [0, n) is returned and start/end
+// indicators are suppressed by the caller.
 //
 // Budget rationale: the detail page header section (title bar +
 // breadcrumb + title row + blank + 3-6 metadata rows + action bar
@@ -625,14 +627,20 @@ func windowDetailList(termHeight, total, cursor int) (start, end int) {
 	if cursor < 0 {
 		cursor = 0
 	}
-	if cursor >= maxRows {
-		start = cursor - maxRows + 1
+	if cursor >= total {
+		cursor = total - 1
+	}
+	// Center the cursor in the window when possible.
+	start = cursor - maxRows/2
+	if start < 0 {
+		start = 0
 	}
 	end = start + maxRows
 	if end > total {
 		end = total
-		if end-maxRows >= 0 {
-			start = end - maxRows
+		start = end - maxRows
+		if start < 0 {
+			start = 0
 		}
 	}
 	return start, end
