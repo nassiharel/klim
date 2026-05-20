@@ -33,16 +33,14 @@ func (m Model) renderForYouList() string {
 	if itemsPerPage < 2 {
 		itemsPerPage = 2
 	}
-	// Reserve one line each for above/below indicators when needed.
+	// Window the visible slice around the cursor. The card layout is
+	// item-oriented (each card spans 3 visible lines) so we reserve
+	// items, not lines, for the indicators: 1 item ≈ 3 lines, but at
+	// the top/bottom the indicators only consume 1 line each. To keep
+	// the math simple and avoid layout jitter we treat the indicator
+	// as a single-card slot only when it would actually render.
 	total := len(m.recommendations)
-	windowSize := itemsPerPage
-	if total > itemsPerPage {
-		windowSize = itemsPerPage - 1
-		if windowSize < 1 {
-			windowSize = 1
-		}
-	}
-	start, _, hiddenAbove, hiddenBelow := windowRange(total, m.cursor, windowSize)
+	start, hiddenAbove, hiddenBelow, windowSize := windowWithIndicators(total, m.cursor, itemsPerPage)
 
 	if hiddenAbove > 0 {
 		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)) + "\n")
@@ -129,14 +127,7 @@ func (m Model) renderOnboardList() string {
 		itemsPerPage = 2
 	}
 	total := len(m.onboardTools)
-	windowSize := itemsPerPage
-	if total > itemsPerPage {
-		windowSize = itemsPerPage - 1
-		if windowSize < 1 {
-			windowSize = 1
-		}
-	}
-	start, _, hiddenAbove, hiddenBelow := windowRange(total, m.cursor, windowSize)
+	start, hiddenAbove, hiddenBelow, windowSize := windowWithIndicators(total, m.cursor, itemsPerPage)
 
 	if hiddenAbove > 0 {
 		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)) + "\n")

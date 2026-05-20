@@ -119,16 +119,11 @@ func (m Model) renderPacksList() string {
 		visibleRows = 3
 	}
 	// Window the visible slice around the cursor (agents-tab style).
-	// Reserve one row each for above/below indicators when they'll show.
+	// windowWithIndicators reserves only the indicator rows that will
+	// actually render — at the top/bottom of the list one extra pack
+	// is shown instead of wasting a row on an unused indicator slot.
 	total := len(packOrder)
-	windowSize := visibleRows
-	if total > visibleRows {
-		windowSize = visibleRows - 2
-		if windowSize < 1 {
-			windowSize = 1
-		}
-	}
-	start, _, hiddenAbove, hiddenBelow := windowRange(total, m.cursor, windowSize)
+	start, hiddenAbove, hiddenBelow, windowSize := windowWithIndicators(total, m.cursor, visibleRows)
 
 	if hiddenAbove > 0 {
 		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)) + "\n")

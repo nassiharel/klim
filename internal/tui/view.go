@@ -103,6 +103,51 @@ func windowRange(total, cursor, maxRows int) (start, displayCursor, hiddenAbove,
 	return
 }
 
+// windowWithIndicators is the indicator-aware variant of windowRange.
+// dataRows is the total row budget the caller has available; the
+// helper figures out the largest window that still leaves space for
+// only the indicators that will actually render (0, 1, or 2 rows).
+// Avoids the off-by-one where a list at the very top/bottom otherwise
+// wastes a reserved row that would never be filled.
+func windowWithIndicators(total, cursor, dataRows int) (start, hiddenAbove, hiddenBelow, windowSize int) {
+	if total <= 0 || dataRows <= 0 {
+		return 0, 0, 0, 0
+	}
+	if total <= dataRows {
+		return 0, 0, 0, total
+	}
+	// Iterate once: at most 2 corrections (start with 0 indicators
+	// reserved, see which are needed, recompute). The fixed point is
+	// reached in two passes because reducing the window only ever
+	// increases hidden counts, never reverses an indicator from
+	// "needed" back to "not needed".
+	reserved := 0
+	for pass := 0; pass < 2; pass++ {
+		ws := dataRows - reserved
+		if ws < 1 {
+			ws = 1
+		}
+		s, _, ha, hb := windowRange(total, cursor, ws)
+		need := 0
+		if ha > 0 {
+			need++
+		}
+		if hb > 0 {
+			need++
+		}
+		if need == reserved {
+			return s, ha, hb, ws
+		}
+		reserved = need
+	}
+	ws := dataRows - reserved
+	if ws < 1 {
+		ws = 1
+	}
+	s, _, ha, hb := windowRange(total, cursor, ws)
+	return s, ha, hb, ws
+}
+
 // truncateLinesToWidth runs truncateANSI on every newline-separated line
 // in s so the result has no line wider than maxWidth. Used by
 // layoutWithFooter: visualRows assumes a wrapping terminal, but some
@@ -1188,18 +1233,13 @@ func (m Model) buildToolLines(maxRows int) []string {
 	if dataRows < 1 {
 		dataRows = 1
 	}
-	// Window the visible slice around the cursor (agents-tab style),
-	// reserving rows for the optional above/below indicators.
+	// Window the visible slice around the cursor (agents-tab style).
+	// windowWithIndicators reserves only the indicator rows that will
+	// actually render, so at the very top/bottom of the list one
+	// extra tool row is shown instead of being wasted on an unused
+	// indicator slot.
 	total := len(m.filteredIndex)
-	windowSize := dataRows
-	if total > dataRows {
-		// One row each for the indicators when we know they'll show.
-		windowSize = dataRows - 2
-		if windowSize < 1 {
-			windowSize = 1
-		}
-	}
-	start, _, hiddenAbove, hiddenBelow := windowRange(total, m.cursor, windowSize)
+	start, hiddenAbove, hiddenBelow, windowSize := windowWithIndicators(total, m.cursor, dataRows)
 
 	if hiddenAbove > 0 {
 		lines = append(lines, "  "+dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)))

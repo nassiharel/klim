@@ -264,11 +264,12 @@ type Model struct {
 	// a static page.
 	animTicking bool
 
-	// bootStart records the wall-clock moment the splash began
-	// displaying (set in NewModel and on every startScan). The
-	// renderer keeps the splash visible until at least
-	// bootSplashMinDuration has elapsed, even if the underlying
-	// scan finishes sooner — so the brand reveal is always seen.
+	// bootStart records the wall-clock moment the splash first
+	// appeared. Set once in NewModel and intentionally NOT reset
+	// by startScan — the bootSplashMinDuration gate exists only
+	// for the initial cold-start brand reveal, not for post-action
+	// rescans (which should return to the UI as soon as the rescan
+	// finishes, with no artificial delay).
 	bootStart time.Time
 
 	// Layout.

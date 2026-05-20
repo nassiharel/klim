@@ -173,9 +173,15 @@ func TrailObjects() (string, error) {
 }
 
 // AgentsDir returns the root directory for all agents-related state
-// under ~/.klim. Everything from the Agents tab — scan cache, per-source
-// marketplace catalogs, costs cache, search index, bookmarks — lives
-// here so the layout is self-contained and easy to inspect.
+// under ~/.klim. Everything written by the Agents tab — scan cache,
+// per-source marketplace catalog files, costs cache, search index,
+// bookmarks — lives under this directory so the layout is
+// self-contained and easy to inspect.
+//
+// Note: pre-0.1.4 versions of klim wrote ~/.klim/agent-bookmarks.yaml
+// at the top level; bookmarks.Load() migrates that file once on first
+// read (see AgentBookmarksLegacy below) and is the only legacy path
+// still honored. New code should never touch the legacy location.
 func AgentsDir() (string, error) {
 	return Join("agents")
 }
@@ -188,15 +194,12 @@ func AgentsCache() (string, error) {
 }
 
 // AgentsCatalogDir returns the directory holding per-source agent
-// marketplace catalog caches (one file per source).
+// marketplace catalog caches. Each remote source (Anthropic
+// marketplace, GitHub copilot-plugins, MCP registry) gets its own
+// file inside this directory so a stale fetch on one source doesn't
+// invalidate the others.
 func AgentsCatalogDir() (string, error) {
 	return Join("agents", "catalog")
-}
-
-// AgentsCatalogCache returns the path to the aggregated agent
-// marketplace catalog cache.
-func AgentsCatalogCache() (string, error) {
-	return Join("agents", "catalog-cache.yaml")
 }
 
 // AgentCostsCache returns the path to the per-session token-count cache
