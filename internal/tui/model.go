@@ -734,7 +734,12 @@ func (m *Model) startScan() tea.Cmd {
 
 	m.loading = true
 	m.phase = phaseLoading
-	m.bootStart = time.Now()
+	// Note: m.bootStart is intentionally NOT reset here. The
+	// bootSplashMinDuration gate only applies to the initial cold-start
+	// reveal — re-scans triggered by install / upgrade / remove must not
+	// blank out the user's current tab with the brand splash. By the time
+	// a startScan fires, time.Since(m.bootStart) is well past the minimum
+	// so the splash only appears for the actual duration of phaseLoading.
 	m.tools = nil
 	m.filteredIndex = nil
 	m.cursor = 0
