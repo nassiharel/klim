@@ -1,86 +1,139 @@
 package catalog
 
-import "github.com/nassiharel/klim/internal/agents"
+import (
+	"embed"
+	"fmt"
+	"io/fs"
+	"sort"
+	"strings"
 
-// DefaultDiscoverableMarketplaces is the curated, statically-shipped
-// list of well-known third-party agent marketplaces klim surfaces in
-// the Marketplaces sub-tab. They appear with Installed=false until the
-// user adds them via the provider CLI (e.g. `claude /plugin marketplace
-// add <repo>`); the Marketplaces tab's "Add to library" action drives
-// that. Entries already registered locally (in known_marketplaces.json
-// or scanned from disk) are de-duplicated by name during the snapshot
-// merge in agents.Service.
+	"gopkg.in/yaml.v3"
+
+	"github.com/nassiharel/klim/internal/agents"
+)
+
+//go:embed discoverable/*.yaml
+var discoverableFS embed.FS
+
+// discoverableEntry is the on-disk YAML schema for a single
+// well-known agent marketplace. The catalog package loads every
+// `discoverable/*.yaml` file into a copy of this struct and then
+// expands it into one agents.Marketplace per provider.
 //
-// Add new entries here when you want to expose a community marketplace
-// to every klim user out of the box. Keep the list short and curated;
-// per-user picks belong in user config, not here.
-var DefaultDiscoverableMarketplaces = []agents.Marketplace{
-	{
-		ID:          "claude-plugins-official",
-		Name:        "claude-plugins-official",
-		DisplayName: "Anthropic Official",
-		Description: "Anthropic's curated Claude Code plugin marketplace",
-		Provider:    agents.ProviderClaudeCode,
-		Owner:       "anthropics",
-		URL:         "https://github.com/anthropics/claude-plugins-official",
-		InstallSpec: "anthropics/claude-plugins-official",
-		Source:      agents.SourceCatalogClaude,
-	},
-	{
-		ID:          "openai-codex-plugin-cc",
-		Name:        "openai-codex-plugin-cc",
-		DisplayName: "OpenAI Codex Plugin",
-		Description: "OpenAI's Codex plugin marketplace for Claude Code",
-		Provider:    agents.ProviderClaudeCode,
-		Owner:       "openai",
-		URL:         "https://github.com/openai/codex-plugin-cc",
-		InstallSpec: "openai/codex-plugin-cc",
-		Source:      agents.SourceCatalogClaude,
-	},
-	{
-		ID:          "superpowers",
-		Name:        "superpowers",
-		DisplayName: "Superpowers",
-		Description: "Community productivity plugins for Claude Code",
-		Provider:    agents.ProviderClaudeCode,
-		Owner:       "obra",
-		URL:         "https://github.com/obra/superpowers-marketplace",
-		InstallSpec: "obra/superpowers-marketplace",
-		Source:      agents.SourceCatalogClaude,
-	},
-	{
-		ID:          "copilot-plugins",
-		Name:        "copilot-plugins",
-		DisplayName: "GitHub Copilot Plugins",
-		Description: "GitHub's official Copilot CLI plugin marketplace",
-		Provider:    agents.ProviderCopilotCLI,
-		Owner:       "github",
-		URL:         "https://github.com/github/copilot-plugins",
-		InstallSpec: "github/copilot-plugins",
-		Source:      agents.SourceCatalogCopilot,
-	},
-	{
-		ID:          "awesome-copilot",
-		Name:        "awesome-copilot",
-		DisplayName: "Awesome Copilot",
-		Description: "Community-curated Copilot plugins and skills",
-		Provider:    agents.ProviderCopilotCLI,
-		Owner:       "github",
-		URL:         "https://github.com/github/awesome-copilot",
-		InstallSpec: "github/awesome-copilot",
-		Source:      agents.SourceCatalogCopilot,
-	},
+// See internal/agents/catalog/discoverable/README.md for the full
+// schema documentation.
+type discoverableEntry struct {
+	ID          string              `yaml:"id"`
+	Name        string              `yaml:"name"`
+	DisplayName string              `yaml:"display_name,omitempty"`
+	Description string              `yaml:"description,omitempty"`
+	Providers   []agents.ProviderID `yaml:"providers"`
+	Owner       string              `yaml:"owner,omitempty"`
+	URL         string              `yaml:"url,omitempty"`
+	InstallSpec string              `yaml:"install_spec,omitempty"`
+	Source      agents.Source       `yaml:"source,omitempty"`
 }
 
-// DiscoverableMarketplaces returns a copy of the curated discoverable
-// list with Installed=false. Returning a copy keeps callers from
-// accidentally mutating the package-level slice when post-processing
-// (e.g., marking entries installed during snapshot merge).
-func DiscoverableMarketplaces() []agents.Marketplace {
-	out := make([]agents.Marketplace, len(DefaultDiscoverableMarketplaces))
-	for i, m := range DefaultDiscoverableMarketplaces {
-		m.Installed = false
-		out[i] = m
+// sourceForProvider returns the canonical agents.Source pill for a
+// provider when the YAML doesn't override it. Keeps catalog-XXX values
+// consistent with what the providers themselves report.
+func sourceForProvider(p agents.ProviderID) agents.Source {
+	switch p {
+	case agents.ProviderCopilotCLI:
+		return agents.SourceCatalogCopilot
+	case agents.ProviderMCPRegistry:
+		return agents.SourceCatalogMCP
+	default:
+		return agents.SourceCatalogClaude
 	}
+}
+
+// loadDiscoverable parses every `discoverable/*.yaml` file embedded in
+// the binary and expands each entry into one agents.Marketplace per
+// provider listed under `providers:`. Returns the merged list sorted
+// by Name for deterministic ordering.
+//
+// Errors are aggregated and returned to callers so unit tests can fail
+// loudly when a file is malformed; production callers
+// (DiscoverableMarketplaces) ignore the error and use the entries that
+// did parse, so a single bad YAML never blocks the whole UI.
+func loadDiscoverable() ([]agents.Marketplace, error) {
+	files, err := fs.ReadDir(discoverableFS, "discoverable")
+	if err != nil {
+		return nil, fmt.Errorf("catalog: read discoverable dir: %w", err)
+	}
+	var (
+		out  []agents.Marketplace
+		errs []string
+	)
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".yaml") {
+			continue
+		}
+		path := "discoverable/" + f.Name()
+		body, err := fs.ReadFile(discoverableFS, path)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", f.Name(), err))
+			continue
+		}
+		var e discoverableEntry
+		if err := yaml.Unmarshal(body, &e); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", f.Name(), err))
+			continue
+		}
+		if e.Name == "" {
+			errs = append(errs, fmt.Sprintf("%s: missing required field 'name'", f.Name()))
+			continue
+		}
+		if len(e.Providers) == 0 {
+			errs = append(errs, fmt.Sprintf("%s: missing required field 'providers'", f.Name()))
+			continue
+		}
+		for _, pid := range e.Providers {
+			id := e.ID
+			if id == "" {
+				id = e.Name
+			}
+			src := e.Source
+			if src == "" {
+				src = sourceForProvider(pid)
+			}
+			out = append(out, agents.Marketplace{
+				ID:          id,
+				Name:        e.Name,
+				DisplayName: e.DisplayName,
+				Description: e.Description,
+				Provider:    pid,
+				Owner:       e.Owner,
+				URL:         e.URL,
+				InstallSpec: e.InstallSpec,
+				Source:      src,
+				Installed:   false,
+			})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Provider < out[j].Provider
+	})
+	if len(errs) > 0 {
+		return out, fmt.Errorf("catalog: %d discoverable file(s) had errors: %s", len(errs), strings.Join(errs, "; "))
+	}
+	return out, nil
+}
+
+// DiscoverableMarketplaces returns the curated list of discoverable
+// agent marketplaces loaded from internal/agents/catalog/discoverable/.
+// Each entry's Installed field is false; the snapshot merge in
+// agents.Service flips it to true (or drops the discoverable copy
+// entirely) once the same marketplace is also reported by a provider.
+//
+// A malformed YAML file in the discoverable directory surfaces as an
+// error from loadDiscoverable but never blocks the caller — every
+// well-formed entry still surfaces in the UI.
+func DiscoverableMarketplaces() []agents.Marketplace {
+	out, _ := loadDiscoverable()
 	return out
 }

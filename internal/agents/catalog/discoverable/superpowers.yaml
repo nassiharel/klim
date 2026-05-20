@@ -1,0 +1,9 @@
+id: superpowers
+name: superpowers
+display_name: Superpowers
+description: Community productivity plugins for Claude Code
+providers:
+  - claude-code
+owner: obra
+url: https://github.com/obra/superpowers-marketplace
+install_spec: obra/superpowers-marketplace
