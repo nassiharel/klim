@@ -480,6 +480,44 @@ func TestMarketplaceDetailListsPlugins(t *testing.T) {
 	}
 }
 
+func TestMarketplaceViewAllPluginsAction(t *testing.T) {
+	m := detailTestModel()
+	m.agents.subTab = agentsSubMarketplaces
+	m.agents.cursor = 0
+	// Open the marketplace detail page.
+	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
+	if !m.agents.detailPage {
+		t.Fatal("expected detailPage=true after enter on marketplace row")
+	}
+
+	// "View all plugins →" is the first action; pressing enter should
+	// dispatch agentViewMarketplacePluginsMsg.
+	_, cmd := m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
+	if cmd == nil {
+		t.Fatal("expected cmd from View all plugins action")
+	}
+	msg := cmd()
+	if _, ok := msg.(agentViewMarketplacePluginsMsg); !ok {
+		t.Fatalf("expected agentViewMarketplacePluginsMsg, got %T", msg)
+	}
+
+	// Feed the message back into the agents message router and verify
+	// it navigates to the Plugins sub-tab with the marketplace filter.
+	handled, _ := m.handleAgentsMsg(msg)
+	if !handled {
+		t.Fatal("agentViewMarketplacePluginsMsg should be handled")
+	}
+	if m.agents.detailPage {
+		t.Error("expected detailPage=false after View all plugins")
+	}
+	if m.agents.subTab != agentsSubPlugins {
+		t.Errorf("subTab = %d, want agentsSubPlugins (%d)", m.agents.subTab, agentsSubPlugins)
+	}
+	if m.agents.marketplaceFilter != "mp1" {
+		t.Errorf("marketplaceFilter = %q, want mp1", m.agents.marketplaceFilter)
+	}
+}
+
 // The plugin-update tests run against the real claude-code provider
 // because rewiring agentsService() requires its own infrastructure;
 // what we verify is the provider-level behaviour. See

@@ -596,7 +596,7 @@ func renderMarketplaceBody(m *Model, frame agentDetailFrame, mp *agents.Marketpl
 	if end < len(plugins) {
 		b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↓ %d below", len(plugins)-end)) + "\n")
 	}
-	b.WriteString("  " + dimVersion.Render("↑/↓ pick · Enter (with action 'Open plugin →') drills in") + "\n")
+	b.WriteString("  " + dimVersion.Render("Enter on 'View all plugins →' opens the full Plugins tab filtered to this marketplace") + "\n")
 	return b.String()
 }
 

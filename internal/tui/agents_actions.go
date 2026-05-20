@@ -57,7 +57,10 @@ func (m *Model) actionsForMarketplace(frame agentDetailFrame, row agentRow) []ag
 	}
 	url := mp.URL
 	return []agentAction{
-		{label: "Refresh", highlight: true, run: refreshAgentsCmd},
+		{label: "View all plugins →", highlight: true, disabled: m.marketplacePluginCount(mp) == 0,
+			reason: "no plugins from this marketplace in the current snapshot",
+			run:    viewMarketplacePluginsCmd},
+		{label: "Refresh", run: refreshAgentsCmd},
 		{label: "Remove", disabled: mp.Source == agents.SourceCatalogClaude || mp.Source == agents.SourceCatalogMCP, reason: "built-in marketplace cannot be removed",
 			run: func() tea.Cmd {
 				return providerActionCmd("removed marketplace "+mp.Name, func(ctx context.Context, p agents.Provider) error {
@@ -369,3 +372,13 @@ func drillMarketplacePluginCmd() tea.Cmd {
 }
 
 type agentDrillPluginMsg struct{}
+
+// viewMarketplacePluginsCmd is a marker message that tells the detail
+// handler to close the detail page, switch to the Plugins sub-tab,
+// and apply a marketplace filter so the user lands on the full
+// plugin list scoped to the marketplace they were viewing.
+func viewMarketplacePluginsCmd() tea.Cmd {
+	return func() tea.Msg { return agentViewMarketplacePluginsMsg{} }
+}
+
+type agentViewMarketplacePluginsMsg struct{}

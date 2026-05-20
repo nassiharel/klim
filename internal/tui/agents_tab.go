@@ -1110,6 +1110,29 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		}
 		m.agentsPushDetail(agentsSubPlugins, plugins[top.bodyCursor].ID)
 		return true, nil
+	case agentViewMarketplacePluginsMsg:
+		// Pop the detail page, jump to the Plugins sub-tab, and
+		// pre-filter by the marketplace the user was viewing so the
+		// duplicated "plugins inside this marketplace" body list is
+		// replaced by the canonical Plugins list scoped to it.
+		if len(st.detailStack) == 0 {
+			return true, nil
+		}
+		top := st.detailStack[len(st.detailStack)-1]
+		row, ok := m.resolveDetailRow(top)
+		if !ok || row.marketplace == nil {
+			return true, nil
+		}
+		mpName := row.marketplace.Name
+		st.detailPage = false
+		st.detailStack = nil
+		st.subTab = agentsSubPlugins
+		st.marketplaceFilter = mpName
+		st.cursor = 0
+		st.sidebarItems = buildAgentsSidebarItems(st)
+		st.flash = "showing plugins from " + mpName
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
 	case agentsCostsLoadedMsg:
 		st.costs.loading = false
 		st.costs.loaded = true
