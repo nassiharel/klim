@@ -86,6 +86,7 @@ func (m *Model) actionsForPlugin(frame agentDetailFrame, row agentRow) []agentAc
 	id := pl.Name
 	ref := agents.PluginRef{Name: pl.Name, Marketplace: pl.Marketplace}
 	prov := pl.Provider
+	skillCount := m.pluginSkillCount(pl)
 	return []agentAction{
 		{label: "Install", highlight: !pl.Installed, disabled: pl.Installed, reason: "already installed",
 			run: func() tea.Cmd {
@@ -99,6 +100,9 @@ func (m *Model) actionsForPlugin(frame agentDetailFrame, row agentRow) []agentAc
 					return p.UpdatePlugin(ctx, id)
 				}, prov)
 			}},
+		{label: "View skills →", disabled: skillCount == 0,
+			reason: "plugin ships no skills in the current snapshot",
+			run:    viewPluginSkillsCmd},
 		{label: "Uninstall", disabled: !pl.Installed, reason: "not installed",
 			run: func() tea.Cmd {
 				return providerActionCmd("uninstalled "+id, func(ctx context.Context, p agents.Provider) error {
@@ -277,6 +281,23 @@ func (m *Model) marketplacePlugins(mp *agents.Marketplace) []agents.Plugin {
 	return out
 }
 
+// pluginSkillCount counts skills in the snapshot whose provider +
+// SourcePlugin match the given plugin.
+func (m *Model) pluginSkillCount(pl *agents.Plugin) int {
+	st := m.agents
+	if st == nil || st.snapshot == nil || pl == nil {
+		return 0
+	}
+	n := 0
+	for i := range st.snapshot.Skills {
+		s := &st.snapshot.Skills[i]
+		if s.Provider == pl.Provider && s.SourcePlugin == pl.Name {
+			n++
+		}
+	}
+	return n
+}
+
 // ---------- command factories ----------
 
 // providerActionCmd runs `op` against the named provider and returns
@@ -382,3 +403,13 @@ func viewMarketplacePluginsCmd() tea.Cmd {
 }
 
 type agentViewMarketplacePluginsMsg struct{}
+
+// viewPluginSkillsCmd is a marker message that tells the detail
+// handler to close the detail page, switch to the Skills sub-tab,
+// and apply a plugin filter so the user lands on the Skills list
+// scoped to skills shipped by the plugin they were viewing.
+func viewPluginSkillsCmd() tea.Cmd {
+	return func() tea.Msg { return agentViewPluginSkillsMsg{} }
+}
+
+type agentViewPluginSkillsMsg struct{}

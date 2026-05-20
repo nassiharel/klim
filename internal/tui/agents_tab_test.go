@@ -518,6 +518,92 @@ func TestMarketplaceViewAllPluginsAction(t *testing.T) {
 	}
 }
 
+func TestPluginViewSkillsAction(t *testing.T) {
+	m := detailTestModel()
+	// Add a skill that belongs to pl1 so View skills is enabled.
+	m.agents.snapshot.Skills = append(m.agents.snapshot.Skills, agents.Skill{
+		ID: "sk2", Name: "sk2", Provider: agents.ProviderCopilotCLI,
+		Scope: agents.ScopePlugin, SourcePlugin: "pl1",
+	})
+	m.agents.subTab = agentsSubPlugins
+	m.agents.cursor = 0 // pl1 (installed)
+	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
+	if !m.agents.detailPage {
+		t.Fatal("expected detailPage=true after enter")
+	}
+
+	// Plugin actions for an installed plugin: [Install (disabled),
+	// Update, View skills →, Uninstall, ...]. Initial focus is on
+	// the first action (Install). Move Right twice to land on
+	// View skills →.
+	_, _ = m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyRight, Text: "right"}))
+	_, _ = m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyRight, Text: "right"}))
+	if m.agents.detailStack[0].actionIdx != 2 {
+		t.Fatalf("actionIdx = %d, want 2 (View skills)", m.agents.detailStack[0].actionIdx)
+	}
+
+	_, cmd := m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
+	if cmd == nil {
+		t.Fatal("expected cmd from View skills action")
+	}
+	msg := cmd()
+	if _, ok := msg.(agentViewPluginSkillsMsg); !ok {
+		t.Fatalf("expected agentViewPluginSkillsMsg, got %T", msg)
+	}
+
+	handled, _ := m.handleAgentsMsg(msg)
+	if !handled {
+		t.Fatal("agentViewPluginSkillsMsg should be handled")
+	}
+	if m.agents.detailPage {
+		t.Error("expected detailPage=false")
+	}
+	if m.agents.subTab != agentsSubSkills {
+		t.Errorf("subTab = %d, want agentsSubSkills (%d)", m.agents.subTab, agentsSubSkills)
+	}
+	if m.agents.pluginFilter != "pl1" {
+		t.Errorf("pluginFilter = %q, want pl1", m.agents.pluginFilter)
+	}
+}
+
+func TestInstalledHotkeyTogglesPluginsFilter(t *testing.T) {
+	m := detailTestModel()
+	m.agents.subTab = agentsSubPlugins
+	if m.agents.statusFilter[agentsSubPlugins] != agentsFilterAll {
+		t.Fatalf("precondition: statusFilter = %v, want All", m.agents.statusFilter[agentsSubPlugins])
+	}
+
+	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: 'i', Text: "i"}))
+	if m.agents.statusFilter[agentsSubPlugins] != agentsFilterInstalled {
+		t.Errorf("after first toggle: filter = %v, want Installed", m.agents.statusFilter[agentsSubPlugins])
+	}
+
+	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: 'i', Text: "i"}))
+	if m.agents.statusFilter[agentsSubPlugins] != agentsFilterAll {
+		t.Errorf("after second toggle: filter = %v, want All", m.agents.statusFilter[agentsSubPlugins])
+	}
+}
+
+func TestApplyPluginFilter_OnlySkillsSubTab(t *testing.T) {
+	rows := []agentRow{
+		{skill: &agents.Skill{Name: "a", SourcePlugin: "pl1"}},
+		{skill: &agents.Skill{Name: "b", SourcePlugin: "pl2"}},
+		{skill: &agents.Skill{Name: "c", SourcePlugin: ""}},
+	}
+	out := applyPluginFilter(rows, agentsSubSkills, "pl1")
+	if len(out) != 1 || out[0].skill.Name != "a" {
+		t.Errorf("Skills filter: got %+v, want [a]", out)
+	}
+	// No-op on other subtabs.
+	if got := applyPluginFilter(rows, agentsSubPlugins, "pl1"); len(got) != 3 {
+		t.Errorf("non-Skills subtab should be a no-op: got %d", len(got))
+	}
+	// Empty filter is a no-op.
+	if got := applyPluginFilter(rows, agentsSubSkills, ""); len(got) != 3 {
+		t.Errorf("empty filter should be a no-op: got %d", len(got))
+	}
+}
+
 // The plugin-update tests run against the real claude-code provider
 // because rewiring agentsService() requires its own infrastructure;
 // what we verify is the provider-level behaviour. See
