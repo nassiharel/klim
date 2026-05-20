@@ -808,7 +808,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// agentsLoadedMsg / agentsLaunchedMsg / agentsDeletedMsg, so
 	// newer messages (agentsCostsLoadedMsg, agentsHealthLoadedMsg,
 	// agentsPromoteResultMsg, agentsSearchIndexLoadedMsg,
-	// agentsBulkResultMsg, agentDrillPluginMsg, agentTranscriptMsg,
+	// agentsBulkResultMsg, agentTranscriptMsg,
 	// agentLaunchPlanMsg, agentActionResultMsg) were silently
 	// dropped — leaving the Costs sub-tab stuck on
 	// "scanning transcripts…" because cs.loading was never cleared.
@@ -822,7 +822,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		agentsPromoteResultMsg,
 		agentsSearchIndexLoadedMsg,
 		agentsBulkResultMsg,
-		agentDrillPluginMsg,
 		agentTranscriptMsg,
 		agentLaunchPlanMsg,
 		agentActionResultMsg:

@@ -469,14 +469,18 @@ func TestMarketplaceDetailListsPlugins(t *testing.T) {
 	m.agents.cursor = 0
 	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
 	out := m.renderAgentsDetailPage()
-	for _, want := range []string{"pl1", "pl2", "Plugins"} {
+	// Body should show the Plugins section header + count, plus a
+	// hint to use the "View all plugins →" action — but it must NOT
+	// embed the per-plugin list (that lives in the Plugins tab).
+	for _, want := range []string{"Plugins", "(2)", "View all plugins"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected detail page to mention %q; output:\n%s", want, out)
 		}
 	}
-	// Body should also include count "(2)".
-	if !strings.Contains(out, "(2)") {
-		t.Errorf("expected '(2)' plugin count in body")
+	for _, unwanted := range []string{"pl1", "pl2"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("plugin name %q should NOT appear in marketplace body; output:\n%s", unwanted, out)
+		}
 	}
 }
 

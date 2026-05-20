@@ -1117,25 +1117,6 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		st.launchPlan = v.plan
 		st.launchPrompt = "Launch this command?"
 		return true, nil
-	case agentDrillPluginMsg:
-		// Push a Plugin frame for the currently focused marketplace
-		// plugin row.
-		if len(st.detailStack) == 0 {
-			return true, nil
-		}
-		top := st.detailStack[len(st.detailStack)-1]
-		row, ok := m.resolveDetailRow(top)
-		if !ok || row.marketplace == nil {
-			return true, nil
-		}
-		plugins := m.marketplacePlugins(row.marketplace)
-		if top.bodyCursor < 0 || top.bodyCursor >= len(plugins) {
-			st.flash = "no plugin focused — use ↑/↓ first"
-			st.flashEnd = time.Now().Add(2 * time.Second)
-			return true, nil
-		}
-		m.agentsPushDetail(agentsSubPlugins, plugins[top.bodyCursor].ID)
-		return true, nil
 	case agentViewMarketplacePluginsMsg:
 		// Pop the detail page, jump to the Plugins sub-tab, and
 		// pre-filter by the marketplace the user was viewing so the

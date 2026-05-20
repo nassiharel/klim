@@ -73,8 +73,6 @@ func (m *Model) actionsForMarketplace(frame agentDetailFrame, row agentRow) []ag
 		{label: "Copy URL", disabled: url == "", reason: "no URL recorded", run: func() tea.Cmd {
 			return copyTextCmd(url, "marketplace URL")
 		}},
-		{label: "Open plugin →", disabled: m.marketplacePluginCount(mp) == 0, reason: "no plugins from this marketplace in the current snapshot",
-			run: drillMarketplacePluginCmd},
 	}
 }
 
@@ -385,14 +383,6 @@ func launchFromDetailCmd(provider agents.ProviderID, spec agents.LaunchSpec) tea
 type agentLaunchPlanMsg struct {
 	plan agents.ExecPlan
 }
-
-// drillMarketplacePluginCmd is a marker message that tells the detail
-// handler to push a plugin frame for the currently-focused plugin row.
-func drillMarketplacePluginCmd() tea.Cmd {
-	return func() tea.Msg { return agentDrillPluginMsg{} }
-}
-
-type agentDrillPluginMsg struct{}
 
 // viewMarketplacePluginsCmd is a marker message that tells the detail
 // handler to close the detail page, switch to the Plugins sub-tab,
