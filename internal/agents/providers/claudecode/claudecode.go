@@ -306,8 +306,8 @@ func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
 
 			// Candidate plugin parent dirs within a marketplace clone.
 			candidates := []string{
-				mpDir,                                  // legacy: <mp>/<plugin>
-				filepath.Join(mpDir, "plugins"),        // real: first-party plugins
+				mpDir,                                    // legacy: <mp>/<plugin>
+				filepath.Join(mpDir, "plugins"),          // real: first-party plugins
 				filepath.Join(mpDir, "external_plugins"), // real: third-party plugins
 			}
 			for _, parent := range candidates {

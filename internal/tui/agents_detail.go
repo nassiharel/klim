@@ -157,19 +157,6 @@ func (m *Model) agentsPopDetail() tea.Cmd {
 	return nil
 }
 
-// agentsPushDetail pushes a new frame onto the navigation stack. Used
-// when the user drills from a marketplace into one of its plugins.
-func (m *Model) agentsPushDetail(subTab int, entityID string) {
-	st := m.agents
-	if st == nil {
-		return
-	}
-	st.detailStack = append(st.detailStack, agentDetailFrame{
-		subTab:   subTab,
-		entityID: entityID,
-	})
-}
-
 // resolveDetailRow looks up the entity referenced by the given frame
 // in the current snapshot. Returns (zero, false) when no longer present.
 func (m *Model) resolveDetailRow(frame agentDetailFrame) (agentRow, bool) {

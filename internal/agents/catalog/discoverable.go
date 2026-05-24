@@ -78,11 +78,11 @@ func loadDiscoverable() ([]agents.Marketplace, error) {
 			continue
 		}
 		if e.Name == "" {
-			errs = append(errs, fmt.Sprintf("%s: missing required field 'name'", f.Name()))
+			errs = append(errs, f.Name()+": missing required field 'name'")
 			continue
 		}
 		if len(e.Providers) == 0 {
-			errs = append(errs, fmt.Sprintf("%s: missing required field 'providers'", f.Name()))
+			errs = append(errs, f.Name()+": missing required field 'providers'")
 			continue
 		}
 		for _, pid := range e.Providers {

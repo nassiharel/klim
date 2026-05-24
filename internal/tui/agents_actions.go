@@ -287,23 +287,6 @@ func (m *Model) marketplacePluginCount(mp *agents.Marketplace) int {
 	return n
 }
 
-// marketplacePlugins returns plugins from the snapshot that belong to
-// the given marketplace, sorted by name.
-func (m *Model) marketplacePlugins(mp *agents.Marketplace) []agents.Plugin {
-	st := m.agents
-	if st == nil || st.snapshot == nil || mp == nil {
-		return nil
-	}
-	var out []agents.Plugin
-	for i := range st.snapshot.Plugins {
-		p := st.snapshot.Plugins[i]
-		if p.Provider == mp.Provider && p.Marketplace == mp.Name {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
 // pluginSkillCount counts skills in the snapshot whose provider +
 // SourcePlugin match the given plugin.
 func (m *Model) pluginSkillCount(pl *agents.Plugin) int {
