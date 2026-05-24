@@ -58,7 +58,7 @@ nfpms:
       - rpm
     bindir: /usr/bin
 
-brews:
+homebrew:
   - repository:
       owner: nassiharel
       name: homebrew-tap
