@@ -1,0 +1,9 @@
+id: claude-plugins-official
+name: claude-plugins-official
+display_name: Anthropic Official
+description: Anthropic's curated Claude Code plugin marketplace
+providers:
+  - claude-code
+owner: anthropics
+url: https://github.com/anthropics/claude-plugins-official
+install_spec: anthropics/claude-plugins-official

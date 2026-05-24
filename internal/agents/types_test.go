@@ -173,6 +173,65 @@ func TestMarketplaceMarshalJSON_OmitsZeroLastSynced(t *testing.T) {
 	}
 }
 
+// fakeRemoteCatalog returns a fixed list of marketplaces so we can
+// exercise the snapshot-merge logic without touching the network.
+type fakeRemoteCatalog struct {
+	marketplaces []Marketplace
+}
+
+func (f fakeRemoteCatalog) FetchAll(_ context.Context) []RemoteCatalogResult {
+	return []RemoteCatalogResult{{SourceName: "fake", Marketplaces: f.marketplaces}}
+}
+
+func TestScan_MergesDiscoverableMarketplaces(t *testing.T) {
+	// One provider already exposes "mp-installed"; the remote catalog
+	// adds it again plus a new "mp-available". The merge must (a) keep
+	// the provider's Installed=true copy as the canonical entry and
+	// (b) append the new one with Installed=false.
+	p := &installedMarketplaceProvider{stubProvider: stubProvider{id: ProviderClaudeCode}}
+	svc := NewService(2, p)
+	svc.RemoteCatalog = fakeRemoteCatalog{marketplaces: []Marketplace{
+		{Name: "mp-installed", Provider: ProviderClaudeCode, Installed: false},
+		{Name: "mp-available", Provider: ProviderClaudeCode, Installed: false},
+	}}
+
+	snap, err := svc.LoadAll(context.Background(), LoadOpts{Refresh: true})
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+
+	// Build a per-name list to detect true duplicates and verify
+	// Installed flags without order-dependent map overwrites.
+	type entry struct {
+		Name      string
+		Installed bool
+	}
+	byName := map[string][]entry{}
+	for _, m := range snap.Marketplaces {
+		byName[m.Name] = append(byName[m.Name], entry{m.Name, m.Installed})
+	}
+
+	// mp-installed: exactly one entry, Installed=true.
+	if entries := byName["mp-installed"]; len(entries) != 1 {
+		t.Errorf("mp-installed: expected 1 entry, got %d: %v", len(entries), entries)
+	} else if !entries[0].Installed {
+		t.Errorf("mp-installed should have Installed=true")
+	}
+
+	// mp-available: exactly one entry, Installed=false.
+	if entries := byName["mp-available"]; len(entries) != 1 {
+		t.Errorf("mp-available: expected 1 entry, got %d: %v", len(entries), entries)
+	} else if entries[0].Installed {
+		t.Errorf("mp-available should have Installed=false")
+	}
+}
+
+type installedMarketplaceProvider struct{ stubProvider }
+
+func (i *installedMarketplaceProvider) Marketplaces(_ context.Context) ([]Marketplace, error) {
+	return []Marketplace{{Name: "mp-installed", Provider: i.id, Installed: true}}, nil
+}
+
 func TestMarketplaceMarshalJSON_KeepsNonZeroLastSynced(t *testing.T) {
 	ts := time.Date(2026, 5, 17, 9, 0, 0, 0, time.UTC)
 	m := Marketplace{ID: "m1", Name: "core", Provider: ProviderClaudeCode, Source: SourceConfig, LastSynced: ts}

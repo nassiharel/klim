@@ -58,20 +58,15 @@ nfpms:
       - rpm
     bindir: /usr/bin
 
-brews:
+homebrew_casks:
   - repository:
       owner: nassiharel
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
     homepage: https://github.com/nassiharel/klim
     description: >-
       Productivity booster for dev tools — discover, standardise, automate, audit toolchains.
     license: MIT
-    install: |
-      bin.install "klim"
-    test: |
-      system bin/"klim", "version"
 
 # Scoop bucket: Windows users add the bucket once and `scoop install klim`
 # from then on. Manifest is written to nassiharel/scoop-bucket on every

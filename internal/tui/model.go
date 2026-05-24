@@ -264,6 +264,14 @@ type Model struct {
 	// a static page.
 	animTicking bool
 
+	// bootStart records the wall-clock moment the splash first
+	// appeared. Set once in NewModel and intentionally NOT reset
+	// by startScan — the bootSplashMinDuration gate exists only
+	// for the initial cold-start brand reveal, not for post-action
+	// rescans (which should return to the UI as soon as the rescan
+	// finishes, with no artificial delay).
+	bootStart time.Time
+
 	// Layout.
 	width  int
 	height int
@@ -524,6 +532,7 @@ func NewModel() Model {
 		// future restarts (startScan, etc.) know they don't need
 		// to schedule a duplicate ticker.
 		animTicking: true,
+		bootStart:   time.Now(),
 	}
 }
 
@@ -726,6 +735,12 @@ func (m *Model) startScan() tea.Cmd {
 
 	m.loading = true
 	m.phase = phaseLoading
+	// Note: m.bootStart is intentionally NOT reset here. The
+	// bootSplashMinDuration gate only applies to the initial cold-start
+	// reveal — re-scans triggered by install / upgrade / remove must not
+	// blank out the user's current tab with the brand splash. By the time
+	// a startScan fires, time.Since(m.bootStart) is well past the minimum
+	// so the splash only appears for the actual duration of phaseLoading.
 	m.tools = nil
 	m.filteredIndex = nil
 	m.cursor = 0
@@ -793,7 +808,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// agentsLoadedMsg / agentsLaunchedMsg / agentsDeletedMsg, so
 	// newer messages (agentsCostsLoadedMsg, agentsHealthLoadedMsg,
 	// agentsPromoteResultMsg, agentsSearchIndexLoadedMsg,
-	// agentsBulkResultMsg, agentDrillPluginMsg, agentTranscriptMsg,
+	// agentsBulkResultMsg, agentTranscriptMsg,
 	// agentLaunchPlanMsg, agentActionResultMsg) were silently
 	// dropped — leaving the Costs sub-tab stuck on
 	// "scanning transcripts…" because cs.loading was never cleared.
@@ -807,10 +822,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		agentsPromoteResultMsg,
 		agentsSearchIndexLoadedMsg,
 		agentsBulkResultMsg,
-		agentDrillPluginMsg,
 		agentTranscriptMsg,
 		agentLaunchPlanMsg,
-		agentActionResultMsg:
+		agentActionResultMsg,
+		agentViewMarketplacePluginsMsg,
+		agentViewPluginSkillsMsg:
 		mp := &m
 		if handled, cmd := mp.handleAgentsMsg(msg); handled {
 			return *mp, cmd

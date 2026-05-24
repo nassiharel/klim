@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/mattn/go-runewidth"
@@ -67,6 +69,111 @@ func fitToVisibleRows(content string, scroll, rows int) (body string, clampedScr
 	return strings.Join(lines, "\n"), scroll, total
 }
 
+// windowRange centers a fixed-size window of `maxRows` items around
+// `cursor` over a list of `total` items. Returns the window's start
+// index, the cursor position inside the window, and the counts of
+// items hidden above and below — so callers can show "↑ N above" /
+// "↓ N below" scroll indicators without scrolling state in the model.
+// Mirrors windowAgentRows but works on counts so any list (tools,
+// packs, recommendations) can adopt the same centred-cursor scroll
+// pattern without duplicating arithmetic.
+func windowRange(total, cursor, maxRows int) (start, displayCursor, hiddenAbove, hiddenBelow int) {
+	if total <= 0 || maxRows <= 0 {
+		return 0, 0, 0, 0
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= total {
+		cursor = total - 1
+	}
+	if total <= maxRows {
+		return 0, cursor, 0, 0
+	}
+	start = cursor - maxRows/2
+	if start < 0 {
+		start = 0
+	}
+	if start+maxRows > total {
+		start = total - maxRows
+	}
+	displayCursor = cursor - start
+	hiddenAbove = start
+	hiddenBelow = total - start - maxRows
+	return
+}
+
+// windowWithIndicators is the indicator-aware variant of windowRange.
+// dataRows is the total row budget the caller has available; the
+// helper figures out the largest window that still leaves space for
+// only the indicators that will actually render (0, 1, or 2 rows).
+// Avoids the off-by-one where a list at the very top/bottom otherwise
+// wastes a reserved row that would never be filled.
+func windowWithIndicators(total, cursor, dataRows int) (start, hiddenAbove, hiddenBelow, windowSize int) {
+	if total <= 0 || dataRows <= 0 {
+		return 0, 0, 0, 0
+	}
+	if total <= dataRows {
+		return 0, 0, 0, total
+	}
+	// When the row budget is too small for both data and indicators,
+	// suppress indicators entirely so the data rows aren't squeezed
+	// out of the viewport.
+	if dataRows < 3 {
+		s, _, _, _ := windowRange(total, cursor, dataRows)
+		return s, 0, 0, dataRows
+	}
+	// Iterate once: at most 2 corrections (start with 0 indicators
+	// reserved, see which are needed, recompute). The fixed point is
+	// reached in two passes because reducing the window only ever
+	// increases hidden counts, never reverses an indicator from
+	// "needed" back to "not needed".
+	reserved := 0
+	for pass := 0; pass < 2; pass++ {
+		ws := dataRows - reserved
+		if ws < 1 {
+			ws = 1
+		}
+		s, _, ha, hb := windowRange(total, cursor, ws)
+		need := 0
+		if ha > 0 {
+			need++
+		}
+		if hb > 0 {
+			need++
+		}
+		if need == reserved {
+			return s, ha, hb, ws
+		}
+		reserved = need
+	}
+	ws := dataRows - reserved
+	if ws < 1 {
+		ws = 1
+	}
+	s, _, ha, hb := windowRange(total, cursor, ws)
+	return s, ha, hb, ws
+}
+
+// truncateLinesToWidth runs truncateANSI on every newline-separated line
+// in s so the result has no line wider than maxWidth. Used by
+// layoutWithFooter: visualRows assumes a wrapping terminal, but some
+// terminals clip instead, which would push the footer off the bottom.
+// Pre-truncating keeps split-line count == visible row count regardless
+// of how the host terminal handles overflow.
+func truncateLinesToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		if lipgloss.Width(l) > maxWidth {
+			lines[i] = truncateANSI(l, maxWidth)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (m Model) renderView() string {
 	if m.quitting {
 		return ""
@@ -107,7 +214,9 @@ func (m Model) renderView() string {
 
 	// Boot splash — full-screen cyber cold-start visual. Drawn
 	// only after the modal/detail layers above have declined.
-	if m.phase == phaseLoading {
+	// Stays up while the scan is in flight OR until the minimum
+	// splash duration has elapsed (whichever is longer).
+	if m.phase == phaseLoading || (!m.bootStart.IsZero() && time.Since(m.bootStart) < bootSplashMinDuration) {
 		return m.renderBootSplash()
 	}
 
@@ -393,6 +502,15 @@ func (m Model) layoutWithFooter(body, footer string) string {
 	// Normalize: ensure body ends with exactly one newline so subsequent line
 	// counting and padding are predictable.
 	body = strings.TrimRight(body, "\n") + "\n"
+
+	// Truncate any line that exceeds the terminal width. visualRows assumes
+	// the host terminal wraps on overflow, but some terminals clip instead;
+	// pre-truncation makes split-line count == visible row count regardless
+	// of host behavior, which is what keeps the footer pinned to the bottom.
+	if m.width > 0 {
+		body = truncateLinesToWidth(body, m.width)
+		footer = truncateLinesToWidth(footer, m.width)
+	}
 
 	// Always reserve at least one blank separator line between body and footer.
 	const minGap = 1
@@ -1111,7 +1229,9 @@ func (m Model) buildToolLines(maxRows int) []string {
 
 	// Tool rows.
 	// Header + optional banner take 1-2 lines from maxRows, so the
-	// effective data capacity shrinks accordingly.
+	// effective data capacity shrinks accordingly. We also reserve
+	// one row for each scroll indicator (↑ N above / ↓ N below) so
+	// the header/footer chrome stays stable as the cursor moves.
 	usedHeaderRows := 1
 	if bannerRow != "" {
 		usedHeaderRows = 2
@@ -1120,18 +1240,29 @@ func (m Model) buildToolLines(maxRows int) []string {
 	if dataRows < 1 {
 		dataRows = 1
 	}
-	start := 0
-	if m.cursor >= dataRows {
-		start = m.cursor - dataRows + 1
+	// Window the visible slice around the cursor (agents-tab style).
+	// windowWithIndicators reserves only the indicator rows that will
+	// actually render, so at the very top/bottom of the list one
+	// extra tool row is shown instead of being wasted on an unused
+	// indicator slot.
+	total := len(m.filteredIndex)
+	start, hiddenAbove, hiddenBelow, windowSize := windowWithIndicators(total, m.cursor, dataRows)
+
+	if hiddenAbove > 0 {
+		lines = append(lines, "  "+dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)))
 	}
 
 	rowCount := 0
-	for vi := start; vi < len(m.filteredIndex) && rowCount < dataRows; vi++ {
+	for vi := start; vi < total && rowCount < windowSize; vi++ {
 		toolIdx := m.filteredIndex[vi]
 		tool := m.tools[toolIdx]
 		selected := vi == m.cursor && !m.categoryPicker
 		lines = append(lines, m.renderRow(tool, toolIdx, selected))
 		rowCount++
+	}
+
+	if hiddenBelow > 0 {
+		lines = append(lines, "  "+dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)))
 	}
 
 	// Empty state.

@@ -94,6 +94,7 @@ func (p *Provider) Marketplaces(_ context.Context) ([]agents.Marketplace, error)
 			Provider:    p.ID(),
 			URL:         "https://registry.modelcontextprotocol.io",
 			Source:      agents.SourceCatalogMCP,
+			Installed:   true,
 		},
 	}, nil
 }
