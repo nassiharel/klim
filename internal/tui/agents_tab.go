@@ -95,6 +95,11 @@ type agentsState struct {
 	// marketplace. Empty string = all.
 	marketplaceFilter string
 
+	// pluginFilter narrows the Skills sub-tab to skills whose
+	// SourcePlugin matches. Empty string = all. Set when the user
+	// uses "View skills →" from a plugin detail page.
+	pluginFilter string
+
 	// scopeFilter narrows Skills / MCPs by scope (user/project/plugin/remote).
 	scopeFilter agents.Scope
 
@@ -235,9 +240,10 @@ func (a tuiCatalogAdapter) FetchAll(ctx context.Context) []agents.RemoteCatalogR
 	out := make([]agents.RemoteCatalogResult, 0, len(in))
 	for _, r := range in {
 		out = append(out, agents.RemoteCatalogResult{
-			SourceName: r.Source.Name,
-			Plugins:    r.Plugins,
-			Err:        r.Err,
+			SourceName:   r.Source.Name,
+			Plugins:      r.Plugins,
+			Marketplaces: r.Marketplaces,
+			Err:          r.Err,
 		})
 	}
 	return out
@@ -424,6 +430,7 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		case "X":
 			st.providerFilter = ""
 			st.marketplaceFilter = ""
+			st.pluginFilter = ""
 			st.scopeFilter = ""
 			st.transportFilter = ""
 			st.statusFilterValue = ""
@@ -557,24 +564,26 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, nil
 	case "6":
 		st.setSubTab(agentsSubCosts)
-		return true, m.agentsCostsLoadCmd()
+		return true, m.agentsSubTabEnterCmd(agentsSubCosts)
 	case "7":
 		st.setSubTab(agentsSubHealth)
-		return true, m.agentsHealthLoadCmd()
+		return true, m.agentsSubTabEnterCmd(agentsSubHealth)
 	case "tab", "right":
 		// On the rightmost sub-tab, let the global handler advance to
 		// the next parent tab instead of wrapping inside Agents.
 		if st.subTab == agentsSubCount-1 {
 			return false, nil
 		}
-		st.setSubTab((st.subTab + 1) % agentsSubCount)
-		return true, nil
+		next := (st.subTab + 1) % agentsSubCount
+		st.setSubTab(next)
+		return true, m.agentsSubTabEnterCmd(next)
 	case "shift+tab", "left":
 		if st.subTab == 0 {
 			return false, nil
 		}
-		st.setSubTab((st.subTab + agentsSubCount - 1) % agentsSubCount)
-		return true, nil
+		next := (st.subTab + agentsSubCount - 1) % agentsSubCount
+		st.setSubTab(next)
+		return true, m.agentsSubTabEnterCmd(next)
 	case "down", "j":
 		st.cursor++
 		if n := len(m.agentsVisibleRows()); st.cursor >= n && n > 0 {
@@ -751,6 +760,7 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		// Clear every active filter on the current sub-tab.
 		st.providerFilter = ""
 		st.marketplaceFilter = ""
+		st.pluginFilter = ""
 		st.scopeFilter = ""
 		st.transportFilter = ""
 		st.statusFilterValue = ""
@@ -759,6 +769,29 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		st.cursor = 0
 		st.sidebarItems = buildAgentsSidebarItems(st)
 		st.flash = "filters cleared"
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
+	case "i":
+		// Toggle the Installed-only filter on Plugins or Marketplaces
+		// sub-tabs. Quick keyboard shortcut alternative to the sidebar
+		// STATUS section.
+		if st.subTab != agentsSubPlugins && st.subTab != agentsSubMarketplaces {
+			return true, nil
+		}
+		entity := "plugins"
+		if st.subTab == agentsSubMarketplaces {
+			entity = "marketplaces"
+		}
+		if st.statusFilter[st.subTab] == agentsFilterInstalled {
+			st.statusFilter[st.subTab] = agentsFilterAll
+			st.flash = "installed-only filter cleared"
+		} else {
+			st.statusFilter[st.subTab] = agentsFilterInstalled
+			st.statusFilterValue = ""
+			st.flash = "showing installed " + entity + " only"
+		}
+		st.cursor = 0
+		st.sidebarItems = buildAgentsSidebarItems(st)
 		st.flashEnd = time.Now().Add(2 * time.Second)
 		return true, nil
 	case "d":
@@ -941,6 +974,34 @@ func openBrowser(url string) error {
 
 func runtimeGOOS() string { return goos }
 
+// agentsSubTabEnterCmd returns the background loader cmd appropriate
+// for entering a given Agents sub-tab. The Costs and Health sub-tabs
+// have async loaders that previously only fired when the user hit
+// the numeric shortcut (6 / 7); Tab navigation skipped them and left
+// the page showing "press r to scan" — visually indistinguishable
+// from "stuck". This helper makes Tab entry behave the same as the
+// numeric shortcut. Returns nil for sub-tabs with no loader (or when
+// the data is already loaded and isn't stale).
+func (m *Model) agentsSubTabEnterCmd(sub int) tea.Cmd {
+	st := m.agents
+	if st == nil {
+		return nil
+	}
+	switch sub {
+	case agentsSubCosts:
+		if st.costs.loaded || st.costs.loading {
+			return nil
+		}
+		return m.agentsCostsLoadCmd()
+	case agentsSubHealth:
+		if st.healthSub.loaded || st.healthSub.loading {
+			return nil
+		}
+		return m.agentsHealthLoadCmd()
+	}
+	return nil
+}
+
 func (st *agentsState) setSubTab(i int) {
 	if st.subTab != i {
 		// Tab change clears the previous tab's selection set so checks
@@ -1061,9 +1122,11 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		st.launchPlan = v.plan
 		st.launchPrompt = "Launch this command?"
 		return true, nil
-	case agentDrillPluginMsg:
-		// Push a Plugin frame for the currently focused marketplace
-		// plugin row.
+	case agentViewMarketplacePluginsMsg:
+		// Pop the detail page, jump to the Plugins sub-tab, and
+		// pre-filter by the marketplace the user was viewing so the
+		// duplicated "plugins inside this marketplace" body list is
+		// replaced by the canonical Plugins list scoped to it.
 		if len(st.detailStack) == 0 {
 			return true, nil
 		}
@@ -1072,13 +1135,38 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		if !ok || row.marketplace == nil {
 			return true, nil
 		}
-		plugins := m.marketplacePlugins(row.marketplace)
-		if top.bodyCursor < 0 || top.bodyCursor >= len(plugins) {
-			st.flash = "no plugin focused — use ↑/↓ first"
-			st.flashEnd = time.Now().Add(2 * time.Second)
+		mpName := row.marketplace.Name
+		st.detailPage = false
+		st.detailStack = nil
+		st.subTab = agentsSubPlugins
+		st.marketplaceFilter = mpName
+		st.cursor = 0
+		st.sidebarItems = buildAgentsSidebarItems(st)
+		st.flash = "showing plugins from " + mpName
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
+	case agentViewPluginSkillsMsg:
+		// Pop the detail page, jump to the Skills sub-tab, and
+		// pre-filter by the plugin the user was viewing so the body
+		// "Contained skills" preview is replaced by the canonical
+		// Skills list scoped to that plugin.
+		if len(st.detailStack) == 0 {
 			return true, nil
 		}
-		m.agentsPushDetail(agentsSubPlugins, plugins[top.bodyCursor].ID)
+		top := st.detailStack[len(st.detailStack)-1]
+		row, ok := m.resolveDetailRow(top)
+		if !ok || row.plugin == nil {
+			return true, nil
+		}
+		plName := row.plugin.Name
+		st.detailPage = false
+		st.detailStack = nil
+		st.subTab = agentsSubSkills
+		st.pluginFilter = plName
+		st.cursor = 0
+		st.sidebarItems = buildAgentsSidebarItems(st)
+		st.flash = "showing skills from " + plName
+		st.flashEnd = time.Now().Add(2 * time.Second)
 		return true, nil
 	case agentsCostsLoadedMsg:
 		st.costs.loading = false
@@ -1241,6 +1329,7 @@ func (m *Model) agentsVisibleRows() []agentRow {
 	rows = filterAgentRows(rows, q)
 	rows = applyProviderFilter(rows, st.providerFilter)
 	rows = applyMarketplaceFilter(rows, st.subTab, st.marketplaceFilter)
+	rows = applyPluginFilter(rows, st.subTab, st.pluginFilter)
 	rows = applyScopeFilter(rows, st.scopeFilter)
 	rows = applyTransportFilter(rows, st.transportFilter)
 	rows = applyStatusFilter(rows, st.subTab, st.statusFilter[st.subTab])
@@ -1535,7 +1624,19 @@ func (m *Model) renderAgentsView() string {
 		}
 	}
 
-	const maxRows = 25
+	// Budget the table window from actual terminal height so the
+	// bottom of the body isn't silently clipped by the outer view
+	// wrapper. The header / sub-tab strip / filter chips / footer
+	// together consume ~12 rows; everything else is data the user
+	// is here to read. Floor at 6 rows so very small terminals still
+	// show something usable.
+	maxRows := m.height - 12
+	if maxRows > 25 {
+		maxRows = 25
+	}
+	if maxRows < 6 {
+		maxRows = 6
+	}
 	visible, windowStart, displayCursor, hiddenAbove, hiddenBelow := windowAgentRows(rows, st.cursor, maxRows)
 	_ = windowStart
 
@@ -1939,6 +2040,7 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agent
 		cols := computeColumnWidths([]column{
 			{header: "SOURCE", width: 10},
 			{header: "NAME", width: 28},
+			{header: "STATUS", width: 11},
 			{header: "OWNER", width: 14},
 			{header: "PLUGINS", width: 8},
 			{header: "URL", grow: true},
@@ -1946,16 +2048,20 @@ func renderAgentsTable(subTab int, rows []agentRow, cursor int, activeSort agent
 		b.WriteString(renderHeader(cols, sortColumnFor(subTab, activeSort)))
 		for i, r := range rows {
 			mp := r.marketplace
-			owner, url, count := "", "", 0
+			owner, url, count, status := "", "", 0, "available"
 			if mp != nil {
 				owner, url, count = mp.Owner, mp.URL, mp.PluginCount
+				if mp.Installed {
+					status = "installed"
+				}
 			}
 			cells := []string{
 				agentsProviderChip(r.provider),
 				truncAgentRow(r.name, cols[1].width),
-				truncAgentRow(owner, cols[2].width),
+				agentsPluginStatusChip(status),
+				truncAgentRow(owner, cols[3].width),
 				dashOrInt(count),
-				truncAgentRow(url, cols[4].width),
+				truncAgentRow(url, cols[5].width),
 			}
 			b.WriteString(renderRow(cells, cols, rowLead(i, cursor), i == cursor, totalWidth))
 		}
@@ -2361,6 +2467,9 @@ func agentsFilterChips(st *agentsState) string {
 	if st.subTab == agentsSubPlugins && st.marketplaceFilter != "" {
 		chips = append(chips, chipStyle.Foreground(cyberAccent).Render("marketplace:"+st.marketplaceFilter))
 	}
+	if st.subTab == agentsSubSkills && st.pluginFilter != "" {
+		chips = append(chips, chipStyle.Foreground(cyberAccent).Render("plugin:"+st.pluginFilter))
+	}
 	if agentsSupportsFilter(st.subTab) {
 		if f := st.statusFilter[st.subTab]; f != agentsFilterAll {
 			chips = append(chips, chipStyle.Foreground(cyberOK).Render("status:"+filterName(f)))
@@ -2375,7 +2484,7 @@ func agentsFilterChips(st *agentsState) string {
 // agentsSupportsFilter reports whether `f` cycling applies to a sub-tab.
 func agentsSupportsFilter(subTab int) bool {
 	switch subTab {
-	case agentsSubPlugins, agentsSubMCPs:
+	case agentsSubMarketplaces, agentsSubPlugins, agentsSubMCPs:
 		return true
 	}
 	return false
@@ -2436,6 +2545,16 @@ func applyStatusFilter(rows []agentRow, subTab int, f agentsFilter) []agentRow {
 				keep = installed && r.mcp.Enabled
 			case agentsFilterDisabled:
 				keep = installed && !r.mcp.Enabled
+			}
+		case agentsSubMarketplaces:
+			if r.marketplace == nil {
+				continue
+			}
+			switch f {
+			case agentsFilterInstalled:
+				keep = r.marketplace.Installed
+			case agentsFilterCatalog:
+				keep = !r.marketplace.Installed
 			}
 		default:
 			keep = true
@@ -2540,6 +2659,23 @@ func applyMarketplaceFilter(rows []agentRow, subTab int, marketplace string) []a
 	out := make([]agentRow, 0, len(rows))
 	for _, r := range rows {
 		if r.plugin != nil && r.plugin.Marketplace == marketplace {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// applyPluginFilter narrows Skills rows to those whose SourcePlugin
+// matches. Only applies on the Skills sub-tab; a no-op everywhere
+// else. Set when the user clicks "View skills →" from a plugin detail
+// page so the Skills tab opens scoped to the originating plugin.
+func applyPluginFilter(rows []agentRow, subTab int, plugin string) []agentRow {
+	if plugin == "" || subTab != agentsSubSkills {
+		return rows
+	}
+	out := make([]agentRow, 0, len(rows))
+	for _, r := range rows {
+		if r.skill != nil && r.skill.SourcePlugin == plugin {
 			out = append(out, r)
 		}
 	}

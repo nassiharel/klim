@@ -78,7 +78,7 @@ func backgroundSelfUpdateCheck() tea.Cmd {
 		if current == "dev" {
 			return selfUpdateCheckMsg{current: current, devBuild: true, background: true}
 		}
-		if c, ok := loadSelfUpdateCache(); ok && time.Since(c.CheckedAt) < selfUpdateCheckTTL {
+		if c, ok := loadSelfUpdateCache(); ok && time.Since(c.CheckedAt) < selfUpdateCheckTTL && c.CurrentVersion == current {
 			return selfUpdateCheckMsg{
 				current:    c.CurrentVersion,
 				latest:     c.LatestVersion,

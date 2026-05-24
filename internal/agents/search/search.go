@@ -2,7 +2,7 @@
 // tab. Each Provider that wants to participate implements a
 // SessionTexts method returning a flat list of SessionText records;
 // the package indexes them (mtime-keyed cache at
-// ~/.klim/cache/agent-search-index.yaml) and serves substring queries
+// ~/.klim/agents/search-index.yaml) and serves substring queries
 // against the cached lines.
 package search
 

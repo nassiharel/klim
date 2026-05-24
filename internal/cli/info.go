@@ -42,7 +42,7 @@ func init() {
 	// cache to bypass. We deliberately do NOT expose a --refresh
 	// flag: it would have no effect, and accepting one as a no-op
 	// would lie to scripts that pass it expecting a behavior change.
-	infoOutputFmt = addOutputFlag(infoCmd, OutputText, OutputJSON)
+	infoOutputFmt = addOutputFlag(infoCmd, OutputText, OutputJSON, OutputYAML)
 	// Registered in root.go with command group.
 }
 
@@ -170,8 +170,8 @@ func runInfo(cmd *cobra.Command, args []string) error {
 
 	report := buildInfoReport(cmd, t, tools)
 
-	if out == OutputJSON {
-		return printJSON(report)
+	if out == OutputJSON || out == OutputYAML {
+		return printStructured(out, report)
 	}
 	renderInfoText(report, t)
 	return nil

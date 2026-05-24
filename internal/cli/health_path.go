@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -40,7 +39,7 @@ Exit codes:
 }
 
 func init() {
-	healthPathOutput = addOutputFlag(healthPathCmd, OutputText, OutputJSON)
+	healthPathOutput = addOutputFlag(healthPathCmd, OutputText, OutputJSON, OutputYAML)
 	healthPathCmd.Flags().BoolVar(&healthPathRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	doctorCmd.AddCommand(healthPathCmd)
 }
@@ -61,10 +60,8 @@ func runHealthPath(cmd *cobra.Command, _ []string) error {
 
 	report := pathconflict.Analyze(tools)
 
-	if out == OutputJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(report); err != nil {
+	if out == OutputJSON || out == OutputYAML {
+		if err := printStructured(out, report); err != nil {
 			return err
 		}
 		if n := countVersionConflicts(report); n > 0 {

@@ -8,21 +8,35 @@ import (
 	"github.com/nassiharel/klim/internal/paths"
 )
 
+// cacheSchemaVersion bumps whenever the on-disk schema for Cache
+// (or any nested type marshalled into it) changes shape in a way
+// that would lose data when read with the new code. The loader
+// treats a mismatched version as "missing cache" so the caller
+// rescans rather than silently dropping fields whose yaml keys
+// were renamed.
+//
+// History:
+//
+//	1 — original Snapshot layout (yaml.v3 defaults: BinPath -> binpath,
+//	     ProviderStatus -> providerstatus, etc.)
+//	2 — explicit snake_case yaml tags on every Snapshot/sub-field
+//	     for structured-output alignment. Bumping forces a rescan so
+//	     BinPath / ProviderStatus don't read as empty from old files.
+const cacheSchemaVersion = 2
+
 // Cache is the on-disk Snapshot cache. Same pattern as scancache —
 // atomic write through fileutil.
 type Cache struct {
-	// PR #77 review: HostID was previously declared here as a
-	// scancache parity placeholder but never populated or read.
-	// Dropped to avoid stale-schema drift; if multi-host
-	// disambiguation becomes necessary later we can wire it up
-	// alongside the read/write paths.
-	WrittenAt time.Time `yaml:"written_at"`
-	Snapshot  Snapshot  `yaml:"snapshot"`
+	// SchemaVersion is checked on load; older versions trigger a
+	// rescan so renamed yaml keys don't silently drop data.
+	SchemaVersion int       `yaml:"schema_version"`
+	WrittenAt     time.Time `yaml:"written_at"`
+	Snapshot      Snapshot  `yaml:"snapshot"`
 }
 
 // LoadCache reads the on-disk cache. Returns (cache, true, nil) on hit,
-// (zero, false, nil) when the file doesn't exist, (zero, false, err)
-// on parse error.
+// (zero, false, nil) when the file doesn't exist or its schema is
+// outdated, (zero, false, err) on parse error.
 func LoadCache() (Cache, bool, error) {
 	p, err := paths.AgentsCache()
 	if err != nil {
@@ -36,6 +50,12 @@ func LoadCache() (Cache, bool, error) {
 	if !found {
 		return Cache{}, false, nil
 	}
+	if c.SchemaVersion != cacheSchemaVersion {
+		// Old layout — its yaml keys don't match the current
+		// type tags, so trusting it would surface as missing
+		// BinPath / ProviderStatus / etc. Treat as a cold cache.
+		return Cache{}, false, nil
+	}
 	return c, true, nil
 }
 
@@ -46,8 +66,9 @@ func SaveCache(snap Snapshot) error {
 		return err
 	}
 	c := Cache{
-		WrittenAt: time.Now().UTC(),
-		Snapshot:  snap,
+		SchemaVersion: cacheSchemaVersion,
+		WrittenAt:     time.Now().UTC(),
+		Snapshot:      snap,
 	}
 	return fileutil.WriteYAML(p, &c, "# klim agents scan cache — auto-generated\n")
 }

@@ -48,6 +48,9 @@ func (m Model) animationActive() bool {
 	if m.phase != phaseDone {
 		return true
 	}
+	if !m.bootStart.IsZero() && time.Since(m.bootStart) < bootSplashMinDuration {
+		return true
+	}
 	if m.pending > 0 {
 		return true
 	}

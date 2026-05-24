@@ -50,7 +50,7 @@ var marketplaceListCmd = &cobra.Command{
 }
 
 func init() {
-	marketplaceListOutputFmt = addOutputFlag(marketplaceListCmd, OutputText, OutputJSON)
+	marketplaceListOutputFmt = addOutputFlag(marketplaceListCmd, OutputText, OutputJSON, OutputYAML)
 	marketplaceCmd.AddCommand(marketplaceAddCmd)
 	marketplaceCmd.AddCommand(marketplaceRemoveCmd)
 	marketplaceCmd.AddCommand(marketplaceListCmd)
@@ -166,7 +166,7 @@ func runMarketplaceList(cmd *cobra.Command, args []string) error {
 	//   - Text mode prints a stderr warning before falling back.
 	_, pathErr := paths.Config()
 	if pathErr != nil {
-		if out == OutputJSON {
+		if out == OutputJSON || out == OutputYAML {
 			return fmt.Errorf("resolving config path: %w", pathErr)
 		}
 		fmt.Fprintf(os.Stderr, "⚠ Could not resolve config path (%v); showing defaults.\n", pathErr)
@@ -176,7 +176,7 @@ func runMarketplaceList(cmd *cobra.Command, args []string) error {
 	if loadErr != nil {
 		// In JSON mode never fall back to synthetic data — automation has
 		// no way to distinguish defaults from actual config otherwise.
-		if out == OutputJSON {
+		if out == OutputJSON || out == OutputYAML {
 			return fmt.Errorf("loading config: %w", loadErr)
 		}
 		fmt.Fprintf(os.Stderr, "⚠ Could not load config (%v); showing defaults.\n", loadErr)
@@ -188,14 +188,14 @@ func runMarketplaceList(cmd *cobra.Command, args []string) error {
 		primaryURL = config.DefaultMarketplaceURL
 	}
 
-	if out == OutputJSON {
+	if out == OutputJSON || out == OutputYAML {
 		extra := make([]string, 0, len(c.Marketplace.ExtraURLs))
 		for _, u := range c.Marketplace.ExtraURLs {
 			if e := strings.TrimSpace(u); e != "" {
 				extra = append(extra, e)
 			}
 		}
-		return printJSON(marketplaceListReport{Primary: primaryURL, Extra: extra})
+		return printStructured(out, marketplaceListReport{Primary: primaryURL, Extra: extra})
 	}
 
 	fmt.Fprintf(os.Stderr, "Primary:\n  %s\n", primaryURL)

@@ -87,7 +87,7 @@ and update the local cache. Fails if no URL is configured.`,
 func init() {
 	complianceCheckCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Path to policy file (overrides config)")
 	complianceCheckCmd.Flags().StringVar(&complianceURLFlag, "url", "", "Remote policy URL (overrides config)")
-	complianceOutput = addOutputFlag(complianceCheckCmd, OutputText, OutputJSON)
+	complianceOutput = addOutputFlag(complianceCheckCmd, OutputText, OutputJSON, OutputYAML)
 	complianceCheckCmd.Flags().BoolVar(&complianceRefreshFlag, "refresh", false, "Force fresh tool scan")
 	complianceCheckCmd.Flags().BoolVar(&complianceForceRefreshFlag, "force-refresh-policy", false, "Force re-fetch policy from URL")
 	complianceShowCmd.Flags().StringVar(&compliancePolicyFlag, "policy", "", "Path to policy file (overrides config)")
@@ -200,8 +200,8 @@ func runComplianceCheck(cmd *cobra.Command, args []string) error {
 
 	result := compliance.Check(policy, tools, loadVulnSeveritiesForCompliance())
 
-	if out == OutputJSON {
-		if err := printJSON(result); err != nil {
+	if out == OutputJSON || out == OutputYAML {
+		if err := printStructured(out, result); err != nil {
 			return err
 		}
 		if !result.Compliant {

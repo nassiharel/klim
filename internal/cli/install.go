@@ -39,5 +39,5 @@ Examples:
 
 func init() {
 	installFlags = addActionFlags(installCmd)
-	installOutputFmt = addOutputFlag(installCmd, OutputText, OutputJSON)
+	installOutputFmt = addOutputFlag(installCmd, OutputText, OutputJSON, OutputYAML)
 }

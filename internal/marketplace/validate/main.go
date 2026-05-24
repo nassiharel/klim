@@ -87,6 +87,18 @@ func main() {
 		errs = append(errs, validatePackFile(f, packNames, toolNames)...)
 	}
 
+	// --- Validate agent marketplaces ---
+	amFiles, err := filepath.Glob(filepath.Join(*dir, "agent-marketplaces", "*.yaml"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: globbing agent-marketplace files: %v\n", err)
+		os.Exit(1)
+	}
+
+	amNames := make(map[string]string)
+	for _, f := range amFiles {
+		errs = append(errs, validateAgentMarketplaceFile(f, amNames)...)
+	}
+
 	// --- Report ---
 	if len(errs) > 0 {
 		fmt.Fprintf(os.Stderr, "Marketplace validation failed with %d error(s):\n\n", len(errs))
@@ -97,8 +109,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Marketplace validated: %d tools, %d packs. All checks passed.\n",
-		len(toolFiles), len(packFiles))
+	fmt.Printf("Marketplace validated: %d tools, %d packs, %d agent marketplaces. All checks passed.\n",
+		len(toolFiles), len(packFiles), len(amFiles))
 }
 
 func loadCategories(path string) (map[string]bool, error) {
@@ -284,6 +296,60 @@ func validatePackFile(path string, seenPacks, toolNames map[string]string) []str
 			errs = append(errs, fmt.Sprintf("%s: duplicate pack name %q (also in %s)", rel, pack.Name, filepath.Base(prev)))
 		} else {
 			seenPacks[pack.Name] = path
+		}
+	}
+
+	return errs
+}
+
+var validProviders = map[string]bool{
+	"claude-code":  true,
+	"copilot-cli":  true,
+	"mcp-registry": true,
+}
+
+func validateAgentMarketplaceFile(path string, seen map[string]string) []string {
+	var errs []string
+	rel := filepath.Base(path)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []string{rel + ": cannot read file: " + err.Error()}
+	}
+
+	var am registry.AgentMarketplaceDef
+	if err := yaml.Unmarshal(data, &am); err != nil {
+		return []string{rel + ": invalid YAML: " + err.Error()}
+	}
+
+	var strict registry.AgentMarketplaceDef
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&strict); err != nil {
+		errs = append(errs, rel+": unknown field(s): "+err.Error())
+	}
+
+	if am.Name == "" {
+		errs = append(errs, rel+": missing required field 'name'")
+	}
+	if len(am.Providers) == 0 {
+		errs = append(errs, rel+": missing required field 'providers' (must have at least one)")
+	}
+	if am.InstallSpec == "" && am.URL == "" {
+		errs = append(errs, rel+": at least one of 'install_spec' or 'url' is required")
+	}
+
+	for _, p := range am.Providers {
+		if !validProviders[p] {
+			errs = append(errs, fmt.Sprintf("%s: unknown provider %q (valid: %s)", rel, p, strings.Join(sortedKeys(validProviders), ", ")))
+		}
+	}
+
+	if am.Name != "" {
+		if prev, exists := seen[am.Name]; exists {
+			errs = append(errs, fmt.Sprintf("%s: duplicate agent marketplace name %q (also in %s)", rel, am.Name, filepath.Base(prev)))
+		} else {
+			seen[am.Name] = path
 		}
 	}
 

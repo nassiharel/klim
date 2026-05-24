@@ -1,0 +1,9 @@
+id: awesome-copilot
+name: awesome-copilot
+display_name: Awesome Copilot
+description: Community-curated Copilot plugins and skills
+providers:
+  - copilot-cli
+owner: github
+url: https://github.com/github/awesome-copilot
+install_spec: github/awesome-copilot
