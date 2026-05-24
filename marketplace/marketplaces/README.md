@@ -14,7 +14,7 @@ re-building.
 ## Schema
 
 ```yaml
-id: openai-codex-plugin-cc            # required, kebab-case
+id: openai-codex-plugin-cc            # optional, kebab-case; defaults to name
 name: openai-codex-plugin-cc          # required, used for de-dup
 display_name: OpenAI Codex Plugin     # optional, shown in detail page
 description: |                        # optional
@@ -24,7 +24,7 @@ providers:                            # required, ≥1
   - copilot-cli
 owner: openai                         # optional
 url: https://github.com/openai/codex-plugin-cc
-install_spec: openai/codex-plugin-cc  # required for "Add to library"
+install_spec: openai/codex-plugin-cc  # at least one of install_spec or url required
 source: catalog-claude                # optional; provider-derived if omitted
 ```
 

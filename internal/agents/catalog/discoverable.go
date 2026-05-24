@@ -85,10 +85,21 @@ func loadDiscoverable() ([]agents.Marketplace, error) {
 			errs = append(errs, f.Name()+": missing required field 'providers'")
 			continue
 		}
+		if e.InstallSpec == "" && e.URL == "" {
+			errs = append(errs, f.Name()+": at least one of 'install_spec' or 'url' is required")
+			continue
+		}
 		for _, pid := range e.Providers {
 			id := e.ID
 			if id == "" {
 				id = e.Name
+			}
+			// When a single YAML entry lists multiple providers,
+			// each expansion gets a provider-qualified ID so that
+			// resolveDetailRow (which keys by ID alone) can
+			// unambiguously identify each Marketplace record.
+			if len(e.Providers) > 1 {
+				id = id + ":" + string(pid)
 			}
 			src := e.Source
 			if src == "" {
