@@ -116,6 +116,13 @@ func windowWithIndicators(total, cursor, dataRows int) (start, hiddenAbove, hidd
 	if total <= dataRows {
 		return 0, 0, 0, total
 	}
+	// When the row budget is too small for both data and indicators,
+	// suppress indicators entirely so the data rows aren't squeezed
+	// out of the viewport.
+	if dataRows < 3 {
+		s, _, _, _ := windowRange(total, cursor, dataRows)
+		return s, 0, 0, dataRows
+	}
 	// Iterate once: at most 2 corrections (start with 0 indicators
 	// reserved, see which are needed, recompute). The fixed point is
 	// reached in two passes because reducing the window only ever

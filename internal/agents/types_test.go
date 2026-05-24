@@ -199,18 +199,30 @@ func TestScan_MergesDiscoverableMarketplaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadAll: %v", err)
 	}
-	got := map[string]bool{}
+
+	// Build a per-name list to detect true duplicates and verify
+	// Installed flags without order-dependent map overwrites.
+	type entry struct {
+		Name      string
+		Installed bool
+	}
+	byName := map[string][]entry{}
 	for _, m := range snap.Marketplaces {
-		if existing, dup := got[m.Name]; dup && existing == m.Installed {
-			t.Errorf("duplicate marketplace %q", m.Name)
-		}
-		got[m.Name] = m.Installed
+		byName[m.Name] = append(byName[m.Name], entry{m.Name, m.Installed})
 	}
-	if !got["mp-installed"] {
-		t.Errorf("mp-installed should have Installed=true; got %v", got)
+
+	// mp-installed: exactly one entry, Installed=true.
+	if entries := byName["mp-installed"]; len(entries) != 1 {
+		t.Errorf("mp-installed: expected 1 entry, got %d: %v", len(entries), entries)
+	} else if !entries[0].Installed {
+		t.Errorf("mp-installed should have Installed=true")
 	}
-	if got["mp-available"] {
-		t.Errorf("mp-available should have Installed=false; got %v", got)
+
+	// mp-available: exactly one entry, Installed=false.
+	if entries := byName["mp-available"]; len(entries) != 1 {
+		t.Errorf("mp-available: expected 1 entry, got %d: %v", len(entries), entries)
+	} else if entries[0].Installed {
+		t.Errorf("mp-available should have Installed=false")
 	}
 }
 
