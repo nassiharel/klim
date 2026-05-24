@@ -72,7 +72,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	if out == OutputJSON || out == OutputYAML {
-		return printSearchJSON(out, query, results, totalMatches)
+		return printSearchStructured(out, query, results, totalMatches)
 	}
 
 	if len(results) == 0 {
@@ -166,7 +166,7 @@ type searchJSONOutput struct {
 	Results      []searchJSONResult `json:"results"`
 }
 
-func printSearchJSON(format OutputFormat, query string, results []search.Result, totalMatches int) error {
+func printSearchStructured(format OutputFormat, query string, results []search.Result, totalMatches int) error {
 	out := searchJSONOutput{
 		Query:        query,
 		TotalMatches: totalMatches,

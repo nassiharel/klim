@@ -7,10 +7,10 @@ import (
 )
 
 // TestLoadDiscoverable_AllFilesParse fails loudly when any embedded
-// YAML file in internal/agents/catalog/discoverable/ is malformed or
-// missing a required field. This is the entry point that ships with
-// klim, so a typo here would silently drop a marketplace from the
-// Marketplaces sub-tab.
+// YAML file in marketplace/marketplaces/ is malformed or missing a
+// required field. This is the entry point that ships with klim, so a
+// typo here would silently drop a marketplace from the Marketplaces
+// sub-tab.
 func TestLoadDiscoverable_AllFilesParse(t *testing.T) {
 	out, err := loadDiscoverable()
 	if err != nil {

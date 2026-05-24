@@ -180,7 +180,7 @@ func (m *Model) renderAgentsCostsView() string {
 			ranges = append(ranges, dimVersion.Render(" "+label+" "))
 		}
 	}
-	b.WriteString("  " + strings.Join(ranges, "  ") + "  " + dimVersion.Render("[ / ] switch · r refresh") + "\n\n")
+	b.WriteString("  " + strings.Join(ranges, "  ") + "  " + dimVersion.Render("[ / ] or , . switch · r refresh") + "\n\n")
 
 	// Totals + sparkline.
 	totalLine := fmt.Sprintf("%s tokens   in %s · out %s",

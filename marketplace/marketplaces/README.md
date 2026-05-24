@@ -6,8 +6,10 @@ sub-tab. They appear as `Installed=false` entries the user can install
 via the detail page's **Add to library** action.
 
 Files in this directory are embedded into the klim binary at build
-time (`internal/agents/catalog/discoverable.go` uses `//go:embed`),
-so adding or changing an entry requires re-building.
+time (`marketplace/marketplaces/embed.go` uses `//go:embed` and the
+catalog loader in `internal/agents/catalog/discoverable.go` reads
+from that embedded FS), so adding or changing an entry requires
+re-building.
 
 ## Schema
 

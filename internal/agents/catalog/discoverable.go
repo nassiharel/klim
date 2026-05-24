@@ -45,10 +45,10 @@ func sourceForProvider(p agents.ProviderID) agents.Source {
 	}
 }
 
-// loadDiscoverable parses every `discoverable/*.yaml` file embedded in
-// the binary and expands each entry into one agents.Marketplace per
-// provider listed under `providers:`. Returns the merged list sorted
-// by Name for deterministic ordering.
+// loadDiscoverable parses every `marketplace/marketplaces/*.yaml` file
+// embedded in the binary (via marketplaces.FS) and expands each entry
+// into one agents.Marketplace per provider listed under `providers:`.
+// Returns the merged list sorted by Name for deterministic ordering.
 //
 // Errors are aggregated and returned to callers so unit tests can fail
 // loudly when a file is malformed; production callers
