@@ -132,6 +132,7 @@ func (p *Provider) Marketplaces(ctx context.Context) ([]agents.Marketplace, erro
 			Owner:       "github",
 			URL:         "https://github.com/github/copilot-plugins",
 			Source:      agents.SourceCatalogCopilot,
+			Installed:   true,
 		},
 		{
 			ID:          "awesome-copilot",
@@ -142,6 +143,7 @@ func (p *Provider) Marketplaces(ctx context.Context) ([]agents.Marketplace, erro
 			Owner:       "github",
 			URL:         "https://github.com/github/awesome-copilot",
 			Source:      agents.SourceCatalogCopilot,
+			Installed:   true,
 		},
 	}
 	root := filepath.Join(p.copilotHome(), "installed-plugins")
@@ -153,10 +155,11 @@ func (p *Provider) Marketplaces(ctx context.Context) ([]agents.Marketplace, erro
 				continue
 			}
 			ms = append(ms, agents.Marketplace{
-				ID:       e.Name(),
-				Name:     e.Name(),
-				Provider: p.ID(),
-				Source:   agents.SourceLocalCopilot,
+				ID:        e.Name(),
+				Name:      e.Name(),
+				Provider:  p.ID(),
+				Source:    agents.SourceLocalCopilot,
+				Installed: true,
 			})
 		}
 	}

@@ -118,12 +118,18 @@ func (m Model) renderPacksList() string {
 	if visibleRows < 3 {
 		visibleRows = 3
 	}
-	start := 0
-	if m.cursor >= visibleRows {
-		start = m.cursor - visibleRows + 1
+	// Window the visible slice around the cursor (agents-tab style).
+	// windowWithIndicators reserves only the indicator rows that will
+	// actually render — at the top/bottom of the list one extra pack
+	// is shown instead of wasting a row on an unused indicator slot.
+	total := len(packOrder)
+	start, hiddenAbove, hiddenBelow, windowSize := windowWithIndicators(total, m.cursor, visibleRows)
+
+	if hiddenAbove > 0 {
+		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)) + "\n")
 	}
 
-	for vi := start; vi < len(packOrder) && vi < start+visibleRows; vi++ {
+	for vi := start; vi < total && vi < start+windowSize; vi++ {
 		pi := packOrder[vi]
 		pack := m.packs[pi]
 		selected := vi == m.cursor
@@ -166,8 +172,21 @@ func (m Model) renderPacksList() string {
 		b.WriteString(line + "\n")
 	}
 
+	if hiddenBelow > 0 {
+		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)) + "\n")
+	}
+
 	// Pad remaining rows.
-	rendered := max(min(len(m.packs)-start, visibleRows), 0)
+	rendered := windowSize
+	if total < windowSize {
+		rendered = total
+	}
+	if hiddenAbove > 0 {
+		rendered++
+	}
+	if hiddenBelow > 0 {
+		rendered++
+	}
 	for range max(visibleRows-rendered, 0) {
 		b.WriteString("\n")
 	}

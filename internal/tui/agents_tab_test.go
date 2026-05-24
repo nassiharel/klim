@@ -94,13 +94,73 @@ func TestApplyStatusFilter_MCPs(t *testing.T) {
 	}
 }
 
+func TestApplyStatusFilter_Marketplaces(t *testing.T) {
+	rows := []agentRow{
+		{name: "registered", marketplace: &agents.Marketplace{Installed: true}},
+		{name: "discoverable", marketplace: &agents.Marketplace{Installed: false}},
+	}
+	inst := applyStatusFilter(rows, agentsSubMarketplaces, agentsFilterInstalled)
+	if len(inst) != 1 || inst[0].name != "registered" {
+		t.Errorf("installed marketplaces: %+v", inst)
+	}
+	avail := applyStatusFilter(rows, agentsSubMarketplaces, agentsFilterCatalog)
+	if len(avail) != 1 || avail[0].name != "discoverable" {
+		t.Errorf("available marketplaces: %+v", avail)
+	}
+}
+
+func TestMarketplaceActions_AvailableSurfacesAddToLibrary(t *testing.T) {
+	m := detailTestModel()
+	mp := &agents.Marketplace{
+		ID: "openai-codex-plugin-cc", Name: "openai-codex-plugin-cc",
+		Provider:    agents.ProviderClaudeCode,
+		URL:         "https://github.com/openai/codex-plugin-cc",
+		InstallSpec: "openai/codex-plugin-cc",
+		Installed:   false,
+	}
+	row := agentRow{marketplace: mp, provider: mp.Provider}
+	actions := m.actionsForMarketplace(agentDetailFrame{}, row)
+	if len(actions) == 0 {
+		t.Fatal("expected actions for available marketplace")
+	}
+	if actions[0].label != "Add to library" {
+		t.Errorf("primary action = %q, want 'Add to library'", actions[0].label)
+	}
+	if !actions[0].highlight {
+		t.Error("'Add to library' should be highlighted")
+	}
+	if actions[0].disabled {
+		t.Errorf("'Add to library' should be enabled (spec recorded); reason: %q", actions[0].reason)
+	}
+	for _, a := range actions {
+		if a.label == "Remove" {
+			t.Error("Remove action should be hidden for available marketplaces")
+		}
+		if a.label == "View all plugins →" {
+			t.Error("View-all-plugins should be hidden for available marketplaces")
+		}
+	}
+}
+
+func TestMarketplaceActions_AvailableDisablesAddWhenNoSpec(t *testing.T) {
+	m := detailTestModel()
+	mp := &agents.Marketplace{Name: "x", Provider: agents.ProviderClaudeCode, Installed: false}
+	actions := m.actionsForMarketplace(agentDetailFrame{}, agentRow{marketplace: mp, provider: mp.Provider})
+	if len(actions) == 0 {
+		t.Fatal("expected actions")
+	}
+	if actions[0].label != "Add to library" || !actions[0].disabled {
+		t.Errorf("Add to library should be disabled without spec; got %+v", actions[0])
+	}
+}
+
 func TestAgentsSupportsFilter(t *testing.T) {
-	for _, sub := range []int{agentsSubPlugins, agentsSubMCPs} {
+	for _, sub := range []int{agentsSubMarketplaces, agentsSubPlugins, agentsSubMCPs} {
 		if !agentsSupportsFilter(sub) {
 			t.Errorf("sub %d should support filter", sub)
 		}
 	}
-	for _, sub := range []int{agentsSubMarketplaces, agentsSubSkills, agentsSubSessions} {
+	for _, sub := range []int{agentsSubSkills, agentsSubSessions} {
 		if agentsSupportsFilter(sub) {
 			t.Errorf("sub %d should NOT support filter", sub)
 		}
@@ -383,7 +443,7 @@ func detailTestModel() Model {
 	m.agents = newAgentsState()
 	m.agents.snapshot = &agents.Snapshot{
 		Marketplaces: []agents.Marketplace{
-			{ID: "mp1", Name: "mp1", Provider: agents.ProviderCopilotCLI, URL: "https://example.test", Source: agents.SourceLocalCopilot},
+			{ID: "mp1", Name: "mp1", Provider: agents.ProviderCopilotCLI, URL: "https://example.test", Source: agents.SourceLocalCopilot, Installed: true},
 		},
 		Plugins: []agents.Plugin{
 			{ID: "pl1", Name: "pl1", Provider: agents.ProviderCopilotCLI, Marketplace: "mp1", Installed: true, Enabled: true, Version: "1.0.0"},
@@ -469,14 +529,142 @@ func TestMarketplaceDetailListsPlugins(t *testing.T) {
 	m.agents.cursor = 0
 	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
 	out := m.renderAgentsDetailPage()
-	for _, want := range []string{"pl1", "pl2", "Plugins"} {
+	// Body should show the Plugins section header + count, plus a
+	// hint to use the "View all plugins →" action — but it must NOT
+	// embed the per-plugin list (that lives in the Plugins tab).
+	for _, want := range []string{"Plugins", "(2)", "View all plugins"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected detail page to mention %q; output:\n%s", want, out)
 		}
 	}
-	// Body should also include count "(2)".
-	if !strings.Contains(out, "(2)") {
-		t.Errorf("expected '(2)' plugin count in body")
+	for _, unwanted := range []string{"pl1", "pl2"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("plugin name %q should NOT appear in marketplace body; output:\n%s", unwanted, out)
+		}
+	}
+}
+
+func TestMarketplaceViewAllPluginsAction(t *testing.T) {
+	m := detailTestModel()
+	m.agents.subTab = agentsSubMarketplaces
+	m.agents.cursor = 0
+	// Open the marketplace detail page.
+	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
+	if !m.agents.detailPage {
+		t.Fatal("expected detailPage=true after enter on marketplace row")
+	}
+
+	// "View all plugins →" is the first action; pressing enter should
+	// dispatch agentViewMarketplacePluginsMsg.
+	_, cmd := m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
+	if cmd == nil {
+		t.Fatal("expected cmd from View all plugins action")
+	}
+	msg := cmd()
+	if _, ok := msg.(agentViewMarketplacePluginsMsg); !ok {
+		t.Fatalf("expected agentViewMarketplacePluginsMsg, got %T", msg)
+	}
+
+	// Feed the message back into the agents message router and verify
+	// it navigates to the Plugins sub-tab with the marketplace filter.
+	handled, _ := m.handleAgentsMsg(msg)
+	if !handled {
+		t.Fatal("agentViewMarketplacePluginsMsg should be handled")
+	}
+	if m.agents.detailPage {
+		t.Error("expected detailPage=false after View all plugins")
+	}
+	if m.agents.subTab != agentsSubPlugins {
+		t.Errorf("subTab = %d, want agentsSubPlugins (%d)", m.agents.subTab, agentsSubPlugins)
+	}
+	if m.agents.marketplaceFilter != "mp1" {
+		t.Errorf("marketplaceFilter = %q, want mp1", m.agents.marketplaceFilter)
+	}
+}
+
+func TestPluginViewSkillsAction(t *testing.T) {
+	m := detailTestModel()
+	// Add a skill that belongs to pl1 so View skills is enabled.
+	m.agents.snapshot.Skills = append(m.agents.snapshot.Skills, agents.Skill{
+		ID: "sk2", Name: "sk2", Provider: agents.ProviderCopilotCLI,
+		Scope: agents.ScopePlugin, SourcePlugin: "pl1",
+	})
+	m.agents.subTab = agentsSubPlugins
+	m.agents.cursor = 0 // pl1 (installed)
+	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
+	if !m.agents.detailPage {
+		t.Fatal("expected detailPage=true after enter")
+	}
+
+	// Plugin actions for an installed plugin: [Install (disabled),
+	// Update, View skills →, Uninstall, ...]. Initial focus is on
+	// the first action (Install). Move Right twice to land on
+	// View skills →.
+	_, _ = m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyRight, Text: "right"}))
+	_, _ = m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyRight, Text: "right"}))
+	if m.agents.detailStack[0].actionIdx != 2 {
+		t.Fatalf("actionIdx = %d, want 2 (View skills)", m.agents.detailStack[0].actionIdx)
+	}
+
+	_, cmd := m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
+	if cmd == nil {
+		t.Fatal("expected cmd from View skills action")
+	}
+	msg := cmd()
+	if _, ok := msg.(agentViewPluginSkillsMsg); !ok {
+		t.Fatalf("expected agentViewPluginSkillsMsg, got %T", msg)
+	}
+
+	handled, _ := m.handleAgentsMsg(msg)
+	if !handled {
+		t.Fatal("agentViewPluginSkillsMsg should be handled")
+	}
+	if m.agents.detailPage {
+		t.Error("expected detailPage=false")
+	}
+	if m.agents.subTab != agentsSubSkills {
+		t.Errorf("subTab = %d, want agentsSubSkills (%d)", m.agents.subTab, agentsSubSkills)
+	}
+	if m.agents.pluginFilter != "pl1" {
+		t.Errorf("pluginFilter = %q, want pl1", m.agents.pluginFilter)
+	}
+}
+
+func TestInstalledHotkeyTogglesPluginsFilter(t *testing.T) {
+	m := detailTestModel()
+	m.agents.subTab = agentsSubPlugins
+	if m.agents.statusFilter[agentsSubPlugins] != agentsFilterAll {
+		t.Fatalf("precondition: statusFilter = %v, want All", m.agents.statusFilter[agentsSubPlugins])
+	}
+
+	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: 'i', Text: "i"}))
+	if m.agents.statusFilter[agentsSubPlugins] != agentsFilterInstalled {
+		t.Errorf("after first toggle: filter = %v, want Installed", m.agents.statusFilter[agentsSubPlugins])
+	}
+
+	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: 'i', Text: "i"}))
+	if m.agents.statusFilter[agentsSubPlugins] != agentsFilterAll {
+		t.Errorf("after second toggle: filter = %v, want All", m.agents.statusFilter[agentsSubPlugins])
+	}
+}
+
+func TestApplyPluginFilter_OnlySkillsSubTab(t *testing.T) {
+	rows := []agentRow{
+		{skill: &agents.Skill{Name: "a", SourcePlugin: "pl1"}},
+		{skill: &agents.Skill{Name: "b", SourcePlugin: "pl2"}},
+		{skill: &agents.Skill{Name: "c", SourcePlugin: ""}},
+	}
+	out := applyPluginFilter(rows, agentsSubSkills, "pl1")
+	if len(out) != 1 || out[0].skill.Name != "a" {
+		t.Errorf("Skills filter: got %+v, want [a]", out)
+	}
+	// No-op on other subtabs.
+	if got := applyPluginFilter(rows, agentsSubPlugins, "pl1"); len(got) != 3 {
+		t.Errorf("non-Skills subtab should be a no-op: got %d", len(got))
+	}
+	// Empty filter is a no-op.
+	if got := applyPluginFilter(rows, agentsSubSkills, ""); len(got) != 3 {
+		t.Errorf("empty filter should be a no-op: got %d", len(got))
 	}
 }
 

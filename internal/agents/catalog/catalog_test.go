@@ -53,10 +53,17 @@ func TestFetcher_FetchAll_Success(t *testing.T) {
 	}
 
 	results := f.FetchAll(context.Background())
-	if len(results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(results))
+	// FetchAll always prepends a synthetic discoverable-marketplaces
+	// result before the per-source fetches. In test environments the
+	// catalog cache may not exist, so the discoverable list can be
+	// empty — we only verify the entry is present with the right name.
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results (discoverable + source), got %d", len(results))
 	}
-	r := results[0]
+	if results[0].Source.Name != "discoverable-marketplaces" {
+		t.Errorf("first result = %q, want discoverable-marketplaces", results[0].Source.Name)
+	}
+	r := results[1]
 	if r.Err != nil {
 		t.Fatalf("unexpected err: %v", r.Err)
 	}
@@ -109,10 +116,10 @@ func TestFetcher_FetchAll_HTTPError_NoCacheFallback(t *testing.T) {
 	}
 
 	results := f.FetchAll(context.Background())
-	if len(results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(results))
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results (discoverable + source), got %d", len(results))
 	}
-	r := results[0]
+	r := results[1]
 	if r.Err == nil {
 		t.Error("expected an error from a 500")
 	}

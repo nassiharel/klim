@@ -157,19 +157,6 @@ func (m *Model) agentsPopDetail() tea.Cmd {
 	return nil
 }
 
-// agentsPushDetail pushes a new frame onto the navigation stack. Used
-// when the user drills from a marketplace into one of its plugins.
-func (m *Model) agentsPushDetail(subTab int, entityID string) {
-	st := m.agents
-	if st == nil {
-		return
-	}
-	st.detailStack = append(st.detailStack, agentDetailFrame{
-		subTab:   subTab,
-		entityID: entityID,
-	})
-}
-
 // resolveDetailRow looks up the entity referenced by the given frame
 // in the current snapshot. Returns (zero, false) when no longer present.
 func (m *Model) resolveDetailRow(frame agentDetailFrame) (agentRow, bool) {
@@ -248,7 +235,10 @@ func dimVersionDetailHint(above, below int) string {
 func detailBodyCursorLen(m *Model, frame agentDetailFrame, row agentRow) (int, bool) {
 	switch {
 	case frame.subTab == agentsSubMarketplaces && row.marketplace != nil:
-		return m.marketplacePluginCount(row.marketplace), true
+		// Marketplace body no longer renders a plugin list — use
+		// "View all plugins →" to open the Plugins tab filtered to
+		// this marketplace.
+		return 0, false
 	case row.plugin != nil:
 		// Contained-skills list (snapshot lookup mirrors renderPluginBody).
 		st := m.agents
@@ -557,54 +547,25 @@ func renderAgentDetailBody(m *Model, frame agentDetailFrame, row agentRow) strin
 }
 
 func renderMarketplaceBody(m *Model, frame agentDetailFrame, mp *agents.Marketplace) string {
-	plugins := m.marketplacePlugins(mp)
+	count := m.marketplacePluginCount(mp)
 	header := lipgloss.NewStyle().Bold(true).Foreground(cyberInfo).Render("Plugins")
 	var b strings.Builder
-	fmt.Fprintf(&b, "  %s  %s\n", header, dimVersion.Render(fmt.Sprintf("(%d)", len(plugins))))
-	if len(plugins) == 0 {
+	fmt.Fprintf(&b, "  %s  %s\n", header, dimVersion.Render(fmt.Sprintf("(%d)", count)))
+	if count == 0 {
 		b.WriteString("  " + dimVersion.Render("none discovered in the current snapshot") + "\n")
 		return b.String()
 	}
-	start, end := windowDetailList(m.height, len(plugins), frame.bodyCursor)
-	if start > 0 {
-		b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↑ %d above", start)) + "\n")
-	}
-	for i := start; i < end; i++ {
-		p := plugins[i]
-		marker := "    "
-		if i == frame.bodyCursor {
-			marker = "  ▸ "
-		}
-		status := "available"
-		switch {
-		case p.Installed && p.Enabled:
-			status = "installed"
-		case p.Installed:
-			status = "disabled"
-		}
-		line := fmt.Sprintf("%s%s  %s  %s",
-			marker,
-			lipgloss.NewStyle().Width(28).Render(truncAgentRow(p.Name, 28)),
-			lipgloss.NewStyle().Width(10).Render(truncAgentRow(p.Version, 10)),
-			truncAgentRow(p.Description, 64),
-		)
-		if i == frame.bodyCursor {
-			line = cyberSelectedRowStyle.Render(line)
-		}
-		b.WriteString(line + "  " + dimVersion.Render(status) + "\n")
-	}
-	if end < len(plugins) {
-		b.WriteString("    " + dimVersion.Render(fmt.Sprintf("↓ %d below", len(plugins)-end)) + "\n")
-	}
-	b.WriteString("  " + dimVersion.Render("↑/↓ pick · Enter (with action 'Open plugin →') drills in") + "\n")
+	b.WriteString("  " + dimVersion.Render("Press Enter on 'View all plugins →' to open the Plugins tab filtered to this marketplace.") + "\n")
 	return b.String()
 }
 
 // windowDetailList returns a [start, end) range over a body list so
 // the visible slice fits inside a detail page on a terminal of the
-// given total height. Pass the body cursor for cursor-following
-// scroll; if the list is short enough to fit entirely, [0, n) is
-// returned and start/end indicators are suppressed by the caller.
+// given total height. The cursor is centered in the window (the same
+// scroll style used by the Agents tab table) so the user can always
+// see context above and below the highlighted row. If the list is
+// short enough to fit entirely, [0, n) is returned and start/end
+// indicators are suppressed by the caller.
 //
 // Budget rationale: the detail page header section (title bar +
 // breadcrumb + title row + blank + 3-6 metadata rows + action bar
@@ -625,14 +586,20 @@ func windowDetailList(termHeight, total, cursor int) (start, end int) {
 	if cursor < 0 {
 		cursor = 0
 	}
-	if cursor >= maxRows {
-		start = cursor - maxRows + 1
+	if cursor >= total {
+		cursor = total - 1
+	}
+	// Center the cursor in the window when possible.
+	start = cursor - maxRows/2
+	if start < 0 {
+		start = 0
 	}
 	end = start + maxRows
 	if end > total {
 		end = total
-		if end-maxRows >= 0 {
-			start = end - maxRows
+		start = end - maxRows
+		if start < 0 {
+			start = 0
 		}
 	}
 	return start, end

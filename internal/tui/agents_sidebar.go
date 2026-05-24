@@ -121,10 +121,15 @@ func appendSections(items []agentSidebarItem, sections ...[]agentSidebarItem) []
 }
 
 func statusSectionMarketplaces(rows []agentRow) []agentSidebarItem {
-	var local, builtin int
+	var installed, available, local, builtin int
 	for _, r := range rows {
 		if r.marketplace == nil {
 			continue
+		}
+		if r.marketplace.Installed {
+			installed++
+		} else {
+			available++
 		}
 		switch r.marketplace.Source {
 		case agents.SourceCatalogClaude, agents.SourceCatalogMCP, agents.SourceCatalogCopilot:
@@ -136,6 +141,8 @@ func statusSectionMarketplaces(rows []agentRow) []agentSidebarItem {
 	return []agentSidebarItem{
 		{label: "STATUS", isHeader: true},
 		{label: fmt.Sprintf("All (%d)", len(rows)), section: "status", value: "all", count: len(rows)},
+		{label: fmt.Sprintf("Installed (%d)", installed), section: "status", value: "installed", count: installed},
+		{label: fmt.Sprintf("Available (%d)", available), section: "status", value: "available", count: available},
 		{label: fmt.Sprintf("Built-in (%d)", builtin), section: "status", value: "builtin", count: builtin},
 		{label: fmt.Sprintf("Local (%d)", local), section: "status", value: "local", count: local},
 	}

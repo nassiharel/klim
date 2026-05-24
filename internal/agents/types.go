@@ -103,9 +103,17 @@ type Marketplace struct {
 	Provider    ProviderID `yaml:"provider"`
 	URL         string     `yaml:"url,omitempty"`
 	Owner       string     `yaml:"owner,omitempty"`
-	PluginCount int        `yaml:"plugin_count,omitempty"`
-	LastSynced  time.Time  `yaml:"last_synced,omitempty"`
-	Source      Source     `yaml:"source"`
+	// InstallSpec is the argument to pass to the provider's
+	// AddMarketplace verb (e.g. `owner/repo`, an https URL, or a
+	// local path). For installed marketplaces it may be empty.
+	InstallSpec string    `yaml:"install_spec,omitempty"`
+	PluginCount int       `yaml:"plugin_count,omitempty"`
+	LastSynced  time.Time `yaml:"last_synced,omitempty"`
+	Source      Source    `yaml:"source"`
+	// Installed reports whether this marketplace is currently
+	// registered with the provider (true) or is a discoverable
+	// catalog entry the user could add (false).
+	Installed bool `yaml:"installed"`
 }
 
 // Plugin is an installable bundle that may contain skills, MCP servers,

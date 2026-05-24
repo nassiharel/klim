@@ -34,9 +34,10 @@ type RemoteCatalog interface {
 // RemoteCatalogResult is one source's contribution to the snapshot.
 // Errors are non-fatal — a partial result still flows through.
 type RemoteCatalogResult struct {
-	SourceName string
-	Plugins    []Plugin
-	Err        error
+	SourceName   string
+	Plugins      []Plugin
+	Marketplaces []Marketplace
+	Err          error
 }
 
 // LoadOpts configures a Service.LoadAll call.
@@ -162,11 +163,21 @@ func (s *Service) scan(ctx context.Context) (*Snapshot, error) {
 	// Merge in the remote catalog (online marketplaces). De-duplicate
 	// against the locally-installed plugin list — when a plugin already
 	// shows up as installed, we never want a phantom "available" copy
-	// of the same plugin to push it down the list.
+	// of the same plugin to push it down the list. Marketplaces are
+	// deduped case-insensitively by Provider+Name; catalog entries
+	// already present in the snapshot (registered with the provider)
+	// are skipped so the canonical "installed" copy wins.
 	if s.RemoteCatalog != nil {
 		installed := make(map[string]bool, len(snap.Plugins))
 		for _, p := range snap.Plugins {
 			installed[p.Provider.String()+"/"+p.Name] = true
+		}
+		mpKey := func(provider ProviderID, name string) string {
+			return string(provider) + "/" + strings.ToLower(name)
+		}
+		seenMP := make(map[string]bool, len(snap.Marketplaces))
+		for _, m := range snap.Marketplaces {
+			seenMP[mpKey(m.Provider, m.Name)] = true
 		}
 		for _, rc := range s.RemoteCatalog.FetchAll(ctx) {
 			for _, p := range rc.Plugins {
@@ -175,6 +186,15 @@ func (s *Service) scan(ctx context.Context) (*Snapshot, error) {
 					continue
 				}
 				snap.Plugins = append(snap.Plugins, p)
+			}
+			for _, m := range rc.Marketplaces {
+				k := mpKey(m.Provider, m.Name)
+				if seenMP[k] {
+					continue
+				}
+				seenMP[k] = true
+				m.Installed = false
+				snap.Marketplaces = append(snap.Marketplaces, m)
 			}
 		}
 	}

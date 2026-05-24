@@ -150,6 +150,118 @@ func TestProvider_Plugins(t *testing.T) {
 	}
 }
 
+func TestProvider_Marketplaces_KnownAndRealLayout(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	if err := os.MkdirAll(filepath.Join(home, ".claude", "plugins"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Real Claude layout: marketplace clone under plugins/marketplaces/.
+	writeFile(t, filepath.Join(home, ".claude", "plugins", "marketplaces",
+		"claude-plugins-official", ".claude-plugin", "marketplace.json"), `{}`)
+	writeFile(t, filepath.Join(home, ".claude", "plugins", "marketplaces",
+		"openai-codex-plugin-cc", ".claude-plugin", "marketplace.json"), `{}`)
+
+	// Authoritative registry written by `claude plugin marketplace add`.
+	writeFile(t, filepath.Join(home, ".claude", "plugins", "known_marketplaces.json"), `{
+  "claude-plugins-official": {
+    "source": {"source": "github", "repo": "anthropics/claude-plugins-official"},
+    "installLocation": "/x/claude-plugins-official",
+    "lastUpdated": "2026-05-14T17:49:46.955Z"
+  },
+  "openai-codex-plugin-cc": {
+    "source": {"source": "github", "repo": "openai/codex-plugin-cc"},
+    "installLocation": "/x/openai-codex-plugin-cc",
+    "lastUpdated": "2026-05-20T10:00:00.000Z"
+  }
+}`)
+
+	p := &Provider{HomeOverride: home}
+	ms, err := p.Marketplaces(context.Background())
+	if err != nil {
+		t.Fatalf("Marketplaces: %v", err)
+	}
+
+	got := map[string]agents.Marketplace{}
+	for _, m := range ms {
+		got[m.Name] = m
+	}
+
+	codex, ok := got["openai-codex-plugin-cc"]
+	if !ok {
+		t.Fatalf("missing openai-codex-plugin-cc; got %+v", names(ms))
+	}
+	if codex.Owner != "openai" {
+		t.Errorf("codex.Owner = %q, want openai", codex.Owner)
+	}
+	if codex.URL != "https://github.com/openai/codex-plugin-cc" {
+		t.Errorf("codex.URL = %q", codex.URL)
+	}
+	if codex.LastSynced.IsZero() {
+		t.Error("codex.LastSynced not parsed")
+	}
+
+	// Canonical must always appear, and only once even though it's in
+	// every source.
+	count := 0
+	for _, m := range ms {
+		if m.Name == "claude-plugins-official" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("claude-plugins-official appeared %d times, want 1", count)
+	}
+}
+
+func names(ms []agents.Marketplace) []string {
+	out := make([]string, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, m.Name)
+	}
+	return out
+}
+
+func TestProvider_Plugins_RealLayout(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+
+	// Plugin under <mp>/plugins/<name>/.claude-plugin/plugin.json
+	writeFile(t, filepath.Join(home, ".claude", "plugins", "marketplaces",
+		"claude-plugins-official", "plugins", "git-helpers",
+		".claude-plugin", "plugin.json"), `{
+  "name": "git-helpers",
+  "version": "0.1.0",
+  "description": "Git helpers"
+}`)
+	// Plugin under <mp>/external_plugins/<name>/.claude-plugin/plugin.json
+	writeFile(t, filepath.Join(home, ".claude", "plugins", "marketplaces",
+		"claude-plugins-official", "external_plugins", "github",
+		".claude-plugin", "plugin.json"), `{
+  "name": "github",
+  "version": "1.0.0"
+}`)
+
+	p := &Provider{HomeOverride: home}
+	plugins, err := p.Plugins(context.Background())
+	if err != nil {
+		t.Fatalf("Plugins: %v", err)
+	}
+
+	names := map[string]string{}
+	for _, pl := range plugins {
+		names[pl.Name] = pl.Marketplace
+	}
+	for _, want := range []string{"git-helpers", "github"} {
+		if mp, ok := names[want]; !ok {
+			t.Errorf("missing plugin %q in %+v", want, names)
+		} else if mp != "claude-plugins-official" {
+			t.Errorf("plugin %q marketplace = %q, want claude-plugins-official", want, mp)
+		}
+	}
+}
+
 func TestProvider_Sessions(t *testing.T) {
 	home, cwd := fixture(t)
 	p := &Provider{HomeOverride: home, CwdOverride: cwd}

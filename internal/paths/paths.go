@@ -172,30 +172,47 @@ func TrailObjects() (string, error) {
 	return Join("trail", "objects")
 }
 
+// AgentsDir returns the root directory for all agents-related state
+// under ~/.klim. Everything written by the Agents tab — scan cache,
+// per-source marketplace catalog files, costs cache, search index,
+// bookmarks — lives under this directory so the layout is
+// self-contained and easy to inspect.
+//
+// Note: pre-0.1.4 versions of klim wrote ~/.klim/agent-bookmarks.yaml
+// at the top level; bookmarks.Load() migrates that file once on first
+// read (see AgentBookmarksLegacy below) and is the only legacy path
+// still honored. New code should never touch the legacy location.
+func AgentsDir() (string, error) {
+	return Join("agents")
+}
+
 // AgentsCache returns the path to the agents tab scan cache file.
 // Cached entries: detected providers, plugins, skills, MCPs, sessions, and
 // marketplace status per host. Invalidated by `r` in the TUI or `--refresh`.
 func AgentsCache() (string, error) {
-	return Join("cache", "agents-cache.yaml")
+	return Join("agents", "cache.yaml")
 }
 
-// AgentsCatalogCache returns the path to the fetched remote agents catalog
-// cache (Anthropic marketplace, GitHub copilot-plugins, MCP registry).
-func AgentsCatalogCache() (string, error) {
-	return Join("marketplace", "agents-catalog-cache.yaml")
+// AgentsCatalogDir returns the directory holding per-source agent
+// marketplace catalog caches. Each remote source (Anthropic
+// marketplace, GitHub copilot-plugins, MCP registry) gets its own
+// file inside this directory so a stale fetch on one source doesn't
+// invalidate the others.
+func AgentsCatalogDir() (string, error) {
+	return Join("agents", "catalog")
 }
 
 // AgentCostsCache returns the path to the per-session token-count cache
 // used by the Agents → Costs sub-tab. Keyed by transcript mtime so we
 // only reparse sessions that actually changed.
 func AgentCostsCache() (string, error) {
-	return Join("cache", "agent-costs.yaml")
+	return Join("agents", "costs.yaml")
 }
 
 // AgentSearchIndex returns the path to the persisted full-text search
 // index for agent session transcripts.
 func AgentSearchIndex() (string, error) {
-	return Join("cache", "agent-search-index.yaml")
+	return Join("agents", "search-index.yaml")
 }
 
 // AgentBookmarks returns the path to the session-bookmarks file
