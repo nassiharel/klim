@@ -7,9 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nassiharel/klim/internal/audit"
-	"github.com/nassiharel/klim/internal/compliance"
-	"github.com/nassiharel/klim/internal/doctor"
 	"github.com/nassiharel/klim/internal/score"
 )
 
@@ -29,7 +26,7 @@ Grade scale: A+ (95+), A (90+), B (80+), C (70+), D (60+), F (<60)`,
 }
 
 func init() {
-	scoreOutput = addOutputFlag(scoreCmd, OutputText, OutputJSON)
+	scoreOutput = addOutputFlag(scoreCmd, OutputText, OutputJSON, OutputYAML)
 	scoreCmd.Flags().BoolVar(&scoreBadgeFlag, "badge", false, "Output shields.io badge URL")
 	scoreCmd.Flags().BoolVar(&scoreRefreshFlag, "refresh", false, "Force fresh scan")
 	// Registered in root.go with command group.
@@ -49,42 +46,15 @@ func runScore(cmd *cobra.Command, args []string) error {
 	}
 	sp.Stop()
 
-	// Run doctor.
-	doctorIssues := doctor.Diagnose(tools, doctor.ScanMeta{})
-
-	// Run compliance if configured.
-	var compResult *compliance.Result
-	var compErrStr string
-	if policyPath := findPolicyPath(cfgFrom(cmd)); policyPath != "" {
-		policy, loadErr := compliance.LoadPolicy(policyPath)
-		if loadErr != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "  ⚠ Compliance policy error: %v\n", loadErr)
-			compErrStr = loadErr.Error()
-		} else {
-			r := compliance.Check(policy, tools, loadVulnSeveritiesForCompliance())
-			compResult = &r
-		}
-	}
-
-	findings, _ := audit.Analyze(tools)
-	auditWarns, auditInfos := audit.CountBySeverity(findings)
-
-	result := score.Compute(score.Input{
-		Tools:         tools,
-		DoctorIssues:  doctorIssues,
-		AuditWarnings: auditWarns,
-		AuditInfos:    auditInfos,
-		CompResult:    compResult,
-		ComplianceErr: compErrStr,
-	})
+	result, _, _ := computeScoreReport(cmd, tools)
 
 	if scoreBadgeFlag {
 		fmt.Println(score.BadgeURL(result))
 		return nil
 	}
 
-	if out == OutputJSON {
-		return printJSON(result)
+	if out == OutputJSON || out == OutputYAML {
+		return printStructured(out, result)
 	}
 
 	// Human output.

@@ -81,16 +81,31 @@ func New() *Fetcher {
 
 // Result is what one source contributes to the merged snapshot.
 type Result struct {
-	Source  Source
-	Plugins []agents.Plugin
-	Err     error
+	Source       Source
+	Plugins      []agents.Plugin
+	Marketplaces []agents.Marketplace
+	Err          error
 }
 
 // FetchAll returns every source's plugin listings in registration order.
 // Cached responses are used when fresh; expired caches are refreshed
 // against the network with fallback to the last good cache on failure.
+//
+// The first entry in the returned slice is a synthetic "discoverable"
+// result that carries the curated marketplace list parsed from the
+// agent_marketplaces section of the cached marketplace.yaml via
+// DiscoverableMarketplaces() (no network I/O beyond the initial
+// catalog fetch). This lets the merged snapshot surface well-known
+// community marketplaces (e.g. openai/codex-plugin-cc) as
+// installable-but-not-yet-installed entries, so users can browse and
+// add them from the Marketplaces sub-tab the same way they discover
+// new tools.
 func (f *Fetcher) FetchAll(ctx context.Context) []Result {
-	out := make([]Result, 0, len(f.Sources))
+	out := make([]Result, 0, len(f.Sources)+1)
+	out = append(out, Result{
+		Source:       Source{Name: "discoverable-marketplaces"},
+		Marketplaces: DiscoverableMarketplaces(),
+	})
 	for _, src := range f.Sources {
 		out = append(out, f.fetchOne(ctx, src))
 	}
@@ -226,15 +241,15 @@ func mergeKeywords(a, b []string) []string {
 // ---- cache ----
 
 // cachedFile wraps a cached marketplace.json with its fetch timestamp.
-// Stored under ~/.klim/marketplace/agents-catalog-<source>.yaml so each
-// source is independent.
+// Stored under ~/.klim/agents/catalog/<source>.yaml so each source is
+// independent.
 type cachedFile struct {
 	WrittenAt time.Time `yaml:"written_at"`
 	Body      []byte    `yaml:"body"`
 }
 
 func cacheFilePath(source string) (string, error) {
-	return paths.Join("marketplace", "agents-catalog-"+sanitize(source)+".yaml")
+	return paths.Join("agents", "catalog", sanitize(source)+".yaml")
 }
 
 func sanitize(s string) string {

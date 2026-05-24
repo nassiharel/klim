@@ -37,7 +37,7 @@ Exit codes:
 }
 
 func init() {
-	doctorOutput = addOutputFlag(doctorCmd, OutputText, OutputJSON)
+	doctorOutput = addOutputFlag(doctorCmd, OutputText, OutputJSON, OutputYAML)
 	doctorCmd.Flags().BoolVar(&doctorRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	// Registered in root.go with command group.
 }
@@ -75,8 +75,8 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	issues := doctor.Diagnose(tools, meta)
 	errors, warnings, infos := doctor.CountBySeverity(issues)
 
-	if out == OutputJSON {
-		return printDoctorJSON(issues, errors, warnings, infos)
+	if out == OutputJSON || out == OutputYAML {
+		return printDoctorJSON(out, issues, errors, warnings, infos)
 	}
 
 	if len(issues) == 0 {
@@ -120,7 +120,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func printDoctorJSON(issues []doctor.Issue, errors, warnings, infos int) error {
+func printDoctorJSON(format OutputFormat, issues []doctor.Issue, errors, warnings, infos int) error {
 	out := jsonDoctorOutput{
 		Issues:  issues,
 		Healthy: !doctor.HasErrors(issues),
@@ -129,7 +129,7 @@ func printDoctorJSON(issues []doctor.Issue, errors, warnings, infos int) error {
 	out.Summary.Warnings = warnings
 	out.Summary.Infos = infos
 
-	if err := printJSON(out); err != nil {
+	if err := printStructured(format, out); err != nil {
 		return err
 	}
 

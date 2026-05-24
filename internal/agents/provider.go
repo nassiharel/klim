@@ -111,14 +111,15 @@ func (r *Registry) Get(id ProviderID) Provider {
 
 // Snapshot is the merged in-memory view of every entity across every
 // provider. The Service produces a Snapshot per scan and feeds it to
-// TUI and CLI consumers.
+// TUI and CLI consumers. The JSON/YAML schema is snake_case so
+// consumers piping through jq/yq see consistent keys.
 type Snapshot struct {
-	Marketplaces   []Marketplace
-	Plugins        []Plugin
-	Skills         []Skill
-	MCPs           []MCP
-	Sessions       []Session
-	ProviderStatus map[ProviderID]Status
+	Marketplaces   []Marketplace         `yaml:"marketplaces"`
+	Plugins        []Plugin              `yaml:"plugins"`
+	Skills         []Skill               `yaml:"skills"`
+	MCPs           []MCP                 `yaml:"mcps"`
+	Sessions       []Session             `yaml:"sessions"`
+	ProviderStatus map[ProviderID]Status `yaml:"provider_status,omitempty"`
 }
 
 // Count returns the count of entities of the given type.

@@ -18,7 +18,18 @@ import (
 // terraform, helm, etc. — tools developers tend to want in one
 // predictable place. Cross-platform `os.UserHomeDir()` resolves to
 // `$HOME` on Unix and `%USERPROFILE%` on Windows.
+//
+// KLIM_HOME overrides the default. This is primarily a test hook —
+// it lets `t.Setenv("KLIM_HOME", t.TempDir())` actually isolate a
+// test from the real user dotfile (a previous version of the
+// self-update cache test ignored this and polluted real users'
+// caches when `go test ./...` ran). Production users shouldn't
+// normally need to set it; if they do, every klim path moves with
+// it as a unit (no per-file overrides).
 func BaseDir() (string, error) {
+	if v := os.Getenv("KLIM_HOME"); v != "" {
+		return v, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -161,34 +172,64 @@ func TrailObjects() (string, error) {
 	return Join("trail", "objects")
 }
 
+// AgentsDir returns the root directory for all agents-related state
+// under ~/.klim. Everything written by the Agents tab — scan cache,
+// per-source marketplace catalog files, costs cache, search index,
+// bookmarks — lives under this directory so the layout is
+// self-contained and easy to inspect.
+//
+// Note: pre-0.1.4 versions of klim wrote ~/.klim/agent-bookmarks.yaml
+// at the top level; bookmarks.Load() migrates that file once on first
+// read (see AgentBookmarksLegacy below) and is the only legacy path
+// still honored. New code should never touch the legacy location.
+func AgentsDir() (string, error) {
+	return Join("agents")
+}
+
 // AgentsCache returns the path to the agents tab scan cache file.
 // Cached entries: detected providers, plugins, skills, MCPs, sessions, and
 // marketplace status per host. Invalidated by `r` in the TUI or `--refresh`.
 func AgentsCache() (string, error) {
-	return Join("cache", "agents-cache.yaml")
+	return Join("agents", "cache.yaml")
 }
 
-// AgentsCatalogCache returns the path to the fetched remote agents catalog
-// cache (Anthropic marketplace, GitHub copilot-plugins, MCP registry).
-func AgentsCatalogCache() (string, error) {
-	return Join("marketplace", "agents-catalog-cache.yaml")
+// AgentsCatalogDir returns the directory holding per-source agent
+// marketplace catalog caches. Each remote source (Anthropic
+// marketplace, GitHub copilot-plugins, MCP registry) gets its own
+// file inside this directory so a stale fetch on one source doesn't
+// invalidate the others.
+func AgentsCatalogDir() (string, error) {
+	return Join("agents", "catalog")
 }
 
 // AgentCostsCache returns the path to the per-session token-count cache
 // used by the Agents → Costs sub-tab. Keyed by transcript mtime so we
 // only reparse sessions that actually changed.
 func AgentCostsCache() (string, error) {
-	return Join("cache", "agent-costs.yaml")
+	return Join("agents", "costs.yaml")
 }
 
 // AgentSearchIndex returns the path to the persisted full-text search
 // index for agent session transcripts.
 func AgentSearchIndex() (string, error) {
-	return Join("cache", "agent-search-index.yaml")
+	return Join("agents", "search-index.yaml")
 }
 
 // AgentBookmarks returns the path to the session-bookmarks file
 // (persistent across runs, written atomically on each toggle/note).
+//
+// Klim < 0.1.4 wrote this file directly at the root of ~/.klim/ —
+// the only state file not nested under a subdirectory. From 0.1.4
+// on, it lives at ~/.klim/agents/bookmarks.yaml alongside other
+// agent-specific state. bookmarks.Load() migrates the legacy file
+// transparently on first read.
 func AgentBookmarks() (string, error) {
+	return Join("agents", "bookmarks.yaml")
+}
+
+// AgentBookmarksLegacy returns the pre-0.1.4 location of the
+// agent-bookmarks file (~/.klim/agent-bookmarks.yaml). Used by the
+// bookmarks package's migration path; new callers should not use it.
+func AgentBookmarksLegacy() (string, error) {
 	return Join("agent-bookmarks.yaml")
 }

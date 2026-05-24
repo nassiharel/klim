@@ -1,6 +1,7 @@
 package bookmarks
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -112,4 +113,45 @@ func TestRemove_ReportsTruth(t *testing.T) {
 	if s.Remove("nonexistent") {
 		t.Error("Remove(missing) should return false")
 	}
+}
+
+func TestLoad_MigratesLegacyLocation(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("KLIM_HOME", tmp)
+
+	// Plant a legacy bookmarks file at ~/.klim/agent-bookmarks.yaml.
+	legacy := New()
+	legacy.Bookmarks["claude:legacy"] = Entry{SessionID: "claude:legacy", Note: "from old layout", Created: time.Now()}
+	if err := saveLegacyForTest(legacy); err != nil {
+		t.Fatalf("seed legacy: %v", err)
+	}
+
+	// Load should find the legacy file, migrate it, and return it.
+	got, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !got.Contains("claude:legacy") {
+		t.Error("migrated store missing legacy bookmark")
+	}
+
+	// New-location file should now exist…
+	newPath := filepath.Join(tmp, "agents", "bookmarks.yaml")
+	if _, err := os.Stat(newPath); err != nil {
+		t.Errorf("new-location file not written: %v", err)
+	}
+	// …and the legacy file should be gone.
+	legacyPath := filepath.Join(tmp, "agent-bookmarks.yaml")
+	if _, err := os.Stat(legacyPath); err == nil {
+		t.Error("legacy file should have been removed after migration")
+	}
+}
+
+// saveLegacyForTest writes a Store at the pre-0.1.4 location.
+func saveLegacyForTest(s *Store) error {
+	path, err := pathsAgentBookmarksLegacy()
+	if err != nil {
+		return err
+	}
+	return fileutilWriteYAML(path, s)
 }

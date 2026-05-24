@@ -104,6 +104,10 @@ func init() {
 	rootCmd.AddCommand(whyCmd)
 	infoCmd.GroupID = "tools"
 	rootCmd.AddCommand(infoCmd)
+	graphCmd.GroupID = "tools"
+	rootCmd.AddCommand(graphCmd)
+	badgeCmd.GroupID = "data"
+	rootCmd.AddCommand(badgeCmd)
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(upgradeCmd)
 	rootCmd.AddCommand(removeCmd)

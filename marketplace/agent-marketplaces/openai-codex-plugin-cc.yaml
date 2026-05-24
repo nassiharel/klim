@@ -1,0 +1,9 @@
+id: openai-codex-plugin-cc
+name: openai-codex-plugin-cc
+display_name: OpenAI Codex Plugin
+description: OpenAI's Codex plugin marketplace for Claude Code
+providers:
+  - claude-code
+owner: openai
+url: https://github.com/openai/codex-plugin-cc
+install_spec: openai/codex-plugin-cc

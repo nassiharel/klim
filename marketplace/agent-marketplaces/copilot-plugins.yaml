@@ -1,0 +1,9 @@
+id: copilot-plugins
+name: copilot-plugins
+display_name: GitHub Copilot Plugins
+description: GitHub's official Copilot CLI plugin marketplace
+providers:
+  - copilot-cli
+owner: github
+url: https://github.com/github/copilot-plugins
+install_spec: github/copilot-plugins

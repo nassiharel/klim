@@ -70,17 +70,17 @@ func (p *Provider) Detect(ctx context.Context) agents.Status {
 	defer cancel()
 	req, err := http.NewRequestWithContext(probeCtx, http.MethodHead, api, nil)
 	if err != nil {
-		return agents.Status{Installed: false, Error: err}
+		return agents.Status{Installed: false, Error: err.Error()}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return agents.Status{Installed: false, Error: err}
+		return agents.Status{Installed: false, Error: err.Error()}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
 		return agents.Status{Installed: true, Version: "v0"}
 	}
-	return agents.Status{Installed: false, Error: fmt.Errorf("HEAD %s -> %d", api, resp.StatusCode)}
+	return agents.Status{Installed: false, Error: fmt.Errorf("HEAD %s -> %d", api, resp.StatusCode).Error()}
 }
 
 // Marketplaces returns the single registry as a marketplace entry.
@@ -94,6 +94,7 @@ func (p *Provider) Marketplaces(_ context.Context) ([]agents.Marketplace, error)
 			Provider:    p.ID(),
 			URL:         "https://registry.modelcontextprotocol.io",
 			Source:      agents.SourceCatalogMCP,
+			Installed:   true,
 		},
 	}, nil
 }

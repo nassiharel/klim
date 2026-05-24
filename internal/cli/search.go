@@ -35,7 +35,7 @@ Examples:
 func init() {
 	searchCmd.Flags().StringVarP(&searchCategoryFlag, "category", "c", "", "Filter by category")
 	searchCmd.Flags().IntVarP(&searchLimitFlag, "limit", "n", 15, "Max results to show")
-	searchOutput = addOutputFlag(searchCmd, OutputText, OutputJSON)
+	searchOutput = addOutputFlag(searchCmd, OutputText, OutputJSON, OutputYAML)
 	// Registered in root.go with command group.
 }
 
@@ -71,8 +71,8 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		results = results[:searchLimitFlag]
 	}
 
-	if out == OutputJSON {
-		return printSearchJSON(query, results, totalMatches)
+	if out == OutputJSON || out == OutputYAML {
+		return printSearchStructured(out, query, results, totalMatches)
 	}
 
 	if len(results) == 0 {
@@ -166,7 +166,7 @@ type searchJSONOutput struct {
 	Results      []searchJSONResult `json:"results"`
 }
 
-func printSearchJSON(query string, results []search.Result, totalMatches int) error {
+func printSearchStructured(format OutputFormat, query string, results []search.Result, totalMatches int) error {
 	out := searchJSONOutput{
 		Query:        query,
 		TotalMatches: totalMatches,
@@ -188,7 +188,7 @@ func printSearchJSON(query string, results []search.Result, totalMatches int) er
 		entry.Sources = availableSources(t)
 		out.Results = append(out.Results, entry)
 	}
-	return printJSON(out)
+	return printStructured(format, out)
 }
 
 func availableSources(t *registry.Tool) []string {
