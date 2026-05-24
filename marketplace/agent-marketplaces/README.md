@@ -5,11 +5,11 @@ agent marketplace that klim surfaces in the **Agents → Marketplaces**
 sub-tab. They appear as `Installed=false` entries the user can install
 via the detail page's **Add to library** action.
 
-Files in this directory are embedded into the klim binary at build
-time (`marketplace/marketplaces/embed.go` uses `//go:embed` and the
-catalog loader in `internal/agents/catalog/discoverable.go` reads
-from that embedded FS), so adding or changing an entry requires
-re-building.
+Files in this directory are assembled into `marketplace.yaml` by CI
+(via `internal/marketplace/assemble`) alongside tool and pack
+definitions. The CLI reads them from the `agent_marketplaces:` section
+of the cached marketplace.yaml at runtime — the same fetch/cache
+mechanism used for tools and packs.
 
 ## Schema
 
@@ -44,7 +44,6 @@ registered marketplaces during the snapshot merge.
 ## Adding a new entry
 
 1. Drop a new `<name>.yaml` file here.
-2. `go test ./internal/agents/catalog/...` — the loader validates the
-   YAML at startup; the test asserts every file parses and lists at
-   least one provider.
-3. `go build ./...` to bake it into the binary.
+2. `make marketplace-validate` — the validator checks required fields.
+3. `make marketplace-assemble` — bake it into `marketplace.yaml`.
+4. `go test ./internal/agents/catalog/...` — verify expansion logic.

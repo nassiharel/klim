@@ -4,57 +4,86 @@ import (
 	"testing"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/registry"
 )
 
-// TestLoadDiscoverable_AllFilesParse fails loudly when any embedded
-// YAML file in marketplace/marketplaces/ is malformed or missing a
-// required field. This is the entry point that ships with klim, so a
-// typo here would silently drop a marketplace from the Marketplaces
-// sub-tab.
-func TestLoadDiscoverable_AllFilesParse(t *testing.T) {
-	out, err := loadDiscoverable()
-	if err != nil {
-		t.Fatalf("loadDiscoverable: %v", err)
+// TestExpandDefs verifies that AgentMarketplaceDef records are correctly
+// expanded into agents.Marketplace records with proper provider mapping,
+// ID generation, and sorting.
+func TestExpandDefs(t *testing.T) {
+	defs := []registry.AgentMarketplaceDef{
+		{
+			Name:        "test-marketplace",
+			Providers:   []string{"claude-code"},
+			URL:         "https://example.com",
+			InstallSpec: "owner/repo",
+		},
 	}
-	if len(out) == 0 {
-		t.Fatal("expected at least one discoverable marketplace")
+	out := expandDefs(defs)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 marketplace, got %d", len(out))
 	}
-	for _, m := range out {
-		if m.Name == "" {
-			t.Errorf("entry missing Name: %+v", m)
-		}
-		if m.Provider == "" {
-			t.Errorf("entry %q missing Provider", m.Name)
-		}
-		if m.Installed {
-			t.Errorf("entry %q should have Installed=false", m.Name)
-		}
+	if out[0].Name != "test-marketplace" {
+		t.Errorf("Name = %q, want test-marketplace", out[0].Name)
+	}
+	if out[0].Provider != agents.ProviderClaudeCode {
+		t.Errorf("Provider = %q, want claude-code", out[0].Provider)
+	}
+	if out[0].Source != agents.SourceCatalogClaude {
+		t.Errorf("Source = %q, want catalog-claude", out[0].Source)
+	}
+	if out[0].Installed {
+		t.Error("Installed should be false")
+	}
+	if out[0].ID != "test-marketplace" {
+		t.Errorf("ID = %q, want test-marketplace (defaulted from Name)", out[0].ID)
 	}
 }
 
-// TestLoadDiscoverable_ExpandsProviders verifies that a marketplace
-// listed under multiple `providers:` is expanded into one
-// agents.Marketplace per provider.
-func TestLoadDiscoverable_ExpandsProviders(t *testing.T) {
-	out, _ := loadDiscoverable()
-	// claude-plugins-official is single-provider; just sanity-check
-	// the source mapping. The expansion logic is also covered
-	// directly via sourceForProvider().
-	var got *agents.Marketplace
-	for i := range out {
-		if out[i].Name == "claude-plugins-official" && out[i].Provider == agents.ProviderClaudeCode {
-			got = &out[i]
-			break
-		}
+// TestExpandDefs_MultiProvider verifies that a marketplace listed under
+// multiple providers is expanded into one agents.Marketplace per
+// provider with provider-qualified IDs.
+func TestExpandDefs_MultiProvider(t *testing.T) {
+	defs := []registry.AgentMarketplaceDef{
+		{
+			Name:        "multi-mp",
+			Providers:   []string{"claude-code", "copilot-cli"},
+			URL:         "https://example.com",
+			InstallSpec: "owner/repo",
+		},
 	}
-	if got == nil {
-		t.Fatal("claude-plugins-official/claude-code not in discoverable list")
+	out := expandDefs(defs)
+	if len(out) != 2 {
+		t.Fatalf("expected 2 marketplaces, got %d", len(out))
 	}
-	if got.Source != agents.SourceCatalogClaude {
-		t.Errorf("source = %q, want catalog-claude", got.Source)
+	// Verify provider-qualified IDs.
+	ids := map[string]bool{}
+	for _, m := range out {
+		ids[m.ID] = true
 	}
-	if got.InstallSpec == "" {
-		t.Error("InstallSpec should not be empty")
+	if !ids["multi-mp:claude-code"] {
+		t.Error("missing provider-qualified ID multi-mp:claude-code")
+	}
+	if !ids["multi-mp:copilot-cli"] {
+		t.Error("missing provider-qualified ID multi-mp:copilot-cli")
+	}
+}
+
+// TestExpandDefs_SkipsInvalid verifies that entries missing required
+// fields are silently skipped.
+func TestExpandDefs_SkipsInvalid(t *testing.T) {
+	defs := []registry.AgentMarketplaceDef{
+		{Name: "", Providers: []string{"claude-code"}, URL: "https://example.com"},     // no name
+		{Name: "no-providers", URL: "https://example.com"},                             // no providers
+		{Name: "no-action", Providers: []string{"claude-code"}},                        // no url or install_spec
+		{Name: "valid", Providers: []string{"claude-code"}, InstallSpec: "owner/repo"}, // valid
+	}
+	out := expandDefs(defs)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 valid marketplace, got %d", len(out))
+	}
+	if out[0].Name != "valid" {
+		t.Errorf("Name = %q, want valid", out[0].Name)
 	}
 }
 

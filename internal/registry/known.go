@@ -17,8 +17,9 @@ var gitHubSlugRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+
 func ValidGitHubSlug(s string) bool { return gitHubSlugRE.MatchString(s) }
 
 type toolsFile struct {
-	Tools []ToolDef `yaml:"tools"`
-	Packs []packDef `yaml:"packs,omitempty"`
+	Tools             []ToolDef             `yaml:"tools"`
+	Packs             []packDef             `yaml:"packs,omitempty"`
+	AgentMarketplaces []AgentMarketplaceDef `yaml:"agent_marketplaces,omitempty"`
 }
 
 // ToolDef is the YAML structure for a single tool definition.
@@ -82,6 +83,22 @@ type packDef struct {
 	DisplayName string   `yaml:"display_name"`
 	Description string   `yaml:"description,omitempty"`
 	Tools       []string `yaml:"tools"`
+}
+
+// AgentMarketplaceDef is the YAML structure for a discoverable agent
+// marketplace. Individual files live in marketplace/agent-marketplaces/
+// and are assembled into marketplace.yaml alongside tools and packs.
+// Exported so the catalog and marketplace packages can reuse it.
+type AgentMarketplaceDef struct {
+	ID          string   `yaml:"id,omitempty"`
+	Name        string   `yaml:"name"`
+	DisplayName string   `yaml:"display_name,omitempty"`
+	Description string   `yaml:"description,omitempty"`
+	Providers   []string `yaml:"providers"`
+	Owner       string   `yaml:"owner,omitempty"`
+	URL         string   `yaml:"url,omitempty"`
+	InstallSpec string   `yaml:"install_spec,omitempty"`
+	Source      string   `yaml:"source,omitempty"`
 }
 
 // PackageDef is the YAML structure for package manager identifiers.
@@ -150,6 +167,18 @@ func ParsePacksFromBytes(data []byte) ([]Pack, error) {
 		packs = append(packs, p)
 	}
 	return packs, nil
+}
+
+// ParseAgentMarketplaceDefsFromBytes parses the agent_marketplaces
+// section from catalog YAML bytes. Returns an error if the YAML is
+// unparsable. Returns an empty (non-nil) slice if the YAML is valid
+// but contains no agent marketplace definitions.
+func ParseAgentMarketplaceDefsFromBytes(data []byte) ([]AgentMarketplaceDef, error) {
+	var f toolsFile
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return nil, fmt.Errorf("parsing agent marketplaces: %w", err)
+	}
+	return f.AgentMarketplaces, nil
 }
 
 func defsToTools(defs []ToolDef) []Tool {
