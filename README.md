@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="klim logo" width="520">
+  <img src="assets/klim.svg" alt="klim" width="120">
 </p>
 
 <h1 align="center">klim</h1>
