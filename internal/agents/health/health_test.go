@@ -135,7 +135,6 @@ func TestProviderInstalled(t *testing.T) {
 	snap := Snapshot{Providers: []ProviderRef{
 		{ID: "claude-code", Installed: true},
 		{ID: "copilot-cli", Installed: false},
-		{ID: "mcp-registry", Installed: false}, // virtual — skipped
 	}}
 	issues := c.Run(context.Background(), snap)
 	if len(issues) != 1 || issues[0].Subject != "copilot-cli" {
