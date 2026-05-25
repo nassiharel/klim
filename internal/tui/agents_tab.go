@@ -1344,6 +1344,9 @@ func (m *Model) agentsVisibleRows() []agentRow {
 	if st.subTab == agentsSubSessions {
 		rows = pinBookmarkedFirst(rows)
 	}
+	if st.subTab == agentsSubPlugins {
+		rows = pinInstalledFirst(rows)
+	}
 	return rows
 }
 
@@ -1372,6 +1375,23 @@ func pinBookmarkedFirst(rows []agentRow) []agentRow {
 	var head, tail []agentRow
 	for _, r := range rows {
 		if r.bookmarked {
+			head = append(head, r)
+		} else {
+			tail = append(tail, r)
+		}
+	}
+	return append(head, tail...)
+}
+
+// pinInstalledFirst moves installed plugin rows to the top while
+// preserving relative order within both groups.
+func pinInstalledFirst(rows []agentRow) []agentRow {
+	if len(rows) < 2 {
+		return rows
+	}
+	var head, tail []agentRow
+	for _, r := range rows {
+		if r.plugin != nil && r.plugin.Installed {
 			head = append(head, r)
 		} else {
 			tail = append(tail, r)
