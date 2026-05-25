@@ -9,9 +9,6 @@
 // shell out to `claude plugin install …` / `copilot mcp add …` etc.,
 // and session launch is `tea.ExecProcess`-style (suspend klim, exec
 // the agent CLI, resume on exit).
-//
-// See superpowers/specs/2026-05-14-agents-tab-design.md for the full
-// design document.
 package agents
 
 import (
