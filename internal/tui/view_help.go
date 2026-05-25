@@ -26,9 +26,9 @@ func (m Model) renderHelpOverlay() string {
 		keys: [][2]string{
 			{"1-0", "jump to tab (1=My Tools … 0=Config)"},
 			{"Tab / Shift-Tab", "next / previous sub-tab"},
-			{"P", "open Plan modal (preview pending changes)"},
+			{"P", "open Plan modal"},
 			{"q / Ctrl-C", "quit"},
-			{"?", "toggle this help overlay"},
+			{"?", "toggle this help"},
 		},
 	}
 
@@ -87,19 +87,19 @@ func (m Model) renderHelpOverlay() string {
 				{"↑ / ↓", "move cursor"},
 				{"Enter", "open detail page"},
 				{"/", "fuzzy search"},
-				{"S", "full-text search across transcripts"},
+				{"S", "search transcripts"},
 				{"s", "cycle sort mode"},
 				{"f", "filter sidebar"},
 				{"i", "toggle installed filter"},
 				{"Space", "select for bulk ops"},
-				{"b", "toggle bookmark (sessions)"},
+				{"b", "toggle bookmark"},
 				{"l", "launch"},
 				{"o", "open URL"},
 				{"r", "refresh"},
-				{"Esc", "close overlay / cancel"},
+				{"Esc", "close / cancel"},
 			},
 		}, section{
-			title: "Agents — Detail Page",
+			title: "Agents — Detail",
 			keys: [][2]string{
 				{"← / →", "move action focus"},
 				{"↑ / ↓", "scroll body"},
@@ -125,7 +125,7 @@ func (m Model) renderHelpOverlay() string {
 				{"↑ / ↓", "navigate issues"},
 				{"Enter", "open fix wizard"},
 				{"r", "re-scan"},
-				{"t", "toggle view (by tool / by dir)"},
+				{"t", "toggle view"},
 				{"u", "uninstall shadowed copy"},
 			},
 		})
@@ -159,53 +159,71 @@ func (m Model) renderHelpOverlay() string {
 		})
 	}
 
-	// Render: centred box with sections.
-	const boxWidth = 64
-	border := lipgloss.NewStyle().
-		Foreground(cyberPrimary).
-		Bold(true)
-	dim := lipgloss.NewStyle().Foreground(cyberFGDim)
-	keyStyle := lipgloss.NewStyle().Foreground(cyberAccent).Bold(true)
+	// Build the inner content (no box chars — lipgloss adds the border).
+	keyCol := 16
+	descCol := 34
+	innerWidth := keyCol + descCol + 3 // key + gap + desc
 
-	var b strings.Builder
+	keyStyle := lipgloss.NewStyle().Foreground(cyberAccent).Bold(true).Width(keyCol)
+	descStyle := lipgloss.NewStyle().Foreground(cyberFGDim).Width(descCol)
+	titleStyle := lipgloss.NewStyle().Foreground(cyberPrimary).Bold(true)
+	dimStyle := lipgloss.NewStyle().Foreground(cyberFGDim)
 
-	// Top border.
-	title := " klim — Keyboard Shortcuts "
-	padLen := boxWidth - len(title) - 2
-	if padLen < 0 {
-		padLen = 0
-	}
-	b.WriteString(border.Render("  ╔"+title+strings.Repeat("═", padLen)+"╗") + "\n")
-
+	var lines []string
 	for si, sec := range sections {
 		if si > 0 {
-			b.WriteString(border.Render("  ╠"+strings.Repeat("═", boxWidth)+"╣") + "\n")
+			lines = append(lines, dimStyle.Render(strings.Repeat("─", innerWidth)))
 		}
-		// Section title.
-		secTitle := fmt.Sprintf("  %-*s", boxWidth, sec.title)
-		b.WriteString(border.Render("  ║") + lipgloss.NewStyle().Bold(true).Foreground(cyberPrimary).Render(secTitle) + border.Render("║") + "\n")
-
+		lines = append(lines, titleStyle.Render(sec.title))
 		for _, kv := range sec.keys {
-			key := keyStyle.Render(fmt.Sprintf("%-18s", kv[0]))
-			desc := dim.Render(fmt.Sprintf("%-*s", boxWidth-20, kv[1]))
-			b.WriteString(border.Render("  ║") + "  " + key + desc + border.Render("║") + "\n")
+			line := keyStyle.Render(kv[0]) + "   " + descStyle.Render(kv[1])
+			lines = append(lines, line)
 		}
 	}
+	lines = append(lines, "", dimStyle.Render("press ? or any key to close"))
 
-	// Bottom.
-	dismiss := fmt.Sprintf("  %-*s", boxWidth, "press ? or any key to close")
-	b.WriteString(border.Render("  ║") + dim.Render(dismiss) + border.Render("║") + "\n")
-	b.WriteString(border.Render("  ╚"+strings.Repeat("═", boxWidth)+"╝") + "\n")
+	content := strings.Join(lines, "\n")
+
+	// Wrap in a lipgloss box with rounded border.
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(cyberPrimary).
+		Padding(1, 2).
+		Width(innerWidth + 6). // padding + border
+		Render(content)
+
+	// Add title to the top border.
+	boxLines := strings.Split(box, "\n")
+	if len(boxLines) > 0 {
+		topBorder := boxLines[0]
+		titleText := " Keyboard Shortcuts "
+		borderRunes := []rune(topBorder)
+		titleRunes := []rune(titleText)
+		// Insert title at position 4 (after "╭──").
+		insertAt := 4
+		if insertAt+len(titleRunes) < len(borderRunes) {
+			for i, r := range titleRunes {
+				borderRunes[insertAt+i] = r
+			}
+			boxLines[0] = string(borderRunes)
+		}
+		box = strings.Join(boxLines, "\n")
+	}
+
+	// Centre the box horizontally.
+	centred := lipgloss.NewStyle().
+		Width(m.width).
+		Align(lipgloss.Center).
+		Render(box)
 
 	// Centre vertically.
-	content := b.String()
-	contentLines := strings.Count(content, "\n")
+	contentLines := strings.Count(centred, "\n") + 1
 	topPad := (m.height - contentLines) / 2
 	if topPad < 1 {
 		topPad = 1
 	}
 
-	return strings.Repeat("\n", topPad) + content
+	return strings.Repeat("\n", topPad) + centred
 }
 
 // renderHelp builds the help / status footer line shown beneath each tab.
