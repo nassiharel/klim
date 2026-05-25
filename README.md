@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="assets/klim.svg" alt="klim" width="120">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/klim-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/klim-light.svg">
+    <img src="assets/klim-light.svg" alt="klim" width="120">
+  </picture>
 </p>
 
 <h1 align="center">klim</h1>
