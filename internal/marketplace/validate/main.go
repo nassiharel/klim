@@ -303,9 +303,8 @@ func validatePackFile(path string, seenPacks, toolNames map[string]string) []str
 }
 
 var validProviders = map[string]bool{
-	"claude-code":  true,
-	"copilot-cli":  true,
-	"mcp-registry": true,
+	"claude-code": true,
+	"copilot-cli": true,
 }
 
 func validateAgentMarketplaceFile(path string, seen map[string]string) []string {

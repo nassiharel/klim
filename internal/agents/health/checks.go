@@ -361,12 +361,6 @@ func (c *checkProviderInstalled) Run(_ context.Context, snap Snapshot) []Issue {
 		if p.Installed {
 			continue
 		}
-		// mcp-registry is virtual — always "installed" conceptually,
-		// but its Installed flag may be false if the provider didn't
-		// set it. Filter that out so we don't nag.
-		if p.ID == "mcp-registry" {
-			continue
-		}
 		issues = append(issues, Issue{
 			CheckID:  c.ID(),
 			Severity: SeverityInfo,

@@ -23,7 +23,6 @@ import (
 	"github.com/nassiharel/klim/internal/agents/catalog"
 	"github.com/nassiharel/klim/internal/agents/providers/claudecode"
 	"github.com/nassiharel/klim/internal/agents/providers/copilotcli"
-	"github.com/nassiharel/klim/internal/agents/providers/mcpregistry"
 )
 
 // agentsState holds all in-memory state for the Agents tab.
@@ -64,9 +63,6 @@ type agentsState struct {
 	deleteTarget string
 	deleteAction tea.Cmd
 
-	// helpOpen toggles the keymap overlay.
-	helpOpen bool
-
 	// viewerLines holds the first N lines of a session transcript so the
 	// user can peek at it without leaving the TUI.
 	viewerOpen  bool
@@ -87,7 +83,7 @@ type agentsState struct {
 	statusFilterValue string
 
 	// providerFilter narrows rows to a single provider when set
-	// (claude-code / copilot-cli / mcp-registry). Empty string = all.
+	// (claude-code / copilot-cli). Empty string = all.
 	// Applies to every sub-tab.
 	providerFilter agents.ProviderID
 
@@ -200,6 +196,7 @@ const (
 	agentsSortModified                       // recent-first (mtime / last event)
 	agentsSortCreated                        // recent-first (created)
 	agentsSortTurns                          // sessions: most turns first
+	agentsSortProvider                       // group by provider
 	agentsSortCount
 )
 
@@ -224,7 +221,6 @@ var agentsService = func() *agents.Service {
 	svc := agents.NewService(4,
 		claudecode.New(),
 		copilotcli.New(),
-		mcpregistry.New(),
 	)
 	svc.RemoteCatalog = tuiCatalogAdapter{f: catalog.New()}
 	return svc
@@ -444,11 +440,6 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, nil
 	}
 
-	// Help overlay closes on any key.
-	if st.helpOpen {
-		st.helpOpen = false
-		return true, nil
-	}
 	// Viewer modal closes on Esc/Enter/q.
 	if st.viewerOpen {
 		switch msg.String() {
@@ -878,8 +869,8 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		st.flashEnd = time.Now().Add(2 * time.Second)
 		return true, nil
 	case "?":
-		st.helpOpen = true
-		return true, nil
+		// Handled globally by model.go — let it fall through.
+		return false, nil
 	case "S":
 		// Full-text search overlay across every indexed transcript
 		// (Shift+S — `/` stays as the per-tab fuzzy filter).
@@ -1068,8 +1059,10 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		st.loadedAt = time.Now()
 		st.snapshot = v.snap
 		st.loadErr = v.err
-		// Drop any lingering "refreshing…" / spinner flash so the user
-		// sees the fresh data without a stale status line on top.
+		// Drop any lingering "refreshing…" / spinner flash and the
+		// detail-page action spinner so the user sees the fresh data
+		// without a stale status line on top.
+		st.actionRunning = ""
 		if strings.HasPrefix(st.flash, "refreshing") || strings.HasPrefix(st.flash, "scanning") {
 			st.flash = ""
 			st.flashEnd = time.Time{}
@@ -1127,6 +1120,7 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		// pre-filter by the marketplace the user was viewing so the
 		// duplicated "plugins inside this marketplace" body list is
 		// replaced by the canonical Plugins list scoped to it.
+		st.actionRunning = ""
 		if len(st.detailStack) == 0 {
 			return true, nil
 		}
@@ -1150,6 +1144,7 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		// pre-filter by the plugin the user was viewing so the body
 		// "Contained skills" preview is replaced by the canonical
 		// Skills list scoped to that plugin.
+		st.actionRunning = ""
 		if len(st.detailStack) == 0 {
 			return true, nil
 		}
@@ -1339,6 +1334,9 @@ func (m *Model) agentsVisibleRows() []agentRow {
 	if st.subTab == agentsSubSessions {
 		rows = pinBookmarkedFirst(rows)
 	}
+	if st.subTab == agentsSubPlugins {
+		rows = pinInstalledFirst(rows)
+	}
 	return rows
 }
 
@@ -1367,6 +1365,23 @@ func pinBookmarkedFirst(rows []agentRow) []agentRow {
 	var head, tail []agentRow
 	for _, r := range rows {
 		if r.bookmarked {
+			head = append(head, r)
+		} else {
+			tail = append(tail, r)
+		}
+	}
+	return append(head, tail...)
+}
+
+// pinInstalledFirst moves installed plugin rows to the top while
+// preserving relative order within both groups.
+func pinInstalledFirst(rows []agentRow) []agentRow {
+	if len(rows) < 2 {
+		return rows
+	}
+	var head, tail []agentRow
+	for _, r := range rows {
+		if r.plugin != nil && r.plugin.Installed {
 			head = append(head, r)
 		} else {
 			tail = append(tail, r)
@@ -1409,8 +1424,10 @@ func agentsSortModesFor(subTab int) []agentsSortMode {
 	switch subTab {
 	case agentsSubSessions:
 		return []agentsSortMode{agentsSortDefault, agentsSortName, agentsSortCreated, agentsSortTurns}
-	case agentsSubPlugins, agentsSubSkills, agentsSubMCPs, agentsSubMarketplaces:
-		return []agentsSortMode{agentsSortDefault, agentsSortName, agentsSortModified}
+	case agentsSubPlugins, agentsSubSkills, agentsSubMCPs:
+		return []agentsSortMode{agentsSortDefault, agentsSortProvider}
+	case agentsSubMarketplaces:
+		return []agentsSortMode{agentsSortDefault, agentsSortModified, agentsSortProvider}
 	}
 	return []agentsSortMode{agentsSortDefault}
 }
@@ -1434,6 +1451,8 @@ func sortModeName(m agentsSortMode) string {
 		return "created"
 	case agentsSortTurns:
 		return "turns"
+	case agentsSortProvider:
+		return "provider"
 	default:
 		return "default"
 	}
@@ -1466,6 +1485,8 @@ func sortAgentRows(rows []agentRow, subTab int, mode agentsSortMode) []agentRow 
 				bt = b.session.TurnCount
 			}
 			return at > bt
+		case agentsSortProvider:
+			return string(a.provider) < string(b.provider)
 		}
 		return false
 	})
@@ -1498,16 +1519,13 @@ func agentsProviderStyle(id agents.ProviderID) lipgloss.Style {
 }
 
 // providerBrandFG returns the brand foreground for a provider —
-// Anthropic orange for Claude, Copilot purple for Copilot, and the
-// amber accent for the MCP registry.
+// Anthropic orange for Claude, Copilot purple for Copilot.
 func providerBrandFG(id agents.ProviderID) color.Color {
 	switch id {
 	case agents.ProviderClaudeCode:
 		return claudeBrand
 	case agents.ProviderCopilotCLI:
 		return copilotBrand
-	case agents.ProviderMCPRegistry:
-		return mcpBrand
 	}
 	return cyberFG
 }
@@ -1568,7 +1586,7 @@ func (m *Model) renderAgentsView() string {
 		b.WriteString("\n")
 	default:
 		// Single, subtle hint — full keymap lives behind ?.
-		b.WriteString("  " + dimVersion.Render("press ? for help") + "\n")
+		b.WriteString("  " + dimVersion.Render("/ filter · s sort · S search transcripts · ? help") + "\n")
 	}
 
 	// Active-filter chip row — only rendered when at least one filter
@@ -1605,6 +1623,13 @@ func (m *Model) renderAgentsView() string {
 		if st.flash != "" && time.Now().Before(st.flashEnd) {
 			b.WriteString("\n  " + st.flash + "\n")
 		}
+		return b.String()
+	}
+
+	// Full-text search overlay replaces the table body so it appears
+	// inline (not pushed to the bottom of the view).
+	if st.searchOverlay.Open {
+		b.WriteString(m.renderAgentsSearchOverlay())
 		return b.String()
 	}
 
@@ -1716,12 +1741,6 @@ func (m *Model) renderAgentsView() string {
 		b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
 	}
 
-	if st.helpOpen {
-		b.WriteString(agentsHelpOverlay())
-	}
-	if st.searchOverlay.Open {
-		b.WriteString(m.renderAgentsSearchOverlay())
-	}
 	if st.noteOpen {
 		b.WriteString(renderAgentNotePrompt(st))
 	}
@@ -1762,8 +1781,6 @@ func providerShort(id agents.ProviderID) string {
 		return "claude"
 	case agents.ProviderCopilotCLI:
 		return "copilot"
-	case agents.ProviderMCPRegistry:
-		return "mcp-reg"
 	default:
 		return string(id)
 	}
@@ -1796,7 +1813,7 @@ func agentsProviderHealth(s *agents.Snapshot) string {
 	if s == nil {
 		return ""
 	}
-	order := []agents.ProviderID{agents.ProviderClaudeCode, agents.ProviderCopilotCLI, agents.ProviderMCPRegistry}
+	order := []agents.ProviderID{agents.ProviderClaudeCode, agents.ProviderCopilotCLI}
 	var pills []string
 	for _, id := range order {
 		st, ok := s.ProviderStatus[id]
@@ -2614,7 +2631,7 @@ func applyStatusValueFilter(rows []agentRow, subTab int, value string) []agentRo
 			}
 			builtin := false
 			switch r.marketplace.Source {
-			case agents.SourceCatalogClaude, agents.SourceCatalogMCP, agents.SourceCatalogCopilot:
+			case agents.SourceCatalogClaude, agents.SourceCatalogCopilot:
 				builtin = true
 			}
 			switch value {
@@ -2748,63 +2765,6 @@ func cycleMarketplaceFilter(current string, available []string) string {
 		}
 	}
 	return available[0]
-}
-
-// agentsHelpOverlay renders the keymap modal.
-func agentsHelpOverlay() string {
-	listKeys := [][2]string{
-		{"1-7", "jump to sub-tab (1=Marketplaces … 6=Costs · 7=Health)"},
-		{"Tab / Shift-Tab", "next / previous sub-tab (or parent at edge)"},
-		{"j / k or ↓ / ↑", "move cursor"},
-		{"Enter", "open detail page (Costs: open focused session)"},
-		{"Shift+D", "toggle inline quick-detail (legacy)"},
-		{"/", "search (fuzzy)"},
-		{"S", "full-text search across all session transcripts"},
-		{"b", "toggle session bookmark (★)"},
-		{"N", "edit note on the focused bookmarked session"},
-		{"Promote ▸", "(detail page action) copy skill/MCP/plugin to another provider"},
-		{"Space", "toggle row selection for bulk ops (plugins / MCPs / sessions)"},
-		{"Shift+I/U/X", "bulk install/update/uninstall plugins"},
-		{"Shift+E/D/R", "bulk enable/disable/remove MCPs"},
-		{"Shift+B/X", "bulk bookmark / delete sessions"},
-		{"s", "cycle sort mode"},
-		{"f", "open filter sidebar (STATUS / PROVIDER / MARKETPLACE / SCOPE / TRANSPORT)"},
-		{"M / P", "open sidebar focused on MARKETPLACE / PROVIDER"},
-		{"X", "clear every filter on the current sub-tab"},
-		{"←/→ (Costs)", "switch range (Today / 7d / 30d / All)"},
-		{"l", "launch session (skill / plugin / session)"},
-		{"o", "open primary URL in browser"},
-		{"c", "copy launch / install / config command"},
-		{"y", "yank entity id to clipboard"},
-		{"v", "view first 60 lines of session transcript"},
-		{"d", "delete current row (sessions / MCPs) — confirms first"},
-		{"r", "refresh (Costs: re-scan transcripts)"},
-		{"?", "toggle this help overlay"},
-		{"Esc", "close overlay / sidebar / cancel modal"},
-	}
-	detailKeys := [][2]string{
-		{"←/→ or Tab/Shift-Tab", "move action focus"},
-		{"↑/↓ or j/k", "scroll body · move plugin cursor (marketplace)"},
-		{"Enter", "execute focused action · disabled buttons flash a reason"},
-		{"o", "open primary URL"},
-		{"c", "copy contextual command"},
-		{"r", "refresh"},
-		{"Esc / q", "pop one frame (or close detail page)"},
-	}
-	var b strings.Builder
-	b.WriteString("\n  ╔ Agents — keymap (list) ════════════════════════════════════════╗\n")
-	for _, row := range listKeys {
-		b.WriteString(fmt.Sprintf("  ║ %-22s  %-40s ║\n", row[0], row[1]))
-	}
-	b.WriteString("  ╠════════════════════════════════════════════════════════════════╣\n")
-	b.WriteString("  ║ detail page                                                    ║\n")
-	for _, row := range detailKeys {
-		b.WriteString(fmt.Sprintf("  ║ %-22s  %-40s ║\n", row[0], row[1]))
-	}
-	b.WriteString("  ║                                                                ║\n")
-	b.WriteString("  ║ press any key to close                                         ║\n")
-	b.WriteString("  ╚════════════════════════════════════════════════════════════════╝\n")
-	return b.String()
 }
 
 // readSessionTranscript reads at most `max` lines from a session

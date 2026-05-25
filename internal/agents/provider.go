@@ -16,7 +16,7 @@ import (
 // special-case capability detection.
 type Provider interface {
 	// ID is the stable identifier used in CLI flags and config keys
-	// (e.g. "claude-code", "copilot-cli", "mcp-registry").
+	// (e.g. "claude-code", "copilot-cli").
 	ID() ProviderID
 
 	// DisplayName is the human-readable name shown in the TUI.

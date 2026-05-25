@@ -132,7 +132,7 @@ func statusSectionMarketplaces(rows []agentRow) []agentSidebarItem {
 			available++
 		}
 		switch r.marketplace.Source {
-		case agents.SourceCatalogClaude, agents.SourceCatalogMCP, agents.SourceCatalogCopilot:
+		case agents.SourceCatalogClaude, agents.SourceCatalogCopilot:
 			builtin++
 		default:
 			local++
@@ -246,7 +246,7 @@ func providerSection(rows []agentRow) []agentSidebarItem {
 	for _, r := range rows {
 		counts[r.provider]++
 	}
-	order := []agents.ProviderID{agents.ProviderClaudeCode, agents.ProviderCopilotCLI, agents.ProviderMCPRegistry}
+	order := []agents.ProviderID{agents.ProviderClaudeCode, agents.ProviderCopilotCLI}
 	items := []agentSidebarItem{
 		{label: "PROVIDER", isHeader: true},
 		{label: fmt.Sprintf("All (%d)", len(rows)), section: "provider", value: "", count: len(rows)},

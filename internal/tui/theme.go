@@ -53,9 +53,6 @@ var (
 	claudeBrand = lipgloss.Color("#cc785c")
 	// GitHub Copilot's product purple — used for "copilot" entities.
 	copilotBrand = lipgloss.Color("#8957e5")
-	// MCP Registry gets the same amber accent we use for warnings
-	// — distinct from the two CLI providers.
-	mcpBrand = lipgloss.Color("#ffb000")
 )
 
 // Reusable style tokens — every render path should reach for one of

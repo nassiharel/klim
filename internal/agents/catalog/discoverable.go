@@ -16,8 +16,6 @@ func sourceForProvider(p agents.ProviderID) agents.Source {
 	switch p {
 	case agents.ProviderCopilotCLI:
 		return agents.SourceCatalogCopilot
-	case agents.ProviderMCPRegistry:
-		return agents.SourceCatalogMCP
 	default:
 		return agents.SourceCatalogClaude
 	}
