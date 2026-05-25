@@ -23,7 +23,6 @@ import (
 	"github.com/nassiharel/klim/internal/agents/catalog"
 	"github.com/nassiharel/klim/internal/agents/providers/claudecode"
 	"github.com/nassiharel/klim/internal/agents/providers/copilotcli"
-	"github.com/nassiharel/klim/internal/agents/providers/mcpregistry"
 )
 
 // agentsState holds all in-memory state for the Agents tab.
@@ -84,7 +83,7 @@ type agentsState struct {
 	statusFilterValue string
 
 	// providerFilter narrows rows to a single provider when set
-	// (claude-code / copilot-cli / mcp-registry). Empty string = all.
+	// (claude-code / copilot-cli). Empty string = all.
 	// Applies to every sub-tab.
 	providerFilter agents.ProviderID
 
@@ -222,7 +221,6 @@ var agentsService = func() *agents.Service {
 	svc := agents.NewService(4,
 		claudecode.New(),
 		copilotcli.New(),
-		mcpregistry.New(),
 	)
 	svc.RemoteCatalog = tuiCatalogAdapter{f: catalog.New()}
 	return svc
@@ -1521,16 +1519,13 @@ func agentsProviderStyle(id agents.ProviderID) lipgloss.Style {
 }
 
 // providerBrandFG returns the brand foreground for a provider —
-// Anthropic orange for Claude, Copilot purple for Copilot, and the
-// amber accent for the MCP registry.
+// Anthropic orange for Claude, Copilot purple for Copilot.
 func providerBrandFG(id agents.ProviderID) color.Color {
 	switch id {
 	case agents.ProviderClaudeCode:
 		return claudeBrand
 	case agents.ProviderCopilotCLI:
 		return copilotBrand
-	case agents.ProviderMCPRegistry:
-		return mcpBrand
 	}
 	return cyberFG
 }
@@ -1786,8 +1781,6 @@ func providerShort(id agents.ProviderID) string {
 		return "claude"
 	case agents.ProviderCopilotCLI:
 		return "copilot"
-	case agents.ProviderMCPRegistry:
-		return "mcp-reg"
 	default:
 		return string(id)
 	}
@@ -1820,7 +1813,7 @@ func agentsProviderHealth(s *agents.Snapshot) string {
 	if s == nil {
 		return ""
 	}
-	order := []agents.ProviderID{agents.ProviderClaudeCode, agents.ProviderCopilotCLI, agents.ProviderMCPRegistry}
+	order := []agents.ProviderID{agents.ProviderClaudeCode, agents.ProviderCopilotCLI}
 	var pills []string
 	for _, id := range order {
 		st, ok := s.ProviderStatus[id]
@@ -2638,7 +2631,7 @@ func applyStatusValueFilter(rows []agentRow, subTab int, value string) []agentRo
 			}
 			builtin := false
 			switch r.marketplace.Source {
-			case agents.SourceCatalogClaude, agents.SourceCatalogMCP, agents.SourceCatalogCopilot:
+			case agents.SourceCatalogClaude, agents.SourceCatalogCopilot:
 				builtin = true
 			}
 			switch value {

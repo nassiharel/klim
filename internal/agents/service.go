@@ -240,7 +240,7 @@ func scanProvider(ctx context.Context, p Provider) providerResults {
 	} else {
 		record(err)
 	}
-	// PR #77 review: collapsed the MCP branch — mcp-registry returns
+	// PR #77 review: collapsed the MCP branch — providers return
 	// (earlier-pages, err) on per-page failures, so assigning the
 	// returned slice unconditionally preserves whatever the provider
 	// gave us (nil is harmless, equivalent to "no MCPs from this

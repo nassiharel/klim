@@ -89,9 +89,8 @@ func TestExpandDefs_SkipsInvalid(t *testing.T) {
 
 func TestSourceForProvider(t *testing.T) {
 	cases := map[agents.ProviderID]agents.Source{
-		agents.ProviderClaudeCode:  agents.SourceCatalogClaude,
-		agents.ProviderCopilotCLI:  agents.SourceCatalogCopilot,
-		agents.ProviderMCPRegistry: agents.SourceCatalogMCP,
+		agents.ProviderClaudeCode: agents.SourceCatalogClaude,
+		agents.ProviderCopilotCLI: agents.SourceCatalogCopilot,
 	}
 	for in, want := range cases {
 		if got := sourceForProvider(in); got != want {

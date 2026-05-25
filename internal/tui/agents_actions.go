@@ -86,7 +86,7 @@ func (m *Model) actionsForMarketplace(frame agentDetailFrame, row agentRow) []ag
 			reason: "no plugins from this marketplace in the current snapshot",
 			run:    viewMarketplacePluginsCmd},
 		{label: "Refresh", run: refreshAgentsCmd},
-		{label: "Remove", disabled: mp.Source == agents.SourceCatalogClaude || mp.Source == agents.SourceCatalogMCP, reason: "built-in marketplace cannot be removed",
+		{label: "Remove", disabled: mp.Source == agents.SourceCatalogClaude || mp.Source == agents.SourceCatalogCopilot, reason: "built-in marketplace cannot be removed",
 			run: func() tea.Cmd {
 				return providerActionCmd("removed marketplace "+mp.Name, func(ctx context.Context, p agents.Provider) error {
 					return p.RemoveMarketplace(ctx, mp.Name)

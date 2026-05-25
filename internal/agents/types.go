@@ -62,9 +62,8 @@ func (p ProviderID) String() string { return string(p) }
 
 // ProviderID values for the built-in providers.
 const (
-	ProviderClaudeCode  ProviderID = "claude-code"
-	ProviderCopilotCLI  ProviderID = "copilot-cli"
-	ProviderMCPRegistry ProviderID = "mcp-registry"
+	ProviderClaudeCode ProviderID = "claude-code"
+	ProviderCopilotCLI ProviderID = "copilot-cli"
 )
 
 // Status reports whether a provider's binary is installed and detected.
@@ -90,7 +89,6 @@ const (
 	SourceLocalCopilot   Source = "local-copilot"
 	SourceCatalogClaude  Source = "catalog-claude"
 	SourceCatalogCopilot Source = "catalog-copilot"
-	SourceCatalogMCP     Source = "catalog-mcp-registry"
 	SourceConfig         Source = "config"
 )
 
