@@ -1987,18 +1987,6 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 	}
 
-	// Global `?` toggles the help overlay from any tab.
-	if msg.String() == "?" {
-		m.helpOverlay = !m.helpOverlay
-		return m, nil
-	}
-
-	// Dismiss the help overlay on any other key when it's open.
-	if m.helpOverlay {
-		m.helpOverlay = false
-		return m, nil
-	}
-
 	// Global `P` opens the Plan modal from any tab. Routed here
 	// before the tab-specific dispatchers so the shortcut is
 	// uniform across the whole UI. Disabled while the catalog is

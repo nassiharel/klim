@@ -191,7 +191,8 @@ func (m Model) renderHelpOverlay() string {
 	}
 
 	colWidth := 30
-	twoColMin := colWidth*2 + 10 // 2 columns + gap + border padding
+	// 2 columns (30+30) + 3-space gap + border (2) + padding (6) = 71
+	twoColMin := colWidth*2 + 3 + 2 + 6 + 1
 	useTwoCol := len(rightParts) > 0 && m.width >= twoColMin
 
 	var columns string
