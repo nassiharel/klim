@@ -180,7 +180,7 @@ func (m Model) renderHelpOverlay() string {
 		return sb.String()
 	}
 
-	// Arrange sections in two columns.
+	// Arrange sections in columns, adapting to terminal width.
 	var leftParts, rightParts []string
 	for i, sec := range sections {
 		if i%2 == 0 {
@@ -190,13 +190,20 @@ func (m Model) renderHelpOverlay() string {
 		}
 	}
 
-	leftCol := strings.Join(leftParts, "\n")
-	rightCol := strings.Join(rightParts, "\n")
+	colWidth := 30
+	twoColMin := colWidth*2 + 10 // 2 columns + gap + border padding
+	useTwoCol := len(rightParts) > 0 && m.width >= twoColMin
 
-	leftBlock := lipgloss.NewStyle().Width(30).Render(leftCol)
-	rightBlock := lipgloss.NewStyle().Width(30).Render(rightCol)
-
-	columns := lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, "   ", rightBlock)
+	var columns string
+	if useTwoCol {
+		leftBlock := lipgloss.NewStyle().Width(colWidth).Render(strings.Join(leftParts, "\n"))
+		rightBlock := lipgloss.NewStyle().Width(colWidth).Render(strings.Join(rightParts, "\n"))
+		columns = lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, "   ", rightBlock)
+	} else {
+		// Single column: stack all sections vertically.
+		allParts := append(leftParts, rightParts...)
+		columns = strings.Join(allParts, "\n")
+	}
 
 	// Title + dismiss hint.
 	title := lipgloss.NewStyle().

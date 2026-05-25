@@ -212,17 +212,18 @@ func (m Model) renderView() string {
 		return m.renderPackDetailView(m.packs[m.packDetailIdx])
 	}
 
+	// Global help overlay — full-screen modal with tab-aware keybindings.
+	// Checked before boot splash so ? during startup renders immediately.
+	if m.helpOverlay {
+		return m.renderHelpOverlay()
+	}
+
 	// Boot splash — full-screen cyber cold-start visual. Drawn
 	// only after the modal/detail layers above have declined.
 	// Stays up while the scan is in flight OR until the minimum
 	// splash duration has elapsed (whichever is longer).
 	if m.phase == phaseLoading || (!m.bootStart.IsZero() && time.Since(m.bootStart) < bootSplashMinDuration) {
 		return m.renderBootSplash()
-	}
-
-	// Global help overlay — full-screen modal with tab-aware keybindings.
-	if m.helpOverlay {
-		return m.renderHelpOverlay()
 	}
 
 	var body strings.Builder
