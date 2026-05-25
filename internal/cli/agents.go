@@ -18,7 +18,6 @@ import (
 	"github.com/nassiharel/klim/internal/agents/catalog"
 	"github.com/nassiharel/klim/internal/agents/providers/claudecode"
 	"github.com/nassiharel/klim/internal/agents/providers/copilotcli"
-	"github.com/nassiharel/klim/internal/agents/providers/mcpregistry"
 )
 
 // newAgentsService builds the AgentService used by every `klim agents`
@@ -27,7 +26,6 @@ var newAgentsService = func() *agents.Service {
 	svc := agents.NewService(4,
 		claudecode.New(),
 		copilotcli.New(),
-		mcpregistry.New(),
 	)
 	svc.RemoteCatalog = catalogAdapter{f: catalog.New()}
 	return svc
@@ -209,7 +207,7 @@ func init() {
 	// every subcommand (including per-entity install/remove ops)
 	// inherits. The list-only `--provider` flag is now declared on
 	// the parent so all subcommands share one flag identity.
-	agentsCmd.PersistentFlags().StringVar(&agentsListProvider, "provider", "", "limit operation to one provider: claude-code|copilot-cli|mcp-registry")
+	agentsCmd.PersistentFlags().StringVar(&agentsListProvider, "provider", "", "limit operation to one provider: claude-code|copilot-cli")
 
 	agentsCmd.AddCommand(agentsListCmd)
 	agentsCmd.AddCommand(agentsSearchCmd)
@@ -430,8 +428,6 @@ func providerShortCLI(id agents.ProviderID) string {
 		return "claude"
 	case agents.ProviderCopilotCLI:
 		return "copilot"
-	case agents.ProviderMCPRegistry:
-		return "mcp-reg"
 	default:
 		return string(id)
 	}
@@ -792,7 +788,7 @@ func forEachProvider(ctx context.Context, fn func(agents.Provider) error) error 
 	if want := strings.TrimSpace(agentsListProvider); want != "" {
 		p := svc.ProviderFor(agents.ProviderID(want))
 		if p == nil {
-			return fmt.Errorf("--provider %q is not registered (known: claude-code, copilot-cli, mcp-registry)", want)
+			return fmt.Errorf("--provider %q is not registered (known: claude-code, copilot-cli)", want)
 		}
 		providers = []agents.Provider{p}
 	}

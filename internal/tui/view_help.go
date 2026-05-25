@@ -3,7 +3,243 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"charm.land/lipgloss/v2"
 )
+
+// renderHelpOverlay produces a full-screen, centred help modal with
+// tab-aware keybinding sections. Called from renderView when
+// m.helpOverlay is true; dismissed by ? or any other key.
+func (m Model) renderHelpOverlay() string {
+	if m.width <= 0 || m.height <= 0 {
+		return ""
+	}
+
+	// Collect sections: global keys + tab-specific keys.
+	type section struct {
+		title string
+		keys  [][2]string
+	}
+
+	global := section{
+		title: "Global",
+		keys: [][2]string{
+			{"1-0", "jump to tab"},
+			{"Tab/Shift-Tab", "next / prev sub-tab"},
+			{"P", "open Plan modal"},
+			{"q / Ctrl-C", "quit"},
+			{"?", "toggle this help"},
+		},
+	}
+
+	sections := []section{global}
+
+	switch m.activeTab {
+	case tabInstalled, tabUpdates, tabFavorites:
+		sections = append(sections, section{
+			title: "My Tools",
+			keys: [][2]string{
+				{"↑/↓", "navigate"},
+				{"Enter", "open detail"},
+				{"u", "upgrade"},
+				{"i", "install"},
+				{"r", "remove"},
+				{"*", "toggle favorite"},
+				{"s", "share"},
+				{"/", "search"},
+				{"Esc", "cancel"},
+			},
+		})
+	case tabDiscover:
+		sections = append(sections, section{
+			title: "Marketplace",
+			keys: [][2]string{
+				{"↑/↓", "navigate"},
+				{"Enter", "open detail"},
+				{"i", "install"},
+				{"*", "toggle favorite"},
+				{"/", "search"},
+				{"Esc", "cancel"},
+			},
+		})
+	case tabProject:
+		sections = append(sections, section{
+			title: "Project",
+			keys: [][2]string{
+				{"↑/↓", "navigate"},
+				{"Enter", "open detail"},
+				{"r", "refresh"},
+			},
+		})
+	case tabDashboard:
+		sections = append(sections, section{
+			title: "Dashboard",
+			keys: [][2]string{
+				{"↑/↓", "scroll"},
+			},
+		})
+	case tabAgents:
+		sections = append(sections, section{
+			title: "Agents",
+			keys: [][2]string{
+				{"1-7", "sub-tab"},
+				{"↑/↓", "cursor"},
+				{"Enter", "detail page"},
+				{"/", "fuzzy filter"},
+				{"S", "search transcripts"},
+				{"s", "sort"},
+				{"f", "filter sidebar"},
+				{"i", "installed filter"},
+				{"Space", "bulk select"},
+				{"b", "bookmark"},
+				{"l", "launch"},
+				{"o", "open URL"},
+				{"r", "refresh"},
+			},
+		}, section{
+			title: "Detail Page",
+			keys: [][2]string{
+				{"←/→", "action focus"},
+				{"↑/↓", "scroll body"},
+				{"Enter", "run action"},
+				{"o", "open URL"},
+				{"c", "copy command"},
+				{"Esc/q", "back"},
+			},
+		})
+	case tabProfile:
+		sections = append(sections, section{
+			title: "My Profile",
+			keys: [][2]string{
+				{"Enter", "generate profile"},
+				{"↑/↓", "scroll"},
+			},
+		})
+	case tabHealth:
+		sections = append(sections, section{
+			title: "Health",
+			keys: [][2]string{
+				{"↑/↓", "navigate"},
+				{"Enter", "fix wizard"},
+				{"r", "re-scan"},
+				{"t", "toggle view"},
+				{"u", "uninstall shadowed"},
+			},
+		})
+	case tabDoctor:
+		sections = append(sections, section{
+			title: "Security",
+			keys: [][2]string{
+				{"↑/↓", "scroll"},
+			},
+		})
+	case tabBackup:
+		sections = append(sections, section{
+			title: "Backup",
+			keys: [][2]string{
+				{"↑/↓", "navigate"},
+				{"Enter", "select"},
+				{"e", "export"},
+				{"i", "import"},
+				{"s", "share"},
+				{"Esc", "cancel"},
+			},
+		})
+	case tabConfig:
+		sections = append(sections, section{
+			title: "Config",
+			keys: [][2]string{
+				{"↑/↓", "scroll"},
+				{"Enter", "edit value"},
+				{"r", "reset default"},
+			},
+		})
+	}
+
+	// Build two-column layout: if we have 2+ sections, put them
+	// side by side; otherwise single column.
+	keyStyle := lipgloss.NewStyle().
+		Foreground(cyberAccent).
+		Bold(true).
+		PaddingRight(2)
+	descStyle := lipgloss.NewStyle().
+		Foreground(cyberFG)
+	sectionTitleStyle := lipgloss.NewStyle().
+		Foreground(cyberPrimary).
+		Bold(true).
+		PaddingBottom(1)
+	dimStyle := lipgloss.NewStyle().
+		Foreground(cyberFGDim)
+
+	renderSection := func(sec section) string {
+		var sb strings.Builder
+		sb.WriteString(sectionTitleStyle.Render(sec.title) + "\n")
+		for _, kv := range sec.keys {
+			sb.WriteString(keyStyle.Render(fmt.Sprintf("%-14s", kv[0])) + descStyle.Render(kv[1]) + "\n")
+		}
+		return sb.String()
+	}
+
+	// Arrange sections in columns, adapting to terminal width.
+	var leftParts, rightParts []string
+	for i, sec := range sections {
+		if i%2 == 0 {
+			leftParts = append(leftParts, renderSection(sec))
+		} else {
+			rightParts = append(rightParts, renderSection(sec))
+		}
+	}
+
+	colWidth := 30
+	// 2 columns (30+30) + 3-space gap + border (2) + padding (6) = 71
+	twoColMin := colWidth*2 + 3 + 2 + 6 + 1
+	useTwoCol := len(rightParts) > 0 && m.width >= twoColMin
+
+	var columns string
+	if useTwoCol {
+		leftBlock := lipgloss.NewStyle().Width(colWidth).Render(strings.Join(leftParts, "\n"))
+		rightBlock := lipgloss.NewStyle().Width(colWidth).Render(strings.Join(rightParts, "\n"))
+		columns = lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, "   ", rightBlock)
+	} else {
+		// Single column: stack all sections vertically.
+		allParts := make([]string, 0, len(leftParts)+len(rightParts))
+		allParts = append(allParts, leftParts...)
+		allParts = append(allParts, rightParts...)
+		columns = strings.Join(allParts, "\n")
+	}
+
+	// Title + dismiss hint.
+	title := lipgloss.NewStyle().
+		Foreground(cyberPrimary).
+		Bold(true).
+		PaddingBottom(1).
+		Render("⌨  Keyboard Shortcuts")
+	dismiss := dimStyle.Render("press ? or any key to close")
+
+	inner := title + "\n\n" + columns + "\n\n" + dismiss
+
+	// Wrap in a styled box.
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(cyberPrimary).
+		Padding(1, 3).
+		Render(inner)
+
+	// Centre horizontally.
+	centred := lipgloss.NewStyle().
+		Width(m.width).
+		Align(lipgloss.Center).
+		Render(box)
+
+	// Centre vertically.
+	contentLines := strings.Count(centred, "\n") + 1
+	topPad := (m.height - contentLines) / 2
+	if topPad < 1 {
+		topPad = 1
+	}
+
+	return strings.Repeat("\n", topPad) + centred
+}
 
 // renderHelp builds the help / status footer line shown beneath each tab.
 // All keys come from m.activeTab / m.* mode flags; nothing in this file
@@ -279,6 +515,12 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("q") + " quit",
 			}
 		}
+	}
+
+	// Append ? help hint to every footer (unless in a modal/prompt
+	// state that already overrides parts).
+	if len(parts) > 0 && m.pendingAction == nil {
+		parts = append(parts, dimVersion.Render("?")+" help")
 	}
 
 	help := helpStyle.Render("  " + strings.Join(parts, "   "))

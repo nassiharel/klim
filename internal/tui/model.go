@@ -279,6 +279,9 @@ type Model struct {
 	// Quitting.
 	quitting bool
 
+	// helpOverlay toggles the full-screen help modal (? key).
+	helpOverlay bool
+
 	// Status message (transient, e.g. error feedback).
 	statusMsg string
 
