@@ -13,18 +13,17 @@ import (
 // reveal animation time to actually be seen.
 const bootSplashMinDuration = 3 * time.Second
 
-// klimASCII is the bootscreen logo. Each row is exactly 34 runes
-// (mixed spaces + █ FULL BLOCK glyphs) so the reveal animation
-// progresses left-to-right at a stable rate; renderBootSplash reads
-// the first row's rune count as the canonical width.
+// klimASCII is the bootscreen logo. Each row must have the same rune
+// count so the reveal animation progresses left-to-right at a stable
+// rate; renderBootSplash reads the first row's rune count as the
+// canonical width.
 var klimASCII = []string{
-	"  ██   ██  ██       ██ ███   ███  ",
-	"  ██  ██   ██       ██ ████ ████  ",
-	"  ██ ██    ██       ██ ██ ███ ██  ",
-	"  ████     ██       ██ ██  █  ██  ",
-	"  ██ ██    ██       ██ ██     ██  ",
-	"  ██  ██   ██████   ██ ██     ██  ",
-	"  ██   ██  ████████ ██ ██     ██  ",
+	"  ██  ██  ██       ██ ██▄  ▄██  ",
+	"  ██▄██   ██       ██ ██ ▀▀ ██  ",
+	"  ████    ██       ██ ██    ██  ",
+	"  ██▀██   ██       ██ ██    ██  ",
+	"  ██  ██  ██▄▄▄▄▄  ██ ██    ██  ",
+	"  ▀▀  ▀▀  ▀▀▀▀▀▀▀  ▀▀ ▀▀    ▀▀  ",
 }
 
 // renderBootSplash draws a full-screen, cyber-styled boot splash:

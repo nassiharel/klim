@@ -34,7 +34,6 @@ source: catalog-claude                # optional; provider-derived if omitted
 |-----------------|------------------------|
 | `claude-code`   | `catalog-claude`       |
 | `copilot-cli`   | `catalog-copilot`      |
-| `mcp-registry`  | `catalog-mcp-registry` |
 
 A marketplace listed under multiple `providers:` is expanded into one
 `Marketplace` entry per provider during catalog load. Each expansion

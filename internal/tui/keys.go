@@ -10,6 +10,17 @@ import (
 )
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Global help toggle — works from any screen.
+	if msg.String() == "?" {
+		m.helpOverlay = !m.helpOverlay
+		return m, nil
+	}
+	// Dismiss the help overlay on any key when it's open.
+	if m.helpOverlay {
+		m.helpOverlay = false
+		return m, nil
+	}
+
 	// Modal key handlers — each intercepts all keys when active.
 	if m.viewingPlan {
 		return m.handleKeyPlanView(msg)
