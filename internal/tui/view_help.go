@@ -24,8 +24,8 @@ func (m Model) renderHelpOverlay() string {
 	global := section{
 		title: "Global",
 		keys: [][2]string{
-			{"1-0", "jump to tab (1=My Tools … 0=Config)"},
-			{"Tab / Shift-Tab", "next / previous sub-tab"},
+			{"1-0", "jump to tab"},
+			{"Tab/Shift-Tab", "next / prev sub-tab"},
 			{"P", "open Plan modal"},
 			{"q / Ctrl-C", "quit"},
 			{"?", "toggle this help"},
@@ -39,112 +39,109 @@ func (m Model) renderHelpOverlay() string {
 		sections = append(sections, section{
 			title: "My Tools",
 			keys: [][2]string{
-				{"↑ / ↓", "navigate tools"},
-				{"Enter", "open detail view"},
-				{"u", "upgrade selected tool"},
-				{"i", "install selected tool"},
-				{"r", "remove / uninstall"},
+				{"↑/↓", "navigate"},
+				{"Enter", "open detail"},
+				{"u", "upgrade"},
+				{"i", "install"},
+				{"r", "remove"},
 				{"*", "toggle favorite"},
-				{"s", "share favorites (token)"},
-				{"/", "search tools"},
-				{"Esc", "close detail / cancel"},
+				{"s", "share"},
+				{"/", "search"},
+				{"Esc", "cancel"},
 			},
 		})
 	case tabDiscover:
 		sections = append(sections, section{
 			title: "Marketplace",
 			keys: [][2]string{
-				{"↑ / ↓", "navigate tools / packs"},
-				{"Enter", "open detail view"},
-				{"i", "install selected tool"},
+				{"↑/↓", "navigate"},
+				{"Enter", "open detail"},
+				{"i", "install"},
 				{"*", "toggle favorite"},
-				{"/", "search marketplace"},
-				{"Esc", "close detail / cancel"},
+				{"/", "search"},
+				{"Esc", "cancel"},
 			},
 		})
 	case tabProject:
 		sections = append(sections, section{
 			title: "Project",
 			keys: [][2]string{
-				{"↑ / ↓", "navigate items"},
+				{"↑/↓", "navigate"},
 				{"Enter", "open detail"},
-				{"r", "refresh scan"},
-				{"Esc", "close"},
+				{"r", "refresh"},
 			},
 		})
 	case tabDashboard:
 		sections = append(sections, section{
 			title: "Dashboard",
 			keys: [][2]string{
-				{"↑ / ↓", "scroll view"},
+				{"↑/↓", "scroll"},
 			},
 		})
 	case tabAgents:
 		sections = append(sections, section{
-			title: "Agents — List",
+			title: "Agents",
 			keys: [][2]string{
-				{"1-7", "jump to sub-tab"},
-				{"↑ / ↓", "move cursor"},
-				{"Enter", "open detail page"},
-				{"/", "fuzzy search"},
+				{"1-7", "sub-tab"},
+				{"↑/↓", "cursor"},
+				{"Enter", "detail page"},
+				{"/", "fuzzy filter"},
 				{"S", "search transcripts"},
-				{"s", "cycle sort mode"},
+				{"s", "sort"},
 				{"f", "filter sidebar"},
-				{"i", "toggle installed filter"},
-				{"Space", "select for bulk ops"},
-				{"b", "toggle bookmark"},
+				{"i", "installed filter"},
+				{"Space", "bulk select"},
+				{"b", "bookmark"},
 				{"l", "launch"},
 				{"o", "open URL"},
 				{"r", "refresh"},
-				{"Esc", "close / cancel"},
 			},
 		}, section{
-			title: "Agents — Detail",
+			title: "Detail Page",
 			keys: [][2]string{
-				{"← / →", "move action focus"},
-				{"↑ / ↓", "scroll body"},
-				{"Enter", "execute action"},
+				{"←/→", "action focus"},
+				{"↑/↓", "scroll body"},
+				{"Enter", "run action"},
 				{"o", "open URL"},
 				{"c", "copy command"},
-				{"r", "refresh"},
-				{"Esc / q", "back"},
+				{"Esc/q", "back"},
 			},
 		})
 	case tabProfile:
 		sections = append(sections, section{
 			title: "My Profile",
 			keys: [][2]string{
-				{"Enter", "generate / refresh profile"},
-				{"↑ / ↓", "scroll view"},
+				{"Enter", "generate profile"},
+				{"↑/↓", "scroll"},
 			},
 		})
 	case tabHealth:
 		sections = append(sections, section{
 			title: "Health",
 			keys: [][2]string{
-				{"↑ / ↓", "navigate issues"},
-				{"Enter", "open fix wizard"},
+				{"↑/↓", "navigate"},
+				{"Enter", "fix wizard"},
 				{"r", "re-scan"},
 				{"t", "toggle view"},
-				{"u", "uninstall shadowed copy"},
+				{"u", "uninstall shadowed"},
 			},
 		})
 	case tabDoctor:
 		sections = append(sections, section{
 			title: "Security",
 			keys: [][2]string{
-				{"↑ / ↓", "scroll view"},
+				{"↑/↓", "scroll"},
 			},
 		})
 	case tabBackup:
 		sections = append(sections, section{
 			title: "Backup",
 			keys: [][2]string{
-				{"↑ / ↓", "navigate"},
-				{"Enter", "select / confirm"},
-				{"e", "export manifest"},
-				{"i", "import manifest"},
-				{"s", "share (token)"},
+				{"↑/↓", "navigate"},
+				{"Enter", "select"},
+				{"e", "export"},
+				{"i", "import"},
+				{"s", "share"},
 				{"Esc", "cancel"},
 			},
 		})
@@ -152,65 +149,73 @@ func (m Model) renderHelpOverlay() string {
 		sections = append(sections, section{
 			title: "Config",
 			keys: [][2]string{
-				{"↑ / ↓", "scroll"},
+				{"↑/↓", "scroll"},
 				{"Enter", "edit value"},
-				{"r", "reset to default"},
+				{"r", "reset default"},
 			},
 		})
 	}
 
-	// Build the inner content (no box chars — lipgloss adds the border).
-	keyCol := 16
-	descCol := 34
-	innerWidth := keyCol + descCol + 3 // key + gap + desc
+	// Build two-column layout: if we have 2+ sections, put them
+	// side by side; otherwise single column.
+	keyStyle := lipgloss.NewStyle().
+		Foreground(cyberAccent).
+		Bold(true).
+		PaddingRight(2)
+	descStyle := lipgloss.NewStyle().
+		Foreground(cyberFG)
+	sectionTitleStyle := lipgloss.NewStyle().
+		Foreground(cyberPrimary).
+		Bold(true).
+		PaddingBottom(1)
+	dimStyle := lipgloss.NewStyle().
+		Foreground(cyberFGDim)
 
-	keyStyle := lipgloss.NewStyle().Foreground(cyberAccent).Bold(true).Width(keyCol)
-	descStyle := lipgloss.NewStyle().Foreground(cyberFGDim).Width(descCol)
-	titleStyle := lipgloss.NewStyle().Foreground(cyberPrimary).Bold(true)
-	dimStyle := lipgloss.NewStyle().Foreground(cyberFGDim)
-
-	var lines []string
-	for si, sec := range sections {
-		if si > 0 {
-			lines = append(lines, dimStyle.Render(strings.Repeat("─", innerWidth)))
-		}
-		lines = append(lines, titleStyle.Render(sec.title))
+	renderSection := func(sec section) string {
+		var sb strings.Builder
+		sb.WriteString(sectionTitleStyle.Render(sec.title) + "\n")
 		for _, kv := range sec.keys {
-			line := keyStyle.Render(kv[0]) + "   " + descStyle.Render(kv[1])
-			lines = append(lines, line)
+			sb.WriteString(keyStyle.Render(fmt.Sprintf("%-14s", kv[0])) + descStyle.Render(kv[1]) + "\n")
+		}
+		return sb.String()
+	}
+
+	// Arrange sections in two columns.
+	var leftParts, rightParts []string
+	for i, sec := range sections {
+		if i%2 == 0 {
+			leftParts = append(leftParts, renderSection(sec))
+		} else {
+			rightParts = append(rightParts, renderSection(sec))
 		}
 	}
-	lines = append(lines, "", dimStyle.Render("press ? or any key to close"))
 
-	content := strings.Join(lines, "\n")
+	leftCol := strings.Join(leftParts, "\n")
+	rightCol := strings.Join(rightParts, "\n")
 
-	// Wrap in a lipgloss box with rounded border.
+	leftBlock := lipgloss.NewStyle().Width(30).Render(leftCol)
+	rightBlock := lipgloss.NewStyle().Width(30).Render(rightCol)
+
+	columns := lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, "   ", rightBlock)
+
+	// Title + dismiss hint.
+	title := lipgloss.NewStyle().
+		Foreground(cyberPrimary).
+		Bold(true).
+		PaddingBottom(1).
+		Render("⌨  Keyboard Shortcuts")
+	dismiss := dimStyle.Render("press ? or any key to close")
+
+	inner := title + "\n\n" + columns + "\n\n" + dismiss
+
+	// Wrap in a styled box.
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(cyberPrimary).
-		Padding(1, 2).
-		Width(innerWidth + 6). // padding + border
-		Render(content)
+		Padding(1, 3).
+		Render(inner)
 
-	// Add title to the top border.
-	boxLines := strings.Split(box, "\n")
-	if len(boxLines) > 0 {
-		topBorder := boxLines[0]
-		titleText := " Keyboard Shortcuts "
-		borderRunes := []rune(topBorder)
-		titleRunes := []rune(titleText)
-		// Insert title at position 4 (after "╭──").
-		insertAt := 4
-		if insertAt+len(titleRunes) < len(borderRunes) {
-			for i, r := range titleRunes {
-				borderRunes[insertAt+i] = r
-			}
-			boxLines[0] = string(borderRunes)
-		}
-		box = strings.Join(boxLines, "\n")
-	}
-
-	// Centre the box horizontally.
+	// Centre horizontally.
 	centred := lipgloss.NewStyle().
 		Width(m.width).
 		Align(lipgloss.Center).
