@@ -3,10 +3,10 @@
   <desc id="desc">klim — developer toolchain manager</desc>
   <!-- Layered K: three nested < chevrons radiating from stem (dark mode) -->
   <g stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <line x1="14" y1="8" x2="14" y2="56" stroke="#00e5ff" stroke-width="4.5"/>
-    <polyline points="50,10 16,32 50,54" stroke="#0080a0" stroke-width="3.5"/>
-    <polyline points="38,18 16,32 38,46" stroke="#00b0d0" stroke-width="3.5"/>
-    <polyline points="28,25 16,32 28,39" stroke="#00e5ff" stroke-width="3.5"/>
+    <line x1="13" y1="5" x2="13" y2="59" stroke="#00e5ff" stroke-width="5"/>
+    <polyline points="52,6 16,29 52,52" stroke="#0080a0" stroke-width="3.5"/>
+    <polyline points="39,15 16,29 39,43" stroke="#00b0d0" stroke-width="3.5"/>
+    <polyline points="30,22 16,29 30,36" stroke="#00e5ff" stroke-width="3.5"/>
   </g>
   <text x="72" y="43" font-family="'Inter', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
         font-size="34" font-weight="600" letter-spacing="-0.5" fill="#e8f0f0">klim</text>

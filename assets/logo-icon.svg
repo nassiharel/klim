@@ -1,18 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <!--
-    Layered K — the original stacked-chevron concept rotated into a "k"
-    Three nested < chevrons (dim→bright, outer→inner) radiate from the stem.
-    Each chevron = a < terminal symbol. Together they form k = |<
-    The layering suggests signal strength / radiating orchestration.
+    Layered K — three nested < chevrons radiating from a | stem
+    Junction above center (y=29) for typographic dynamism.
+    Golden-ratio spacing: inner 14px, middle 23px, outer 37px reach.
+    k = |<<< — the pipe with layered redirects.
   -->
   <g stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <!-- | stem (pipe) -->
-    <line x1="14" y1="8" x2="14" y2="56" stroke="#00e5ff" stroke-width="4.5"/>
-    <!-- outer < (widest reach, dimmest) -->
-    <polyline points="50,10 16,32 50,54" stroke="#0080a0" stroke-width="3.5"/>
+    <!-- | stem -->
+    <line x1="13" y1="5" x2="13" y2="59" stroke="#00e5ff" stroke-width="5"/>
+    <!-- outer < (widest, dimmest) -->
+    <polyline points="52,6 16,29 52,52" stroke="#0080a0" stroke-width="3.5"/>
     <!-- middle < -->
-    <polyline points="38,18 16,32 38,46" stroke="#00b0d0" stroke-width="3.5"/>
-    <!-- inner < (shortest reach, brightest) -->
-    <polyline points="28,25 16,32 28,39" stroke="#00e5ff" stroke-width="3.5"/>
+    <polyline points="39,15 16,29 39,43" stroke="#00b0d0" stroke-width="3.5"/>
+    <!-- inner < (brightest) -->
+    <polyline points="30,22 16,29 30,36" stroke="#00e5ff" stroke-width="3.5"/>
   </g>
 </svg>
