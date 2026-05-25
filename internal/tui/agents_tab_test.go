@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -8,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/health"
 )
 
 func TestSortAgentRows_Sessions(t *testing.T) {
@@ -794,6 +796,55 @@ func TestApplyScopeFilter(t *testing.T) {
 	got := applyScopeFilter(rows, agents.ScopeUser)
 	if len(got) != 1 || got[0].name != "u" {
 		t.Errorf("user scope: %+v", got)
+	}
+}
+
+func TestAgentsHealthCursorMovesAndWindowFollows(t *testing.T) {
+	m := NewModel()
+	m.activeTab = tabAgents
+	m.width = 120
+	m.height = 30
+	m.agents = newAgentsState()
+	m.agents.subTab = agentsSubHealth
+	m.agents.snapshot = &agents.Snapshot{}
+
+	// Populate 20 health issues.
+	for i := 0; i < 20; i++ {
+		m.agents.healthSub.issues = append(m.agents.healthSub.issues,
+			health.Issue{Title: fmt.Sprintf("issue-%d", i), Severity: health.SeverityWarn, Provider: "test", Kind: "test", Subject: "s"})
+	}
+	m.agents.healthSub.loaded = true
+	m.agents.healthSub.loadedAt = time.Now()
+
+	// Initial cursor should be 0.
+	if m.agents.healthSub.cursor != 0 {
+		t.Fatalf("initial cursor = %d, want 0", m.agents.healthSub.cursor)
+	}
+
+	// Press down 5 times.
+	for i := 0; i < 5; i++ {
+		handled, _ := m.handleAgentsHealthKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown, Text: "down"}))
+		if !handled {
+			t.Fatalf("down key %d not handled", i)
+		}
+	}
+	if m.agents.healthSub.cursor != 5 {
+		t.Errorf("cursor after 5 downs = %d, want 5", m.agents.healthSub.cursor)
+	}
+
+	// Render should include the cursor row and scroll indicators.
+	out := m.renderAgentsHealthView()
+	if !strings.Contains(out, "issue-5") {
+		t.Error("rendered output should contain cursor row issue-5")
+	}
+
+	// Press up — cursor should decrease.
+	handled, _ := m.handleAgentsHealthKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyUp, Text: "up"}))
+	if !handled {
+		t.Fatal("up key not handled")
+	}
+	if m.agents.healthSub.cursor != 4 {
+		t.Errorf("cursor after up = %d, want 4", m.agents.healthSub.cursor)
 	}
 }
 
