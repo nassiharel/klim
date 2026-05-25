@@ -811,7 +811,7 @@ func TestAgentsHealthCursorMovesAndWindowFollows(t *testing.T) {
 	// Populate 20 health issues.
 	for i := 0; i < 20; i++ {
 		m.agents.healthSub.issues = append(m.agents.healthSub.issues,
-			health.Issue{Title: fmt.Sprintf("issue-%d", i), Severity: health.SeverityWarn, Provider: "test", Kind: "test", Subject: "s"})
+			health.Issue{Title: fmt.Sprintf("issue-%d", i), Severity: health.SeverityWarn, Provider: "test", Kind: health.KindProvider, Subject: "s"})
 	}
 	m.agents.healthSub.loaded = true
 	m.agents.healthSub.loadedAt = time.Now()
