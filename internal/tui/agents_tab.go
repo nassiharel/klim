@@ -1579,7 +1579,7 @@ func (m *Model) renderAgentsView() string {
 		b.WriteString("\n")
 	default:
 		// Single, subtle hint — full keymap lives behind ?.
-		b.WriteString("  " + dimVersion.Render("press ? for help") + "\n")
+		b.WriteString("  " + dimVersion.Render("/ filter · s sort · S search transcripts · ? help") + "\n")
 	}
 
 	// Active-filter chip row — only rendered when at least one filter
@@ -1616,6 +1616,13 @@ func (m *Model) renderAgentsView() string {
 		if st.flash != "" && time.Now().Before(st.flashEnd) {
 			b.WriteString("\n  " + st.flash + "\n")
 		}
+		return b.String()
+	}
+
+	// Full-text search overlay replaces the table body so it appears
+	// inline (not pushed to the bottom of the view).
+	if st.searchOverlay.Open {
+		b.WriteString(m.renderAgentsSearchOverlay())
 		return b.String()
 	}
 
@@ -1729,9 +1736,6 @@ func (m *Model) renderAgentsView() string {
 
 	if st.helpOpen {
 		b.WriteString(agentsHelpOverlay())
-	}
-	if st.searchOverlay.Open {
-		b.WriteString(m.renderAgentsSearchOverlay())
 	}
 	if st.noteOpen {
 		b.WriteString(renderAgentNotePrompt(st))

@@ -6,6 +6,4 @@ tools:
     - name: gh
     - name: git
     - name: go
-    - name: golangci-lint
-    - name: node
     - name: npm
