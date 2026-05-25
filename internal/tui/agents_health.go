@@ -189,7 +189,22 @@ func (m *Model) renderAgentsHealthView() string {
 	}, m.width)
 	b.WriteString(renderHeader(cols, -1))
 
-	for i, is := range hs.issues {
+	// Windowed issue list — reserve rows for the header (already
+	// emitted), the detail pane below, and the "scanned …" footer.
+	// The detail pane takes ~4 lines; summary + header + footer ~5.
+	dataRows := m.height - 12
+	if dataRows < 3 {
+		dataRows = 3
+	}
+	total := len(hs.issues)
+	start, hiddenAbove, hiddenBelow, windowSize := windowWithIndicators(total, hs.cursor, dataRows)
+
+	if hiddenAbove > 0 {
+		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)) + "\n")
+	}
+
+	for vi := start; vi < total && vi < start+windowSize; vi++ {
+		is := hs.issues[vi]
 		sev := healthSeverityChip(is.Severity)
 		cells := []string{
 			sev,
@@ -198,7 +213,11 @@ func (m *Model) renderAgentsHealthView() string {
 			truncAgentRow(is.Subject, cols[3].width),
 			truncAgentRow(is.Title, cols[4].width),
 		}
-		b.WriteString(renderRow(cells, cols, rowLead(i, hs.cursor), i == hs.cursor, m.width))
+		b.WriteString(renderRow(cells, cols, rowLead(vi, hs.cursor), vi == hs.cursor, m.width))
+	}
+
+	if hiddenBelow > 0 {
+		b.WriteString("  " + dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)) + "\n")
 	}
 
 	if hs.cursor >= 0 && hs.cursor < len(hs.issues) {

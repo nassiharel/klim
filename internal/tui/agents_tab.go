@@ -200,6 +200,7 @@ const (
 	agentsSortModified                       // recent-first (mtime / last event)
 	agentsSortCreated                        // recent-first (created)
 	agentsSortTurns                          // sessions: most turns first
+	agentsSortProvider                       // group by provider
 	agentsSortCount
 )
 
@@ -1068,8 +1069,10 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		st.loadedAt = time.Now()
 		st.snapshot = v.snap
 		st.loadErr = v.err
-		// Drop any lingering "refreshing…" / spinner flash so the user
-		// sees the fresh data without a stale status line on top.
+		// Drop any lingering "refreshing…" / spinner flash and the
+		// detail-page action spinner so the user sees the fresh data
+		// without a stale status line on top.
+		st.actionRunning = ""
 		if strings.HasPrefix(st.flash, "refreshing") || strings.HasPrefix(st.flash, "scanning") {
 			st.flash = ""
 			st.flashEnd = time.Time{}
@@ -1127,6 +1130,7 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		// pre-filter by the marketplace the user was viewing so the
 		// duplicated "plugins inside this marketplace" body list is
 		// replaced by the canonical Plugins list scoped to it.
+		st.actionRunning = ""
 		if len(st.detailStack) == 0 {
 			return true, nil
 		}
@@ -1150,6 +1154,7 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		// pre-filter by the plugin the user was viewing so the body
 		// "Contained skills" preview is replaced by the canonical
 		// Skills list scoped to that plugin.
+		st.actionRunning = ""
 		if len(st.detailStack) == 0 {
 			return true, nil
 		}
@@ -1409,8 +1414,10 @@ func agentsSortModesFor(subTab int) []agentsSortMode {
 	switch subTab {
 	case agentsSubSessions:
 		return []agentsSortMode{agentsSortDefault, agentsSortName, agentsSortCreated, agentsSortTurns}
-	case agentsSubPlugins, agentsSubSkills, agentsSubMCPs, agentsSubMarketplaces:
-		return []agentsSortMode{agentsSortDefault, agentsSortName, agentsSortModified}
+	case agentsSubPlugins, agentsSubSkills, agentsSubMCPs:
+		return []agentsSortMode{agentsSortDefault, agentsSortProvider}
+	case agentsSubMarketplaces:
+		return []agentsSortMode{agentsSortDefault, agentsSortModified, agentsSortProvider}
 	}
 	return []agentsSortMode{agentsSortDefault}
 }
@@ -1434,6 +1441,8 @@ func sortModeName(m agentsSortMode) string {
 		return "created"
 	case agentsSortTurns:
 		return "turns"
+	case agentsSortProvider:
+		return "provider"
 	default:
 		return "default"
 	}
@@ -1466,6 +1475,8 @@ func sortAgentRows(rows []agentRow, subTab int, mode agentsSortMode) []agentRow 
 				bt = b.session.TurnCount
 			}
 			return at > bt
+		case agentsSortProvider:
+			return string(a.provider) < string(b.provider)
 		}
 		return false
 	})
