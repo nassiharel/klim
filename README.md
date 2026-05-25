@@ -31,9 +31,9 @@
 Klim is a productivity booster for dev tools: a deterministic, cross-platform layer for discovering, standardizing, securing, and automating the tools every project depends on. It keeps native package managers in charge of installation while giving humans, teams, CI, and AI agents the same portable environment contracts and predictable operations.
 
 <p align="center">
-  <a href="https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4">
-    <img src="https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4" alt="klim demo" width="900">
-  </a>
+
+https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4
+
 </p>
 
 ## Quick install
@@ -185,9 +185,9 @@ AI agents are good at translating intent. Klim is the stable local primitive the
 ## Demo
 
 <p align="center">
-  <a href="https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4">
-    <img src="https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4" alt="klim demo — TUI tabs, marketplace, dashboard, security, and more" width="900">
-  </a>
+
+https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4
+
 </p>
 
 > Nine TUI tabs and an optional local web view. Same data, same actions, same JSON — whichever surface you prefer.
