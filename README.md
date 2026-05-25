@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo.svg">
     <source media="(prefers-color-scheme: light)" srcset="assets/logo-light.svg">
-    <img src="assets/logo.svg" alt="klim logo" width="520">
+    <img src="assets/logo.svg" alt="klim logo" width="320">
   </picture>
 </p>
 
