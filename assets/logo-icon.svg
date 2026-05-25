@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="klim">
+  <g stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="19" y1="8" x2="19" y2="56"/>
+    <polyline points="44,10 19,32 44,54"/>
+  </g>
+</svg>
