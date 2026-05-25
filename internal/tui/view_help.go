@@ -3,7 +3,210 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"charm.land/lipgloss/v2"
 )
+
+// renderHelpOverlay produces a full-screen, centred help modal with
+// tab-aware keybinding sections. Called from renderView when
+// m.helpOverlay is true; dismissed by ? or any other key.
+func (m Model) renderHelpOverlay() string {
+	if m.width <= 0 || m.height <= 0 {
+		return ""
+	}
+
+	// Collect sections: global keys + tab-specific keys.
+	type section struct {
+		title string
+		keys  [][2]string
+	}
+
+	global := section{
+		title: "Global",
+		keys: [][2]string{
+			{"1-0", "jump to tab (1=My Tools … 0=Config)"},
+			{"Tab / Shift-Tab", "next / previous sub-tab"},
+			{"P", "open Plan modal (preview pending changes)"},
+			{"q / Ctrl-C", "quit"},
+			{"?", "toggle this help overlay"},
+		},
+	}
+
+	sections := []section{global}
+
+	switch m.activeTab {
+	case tabInstalled, tabUpdates, tabFavorites:
+		sections = append(sections, section{
+			title: "My Tools",
+			keys: [][2]string{
+				{"↑ / ↓", "navigate tools"},
+				{"Enter", "open detail view"},
+				{"u", "upgrade selected tool"},
+				{"i", "install selected tool"},
+				{"r", "remove / uninstall"},
+				{"*", "toggle favorite"},
+				{"s", "share favorites (token)"},
+				{"/", "search tools"},
+				{"Esc", "close detail / cancel"},
+			},
+		})
+	case tabDiscover:
+		sections = append(sections, section{
+			title: "Marketplace",
+			keys: [][2]string{
+				{"↑ / ↓", "navigate tools / packs"},
+				{"Enter", "open detail view"},
+				{"i", "install selected tool"},
+				{"*", "toggle favorite"},
+				{"/", "search marketplace"},
+				{"Esc", "close detail / cancel"},
+			},
+		})
+	case tabProject:
+		sections = append(sections, section{
+			title: "Project",
+			keys: [][2]string{
+				{"↑ / ↓", "navigate items"},
+				{"Enter", "open detail"},
+				{"r", "refresh scan"},
+				{"Esc", "close"},
+			},
+		})
+	case tabDashboard:
+		sections = append(sections, section{
+			title: "Dashboard",
+			keys: [][2]string{
+				{"↑ / ↓", "scroll view"},
+			},
+		})
+	case tabAgents:
+		sections = append(sections, section{
+			title: "Agents — List",
+			keys: [][2]string{
+				{"1-7", "jump to sub-tab"},
+				{"↑ / ↓", "move cursor"},
+				{"Enter", "open detail page"},
+				{"/", "fuzzy search"},
+				{"S", "full-text search across transcripts"},
+				{"s", "cycle sort mode"},
+				{"f", "filter sidebar"},
+				{"i", "toggle installed filter"},
+				{"Space", "select for bulk ops"},
+				{"b", "toggle bookmark (sessions)"},
+				{"l", "launch"},
+				{"o", "open URL"},
+				{"r", "refresh"},
+				{"Esc", "close overlay / cancel"},
+			},
+		}, section{
+			title: "Agents — Detail Page",
+			keys: [][2]string{
+				{"← / →", "move action focus"},
+				{"↑ / ↓", "scroll body"},
+				{"Enter", "execute action"},
+				{"o", "open URL"},
+				{"c", "copy command"},
+				{"r", "refresh"},
+				{"Esc / q", "back"},
+			},
+		})
+	case tabProfile:
+		sections = append(sections, section{
+			title: "My Profile",
+			keys: [][2]string{
+				{"Enter", "generate / refresh profile"},
+				{"↑ / ↓", "scroll view"},
+			},
+		})
+	case tabHealth:
+		sections = append(sections, section{
+			title: "Health",
+			keys: [][2]string{
+				{"↑ / ↓", "navigate issues"},
+				{"Enter", "open fix wizard"},
+				{"r", "re-scan"},
+				{"t", "toggle view (by tool / by dir)"},
+				{"u", "uninstall shadowed copy"},
+			},
+		})
+	case tabDoctor:
+		sections = append(sections, section{
+			title: "Security",
+			keys: [][2]string{
+				{"↑ / ↓", "scroll view"},
+			},
+		})
+	case tabBackup:
+		sections = append(sections, section{
+			title: "Backup",
+			keys: [][2]string{
+				{"↑ / ↓", "navigate"},
+				{"Enter", "select / confirm"},
+				{"e", "export manifest"},
+				{"i", "import manifest"},
+				{"s", "share (token)"},
+				{"Esc", "cancel"},
+			},
+		})
+	case tabConfig:
+		sections = append(sections, section{
+			title: "Config",
+			keys: [][2]string{
+				{"↑ / ↓", "scroll"},
+				{"Enter", "edit value"},
+				{"r", "reset to default"},
+			},
+		})
+	}
+
+	// Render: centred box with sections.
+	const boxWidth = 64
+	border := lipgloss.NewStyle().
+		Foreground(cyberPrimary).
+		Bold(true)
+	dim := lipgloss.NewStyle().Foreground(cyberFGDim)
+	keyStyle := lipgloss.NewStyle().Foreground(cyberAccent).Bold(true)
+
+	var b strings.Builder
+
+	// Top border.
+	title := " klim — Keyboard Shortcuts "
+	padLen := boxWidth - len(title) - 2
+	if padLen < 0 {
+		padLen = 0
+	}
+	b.WriteString(border.Render("  ╔"+title+strings.Repeat("═", padLen)+"╗") + "\n")
+
+	for si, sec := range sections {
+		if si > 0 {
+			b.WriteString(border.Render("  ╠"+strings.Repeat("═", boxWidth)+"╣") + "\n")
+		}
+		// Section title.
+		secTitle := fmt.Sprintf("  %-*s", boxWidth, sec.title)
+		b.WriteString(border.Render("  ║") + lipgloss.NewStyle().Bold(true).Foreground(cyberPrimary).Render(secTitle) + border.Render("║") + "\n")
+
+		for _, kv := range sec.keys {
+			key := keyStyle.Render(fmt.Sprintf("%-18s", kv[0]))
+			desc := dim.Render(fmt.Sprintf("%-*s", boxWidth-20, kv[1]))
+			b.WriteString(border.Render("  ║") + "  " + key + desc + border.Render("║") + "\n")
+		}
+	}
+
+	// Bottom.
+	dismiss := fmt.Sprintf("  %-*s", boxWidth, "press ? or any key to close")
+	b.WriteString(border.Render("  ║") + dim.Render(dismiss) + border.Render("║") + "\n")
+	b.WriteString(border.Render("  ╚"+strings.Repeat("═", boxWidth)+"╝") + "\n")
+
+	// Centre vertically.
+	content := b.String()
+	contentLines := strings.Count(content, "\n")
+	topPad := (m.height - contentLines) / 2
+	if topPad < 1 {
+		topPad = 1
+	}
+
+	return strings.Repeat("\n", topPad) + content
+}
 
 // renderHelp builds the help / status footer line shown beneath each tab.
 // All keys come from m.activeTab / m.* mode flags; nothing in this file
@@ -279,6 +482,12 @@ func (m Model) renderHelp() string {
 				dimVersion.Render("q") + " quit",
 			}
 		}
+	}
+
+	// Append ? help hint to every footer (unless in a modal/prompt
+	// state that already overrides parts).
+	if len(parts) > 0 && m.pendingAction == nil {
+		parts = append(parts, dimVersion.Render("?")+" help")
 	}
 
 	help := helpStyle.Render("  " + strings.Join(parts, "   "))

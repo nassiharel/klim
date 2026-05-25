@@ -47,10 +47,6 @@ func (m *Model) handleAgentsDetailKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, nil
 	}
-	if st.helpOpen {
-		st.helpOpen = false
-		return true, nil
-	}
 
 	top := &st.detailStack[len(st.detailStack)-1]
 	row, ok := m.resolveDetailRow(*top)
@@ -132,8 +128,11 @@ func (m *Model) handleAgentsDetailKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, copyTextCmd(text, label)
 	case "?":
-		st.helpOpen = true
-		return true, nil
+		// Handled globally — but we need to return false to let it
+		// reach the global handler. The detail page catches all keys
+		// with `return true, nil` at the bottom, so we explicitly
+		// return false here.
+		return false, nil
 	case "r":
 		st.flash = "refreshing…"
 		st.flashEnd = time.Now().Add(2 * time.Second)
@@ -406,9 +405,6 @@ func (m *Model) renderAgentsDetailPage() string {
 		b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
 		b.WriteString("  ║ Esc / Enter / q = close\n")
 		b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
-	}
-	if st.helpOpen {
-		b.WriteString(agentsHelpOverlay())
 	}
 	if st.promotePicker.Open {
 		b.WriteString(renderAgentsPromotePicker(st, m.width))

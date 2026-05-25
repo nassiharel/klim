@@ -279,6 +279,9 @@ type Model struct {
 	// Quitting.
 	quitting bool
 
+	// helpOverlay toggles the full-screen help modal (? key).
+	helpOverlay bool
+
 	// Status message (transient, e.g. error feedback).
 	statusMsg string
 
@@ -1982,6 +1985,18 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// when no tools are loaded (e.g. catalog fetch failure).
 	if len(m.tools) > 0 {
 		m.statusMsg = ""
+	}
+
+	// Global `?` toggles the help overlay from any tab.
+	if msg.String() == "?" {
+		m.helpOverlay = !m.helpOverlay
+		return m, nil
+	}
+
+	// Dismiss the help overlay on any other key when it's open.
+	if m.helpOverlay {
+		m.helpOverlay = false
+		return m, nil
 	}
 
 	// Global `P` opens the Plan modal from any tab. Routed here

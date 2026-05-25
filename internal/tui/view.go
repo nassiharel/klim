@@ -220,6 +220,11 @@ func (m Model) renderView() string {
 		return m.renderBootSplash()
 	}
 
+	// Global help overlay — full-screen modal with tab-aware keybindings.
+	if m.helpOverlay {
+		return m.renderHelpOverlay()
+	}
+
 	var body strings.Builder
 
 	body.WriteString(m.renderTitleBar() + "\n")
