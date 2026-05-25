@@ -201,7 +201,9 @@ func (m Model) renderHelpOverlay() string {
 		columns = lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, "   ", rightBlock)
 	} else {
 		// Single column: stack all sections vertically.
-		allParts := append(leftParts, rightParts...)
+		allParts := make([]string, 0, len(leftParts)+len(rightParts))
+		allParts = append(allParts, leftParts...)
+		allParts = append(allParts, rightParts...)
 		columns = strings.Join(allParts, "\n")
 	}
 
