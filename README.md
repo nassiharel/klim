@@ -1,12 +1,10 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/klim-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="assets/klim-light.svg">
-    <img src="assets/klim-light.svg" alt="klim" width="120">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/klim-wordmark-inter-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/klim-wordmark-inter-light.svg">
+    <img src="assets/klim-wordmark-inter-light.svg" alt="klim" width="340">
   </picture>
 </p>
-
-<h1 align="center">klim</h1>
 
 <p align="center">
   <strong>Reignite Dev Experience.</strong>
