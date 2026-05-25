@@ -499,17 +499,35 @@ func TestAgentsDetailEscReturnsToList(t *testing.T) {
 func TestAgentsDetailDisabledActionFlashes(t *testing.T) {
 	m := detailTestModel()
 	m.agents.subTab = agentsSubPlugins
-	m.agents.cursor = 1 // pl2 is not installed → Update is disabled
+	// Create a non-installed plugin with no marketplace so Promote is disabled.
+	m.agents.snapshot.Plugins = append(m.agents.snapshot.Plugins,
+		agents.Plugin{ID: "pl3", Name: "pl3", Provider: agents.ProviderCopilotCLI, Installed: false},
+	)
+	m.agents.cursor = 2 // pl3
 	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
 
-	// First action for plugins is "Install" — focus is at 0. Move to
-	// "Update" (index 1).
-	_, _ = m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyRight, Text: "right"}))
-	if got := m.agents.detailStack[0].actionIdx; got != 1 {
-		t.Fatalf("actionIdx after one right = %d, want 1", got)
+	// Find the Promote action index — it should be disabled (no marketplace).
+	row, _ := m.resolveDetailRow(m.agents.detailStack[0])
+	actions := m.agentsBuildActions(m.agents.detailStack[0], row)
+	promoteIdx := -1
+	for i, a := range actions {
+		if a.label == "Promote ▸" {
+			promoteIdx = i
+			break
+		}
+	}
+	if promoteIdx < 0 {
+		t.Fatal("Promote action not found")
+	}
+	if !actions[promoteIdx].disabled {
+		t.Fatal("Promote should be disabled for plugin with no marketplace")
+	}
+	// Navigate to the Promote action.
+	for i := 0; i < promoteIdx; i++ {
+		_, _ = m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyRight, Text: "right"}))
 	}
 
-	// Pressing enter on the disabled Update should set a flash and not
+	// Pressing enter on the disabled Promote should set a flash and not
 	// schedule the action.
 	handled, cmd := m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
 	if !handled {
@@ -518,8 +536,8 @@ func TestAgentsDetailDisabledActionFlashes(t *testing.T) {
 	if cmd != nil {
 		t.Error("disabled action should NOT return a tea.Cmd")
 	}
-	if !strings.Contains(m.agents.flash, "Update") {
-		t.Errorf("expected flash about Update, got %q", m.agents.flash)
+	if m.agents.flash == "" {
+		t.Error("expected a flash message for disabled action")
 	}
 }
 
@@ -596,14 +614,13 @@ func TestPluginViewSkillsAction(t *testing.T) {
 		t.Fatal("expected detailPage=true after enter")
 	}
 
-	// Plugin actions for an installed plugin: [Install (disabled),
-	// Update, View skills →, Uninstall, ...]. Initial focus is on
-	// the first action (Install). Move Right twice to land on
+	// Plugin actions for an installed plugin with skills: [Update,
+	// View skills →, Disable, Launch, Uninstall, ...]. Initial focus
+	// is on the first action (Update). Move Right once to land on
 	// View skills →.
 	_, _ = m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyRight, Text: "right"}))
-	_, _ = m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyRight, Text: "right"}))
-	if m.agents.detailStack[0].actionIdx != 2 {
-		t.Fatalf("actionIdx = %d, want 2 (View skills)", m.agents.detailStack[0].actionIdx)
+	if m.agents.detailStack[0].actionIdx != 1 {
+		t.Fatalf("actionIdx = %d, want 1 (View skills)", m.agents.detailStack[0].actionIdx)
 	}
 
 	_, cmd := m.handleAgentsDetailKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter, Text: "enter"}))
@@ -673,25 +690,31 @@ func TestApplyPluginFilter_OnlySkillsSubTab(t *testing.T) {
 // what we verify is the provider-level behaviour. See
 // internal/agents/providers/claudecode/claudecode_test.go.
 func TestPluginUpdateUnsupportedSurfaces(t *testing.T) {
-	// Action build for a non-installed plugin should disable Update.
+	// Non-installed plugin should show Install (not Update).
 	m := detailTestModel()
 	row := agentRow{plugin: &m.agents.snapshot.Plugins[1]}
 	actions := m.actionsForPlugin(agentDetailFrame{subTab: agentsSubPlugins}, row)
-	var update *agentAction
+
+	// Install should be present and enabled.
+	var install *agentAction
 	for i := range actions {
-		if actions[i].label == "Update" {
-			update = &actions[i]
+		if actions[i].label == "Install" {
+			install = &actions[i]
 			break
 		}
 	}
-	if update == nil {
-		t.Fatal("Update action not found")
+	if install == nil {
+		t.Fatal("Install action not found for non-installed plugin")
 	}
-	if !update.disabled {
-		t.Error("Update should be disabled for non-installed plugin")
+	if install.disabled {
+		t.Error("Install should be enabled for non-installed plugin")
 	}
-	if !strings.Contains(update.reason, "not installed") {
-		t.Errorf("reason %q should mention 'not installed'", update.reason)
+
+	// Update should NOT be present for non-installed plugins.
+	for _, a := range actions {
+		if a.label == "Update" {
+			t.Error("Update should not be shown for non-installed plugin")
+		}
 	}
 }
 

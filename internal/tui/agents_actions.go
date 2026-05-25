@@ -110,55 +110,85 @@ func (m *Model) actionsForPlugin(frame agentDetailFrame, row agentRow) []agentAc
 	ref := agents.PluginRef{Name: pl.Name, Marketplace: pl.Marketplace}
 	prov := pl.Provider
 	skillCount := m.pluginSkillCount(pl)
-	return []agentAction{
-		{label: "Install", highlight: !pl.Installed, disabled: pl.Installed, reason: "already installed",
-			run: func() tea.Cmd {
-				return providerActionCmd("installed "+id, func(ctx context.Context, p agents.Provider) error {
-					return p.InstallPlugin(ctx, ref)
-				}, prov)
+
+	var actions []agentAction
+
+	if !pl.Installed {
+		// Not installed: offer Install as primary + browse actions.
+		actions = append(actions,
+			agentAction{label: "Install", highlight: true,
+				run: func() tea.Cmd {
+					return providerActionCmd("installed "+id, func(ctx context.Context, p agents.Provider) error {
+						return p.InstallPlugin(ctx, ref)
+					}, prov)
+				}},
+		)
+	} else {
+		// Installed: offer Update as primary + management actions.
+		actions = append(actions,
+			agentAction{label: "Update", highlight: true,
+				run: func() tea.Cmd {
+					return providerActionCmd("updated "+id, func(ctx context.Context, p agents.Provider) error {
+						return p.UpdatePlugin(ctx, id)
+					}, prov)
+				}},
+		)
+		if skillCount > 0 {
+			actions = append(actions,
+				agentAction{label: "View skills →", run: viewPluginSkillsCmd},
+			)
+		}
+		if pl.Enabled {
+			actions = append(actions,
+				agentAction{label: "Disable",
+					run: func() tea.Cmd {
+						return providerActionCmd("disabled "+id, func(ctx context.Context, p agents.Provider) error {
+							return p.EnablePlugin(ctx, id, false)
+						}, prov)
+					}},
+			)
+		} else {
+			actions = append(actions,
+				agentAction{label: "Enable",
+					run: func() tea.Cmd {
+						return providerActionCmd("enabled "+id, func(ctx context.Context, p agents.Provider) error {
+							return p.EnablePlugin(ctx, id, true)
+						}, prov)
+					}},
+			)
+		}
+		actions = append(actions,
+			agentAction{label: "Launch", run: func() tea.Cmd {
+				return launchFromDetailCmd(prov, agents.LaunchSpec{Provider: prov, PluginName: pl.Name})
 			}},
-		{label: "Update", highlight: pl.Installed, disabled: !pl.Installed, reason: "not installed",
-			run: func() tea.Cmd {
-				return providerActionCmd("updated "+id, func(ctx context.Context, p agents.Provider) error {
-					return p.UpdatePlugin(ctx, id)
-				}, prov)
-			}},
-		{label: "View skills →", disabled: skillCount == 0,
-			reason: "plugin ships no skills in the current snapshot",
-			run:    viewPluginSkillsCmd},
-		{label: "Uninstall", disabled: !pl.Installed, reason: "not installed",
-			run: func() tea.Cmd {
-				return providerActionCmd("uninstalled "+id, func(ctx context.Context, p agents.Provider) error {
-					return p.UninstallPlugin(ctx, id)
-				}, prov)
-			}},
-		{label: "Enable", disabled: !pl.Installed || pl.Enabled, reason: "already enabled or not installed",
-			run: func() tea.Cmd {
-				return providerActionCmd("enabled "+id, func(ctx context.Context, p agents.Provider) error {
-					return p.EnablePlugin(ctx, id, true)
-				}, prov)
-			}},
-		{label: "Disable", disabled: !pl.Installed || !pl.Enabled, reason: "already disabled or not installed",
-			run: func() tea.Cmd {
-				return providerActionCmd("disabled "+id, func(ctx context.Context, p agents.Provider) error {
-					return p.EnablePlugin(ctx, id, false)
-				}, prov)
-			}},
-		{label: "Launch", disabled: !pl.Installed, reason: "not installed", run: func() tea.Cmd {
-			return launchFromDetailCmd(prov, agents.LaunchSpec{Provider: prov, PluginName: pl.Name})
-		}},
-		{label: "Open Homepage", disabled: pl.Homepage == "", reason: "no homepage", run: func() tea.Cmd {
+			agentAction{label: "Uninstall",
+				run: func() tea.Cmd {
+					return providerActionCmd("uninstalled "+id, func(ctx context.Context, p agents.Provider) error {
+						return p.UninstallPlugin(ctx, id)
+					}, prov)
+				}},
+		)
+	}
+
+	// Browse actions — only show when URLs exist.
+	if pl.Homepage != "" {
+		actions = append(actions, agentAction{label: "Open Homepage", run: func() tea.Cmd {
 			return openURLCmd(pl.Homepage)
-		}},
-		{label: "Open Repo", disabled: pl.Repository == "", reason: "no repository", run: func() tea.Cmd {
+		}})
+	}
+	if pl.Repository != "" {
+		actions = append(actions, agentAction{label: "Open Repo", run: func() tea.Cmd {
 			return openURLCmd(pl.Repository)
-		}},
-		{label: "Copy Install", run: func() tea.Cmd {
+		}})
+	}
+	actions = append(actions,
+		agentAction{label: "Copy Install", run: func() tea.Cmd {
 			text, _ := rowCopyText(row)
 			return copyTextCmd(text, "install command")
 		}},
 		promoteAction(m.agents, promote.KindPlugin, string(prov), pl.Name, pluginPromoteReason(pl)),
-	}
+	)
+	return actions
 }
 
 func pluginPromoteReason(pl *agents.Plugin) string {
