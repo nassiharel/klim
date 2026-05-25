@@ -31,7 +31,9 @@
 Klim is a productivity booster for dev tools: a deterministic, cross-platform layer for discovering, standardizing, securing, and automating the tools every project depends on. It keeps native package managers in charge of installation while giving humans, teams, CI, and AI agents the same portable environment contracts and predictable operations.
 
 <p align="center">
-  <img src="assets/examples/klim-installed-tui.png" alt="klim Installed view: every tool on the machine with version, install source, category, and GitHub stars" width="900">
+  <a href="https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4">
+    <img src="https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4" alt="klim demo" width="900">
+  </a>
 </p>
 
 ## Quick install
@@ -180,42 +182,13 @@ AI agents are good at translating intent. Klim is the stable local primitive the
 
 ---
 
-## Screenshots
+## Demo
 
-<table>
-  <tr>
-    <td align="center"><strong>Installed</strong><br><sub>Every tool, every version, every install source</sub></td>
-    <td align="center"><strong>Dashboard</strong><br><sub>Score, coverage, GitHub highlights, package-manager mix</sub></td>
-  </tr>
-  <tr>
-    <td><img src="assets/examples/klim-installed-tui.png" alt="klim Installed view"></td>
-    <td><img src="assets/examples/klim-dashboard-tui.png" alt="klim Dashboard view"></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Marketplace</strong><br><sub>110+ curated tools with category, stars, and policy state</sub></td>
-    <td align="center"><strong>Curated packs</strong><br><sub>Bundle status across Cloud Essentials, Kubernetes Starter, Go Developer, …</sub></td>
-  </tr>
-  <tr>
-    <td><img src="assets/examples/klim-marketplace-tui.png" alt="klim Marketplace tab"></td>
-    <td><img src="assets/examples/klim-marketplace-packs-tui.png" alt="klim Marketplace Packs sub-tab"></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>For You</strong><br><sub>Personalised recommendations ranked by overlap with your installed set</sub></td>
-    <td align="center"><strong>Project scan</strong><br><sub>Auto-detect required tools from <code>go.mod</code>, <code>package.json</code>, <code>.github/</code></sub></td>
-  </tr>
-  <tr>
-    <td><img src="assets/examples/klim-marketplace-for-you-tui.png" alt="klim Marketplace For You sub-tab"></td>
-    <td><img src="assets/examples/klim-project-tui.png" alt="klim Project tab"></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Compliance</strong><br><sub>Disallowed sources, blocked tools, license violations against your active policy</sub></td>
-    <td align="center"><strong>Local browser</strong><br><sub><code>klim browser</code> — same data and actions as the TUI in your default browser</sub></td>
-  </tr>
-  <tr>
-    <td><img src="assets/examples/klim-security-compliance-tui.png" alt="klim Security tab on Compliance"></td>
-    <td><img src="assets/examples/klim-local-browser-view.png" alt="klim browser local web view"></td>
-  </tr>
-</table>
+<p align="center">
+  <a href="https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4">
+    <img src="https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4" alt="klim demo — TUI tabs, marketplace, dashboard, security, and more" width="900">
+  </a>
+</p>
 
 > Nine TUI tabs and an optional local web view. Same data, same actions, same JSON — whichever surface you prefer.
 
