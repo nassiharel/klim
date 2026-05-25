@@ -32,7 +32,7 @@ Klim is a productivity booster for dev tools: a deterministic, cross-platform la
 
 <p align="center">
 
-https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4
+https://github.com/user-attachments/assets/54969cc1-47b7-47b7-af35-06d0649da466
 
 </p>
 
@@ -186,7 +186,7 @@ AI agents are good at translating intent. Klim is the stable local primitive the
 
 <p align="center">
 
-https://github.com/nassiharel/klim/releases/download/v0.1.3/klim.mp4
+https://github.com/user-attachments/assets/54969cc1-47b7-47b7-af35-06d0649da466
 
 </p>
 
