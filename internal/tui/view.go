@@ -197,6 +197,12 @@ func (m Model) renderView() string {
 	}
 
 	// Detail view.
+	// Global help overlay — full-screen modal with tab-aware keybindings.
+	// Checked before detail views so ? renders over any page.
+	if m.helpOverlay {
+		return m.renderHelpOverlay()
+	}
+
 	if m.showDetail && m.detailIdx >= 0 && m.detailIdx < len(m.tools) {
 		return m.renderDetailView(m.tools[m.detailIdx])
 	}
@@ -210,12 +216,6 @@ func (m Model) renderView() string {
 	// Pack detail view.
 	if m.showPackDetail && m.packDetailIdx >= 0 && m.packDetailIdx < len(m.packs) {
 		return m.renderPackDetailView(m.packs[m.packDetailIdx])
-	}
-
-	// Global help overlay — full-screen modal with tab-aware keybindings.
-	// Checked before boot splash so ? during startup renders immediately.
-	if m.helpOverlay {
-		return m.renderHelpOverlay()
 	}
 
 	// Boot splash — full-screen cyber cold-start visual. Drawn
