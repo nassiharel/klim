@@ -30,7 +30,7 @@
 
 ---
 
-Klim is a cross-platform layer over native package managers for discovering, standardizing, securing, and automating the dev tools every project depends on — the same portable contracts and predictable operations for humans, teams, CI, and AI agents.
+Klim is a cross-platform layer over native package managers for discovering, standardizing, securing, and automating the dev tools every project depends on — the same portable contracts and predictable operations for developers, teams, CI, and AI agents.
 
 🌐 **Website:** [nassiharel.github.io/klim-web](https://nassiharel.github.io/klim-web) &nbsp;·&nbsp; 📖 **Docs:** [nassiharel.github.io/klim-web/docs](https://nassiharel.github.io/klim-web/docs)
 
