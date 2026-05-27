@@ -36,19 +36,23 @@ https://github.com/user-attachments/assets/54969cc1-47b7-47b7-af35-06d0649da466
 
 ## Install
 
-**macOS / Linux**
+Install with your package manager (recommended) or the bootstrap script. Verify with `klim version`.
+
+**macOS / Linux** — Homebrew
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
-# or: brew install nassiharel/tap/klim
+brew install nassiharel/tap/klim
 ```
 
-**Windows**
+**Windows** — winget or Scoop
 
 ```powershell
-irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
-# or: winget install nassiharel.klim
-# or: scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket; scoop install klim
+winget install nassiharel.klim
+```
+
+```powershell
+scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket
+scoop install klim
 ```
 
 **Go 1.25+**
@@ -57,7 +61,17 @@ irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
 go install github.com/nassiharel/klim/cmd/klim@latest
 ```
 
-Verify with `klim version`.
+**Bootstrap script** (no package manager required)
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash
+```
+
+```powershell
+# Windows
+irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
+```
 
 <details>
 <summary>Other install options (deb / rpm / direct binary / pinned versions)</summary>
