@@ -30,7 +30,9 @@
 
 ---
 
-Klim is a deterministic, cross-platform layer over native package managers for discovering, standardizing, securing, and automating the dev tools every project depends on — the same portable contracts and predictable operations for humans, teams, CI, and AI agents.
+Klim is a cross-platform layer over native package managers for discovering, standardizing, securing, and automating the dev tools every project depends on — the same portable contracts and predictable operations for developers, teams, CI, and AI agents.
+
+🌐 **Website:** [nassiharel.github.io/klim-web](https://nassiharel.github.io/klim-web) &nbsp;·&nbsp; 📖 **Docs:** [nassiharel.github.io/klim-web/docs](https://nassiharel.github.io/klim-web/docs)
 
 https://github.com/user-attachments/assets/54969cc1-47b7-47b7-af35-06d0649da466
 
@@ -144,7 +146,7 @@ Delegates installs and upgrades to managers you already trust — winget, Homebr
 `klim health` flags PATH conflicts, unmanaged installs, archived upstreams, and stale repos, with an interactive PATH-fix wizard. `klim security audit` runs vulnerability lookup via OSV.dev, license inventory, policy enforcement, and CycloneDX SBOM output. `klim score` summarizes overall toolchain health.
 
 ### Interfaces
-Interactive TUI with nine tabs — My Tools, Marketplace, Project, Dashboard, My Profile (with My Score breakdown), Health, Security, Backup, Config — plus an optional local web view. Every action also runs from a deterministic CLI with `--output json`, stable exit codes, and shell completions.
+Interactive TUI with nine tabs — My Tools, Marketplace, Project, Dashboard, My Profile (with My Score breakdown), Health, Security, Backup, Config — plus an optional local web view. Every action also runs from a CLI with `--output json`, stable exit codes, and shell completions.
 
 ---
 
