@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>klim — social preview</title>
+<style>
+  /* GitHub social preview canvas: 1280 × 640.
+     GitHub crops slightly on small previews — keep important content
+     within the 80 px inner safe zone (1120 × 480 effective).            */
+  :root {
+    --ink:    #0b1220;   /* deep navy from wordmark */
+    --paper:  #e6edf3;   /* off-white from dark wordmark */
+    --cyan:   #00c8e6;   /* brand accent — dot on the "i" */
+    --muted:  #8b96a8;   /* secondary text */
+    --line:   #1a2538;   /* subtle grid */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    font-family: Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+    background: var(--ink);
+    color: var(--paper);
+    position: relative;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  /* Soft cyan glow in the top-right, mirrors the chevron in the mark */
+  .glow {
+    position: absolute;
+    top: -200px; right: -200px;
+    width: 700px; height: 700px;
+    background: radial-gradient(circle, rgba(0,200,230,0.18) 0%, rgba(0,200,230,0) 60%);
+    pointer-events: none;
+  }
+
+  /* Faint grid for a "developer tool" texture */
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(to right,  rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  .stage {
+    position: relative;
+    height: 100%;
+    padding: 80px 96px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  /* ---- header ------------------------------------------------------ */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: var(--muted);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .header .dot { color: var(--cyan); }
+  .header .sep { opacity: 0.4; }
+
+  /* ---- wordmark (inline SVG, scaled up from brand asset) ---------- */
+  .wordmark { display: block; }
+
+  .tagline {
+    margin-top: 28px;
+    font-size: 40px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    color: var(--paper);
+  }
+  .tagline .accent { color: var(--cyan); }
+
+  .sub {
+    margin-top: 18px;
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--muted);
+    max-width: 860px;
+    line-height: 1.4;
+  }
+
+  /* ---- footer ------------------------------------------------------ */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    color: var(--muted);
+    font-size: 18px;
+  }
+  .chips {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--paper);
+    background: rgba(255,255,255,0.02);
+  }
+  .chip .k { color: var(--cyan); margin-right: 6px; }
+  .repo {
+    font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    font-size: 18px;
+    color: var(--paper);
+    opacity: 0.85;
+  }
+  .repo .slash { color: var(--cyan); }
+</style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="grid"></div>
+
+  <div class="stage">
+
+    <div class="header">
+      <span class="dot">●</span>
+      <span>cross-platform tool layer</span>
+      <span class="sep">/</span>
+      <span>cli · tui · agents</span>
+    </div>
+
+    <div>
+      <!-- Brand wordmark: dark-theme variant scaled to ~200px tall.
+           Includes the mark (stem + cyan chevron) and "lim" with a cyan
+           dot on the dotless "i". Single source of truth for the logo. -->
+      <svg class="wordmark" width="680" height="240" viewBox="0 0 340 120" aria-label="klim">
+        <rect x="22" y="20" width="14" height="80" rx="3" fill="#e6edf3"/>
+        <path d="M48 28 L82 60 L48 92"
+              fill="none" stroke="#00c8e6" stroke-width="14"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="100" y="98"
+              font-family="Inter, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
+              font-size="96" font-weight="700" letter-spacing="-4" fill="#e6edf3">l</text>
+        <rect x="148" y="50" width="14" height="48" rx="3" fill="#e6edf3"/>
+        <circle cx="155" cy="34" r="9" fill="#00c8e6"/>
+        <text x="170" y="98"
+              font-family="Inter, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
+              font-size="96" font-weight="700" letter-spacing="-4" fill="#e6edf3">m</text>
+      </svg>
+
+      <div class="tagline">
+        Reignite <span class="accent">Dev Experience.</span>
+      </div>
+
+      <div class="sub">
+        One portable contract over winget, Homebrew, apt, Chocolatey, Scoop, npm —
+        for developers, teams, CI, and AI agents.
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="chips">
+        <span class="chip"><span class="k">$</span>klim check</span>
+        <span class="chip"><span class="k">$</span>klim install --pack go-developer</span>
+        <span class="chip"><span class="k">$</span>klim security audit --sbom</span>
+      </div>
+      <div class="repo">github.com<span class="slash">/</span>nassiharel<span class="slash">/</span>klim</div>
+    </div>
+
+  </div>
+</body>
+</html>
