@@ -743,6 +743,21 @@ func redactHeaders(in map[string]string) map[string]string {
 // turn count, live state, recent activity, tool counts, MCP servers,
 // branch, group, and a paste-ready restart command.
 //
+// Identifier convention (important — read before changing):
+//
+//   - s.ID stays `"claude:" + e.Name()`, where e.Name() is the
+//     URL-encoded project directory name (e.g. `C--dev-klim`). This
+//     is the form `claude project purge <decoded-path>` understands
+//     and what the TUI's Delete action passes through to
+//     [Provider.DeleteSession].
+//   - s.Name carries the in-file session UUID (when discoverable).
+//     This is what `claude -r <uuid>` expects for resume. Both the
+//     CLI and TUI launch paths read it via [Provider.BuildLaunch].
+//   - s.TranscriptPath remains the project directory, so the TUI's
+//     "Open Dir" action lands in the right folder. View Transcript
+//     handles the directory case by looking for the newest `*.jsonl`
+//     inside.
+//
 // Sessions are returned sorted by LastModified descending.
 func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	dir := filepath.Join(p.claudeDir(), "projects")
@@ -779,10 +794,12 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 		// fall back to the dir-mtime baseline above.
 		if tr := latestTranscript(full); tr != "" {
 			scan := enrichSessionFromJSONL(tr, now)
+			// Surface the in-file UUID via s.Name so BuildLaunch
+			// (and any other UUID-needing consumer) can find it
+			// without re-parsing the transcript. s.ID stays the
+			// URL-encoded dir name — see the Sessions godoc above.
 			if scan.SessionID != "" {
-				// Prefer the in-file id when available — the dir
-				// name is URL-encoded and harder to read.
-				s.ID = "claude:" + scan.SessionID
+				s.Name = scan.SessionID
 			}
 			if scan.Cwd != "" {
 				s.ProjectPath = scan.Cwd
@@ -799,7 +816,6 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 			if !scan.LastSeen.IsZero() {
 				s.LastModified = scan.LastSeen
 			}
-			s.TranscriptPath = tr
 			agents.ApplyEnrichment(&s, scan.Result)
 		}
 
@@ -815,18 +831,22 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 			s.Type = "interactive"
 		}
 
-		// Build the copy-paste resume command. Bin defaults to
-		// "claude" when claude isn't on PATH so the snippet still
-		// makes sense in a foreign shell.
-		idForResume := strings.TrimPrefix(s.ID, "claude:")
+		// Build the copy-paste resume command. Prefer the in-file
+		// UUID (s.Name) since that's what `claude -r` expects; fall
+		// back to the dir-name form if no UUID was parsed (very old
+		// transcripts).
+		resumeID := s.Name
+		if resumeID == "" {
+			resumeID = strings.TrimPrefix(s.ID, "claude:")
+		}
 		cli := bin
 		if cli == "" {
 			cli = "claude"
 		}
 		if s.ProjectPath != "" {
-			s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume " + idForResume
+			s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume " + resumeID
 		} else {
-			s.RestartCommand = cli + " --resume " + idForResume
+			s.RestartCommand = cli + " --resume " + resumeID
 		}
 
 		// Repository name (best-effort).
@@ -998,6 +1018,14 @@ func (p *Provider) runCLI(ctx context.Context, args ...string) error {
 }
 
 // BuildLaunch constructs the exec plan for a LaunchSpec.
+//
+// For session resumes, Claude's `-r` flag expects the session UUID
+// (e.g. `3b4dc369-3956-…`), not the URL-encoded project directory
+// name we use for s.ID. When the SessionID we receive looks like a
+// directory name (contains `--` or `%2F`), we look up the most
+// recently modified `.jsonl` in that project directory and pull the
+// UUID out of it. Falls back to the raw trimmed string for legacy
+// callers passing a bare UUID.
 func (p *Provider) BuildLaunch(spec agents.LaunchSpec) (agents.ExecPlan, error) {
 	bin := p.binary()
 	if bin == "" {
@@ -1007,8 +1035,12 @@ func (p *Provider) BuildLaunch(spec agents.LaunchSpec) (agents.ExecPlan, error) 
 	note := "Start a Claude Code session"
 	switch {
 	case spec.SessionID != "":
-		id := strings.TrimPrefix(spec.SessionID, "claude:")
-		args = append(args, "-r", id)
+		raw := strings.TrimPrefix(spec.SessionID, "claude:")
+		uuid := p.resolveSessionUUID(raw)
+		if uuid == "" {
+			uuid = raw
+		}
+		args = append(args, "-r", uuid)
 		note = "Resume Claude Code session"
 	case spec.SkillName != "":
 		// Claude has no `--skill` flag; we open a new session and the
@@ -1027,6 +1059,51 @@ func (p *Provider) BuildLaunch(spec agents.LaunchSpec) (agents.ExecPlan, error) 
 		Cwd:  spec.Cwd,
 		Note: note,
 	}, nil
+}
+
+// resolveSessionUUID maps a Claude session ID (which may be either
+// a bare UUID or the URL-encoded directory name like `C--dev-klim`)
+// to the in-file session UUID by reading the directory's most recent
+// transcript. Returns the empty string when the lookup fails — the
+// caller should fall back to using the raw input.
+//
+// Best-effort: any I/O or parse error returns "" and the caller
+// proceeds with whatever it had. The cost is one stat + one small
+// JSON decode of the first event line, so this stays cheap even when
+// called from interactive paths.
+func (p *Provider) resolveSessionUUID(idOrDir string) string {
+	// Already a UUID? UUIDs have 4 dashes and no double-dash, so a
+	// `--` substring is a strong dirname signal.
+	if !strings.Contains(idOrDir, "--") && !strings.Contains(idOrDir, "%2F") {
+		return idOrDir
+	}
+	projectDir := filepath.Join(p.claudeDir(), "projects", idOrDir)
+	tr := latestTranscript(projectDir)
+	if tr == "" {
+		return ""
+	}
+	f, err := os.Open(tr)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	dec := json.NewDecoder(f)
+	// Walk a handful of events: some early events (queue-operation
+	// telemetry) carry the sessionId before any user/assistant
+	// message arrives. Cap the search so a transcript with no
+	// sessionId at all doesn't read the whole file.
+	for i := 0; i < 20; i++ {
+		var ev struct {
+			SessionID string `json:"sessionId"`
+		}
+		if err := dec.Decode(&ev); err != nil {
+			return ""
+		}
+		if ev.SessionID != "" {
+			return ev.SessionID
+		}
+	}
+	return ""
 }
 
 // Provider compile-time check.

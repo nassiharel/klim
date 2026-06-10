@@ -2443,13 +2443,17 @@ func renderAgentDetail(r agentRow, snap *agents.Snapshot) string {
 			_, _ = fmt.Fprintf(tw, "  turns\t%d\n", s.TurnCount)
 		}
 		if s.ProjectPath != "" {
-			_, _ = fmt.Fprintf(tw, "  project\t%s\n", s.ProjectPath)
+			_, _ = fmt.Fprintf(tw, "  project\t%s\n", truncAgentRow(s.ProjectPath, 80))
 		}
 		if s.Title != "" {
-			_, _ = fmt.Fprintf(tw, "  title\t%s\n", s.Title)
+			// Cap the title so a long first-user-message doesn't wrap
+			// across two visual rows and throw off footer alignment.
+			// 80 chars is a generous cap that still reads as the first
+			// sentence of an intent on every reasonable terminal width.
+			_, _ = fmt.Fprintf(tw, "  title\t%s\n", truncAgentRow(s.Title, 80))
 		}
 		if s.TranscriptPath != "" {
-			_, _ = fmt.Fprintf(tw, "  transcript\t%s\n", s.TranscriptPath)
+			_, _ = fmt.Fprintf(tw, "  transcript\t%s\n", truncAgentRow(s.TranscriptPath, 80))
 		}
 	default:
 		_, _ = fmt.Fprintf(tw, "  id\t%s\n", r.id)
@@ -2769,31 +2773,87 @@ func cycleMarketplaceFilter(current string, available []string) string {
 
 // readSessionTranscript reads at most `max` lines from a session
 // transcript file. Returns the lines so the viewer modal can render them.
+//
+// When given a directory, looks for the canonical Copilot
+// `events.jsonl` first; if that's missing, falls back to the most
+// recently modified `*.jsonl` in the directory (Claude project
+// dirs follow this layout — one file per session UUID).
+//
+// Each returned line is capped at 4 KiB to keep the transcript
+// viewer's layout from exploding when a single Claude event embeds
+// a multi-megabyte tool result (hook outputs, pasted code blocks).
+// Truncated lines get a trailing `…` so the viewer indicates the cut.
 func readSessionTranscript(path string, limit int) ([]string, error) {
 	st, err := os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
 	if st.IsDir() {
-		path = filepath.Join(path, "events.jsonl")
+		if eventsPath := filepath.Join(path, "events.jsonl"); fileExists(eventsPath) {
+			path = eventsPath
+		} else if newest := newestJSONL(path); newest != "" {
+			path = newest
+		} else {
+			return nil, fmt.Errorf("no transcript file found in %s", path)
+		}
 	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
+	const maxLineBytes = 4096
 	var lines []string
 	br := bufio.NewReader(f)
 	for i := 0; i < limit; i++ {
 		line, err := br.ReadString('\n')
 		if line != "" {
-			lines = append(lines, strings.TrimRight(line, "\r\n"))
+			line = strings.TrimRight(line, "\r\n")
+			if len(line) > maxLineBytes {
+				line = line[:maxLineBytes-1] + "…"
+			}
+			lines = append(lines, line)
 		}
 		if err != nil {
 			break
 		}
 	}
 	return lines, nil
+}
+
+// fileExists is a tiny stat-only helper so readSessionTranscript can
+// distinguish "events.jsonl missing" from "events.jsonl unreadable".
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// newestJSONL returns the path to the most recently modified `.jsonl`
+// file in `dir`, or the empty string when none exist. Used by the
+// transcript viewer to surface the most recent Claude project
+// session when the project dir doesn't carry the canonical
+// `events.jsonl` filename.
+func newestJSONL(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var newest string
+	var newestTime time.Time
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		fi, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if newest == "" || fi.ModTime().After(newestTime) {
+			newest = filepath.Join(dir, e.Name())
+			newestTime = fi.ModTime()
+		}
+	}
+	return newest
 }
 
 // deleteAgentEntityCmd builds the Bubbletea command that deletes a
