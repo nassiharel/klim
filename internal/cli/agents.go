@@ -730,9 +730,10 @@ func agentsListSkills(cmd *cobra.Command, _ []string) error {
 func agentsListMCPs(cmd *cobra.Command, _ []string) error {
 	return runAgentsList(cmd, nil, agents.EntityMCP)
 }
-func agentsListSessions(cmd *cobra.Command, _ []string) error {
-	return runAgentsList(cmd, nil, agents.EntitySession)
-}
+
+// (agentsListSessions removed — the dashboard's runAgentsSessionsList
+// in agents_sessions.go fully replaces it, with filter / sort / group
+// flags and a TUI fallthrough.)
 
 func agentsAddMarketplace(cmd *cobra.Command, args []string) error {
 	return forEachProvider(cmd.Context(), func(p agents.Provider) error {
@@ -777,7 +778,7 @@ func agentsResumeSession(cmd *cobra.Command, args []string) error {
 		}
 		if id == "--last" || id == "last" {
 			if len(snap.Sessions) == 0 {
-				return fmt.Errorf("resume: no sessions available")
+				return errors.New("resume: no sessions available")
 			}
 			id = snap.Sessions[0].ID
 		} else {

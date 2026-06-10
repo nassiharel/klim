@@ -18,7 +18,10 @@ import (
 // terminal-only types).
 func init() {
 	isStdoutTTY = func() bool {
-		return term.IsTerminal(int(os.Stdout.Fd()))
+		// G115: int(uintptr) here is safe — stdout's fd is always
+		// well within int range (1 on POSIX, a small kernel handle
+		// on Windows that term.IsTerminal expects as int).
+		return term.IsTerminal(int(os.Stdout.Fd())) //nolint:gosec
 	}
 	launchSessionsTUIImpl = func(ctx context.Context) error {
 		svc := newAgentsService()

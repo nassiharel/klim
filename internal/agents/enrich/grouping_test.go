@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+// p builds an OS-appropriate absolute path for the test fixtures
+// without tripping gocritic's filepathJoin check (which warns when
+// `filepath.Join("/", …)` is used to construct an absolute path).
+func p(segments ...string) string {
+	rel := filepath.Join(segments...)
+	return string(filepath.Separator) + rel
+}
+
 func TestResolveGrouping(t *testing.T) {
 	t.Parallel()
 
@@ -14,55 +22,55 @@ func TestResolveGrouping(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
-		cwd    string
-		repo   string
-		title  string
-		home   string
-		want   string
+		name  string
+		cwd   string
+		repo  string
+		title string
+		home  string
+		want  string
 	}{
 		{
 			name: "user mapping wins over repo name",
-			cwd:  filepath.Join("/", "Users", "n", "dev", "klim"),
+			cwd:  p("Users", "n", "dev", "klim"),
 			repo: "klim-fork",
 			want: "Klim",
 		},
 		{
 			name: "repo name when no mapping matches",
-			cwd:  filepath.Join("/", "Users", "n", "dev", "myproject"),
+			cwd:  p("Users", "n", "dev", "myproject"),
 			repo: "myrepo",
 			want: "myrepo",
 		},
 		{
 			name: "last cwd segment when no mapping and no repo",
-			cwd:  filepath.Join("/", "Users", "n", "dev", "my-project"),
+			cwd:  p("Users", "n", "dev", "my-project"),
 			want: "my-project",
 		},
 		{
-			name: "noisy parent skipped, falls through to title bucket",
-			cwd:  filepath.Join("/", "Users"),
+			name:  "noisy parent skipped, falls through to title bucket",
+			cwd:   p("Users"),
 			title: "pr review feedback",
-			want: "PR Reviews",
+			want:  "PR Reviews",
 		},
 		{
 			name: "home directory gets the home label",
-			cwd:  "/Users/n",
-			home: "/Users/n",
+			cwd:  p("Users", "n"),
+			home: p("Users", "n"),
 			want: "🏠 Home",
 		},
 		{
 			name: "user mapping overrides the home label",
-			cwd:  filepath.Join("/", "Users", "n"),
-			home: filepath.Join("/", "Users", "n"),
+			cwd:  p("Users", "n"),
+			home: p("Users", "n"),
 			// Substring match: "n" is in the path, but we don't want
 			// a 1-char accidental match; use a clearly intentional key.
 			want: "🏠 Home",
 		},
 		{
-			name: "title bucket: bug",
-			cwd:  filepath.Join("/", "Users"),
+			name:  "title bucket: bug",
+			cwd:   p("Users"),
 			title: "fix a small bug in widget",
-			want: "Bug Fixes",
+			want:  "Bug Fixes",
 		},
 		{
 			name: "all empty falls through to Other",

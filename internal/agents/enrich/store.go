@@ -109,7 +109,8 @@ func (s *GroupingMappings) All() map[string]string {
 	return out
 }
 
-// Entries returns the mappings as a sorted slice for stable display.
+// GroupingEntry is one (pattern, group) mapping in the persisted
+// store, used by `klim agents sessions group list`.
 type GroupingEntry struct {
 	Pattern string
 	Group   string

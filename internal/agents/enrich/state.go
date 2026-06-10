@@ -32,9 +32,9 @@ type Result struct {
 	RecentActivity  string
 	ToolCounts      map[string]int
 	MCPServers      []string
-	SubagentRuns    int    // total subagent.started events seen
-	BackgroundTasks int    // started minus completed (>= 0)
-	TurnCount       int    // user.message events
+	SubagentRuns    int // total subagent.started events seen
+	BackgroundTasks int // started minus completed (>= 0)
+	TurnCount       int // user.message events
 	LastTimestamp   time.Time
 	FirstTimestamp  time.Time
 

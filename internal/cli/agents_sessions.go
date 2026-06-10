@@ -29,19 +29,19 @@ import (
 // (the rest of this file follows the same pattern: tightly-scoped
 // state, dispatched explicitly into each runner).
 var agentsSessionsListFlags struct {
-	status   string
-	since    string
-	until    string
-	project  string
-	starred  bool
-	sort     string
-	reverse  bool
-	limit    int
-	groupBy  string
-	noGroup  bool
-	noColor  bool
-	refresh  bool
-	watch    bool
+	status  string
+	since   string
+	until   string
+	project string
+	starred bool
+	sort    string
+	reverse bool
+	limit   int
+	groupBy string
+	noGroup bool
+	noColor bool
+	refresh bool
+	watch   bool
 }
 
 var agentsSessionsListFormat func() (OutputFormat, error)
@@ -501,17 +501,17 @@ func runAgentsSessionsView(cmd *cobra.Command, args []string) error {
 
 	// Tool histogram.
 	if len(session.ToolCounts) > 0 {
-		fmt.Fprintln(os.Stdout)
-		fmt.Fprintln(os.Stdout, "TOOLS")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "TOOLS")
 		printToolHistogram(os.Stdout, session.ToolCounts, 40)
 	}
 
 	// Recent turns from the transcript (best-effort).
 	if turns := readRecentTurns(session.TranscriptPath, agentsSessionsViewTurns); len(turns) > 0 {
-		fmt.Fprintln(os.Stdout)
-		fmt.Fprintln(os.Stdout, "CONVERSATION")
+		_, _ = fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout, "CONVERSATION")
 		for _, t := range turns {
-			fmt.Fprintf(os.Stdout, "  [%s] %s\n", t.role, enrich.TruncateOneLine(t.text, 240))
+			_, _ = fmt.Fprintf(os.Stdout, "  [%s] %s\n", t.role, enrich.TruncateOneLine(t.text, 240))
 		}
 	}
 	return nil
@@ -525,20 +525,20 @@ func printToolHistogram(w io.Writer, counts map[string]int, width int) {
 		count int
 	}
 	var pairs []kv
-	max := 0
+	peak := 0
 	for k, v := range counts {
 		pairs = append(pairs, kv{k, v})
-		if v > max {
-			max = v
+		if v > peak {
+			peak = v
 		}
 	}
 	sort.Slice(pairs, func(i, j int) bool { return pairs[i].count > pairs[j].count })
-	if max == 0 {
+	if peak == 0 {
 		return
 	}
 	for _, p := range pairs {
-		bar := strings.Repeat("█", (p.count*width+max-1)/max)
-		fmt.Fprintf(w, "  %-18s %4d %s\n", truncateAgent(p.name, 18), p.count, bar)
+		bar := strings.Repeat("█", (p.count*width+peak-1)/peak)
+		_, _ = fmt.Fprintf(w, "  %-18s %4d %s\n", truncateAgent(p.name, 18), p.count, bar)
 	}
 }
 
@@ -714,7 +714,7 @@ func runAgentsSessionsTail(cmd *cobra.Command, args []string) error {
 			return &UsageError{Err: fmt.Errorf("no session found matching %q", id)}
 		}
 		if s.LiveState != prevState || s.RecentActivity != prevRecent {
-			fmt.Fprintf(os.Stdout, "[%s] %s %s — %s\n",
+			_, _ = fmt.Fprintf(os.Stdout, "[%s] %s %s — %s\n",
 				time.Now().Format("15:04:05"),
 				dashOr(string(s.LiveState)),
 				s.ID,
@@ -813,24 +813,24 @@ func runAgentsSessionsStats(cmd *cobra.Command, _ []string) error {
 	_, _ = fmt.Fprintf(w, "subagent runs\t%d\n", stats.TotalSubagents)
 	_, _ = fmt.Fprintf(w, "background tasks\t%d\n", stats.BackgroundTasks)
 	_ = w.Flush()
-	fmt.Fprintln(os.Stdout)
+	_, _ = fmt.Fprintln(os.Stdout)
 	printStateBlock(w, "BY LIVE STATE", stats.ByLiveState)
 	_ = w.Flush()
-	fmt.Fprintln(os.Stdout)
+	_, _ = fmt.Fprintln(os.Stdout)
 	printStateBlock(w, "BY PROVIDER", stats.ByProvider)
 	_ = w.Flush()
 	if len(stats.TopProjects) > 0 {
-		fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout)
 		printTopBlock(w, "TOP PROJECTS", stats.TopProjects)
 	}
 	if len(stats.TopMCPs) > 0 {
 		_ = w.Flush()
-		fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout)
 		printTopBlock(w, "TOP MCPS", stats.TopMCPs)
 	}
 	if len(stats.TopTools) > 0 {
 		_ = w.Flush()
-		fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout)
 		printTopBlock(w, "TOP TOOLS", stats.TopTools)
 	}
 	return nil
@@ -1008,15 +1008,15 @@ func runAgentsSessionsFiles(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintf(os.Stderr, "agents: %d file(s) across %d session(s)\n", len(entries), len(sessions))
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	defer func() { _ = w.Flush() }()
-	max := 0
+	peak := 0
 	for _, e := range entries {
-		if e.SessionCount > max {
-			max = e.SessionCount
+		if e.SessionCount > peak {
+			peak = e.SessionCount
 		}
 	}
 	_, _ = fmt.Fprintln(w, "SESSIONS\tBAR\tPATH")
 	for _, e := range entries {
-		bar := strings.Repeat("█", (e.SessionCount*30+max-1)/max)
+		bar := strings.Repeat("█", (e.SessionCount*30+peak-1)/peak)
 		_, _ = fmt.Fprintf(w, "%d\t%s\t%s\n", e.SessionCount, bar, truncateAgent(e.Path, 80))
 	}
 	return nil
@@ -1335,9 +1335,7 @@ func findSession(sessions []agents.Session, q string) (agents.Session, bool) {
 // a var so the rest of this file doesn't acquire an encoding/json
 // import — keeps the file size grep-friendly.
 
-var jsonUnmarshalFn = func(data []byte, v any) error {
-	return jsonStdUnmarshal(data, v)
-}
+var jsonUnmarshalFn = jsonStdUnmarshal
 
 // (Implemented in agents_sessions_json.go to keep encoding/json out of
 // this file's import block — it would otherwise read like a generic

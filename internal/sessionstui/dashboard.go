@@ -26,6 +26,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -65,16 +66,16 @@ const (
 // CLI package can construct it (the constructor takes a *agents.Service
 // so tests can pass a stub).
 type Model struct {
-	svc        *agents.Service
-	loading    bool
-	loadErr    error
-	snapshot   *agents.Snapshot
-	updatedAt  time.Time
-	now        func() time.Time
+	svc       *agents.Service
+	loading   bool
+	loadErr   error
+	snapshot  *agents.Snapshot
+	updatedAt time.Time
+	now       func() time.Time
 
-	tab     int
-	groupBy string
-	search  string
+	tab          int
+	groupBy      string
+	search       string
 	insertSearch bool
 
 	cursor int
@@ -154,7 +155,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tea.Tick(slowTick, func(t time.Time) tea.Msg { return slowTickMsg(t) }),
 		)
 	case tea.KeyMsg:
-		return m, m.handleKey(msg)
+		cmd := m.handleKey(msg)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -409,7 +411,7 @@ func stateOrder(st agents.LiveState) int {
 // ----- View -----
 
 var (
-	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A5E844")).Padding(0, 1)
+	headerStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A5E844")).Padding(0, 1)
 	tabActiveStyle = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("#A5E844"))
 	tabIdleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#8B8B8B"))
 	dimStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("#7F7F7F"))
@@ -467,7 +469,7 @@ func (m *Model) renderHeader() string {
 	if m.loading {
 		parts = append(parts, mutedStyle.Render("loading…"))
 	} else if !m.updatedAt.IsZero() {
-		parts = append(parts, dimStyle.Render(fmt.Sprintf("updated %s", enrich.RelativeTime(m.updatedAt, m.now()))))
+		parts = append(parts, dimStyle.Render("updated "+enrich.RelativeTime(m.updatedAt, m.now())))
 	}
 	if m.loadErr != nil {
 		parts = append(parts, stateWaiting.Render("err: "+m.loadErr.Error()))
@@ -572,7 +574,7 @@ func (m *Model) renderRow(s agents.Session) string {
 	state := stateGlyph(s.LiveState)
 	title := truncate(displayTitle(s), 50)
 	branch := truncate(dashOr(s.Branch), 18)
-	turns := dashOr(fmt.Sprintf("%d", s.TurnCount))
+	turns := dashOr(strconv.Itoa(s.TurnCount))
 	if s.TurnCount == 0 {
 		turns = "—"
 	}
@@ -604,7 +606,7 @@ func (m *Model) renderDetail(s agents.Session) string {
 		pairs = append(pairs, [2]string{"mcps", strings.Join(s.MCPServers, ", ")})
 	}
 	for _, p := range pairs {
-		b.WriteString(fmt.Sprintf("  %s %s\n", dimStyle.Render(fmt.Sprintf("%-9s", p[0])), p[1]))
+		fmt.Fprintf(&b, "  %s %s\n", dimStyle.Render(fmt.Sprintf("%-9s", p[0])), p[1])
 	}
 	return b.String()
 }
@@ -673,14 +675,14 @@ func (m *Model) renderFiles() string {
 		rows = append(rows, entry{k, v})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].count > rows[j].count })
-	max := rows[0].count
+	peak := rows[0].count
 	var b strings.Builder
 	for i, r := range rows {
 		if i >= 20 {
 			break
 		}
-		bar := strings.Repeat("█", (r.count*30+max-1)/max)
-		b.WriteString(fmt.Sprintf("  %4d  %s  %s\n", r.count, stateWorking.Render(bar), truncate(r.name, 80)))
+		bar := strings.Repeat("█", (r.count*30+peak-1)/peak)
+		fmt.Fprintf(&b, "  %4d  %s  %s\n", r.count, stateWorking.Render(bar), truncate(r.name, 80))
 	}
 	return b.String()
 }
@@ -706,16 +708,16 @@ func (m *Model) renderStats() string {
 		}
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  total sessions:   %d\n", len(m.snapshot.Sessions)))
-	b.WriteString(fmt.Sprintf("  total turns:      %d\n", totalTurns))
-	b.WriteString(fmt.Sprintf("  total tool calls: %d\n", totalTools))
-	b.WriteString(fmt.Sprintf("  subagent runs:    %d\n", totalSubagents))
-	b.WriteString(fmt.Sprintf("  background tasks: %d\n", bg))
+	fmt.Fprintf(&b, "  total sessions:   %d\n", len(m.snapshot.Sessions))
+	fmt.Fprintf(&b, "  total turns:      %d\n", totalTurns)
+	fmt.Fprintf(&b, "  total tool calls: %d\n", totalTools)
+	fmt.Fprintf(&b, "  subagent runs:    %d\n", totalSubagents)
+	fmt.Fprintf(&b, "  background tasks: %d\n", bg)
 	b.WriteByte('\n')
 	b.WriteString(headerStyle.Render(" by live state "))
 	b.WriteByte('\n')
 	for _, st := range []agents.LiveState{agents.StateWorking, agents.StateThinking, agents.StateWaiting, agents.StateIdle, agents.StateUnknown} {
-		b.WriteString(fmt.Sprintf("  %-9s %d\n", stateLabel(st), live[st]))
+		fmt.Fprintf(&b, "  %-9s %d\n", stateLabel(st), live[st])
 	}
 	b.WriteByte('\n')
 	b.WriteString(headerStyle.Render(" by provider "))
@@ -726,7 +728,7 @@ func (m *Model) renderStats() string {
 	}
 	sort.Slice(keys, func(i, j int) bool { return string(keys[i]) < string(keys[j]) })
 	for _, k := range keys {
-		b.WriteString(fmt.Sprintf("  %-12s %d\n", k, provider[k]))
+		fmt.Fprintf(&b, "  %-12s %d\n", k, provider[k])
 	}
 	return b.String()
 }

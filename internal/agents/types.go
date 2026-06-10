@@ -195,7 +195,7 @@ const (
 //     ask_permission), with the question in WaitingContext.
 //   - StateIdle      — no events for ≥60s; the CLI is probably idle or
 //     has crashed.
-//   - StateUnknown   — no event log or unparseable.
+//   - StateUnknown   — no event log or unparsable.
 type LiveState string
 
 // LiveState values.

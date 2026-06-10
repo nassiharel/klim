@@ -12,19 +12,19 @@ import (
 //
 // Sourced from ghcpCliDashboard/src/grouping.py.
 var GroupNoisyParents = map[string]bool{
-	"users":    true,
-	"user":     true,
-	"home":     true,
-	"repos":    true,
-	"repo":     true,
-	"github":   true,
+	"users":      true,
+	"user":       true,
+	"home":       true,
+	"repos":      true,
+	"repo":       true,
+	"github":     true,
 	"github.com": true,
-	"src":      true,
-	"dev":      true,
-	"code":     true,
-	"projects": true,
-	"work":     true,
-	"workspace": true,
+	"src":        true,
+	"dev":        true,
+	"code":       true,
+	"projects":   true,
+	"work":       true,
+	"workspace":  true,
 }
 
 // GroupKeywordBuckets maps title-substring keywords to group names. The
