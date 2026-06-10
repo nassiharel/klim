@@ -71,15 +71,13 @@ func TestChooseTileLayout(t *testing.T) {
 }
 
 // TestRenderSessionTiles_EachTileIsRightHeight verifies every tile
-// renders to exactly tileHeight rows (border-top + 4 content rows
-// + border-bottom). If this drifts the grid loses alignment and
-// the footer math falls apart again.
+// renders to exactly tileHeight rows. If this drifts the grid loses
+// alignment and the footer math falls apart.
 func TestRenderSessionTiles_EachTileIsRightHeight(t *testing.T) {
 	t.Parallel()
 	snap := makeTileSnap(1)
 	rows := []agentRow{{id: snap.Sessions[0].ID, session: &snap.Sessions[0]}}
 	out := renderSessionTiles(rows, 0, 100)
-	// 1 tile → 1 row of tile output, which itself is tileHeight rows.
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	if len(lines) != tileHeight {
 		t.Errorf("expected %d lines for one tile, got %d:\n%s", tileHeight, len(lines), out)
@@ -98,7 +96,7 @@ func TestRenderSessionTiles_GridShape(t *testing.T) {
 	}
 	out := renderSessionTiles(rows, 0, 200)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	// 6 sessions / 3 cols = 2 rows × tileHeight = 12 visual lines.
+	// 6 sessions / 3 cols = 2 rows × tileHeight visual lines per row.
 	want := 2 * tileHeight
 	if len(lines) != want {
 		t.Errorf("expected %d lines for 6 tiles at 3 cols, got %d", want, len(lines))
@@ -171,9 +169,11 @@ func TestFooterAlignsToBottom_TilesMode(t *testing.T) {
 	}
 }
 
-// TestRenderOneTile_HighlightedHasDifferentBorder pins the visual
-// distinction between the cursor-selected tile and the rest.
-func TestRenderOneTile_HighlightedHasDifferentBorder(t *testing.T) {
+// TestRenderOneTile_HighlightedHasDifferentBar pins the visual
+// distinction between the cursor-selected tile and the rest. The
+// border swaps to cyberPrimary on selection so the rendered ANSI of
+// the first row must differ between selected and idle.
+func TestRenderOneTile_HighlightedHasDifferentBar(t *testing.T) {
 	t.Parallel()
 	s := makeTileSnap(1).Sessions[0]
 	idle := renderOneTile(s, 40, false)
@@ -181,10 +181,155 @@ func TestRenderOneTile_HighlightedHasDifferentBorder(t *testing.T) {
 	if idle == active {
 		t.Error("active tile should differ from idle tile (border color)")
 	}
-	// Both should be the same visible width.
 	idleW := lipgloss.Width(strings.Split(idle, "\n")[0])
 	activeW := lipgloss.Width(strings.Split(active, "\n")[0])
 	if idleW != activeW {
 		t.Errorf("active/idle widths differ: %d vs %d", activeW, idleW)
 	}
+}
+
+// TestStateBarColor_PerLiveState pins the state → bar color mapping
+// so a theme tweak doesn't accidentally swap the semantic meanings.
+func TestStateBarColor_PerLiveState(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		state agents.LiveState
+		want  any
+	}{
+		{agents.StateWorking, cyberOK},
+		{agents.StateThinking, cyberPrimary},
+		{agents.StateWaiting, cyberAccent},
+		{agents.StateIdle, cyberFGDim},
+		{agents.LiveState(""), cyberFGDim}, // unknown defaults to dim
+	}
+	for _, tt := range tests {
+		got := stateBarColor(tt.state)
+		if got != tt.want {
+			t.Errorf("stateBarColor(%q) = %v, want %v", tt.state, got, tt.want)
+		}
+	}
+}
+
+// TestRenderOneTile_StarDoesNotShiftTitle is the regression test for
+// the original bug: starring a tile changed the title's column
+// position because the star glyph was only inserted when starred.
+// The fix reserves a 2-cell slot in both states; this test asserts
+// the title lands at the same *visual* column whether starred or not.
+// We use a rune index (not byte index) because ⭐ is multi-byte in
+// UTF-8 but a single grapheme — byte offsets would mislead.
+func TestRenderOneTile_StarDoesNotShiftTitle(t *testing.T) {
+	t.Parallel()
+	s := makeTileSnap(1).Sessions[0]
+	s.Title = "MarkerXYZ"
+	s.Starred = false
+	unstarred := renderOneTile(s, 50, false)
+	s.Starred = true
+	starred := renderOneTile(s, 50, false)
+
+	// The title row is index 2 (rounded-border top at 0, subtitle at 1).
+	unRow := stripANSIForTest(strings.Split(unstarred, "\n")[2])
+	stRow := stripANSIForTest(strings.Split(starred, "\n")[2])
+
+	unCol := visualColumn(unRow, "MarkerXYZ")
+	stCol := visualColumn(stRow, "MarkerXYZ")
+	if unCol < 0 || stCol < 0 {
+		t.Fatalf("title text not found in rows:\n unstarred: %q\n starred:   %q", unRow, stRow)
+	}
+	if unCol != stCol {
+		t.Errorf("title visual column shifted by star: unstarred=%d starred=%d\n unstarred row: %q\n starred row:   %q",
+			unCol, stCol, unRow, stRow)
+	}
+}
+
+// visualColumn returns the visual cell column at which `needle`
+// starts in `s`, or -1 if not found. It counts wide characters (CJK,
+// emoji) as 2 and skips zero-width sequences so the result matches
+// what the terminal actually displays. Test-only helper — pairs
+// with stripANSIForTest.
+func visualColumn(s, needle string) int {
+	idx := strings.Index(s, needle)
+	if idx < 0 {
+		return -1
+	}
+	return lipgloss.Width(s[:idx])
+}
+
+// TestStripActivityPrefix covers the most common JSONL-emitted role
+// prefixes. The viewer is fine with brackets but tiles are tight on
+// horizontal space and the prefix is redundant with the dot.
+func TestStripActivityPrefix(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"  ", ""},
+		{"[user] hello there", "hello there"},
+		{"[assistant] working on it", "working on it"},
+		{"[tool] Bash(ls)", "Bash(ls)"},
+		{"tool: Edit(file=foo)", "Edit(file=foo)"},
+		{"asking: pick branch", "pick branch"},
+		{"no prefix passthrough", "no prefix passthrough"},
+	}
+	for _, tt := range tests {
+		if got := stripActivityPrefix(tt.in); got != tt.want {
+			t.Errorf("stripActivityPrefix(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestProviderChip_ClaudeAndCopilot confirms each provider gets a
+// visible chip with the expected label text.
+func TestProviderChip_ClaudeAndCopilot(t *testing.T) {
+	t.Parallel()
+	cl := providerChip(agents.ProviderClaudeCode)
+	if !strings.Contains(stripANSIForTest(cl), "Claude") {
+		t.Errorf("Claude chip missing label: %q", cl)
+	}
+	co := providerChip(agents.ProviderCopilotCLI)
+	if !strings.Contains(stripANSIForTest(co), "Copilot") {
+		t.Errorf("Copilot chip missing label: %q", co)
+	}
+	if providerChip(agents.ProviderID("unknown")) != "" {
+		t.Errorf("unknown provider should return empty chip")
+	}
+}
+
+// TestBranchPill_EmptyBranchReturnsPlaceholder confirms the row keeps
+// a constant width when the branch is unknown so the rounded border
+// doesn't shrink/grow between tiles.
+func TestBranchPill_EmptyBranchReturnsPlaceholder(t *testing.T) {
+	t.Parallel()
+	empty := branchPill("")
+	if empty == "" {
+		t.Error("empty branch should render placeholder, not empty string")
+	}
+	if !strings.Contains(stripANSIForTest(empty), "—") {
+		t.Errorf("empty branch placeholder should contain em-dash, got %q", empty)
+	}
+	withBranch := branchPill("main")
+	if !strings.Contains(stripANSIForTest(withBranch), "main") {
+		t.Errorf("branch pill should contain branch name, got %q", withBranch)
+	}
+}
+
+// stripANSIForTest removes ANSI escape sequences from a rendered
+// string for substring-level assertions. Test-only helper.
+func stripANSIForTest(s string) string {
+	var b strings.Builder
+	inEsc := false
+	for _, r := range s {
+		if inEsc {
+			if r == 'm' {
+				inEsc = false
+			}
+			continue
+		}
+		if r == '\x1b' {
+			inEsc = true
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }

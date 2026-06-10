@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -9,50 +10,41 @@ import (
 	"github.com/nassiharel/klim/internal/agents"
 )
 
-// Tile-mode renderer for the Sessions sub-tab. Inspired by
-// ghcpCliDashboard's SessionGrid: one bordered card per session,
-// packed with the most-used metadata (state, title, branch, turns,
-// recent activity).
+// Tile-mode renderer for the Sessions sub-tab. Visual design ported
+// from ghcpCliDashboard's SessionTile.tsx: a colored left-edge accent
+// bar signals live state, a bold title sits next to a colored
+// provider chip, the branch is demoted into a dim pill, recent
+// activity is colored by state, and turn/MCP counts live as pill
+// badges instead of dim text crammed onto the same row as the state
+// label.
 //
-// Lives in its own file because the rendering is independent of
-// the table-based renderRow / renderHeader machinery — different
-// layout primitive, different sizing rules.
+// Lives in its own file because the rendering is independent of the
+// table-based renderRow / renderHeader machinery — different layout
+// primitive, different sizing rules.
 
-// Tile geometry. Cards are sized to fit two columns at narrow
-// widths and grow to three columns when the terminal can hold them
-// without horizontal scroll. Each card is exactly tileHeight rows
-// tall so the responsive row math in the caller stays simple.
+// Tile geometry. Cards are sized to fit two columns at narrow widths
+// and grow to three columns when the terminal can hold them. Each
+// card is exactly tileHeight rows tall so the responsive row math in
+// the caller stays simple.
 const (
 	tileMinWidth  = 32 // sub-this, fall back to single-column
-	tileIdealMax  = 52 // wider tiles waste space; cap at this
+	tileIdealMax  = 56 // wider tiles waste horizontal space
 	tileGap       = 2  // horizontal space between cards
-	tileHeight    = 6  // border-top + 4 content + border-bottom
-	tileBodyLines = 4  // content lines inside the border
-)
-
-// tileBorderActive is the highlight border for the cursor-selected
-// tile. Plain rounded border for the rest.
-var (
-	tileBorderActive = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(cyberAccent)
-	tileBorderIdle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(cyberFGDim)
+	tileHeight    = 7  // 5 content rows + the rounded-border top/bottom
+	tileBodyLines = 5  // content lines inside the border
 )
 
 // renderSessionTiles renders the given session rows as a grid of
-// bordered cards. `cursor` is the index of the highlighted row
-// (-1 to skip highlighting); rows that aren't sessions are skipped
-// silently so a stray mixed-content slice doesn't crash the
-// renderer.
+// bordered cards. `cursor` is the index of the highlighted row (-1
+// to skip highlighting); rows that aren't sessions are skipped
+// silently so a stray mixed-content slice doesn't crash the renderer.
 //
 // `totalWidth` is the horizontal budget the caller has — usually
 // `m.width - agentsSidebarColWidth - 3` so the grid composites
 // cleanly with the sidebar.
 //
-// Returns a string with one or more newline-terminated rows of
-// tiles, ready to be inserted into the agents body buffer.
+// Returns a string with one or more newline-terminated rows of tiles,
+// ready to be inserted into the agents body buffer.
 func renderSessionTiles(rows []agentRow, cursor int, totalWidth int) string {
 	if totalWidth < tileMinWidth+4 {
 		// Terminal too narrow for tiles — fall back to a one-line
@@ -73,9 +65,6 @@ func renderSessionTiles(rows []agentRow, cursor int, totalWidth int) string {
 
 	tileW, cols := chooseTileLayout(totalWidth)
 
-	// Build per-session pre-rendered tile strings, then stitch them
-	// into rows of `cols` columns. Each tile is exactly tileHeight
-	// visual rows (lipgloss border + tileBodyLines + closing border).
 	tiles := make([]string, 0, len(rows))
 	for i, r := range rows {
 		if r.session == nil {
@@ -90,8 +79,6 @@ func renderSessionTiles(rows []agentRow, cursor int, totalWidth int) string {
 		if end > len(tiles) {
 			end = len(tiles)
 		}
-		// Each tile is a multi-line string; lipgloss.JoinHorizontal
-		// lays them side by side without re-padding.
 		row := lipgloss.JoinHorizontal(lipgloss.Top, withGutters(tiles[start:end])...)
 		b.WriteString(row)
 		b.WriteByte('\n')
@@ -102,8 +89,7 @@ func renderSessionTiles(rows []agentRow, cursor int, totalWidth int) string {
 // chooseTileLayout picks (tileWidth, columnCount) for the available
 // horizontal budget. Bias toward 2 columns until we have room for 3
 // without each tile dropping below the ideal max; never more than 3
-// because at that point cards start to look like the table they're
-// replacing.
+// because cards start to look like the table they're replacing.
 func chooseTileLayout(totalWidth int) (int, int) {
 	// Try 3 cols first.
 	if w := (totalWidth - 2*tileGap) / 3; w >= tileMinWidth {
@@ -119,8 +105,8 @@ func chooseTileLayout(totalWidth int) (int, int) {
 		}
 		return w, 2
 	}
-	// Single column — clamp to a sensible max so a 200-col terminal
-	// doesn't produce a single absurdly wide card.
+	// Single column — clamp so a 200-col terminal doesn't produce a
+	// single absurdly wide card.
 	w := totalWidth
 	if w > tileIdealMax {
 		w = tileIdealMax
@@ -129,7 +115,7 @@ func chooseTileLayout(totalWidth int) (int, int) {
 }
 
 // withGutters interleaves blank gutter strings between the tiles in
-// a row so `JoinHorizontal` produces the expected spacing.
+// a row so JoinHorizontal produces the expected spacing.
 func withGutters(tiles []string) []string {
 	if len(tiles) <= 1 {
 		return tiles
@@ -147,74 +133,121 @@ func withGutters(tiles []string) []string {
 
 // renderOneTile draws a single session card at `width` columns.
 //
-// Layout (4 content lines inside the rounded border):
+// Layout (5 content lines bracketed top/bottom by the rounded border):
 //
-//	● ⭐ <title>           <provider>
-//	  ⎇ <branch>           <modified>
-//	  <recent activity>
-//	  <state> · <turns>t · <mcps>
+//	╭─────────────────────────────────────╮
+//	│ started 3m ago                      │   ← subtitle
+//	│ ● ⭐ Refactor session tiles  ✦ Claude│   ← dot + star + title + provider chip
+//	│ ⎇ feat/tiles-redesign               │   ← branch pill
+//	│ ▸ edited agents_session_tiles.go    │   ← recent activity (state-colored)
+//	│ 💬 14  🔌 3  · working              │   ← badges + state label
+//	╰─────────────────────────────────────╯
 //
-// The title gets the most space; everything else is single-line.
-// Long values are truncated with `…` so the card height stays at
-// exactly tileBodyLines.
+// Star slot is always reserved (2 cells) so the title's column
+// doesn't shift between starred and unstarred tiles. The bordering
+// rounded box is colored by live state, and brightens to cyber-cyan
+// when this tile is the cursor selection.
 func renderOneTile(s agents.Session, width int, selected bool) string {
-	style := tileBorderIdle
+	barColor := stateBarColor(s.LiveState)
 	if selected {
-		style = tileBorderActive
+		barColor = cyberPrimary
 	}
-	// Inner content width is width - 2 (one column for each border).
-	innerW := width - 2
-	if innerW < tileMinWidth-2 {
-		innerW = tileMinWidth - 2
+	border := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(barColor).
+		Width(width).
+		Padding(0, 1)
+
+	// Inner content width = width - 2 (border cells) - 2 (padding).
+	innerW := width - 4
+	if innerW < tileMinWidth-4 {
+		innerW = tileMinWidth - 4
 	}
 
+	subtitle := lipgloss.NewStyle().Foreground(cyberFGDim).
+		Render(padOrTruncTile("started "+humaniseTime(s.LastModified), innerW))
+
+	titleRow := renderTitleRow(s, innerW, selected)
+	branchRow := renderBranchRow(s, innerW)
+	activityRow := renderActivityRow(s, innerW)
+	badgesRow := renderBadgesRow(s, innerW)
+
+	body := strings.Join([]string{subtitle, titleRow, branchRow, activityRow, badgesRow}, "\n")
+	return border.Render(body)
+}
+
+// renderTitleRow lays out: dot + reserved-star-slot + bold title +
+// right-aligned provider chip. The reserved 2-cell star slot keeps
+// the title's column position identical whether or not the session
+// is starred — fixes the visible misalignment in the original design.
+func renderTitleRow(s agents.Session, innerW int, selected bool) string {
 	dot := stateDot(s.LiveState)
-	star := " "
+	star := "  " // always two cells reserved
 	if s.Starred {
-		star = "★"
+		star = "⭐"
+	}
+	chip := providerChip(s.Provider)
+	titleStyle := lipgloss.NewStyle().Foreground(cyberFG).Bold(true)
+	if selected {
+		titleStyle = titleStyle.Foreground(cyberPrimary)
 	}
 	title := tileDisplayTitle(s)
-	provider := providerShort(s.Provider)
-	// Title row: dot + star + title (grows) + provider on the right.
-	titleW := innerW - lipgloss.Width(dot) - lipgloss.Width(star) - lipgloss.Width(provider) - 3 // 3 = spaces
-	if titleW < 8 {
-		titleW = 8
+	// Budget: innerW - dot(1) - space(1) - star(2) - space(1)
+	// - chip visible width - space-before-chip(1).
+	titleW := innerW - 1 - 1 - 2 - 1 - lipgloss.Width(chip) - 1
+	if titleW < 6 {
+		titleW = 6
 	}
-	titleRow := fmt.Sprintf("%s %s %s %s",
-		dot, star,
-		padOrTruncTile(title, titleW),
-		dimVersion.Render(provider),
-	)
+	titleText := titleStyle.Render(padOrTruncTile(title, titleW))
+	return dot + " " + star + " " + titleText + " " + chip
+}
 
-	// Branch + modified row.
-	branch := s.Branch
-	if branch == "" {
-		branch = "—"
+// renderBranchRow renders the demoted branch pill. Empty branch →
+// dim em-dash so the row height stays consistent.
+func renderBranchRow(s agents.Session, innerW int) string {
+	pill := branchPill(s.Branch)
+	return padOrTruncTile(pill, innerW)
+}
+
+// renderActivityRow renders the recent-activity line, prefix-stripped
+// for readability and colored by state. Waiting sessions get amber so
+// the user can spot pending prompts at a glance.
+func renderActivityRow(s agents.Session, innerW int) string {
+	text := stripActivityPrefix(s.RecentActivity)
+	if text == "" {
+		text = "—"
 	}
-	modified := humaniseTime(s.LastModified)
-	branchRow := fmt.Sprintf("  ⎇ %s %s",
-		padOrTruncTile(branch, innerW-lipgloss.Width(modified)-5),
-		dimVersion.Render(modified),
-	)
-
-	// Recent activity row (the most diagnostic line — what is the
-	// agent actually doing right now).
-	recent := s.RecentActivity
-	if recent == "" {
-		recent = "—"
+	color := cyberFG
+	switch s.LiveState {
+	case agents.StateWaiting:
+		color = cyberAccent
+	case agents.StateIdle:
+		color = cyberFGDim
 	}
-	recentRow := "  " + dimVersion.Render(padOrTruncTile(recent, innerW-2))
+	const leader = "▸ "
+	content := padOrTruncTile(text, innerW-lipgloss.Width(leader))
+	return lipgloss.NewStyle().Foreground(color).Render(leader + content)
+}
 
-	// Footer row: state label + turn count + mcp count.
-	footer := fmt.Sprintf("  %s · %s · %s",
-		stateLabel(s.LiveState),
-		turnCountLabel(s.TurnCount),
-		mcpCountLabel(len(s.MCPServers)),
-	)
-	footerRow := padOrTruncTile(footer, innerW)
+// renderBadgesRow renders the bottom line: turn count + MCP count +
+// state label. Counts use chip-style backgrounds so they read as
+// pills rather than dim text.
+func renderBadgesRow(s agents.Session, innerW int) string {
+	chipStyle := lipgloss.NewStyle().Foreground(cyberFG).Background(cyberChipBg).Padding(0, 1)
+	stateStyle := lipgloss.NewStyle().Foreground(stateBarColor(s.LiveState)).Bold(true)
 
-	body := strings.Join([]string{titleRow, branchRow, recentRow, footerRow}, "\n")
-	return style.Width(width).Render(body)
+	parts := []string{}
+	if s.TurnCount > 0 {
+		parts = append(parts, chipStyle.Render(fmt.Sprintf("💬 %d", s.TurnCount)))
+	}
+	if n := len(s.MCPServers); n > 0 {
+		parts = append(parts, chipStyle.Render(fmt.Sprintf("🔌 %d", n)))
+	}
+	if s.LiveState != "" {
+		parts = append(parts, stateStyle.Render(string(s.LiveState)))
+	}
+	joined := strings.Join(parts, "  ")
+	return padOrTruncTile(joined, innerW)
 }
 
 // padOrTruncTile pads or truncates `s` to exactly `n` visual cells.
@@ -232,7 +265,6 @@ func padOrTruncTile(s string, n int) string {
 	if w < n {
 		return s + strings.Repeat(" ", n-w)
 	}
-	// Truncate. truncateANSI handles ANSI escapes correctly.
 	return truncateANSI(s, n-1) + "…"
 }
 
@@ -248,7 +280,6 @@ func tileDisplayTitle(s agents.Session) string {
 		return s.Repository
 	}
 	if s.ProjectPath != "" {
-		// Take last segment.
 		if i := strings.LastIndexAny(s.ProjectPath, `/\`); i >= 0 && i < len(s.ProjectPath)-1 {
 			return s.ProjectPath[i+1:]
 		}
@@ -257,9 +288,9 @@ func tileDisplayTitle(s agents.Session) string {
 	return sessionShortID(s.ID)
 }
 
-// sessionTileFallback is the one-line summary used when the
-// terminal is too narrow for tile rendering. Keeps the screen
-// usable rather than emitting an empty body.
+// sessionTileFallback is the one-line summary used when the terminal
+// is too narrow for tile rendering. Keeps the screen usable rather
+// than emitting an empty body.
 func sessionTileFallback(s agents.Session) string {
 	return fmt.Sprintf("%s %s · %s · %s",
 		stateDot(s.LiveState),
@@ -273,21 +304,43 @@ func sessionTileFallback(s agents.Session) string {
 // state-glyph scheme used by `klim agents sessions list` so the two
 // surfaces look at-a-glance identical.
 func stateDot(st agents.LiveState) string {
-	switch st {
-	case agents.StateWorking:
-		return lipgloss.NewStyle().Foreground(cyberOK).Render("●")
-	case agents.StateThinking:
-		return lipgloss.NewStyle().Foreground(cyberPrimary).Render("◐")
-	case agents.StateWaiting:
-		return lipgloss.NewStyle().Foreground(cyberAccent).Render("▲")
-	case agents.StateIdle:
-		return lipgloss.NewStyle().Foreground(cyberFGDim).Render("○")
-	}
-	return lipgloss.NewStyle().Foreground(cyberFGDim).Render("·")
+	return lipgloss.NewStyle().Foreground(stateBarColor(st)).Render(stateGlyph(st))
 }
 
-// stateLabel returns the live state as a short word, or "—" when
-// no state was derived.
+// stateGlyph returns the bare glyph for a live state, no styling.
+func stateGlyph(st agents.LiveState) string {
+	switch st {
+	case agents.StateWorking:
+		return "●"
+	case agents.StateThinking:
+		return "◐"
+	case agents.StateWaiting:
+		return "▲"
+	case agents.StateIdle:
+		return "○"
+	}
+	return "·"
+}
+
+// stateBarColor returns the accent color for a live state. Drives
+// both the tile border and the state-label foreground so the visual
+// language is consistent everywhere.
+func stateBarColor(st agents.LiveState) color.Color {
+	switch st {
+	case agents.StateWorking:
+		return cyberOK
+	case agents.StateThinking:
+		return cyberPrimary
+	case agents.StateWaiting:
+		return cyberAccent
+	case agents.StateIdle:
+		return cyberFGDim
+	}
+	return cyberFGDim
+}
+
+// stateLabel returns the live state as a short word, or "—" when no
+// state was derived.
 func stateLabel(st agents.LiveState) string {
 	if st == "" {
 		return "—"
@@ -295,20 +348,58 @@ func stateLabel(st agents.LiveState) string {
 	return string(st)
 }
 
-// turnCountLabel renders the turn count with a trailing "t" for
-// compactness (5t instead of "5 turns"). Zero turns → "—".
-func turnCountLabel(n int) string {
-	if n <= 0 {
-		return "—"
+// providerChip renders a colored provider badge to sit next to the
+// title. Claude uses amber, Copilot uses cyan — matches the chip
+// styling in the dashboard SessionTile.tsx port.
+func providerChip(p agents.ProviderID) string {
+	switch p {
+	case agents.ProviderClaudeCode:
+		return lipgloss.NewStyle().
+			Foreground(cyberAccent).Bold(true).
+			Render("✦ Claude")
+	case agents.ProviderCopilotCLI:
+		return lipgloss.NewStyle().
+			Foreground(cyberPrimary).Bold(true).
+			Render("⌬ Copilot")
 	}
-	return fmt.Sprintf("%dt", n)
+	return ""
 }
 
-// mcpCountLabel renders the MCP server count with a leading 🔌 chip
-// when non-zero. Zero → "—" to keep the footer width consistent.
-func mcpCountLabel(n int) string {
-	if n <= 0 {
-		return "—"
+// branchPill renders the branch as a dim "⎇ <branch>" string, or
+// returns the em-dash placeholder when no branch is known so the
+// row keeps a constant height.
+func branchPill(branch string) string {
+	if branch == "" {
+		return lipgloss.NewStyle().Foreground(cyberFGDim).Render("⎇ —")
 	}
-	return fmt.Sprintf("🔌%d", n)
+	style := lipgloss.NewStyle().Foreground(cyberFG).Background(cyberChipBg).Padding(0, 1)
+	return style.Render("⎇ " + branch)
+}
+
+// stripActivityPrefix removes the noisy role-marker prefixes the
+// JSONL parser emits ("[user]", "[assistant]", "[tool]", "tool:",
+// "asking:") so the activity line reads as plain English.
+func stripActivityPrefix(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	for _, p := range []string{
+		"[user]", "[assistant]", "[tool]",
+		"[user] ", "[assistant] ", "[tool] ",
+	} {
+		if strings.HasPrefix(s, p) {
+			s = strings.TrimPrefix(s, p)
+			s = strings.TrimSpace(s)
+			break
+		}
+	}
+	for _, p := range []string{"tool: ", "tool:", "asking: ", "asking:"} {
+		if strings.HasPrefix(s, p) {
+			s = strings.TrimPrefix(s, p)
+			s = strings.TrimSpace(s)
+			break
+		}
+	}
+	return s
 }
