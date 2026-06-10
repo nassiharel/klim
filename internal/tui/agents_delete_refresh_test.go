@@ -199,3 +199,74 @@ func TestDeleteFlow_RefreshesEvenOnError(t *testing.T) {
 		t.Fatal("BUG: agentsDeletedMsg with err returned no follow-up Cmd — TUI won't refresh after a failed delete!")
 	}
 }
+
+// TestDeleteFromDetailPage_AutoPopsBackToList covers the user-facing
+// follow-up bug: after a successful delete launched from the
+// full-screen detail view, the refreshed snapshot no longer contains
+// the deleted entity, so the detail view used to render the unhelpful
+// "entity no longer present — press Esc to return" line until the user
+// dismissed it. The fix prunes detail-stack frames whose entityID
+// disappears on the next snapshot load, so the detail page auto-closes
+// and the user lands back on the list.
+func TestDeleteFromDetailPage_AutoPopsBackToList(t *testing.T) {
+	fakeHome := t.TempDir()
+	doomedID := "doomed-uuid-cccccccc-cccc-cccc-cccc-cccccccccccc"
+	dir := filepath.Join(fakeHome, "session-state", doomedID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	events := `{"type":"session.start","timestamp":"2026-06-10T08:00:00.000Z","data":{"sessionId":"` + doomedID +
+		`","startTime":"2026-06-10T08:00:00.000Z","context":{"cwd":"/tmp"}}}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	prev := agentsService
+	agentsService = func() *agents.Service {
+		return agents.NewService(4,
+			&copilotcli.Provider{HomeOverride: fakeHome},
+			&claudecode.Provider{HomeOverride: t.TempDir()},
+		)
+	}
+	defer func() { agentsService = prev }()
+
+	m := NewModel()
+	m.width = 140
+	m.height = 40
+	m.phase = phaseDone
+	m.bootStart = time.Now().Add(-time.Hour)
+	m.activeTab = tabAgents
+	m.agents = newAgentsState()
+	m.agents.subTab = agentsSubSessions
+
+	// Initial load + open detail page on the doomed session.
+	_, _ = m.handleAgentsMsg(loadAgentsCmd(true)())
+	m.agents.detailPage = true
+	m.agents.detailStack = []agentDetailFrame{{
+		subTab:   agentsSubSessions,
+		entityID: "copilot:" + doomedID,
+	}}
+
+	// Delete the session and run the refresh follow-up.
+	deletedMsg := deleteAgentEntityCmd(agents.ProviderCopilotCLI, agents.EntitySession, "copilot:"+doomedID)()
+	_, followup := m.handleAgentsMsg(deletedMsg)
+	if followup == nil {
+		t.Fatal("delete handler returned no follow-up cmd")
+	}
+	_, _ = m.handleAgentsMsg(followup())
+
+	// The detail page should have auto-closed because the entity is
+	// no longer in the snapshot.
+	if m.agents.detailPage {
+		t.Errorf("detail page still open after deleted entity was removed")
+	}
+	if len(m.agents.detailStack) != 0 {
+		t.Errorf("detail stack should be empty after auto-prune, got %d frames", len(m.agents.detailStack))
+	}
+
+	// And rendering the view must NOT contain the no-longer-present message.
+	out := m.renderView()
+	if strings.Contains(out, "entity no longer present") {
+		t.Errorf("render still shows 'entity no longer present' after auto-pop")
+	}
+}

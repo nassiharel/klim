@@ -1122,6 +1122,25 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		if st.sidebarOpen || len(st.sidebarItems) > 0 {
 			st.sidebarItems = buildAgentsSidebarItems(st)
 		}
+		// Prune any detail-stack frames whose entity disappeared from
+		// the refreshed snapshot (e.g. the user just deleted the
+		// session that was open in detail view). Without this the
+		// detail page renders "entity no longer present — press Esc
+		// to return" until the user manually dismisses it, which is
+		// noise: the action they took succeeded, and the screen
+		// should follow them back to the list automatically.
+		if st.detailPage && len(st.detailStack) > 0 {
+			pruned := st.detailStack[:0]
+			for _, frame := range st.detailStack {
+				if _, ok := m.resolveDetailRow(frame); ok {
+					pruned = append(pruned, frame)
+				}
+			}
+			st.detailStack = pruned
+			if len(st.detailStack) == 0 {
+				st.detailPage = false
+			}
+		}
 		return true, nil
 	case agentsLaunchedMsg:
 		if v.err != nil {
