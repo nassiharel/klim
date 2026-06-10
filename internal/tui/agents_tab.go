@@ -2979,16 +2979,22 @@ func renderTranscriptLine(raw []byte) string {
 
 	// Single struct that fits both Claude and Copilot shapes — we use
 	// only the fields that are present for the role we're looking at.
+	//
+	// `message.content` is intentionally json.RawMessage: in real
+	// Claude transcripts it appears in TWO shapes — a plain string
+	// (`"content":"hi there"`, the dominant case for user-typed
+	// messages) AND an array of typed blocks (`"content":[{"type":
+	// "text",...}]`, used for assistant turns and tool calls).
+	// Declaring it as `[]struct{...}` made json.Unmarshal fail with
+	// a type mismatch on every string-form line, which was returned
+	// as "" and silently dropped — so the viewer rendered an empty
+	// box for sessions where the user-typed messages dominated. We
+	// now branch on the first byte of the raw value to handle both.
 	var ev struct {
 		Type    string `json:"type"`
 		Message struct {
-			Role    string `json:"role"`
-			Content []struct {
-				Type  string                 `json:"type"`
-				Text  string                 `json:"text"`
-				Name  string                 `json:"name"`
-				Input map[string]interface{} `json:"input"`
-			} `json:"content"`
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
 		} `json:"message"`
 		// Copilot wraps everything in data.message.{text,content}.
 		Data struct {
@@ -3006,16 +3012,12 @@ func renderTranscriptLine(raw []byte) string {
 	switch ev.Type {
 	case "user", "assistant":
 		role := ev.Type
-		// Walk Claude's content blocks for the first text / tool_use.
-		for _, c := range ev.Message.Content {
-			switch c.Type {
-			case "text":
-				if c.Text != "" {
-					return "[" + role + "] " + collapseWhitespace(c.Text)
-				}
-			case "tool_use":
-				return "[tool]      " + c.Name + "(" + summariseInput(c.Input) + ")"
-			}
+		text, tool := extractClaudeContent(ev.Message.Content)
+		if tool != "" {
+			return tool
+		}
+		if text != "" {
+			return "[" + role + "] " + collapseWhitespace(text)
 		}
 		return ""
 	case "user.message", "assistant.message":
@@ -3033,6 +3035,59 @@ func renderTranscriptLine(raw []byte) string {
 		return "[" + role + "] " + collapseWhitespace(text)
 	}
 	return ""
+}
+
+// extractClaudeContent unpacks the polymorphic `message.content`
+// field from a Claude transcript event. Returns (text, toolLine):
+//   - text:     non-empty when the content was a plain string OR an
+//     array containing a text block. The caller wraps it
+//     in the role prefix.
+//   - toolLine: a fully-rendered "[tool] name(arg)" string when the
+//     content was an array containing a tool_use block.
+//     When non-empty the caller uses it verbatim and
+//     ignores `text`.
+//
+// Returns ("", "") when the content is empty, neither shape, or
+// only contains blocks the viewer should skip (e.g. tool_result
+// payloads belong to the tool, not the conversation).
+func extractClaudeContent(raw json.RawMessage) (text, toolLine string) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return "", ""
+	}
+	// String form: `"content":"plain text from the user"`. This is
+	// the dominant case for user-typed messages and was the source
+	// of the viewer-is-blank bug before the json.RawMessage switch.
+	if trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err == nil {
+			return s, ""
+		}
+		return "", ""
+	}
+	// Array form: walk blocks for the first text or tool_use.
+	if trimmed[0] == '[' {
+		var blocks []struct {
+			Type  string                 `json:"type"`
+			Text  string                 `json:"text"`
+			Name  string                 `json:"name"`
+			Input map[string]interface{} `json:"input"`
+		}
+		if err := json.Unmarshal(trimmed, &blocks); err != nil {
+			return "", ""
+		}
+		for _, c := range blocks {
+			switch c.Type {
+			case "text":
+				if c.Text != "" {
+					return c.Text, ""
+				}
+			case "tool_use":
+				return "", "[tool]      " + c.Name + "(" + summariseInput(c.Input) + ")"
+			}
+		}
+	}
+	return "", ""
 }
 
 // summariseInput renders a tool input map as a short summary like
