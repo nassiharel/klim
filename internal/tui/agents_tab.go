@@ -2891,7 +2891,7 @@ func renderTranscriptLine(raw []byte) string {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &ev); err != nil {
-		return "" // unparseable — skip
+		return "" // unparsable — skip
 	}
 
 	switch ev.Type {
