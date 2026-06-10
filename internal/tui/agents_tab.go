@@ -53,6 +53,12 @@ type agentsState struct {
 	// sortMode is per sub-tab: see agentsSortMode* below.
 	sortMode map[int]agentsSortMode
 
+	// sessionsViewMode toggles the Sessions sub-tab between the
+	// dense per-row table (default) and a compact tile grid
+	// reminiscent of ghcpCliDashboard's SessionGrid. Cycled with
+	// the `v` key; only meaningful when subTab == agentsSubSessions.
+	sessionsViewMode sessionsViewMode
+
 	// statusFilter is per sub-tab: see agentsFilter* below.
 	statusFilter map[int]agentsFilter
 
@@ -206,6 +212,32 @@ const (
 // entry. Older caches still render immediately but trigger a
 // background refresh so the user sees latest state on the next tick.
 const agentsCacheTTL = 10 * time.Minute
+
+// sessionsViewMode controls how the Sessions sub-tab renders its
+// rows. Toggled by the `v` keybinding when the sub-tab is active.
+type sessionsViewMode int
+
+// Session view modes.
+const (
+	sessionsViewList  sessionsViewMode = 0 // default — dense table
+	sessionsViewTiles sessionsViewMode = 1 // bordered tile grid
+)
+
+// next returns the view mode that follows v in the toggle cycle.
+func (v sessionsViewMode) next() sessionsViewMode {
+	if v == sessionsViewList {
+		return sessionsViewTiles
+	}
+	return sessionsViewList
+}
+
+// label returns a short human label for the current view mode.
+func (v sessionsViewMode) label() string {
+	if v == sessionsViewTiles {
+		return "tiles"
+	}
+	return "list"
+}
 
 const (
 	agentsSubMarketplaces = 0
@@ -877,6 +909,23 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		// Full-text search overlay across every indexed transcript
 		// (Shift+S — `/` stays as the per-tab fuzzy filter).
 		return true, m.agentsSearchOpenCmd()
+	case "t":
+		// View mode toggle — list ↔ tiles. Only meaningful on the
+		// Sessions sub-tab today; on other sub-tabs we surface a
+		// flash hint instead of silently swallowing the keystroke
+		// so users know the binding exists but doesn't apply here.
+		//
+		// `v` is already taken by "View transcript", so the toggle
+		// lives on `t` for "tiles / table".
+		if st.subTab != agentsSubSessions {
+			st.flash = "t toggles view mode (only on Sessions sub-tab)"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		st.sessionsViewMode = st.sessionsViewMode.next()
+		st.flash = "view: " + st.sessionsViewMode.label()
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
 	case "r":
 		st.loading = true
 		st.flash = "refreshing…"
@@ -1599,8 +1648,14 @@ func (m *Model) renderAgentsView() string {
 		b.WriteString("  filter: " + st.searchInput + "  " + dimVersion.Render("/ edit · esc clear"))
 		b.WriteString("\n")
 	default:
-		// Single, subtle hint — full keymap lives behind ?.
-		b.WriteString("  " + dimVersion.Render("/ filter · s sort · S search transcripts · ? help") + "\n")
+		// Single, subtle hint — full keymap lives behind ?. On the
+		// Sessions sub-tab we additionally surface `t` so the
+		// list/tiles toggle is discoverable.
+		hint := "/ filter · s sort · S search transcripts · ? help"
+		if st.subTab == agentsSubSessions {
+			hint = "/ filter · s sort · t " + st.sessionsViewMode.label() + " view · S search · ? help"
+		}
+		b.WriteString("  " + dimVersion.Render(hint) + "\n")
 	}
 
 	// Active-filter chip row — only rendered when at least one filter
@@ -1676,6 +1731,20 @@ func (m *Model) renderAgentsView() string {
 	if maxRows < 6 {
 		maxRows = 6
 	}
+	// Tile mode budgets differently: each card is `tileHeight` rows
+	// tall and we lay them out in 1–3 columns. Translate the visual
+	// row budget into a session-count budget so windowAgentRows
+	// returns enough sessions to fill the available tile rows
+	// without overflowing them.
+	if st.subTab == agentsSubSessions && st.sessionsViewMode == sessionsViewTiles {
+		tileTotalW := m.width - agentsSidebarColWidth - 3
+		_, cols := chooseTileLayout(tileTotalW)
+		tileRows := maxRows / tileHeight
+		if tileRows < 1 {
+			tileRows = 1
+		}
+		maxRows = tileRows * cols
+	}
 	visible, windowStart, displayCursor, hiddenAbove, hiddenBelow := windowAgentRows(rows, st.cursor, maxRows)
 	_ = windowStart
 
@@ -1685,7 +1754,16 @@ func (m *Model) renderAgentsView() string {
 	if hiddenAbove > 0 {
 		fmt.Fprintf(&tbl, "  %s\n", dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)))
 	}
-	tbl.WriteString(renderAgentsTable(st.subTab, visible, displayCursor, st.sortMode[st.subTab], m.width-agentsSidebarColWidth-3))
+	// On the Sessions sub-tab, the user can toggle between the
+	// dense table and a compact tile grid via the `v` keybinding.
+	// Tiles are inspired by ghcpCliDashboard's SessionGrid: one
+	// bordered card per session with the most-used metadata
+	// (state, title, branch, turns, recent activity) packed in.
+	if st.subTab == agentsSubSessions && st.sessionsViewMode == sessionsViewTiles {
+		tbl.WriteString(renderSessionTiles(visible, displayCursor, m.width-agentsSidebarColWidth-3))
+	} else {
+		tbl.WriteString(renderAgentsTable(st.subTab, visible, displayCursor, st.sortMode[st.subTab], m.width-agentsSidebarColWidth-3))
+	}
 	if hiddenBelow > 0 {
 		fmt.Fprintf(&tbl, "  %s\n", dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)))
 	}
