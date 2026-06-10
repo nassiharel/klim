@@ -1086,7 +1086,15 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		if v.err != nil {
 			st.flash = "delete failed: " + v.err.Error()
 			st.flashEnd = time.Now().Add(4 * time.Second)
-			return true, nil
+			// Refresh anyway: a "not found" / "already deleted"
+			// error often means our snapshot was stale (or the
+			// user already removed the dir out of band). Without
+			// the reload the failing row stays visibly on screen
+			// forever and the user can't tell whether the action
+			// took. The error toast still surfaces the underlying
+			// failure for cases where the delete genuinely failed
+			// (permissions, disk full, etc.).
+			return true, loadAgentsCmd(true)
 		}
 		st.flash = fmt.Sprintf("deleted %s %s", v.typ, v.id)
 		st.flashEnd = time.Now().Add(3 * time.Second)
@@ -1096,7 +1104,11 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		if v.err != nil {
 			st.flash = "✗ " + v.label + ": " + v.err.Error()
 			st.flashEnd = time.Now().Add(5 * time.Second)
-			return true, nil
+			// Same recovery pattern as agentsDeletedMsg: refresh on
+			// error so a stale row whose backing state already
+			// changed (e.g. plugin uninstalled out of band) doesn't
+			// linger on screen.
+			return true, loadAgentsCmd(true)
 		}
 		st.flash = "✓ " + v.label
 		st.flashEnd = time.Now().Add(3 * time.Second)
