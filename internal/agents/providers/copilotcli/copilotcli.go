@@ -880,10 +880,64 @@ func (p *Provider) EnableMCP(ctx context.Context, name string, enabled bool) err
 	return p.runCLI(ctx, "mcp", "disable", name)
 }
 
-// DeleteSession deletes a session via the provider CLI.
+// DeleteSession removes a Copilot session's on-disk state.
+//
+// Copilot CLI as of 1.x does NOT expose a `session delete` subcommand —
+// running `copilot session delete <id>` returns exit 1 with
+// `error: Invalid command format. Did you mean: copilot -i "session
+// delete <id>"?` on stderr. The previous implementation shelled out
+// to that nonexistent command via runCLI which inherits stdio; in the
+// TUI those 191 bytes of error text were written straight onto the
+// rendered screen, corrupting the layout, AND the session wasn't
+// actually deleted.
+//
+// We remove the session directory directly instead. Layouts checked
+// (matching Sessions() — keep in sync if one changes):
+//
+//	~/.copilot/session-state/<uuid>/   (1.x default)
+//	~/.copilot/sessions/<uuid>/        (pre-1.0)
+//	~/.copilot/state/<uuid>/           (older fallback)
+//
+// The first existing dir is removed. Returns nil when at least one
+// dir was found and removed; an error otherwise. The orphan row in
+// ~/.copilot/session-store.db (the SQLite index Copilot keeps) is
+// NOT cleaned up — Sessions() reads the dirs directly so the entry
+// disappears from our UI either way, and we deliberately stay free
+// of an SQLite dependency.
 func (p *Provider) DeleteSession(ctx context.Context, id string) error {
+	_ = ctx // no IO that can be cancelled; kept for interface conformance
 	id = strings.TrimPrefix(id, "copilot:")
-	return p.runCLI(ctx, "session", "delete", id)
+	if id == "" {
+		return errors.New("delete: session id is required")
+	}
+	root := p.copilotHome()
+	var lastErr error
+	removed := false
+	for _, sub := range []string{"session-state", "sessions", "state"} {
+		dir := filepath.Join(root, sub, id)
+		info, err := os.Stat(dir)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				lastErr = err
+			}
+			continue
+		}
+		if !info.IsDir() {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			lastErr = err
+			continue
+		}
+		removed = true
+	}
+	if removed {
+		return nil
+	}
+	if lastErr != nil {
+		return fmt.Errorf("delete: %w", lastErr)
+	}
+	return fmt.Errorf("delete: session %q not found under %s", id, root)
 }
 
 func (p *Provider) runCLI(ctx context.Context, args ...string) error {

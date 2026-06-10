@@ -164,3 +164,83 @@ func TestProvider_UpdatePlugin_UnsupportedSurfacesClearError(t *testing.T) {
 		t.Errorf("got err=%v, want 'update not supported by copilot-cli'", err)
 	}
 }
+
+// TestProvider_DeleteSession_RemovesDirectory verifies the Copilot
+// DeleteSession path: Copilot CLI 1.x has no `session delete`
+// subcommand, so we delete the on-disk session-state dir directly
+// instead of shelling out (which would print "Invalid command format"
+// to the TUI's inherited stderr and leave the session intact).
+//
+// Covers all three layout candidates Sessions() supports, plus the
+// "not found" error path so callers see a clean message instead of
+// silent success.
+func TestProvider_DeleteSession_RemovesDirectory(t *testing.T) {
+	for _, layout := range []string{"session-state", "sessions", "state"} {
+		t.Run(layout, func(t *testing.T) {
+			home := t.TempDir()
+			sid := "0596511c-4387-4cc2-8d08-4302511cc586"
+			dir := filepath.Join(home, layout, sid)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte("{}\n"), 0o644); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			p := &Provider{HomeOverride: home}
+
+			if err := p.DeleteSession(context.Background(), "copilot:"+sid); err != nil {
+				t.Fatalf("DeleteSession: %v", err)
+			}
+			if _, err := os.Stat(dir); !os.IsNotExist(err) {
+				t.Errorf("expected dir removed, got stat err=%v", err)
+			}
+		})
+	}
+}
+
+func TestProvider_DeleteSession_MissingReturnsError(t *testing.T) {
+	home := t.TempDir()
+	p := &Provider{HomeOverride: home}
+	err := p.DeleteSession(context.Background(), "copilot:does-not-exist")
+	if err == nil {
+		t.Fatal("expected error for missing session, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("err=%v, want 'not found'", err)
+	}
+}
+
+func TestProvider_DeleteSession_EmptyIDIsError(t *testing.T) {
+	p := &Provider{HomeOverride: t.TempDir()}
+	err := p.DeleteSession(context.Background(), "copilot:")
+	if err == nil {
+		t.Fatal("expected error for empty id, got nil")
+	}
+}
+
+// TestProvider_DeleteSession_LeavesOtherSessions covers the
+// blast-radius worry: removing one session must NOT touch others
+// that happen to share the parent directory. The most common failure
+// mode would be a path-construction bug that lands on the parent
+// itself.
+func TestProvider_DeleteSession_LeavesOtherSessions(t *testing.T) {
+	home := t.TempDir()
+	keep := filepath.Join(home, "session-state", "keep-me")
+	doomed := filepath.Join(home, "session-state", "doomed")
+	for _, d := range []string{keep, doomed} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+	}
+	p := &Provider{HomeOverride: home}
+
+	if err := p.DeleteSession(context.Background(), "copilot:doomed"); err != nil {
+		t.Fatalf("DeleteSession: %v", err)
+	}
+	if _, err := os.Stat(doomed); !os.IsNotExist(err) {
+		t.Errorf("doomed dir not removed: %v", err)
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Errorf("kept dir was unexpectedly removed: %v", err)
+	}
+}
