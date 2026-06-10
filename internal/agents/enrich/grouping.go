@@ -2,6 +2,7 @@ package enrich
 
 import (
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -63,16 +64,27 @@ var GroupKeywordBuckets = []struct {
 // last-resort fallback).
 func Resolve(cwd, repo, title, home string, mappings map[string]string) string {
 	// 1. mappings: substring match (so "/dev/klim" matches the key
-	//    "klim"). Iterate in deterministic order would require sorting
-	//    keys; we accept first-hit since the user's mapping table is
-	//    expected to be unambiguous.
+	//    "klim"). Iterate keys in a deterministic order so two
+	//    overlapping patterns always resolve to the same group across
+	//    runs / refreshes. Longer keys are tried first — a more
+	//    specific pattern beats a more generic one (e.g. "klim-fork"
+	//    wins over "klim" when the cwd contains both).
 	if cwd != "" && len(mappings) > 0 {
-		for needle, group := range mappings {
-			if needle == "" {
-				continue
+		keys := make([]string, 0, len(mappings))
+		for k := range mappings {
+			if k != "" {
+				keys = append(keys, k)
 			}
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			if len(keys[i]) != len(keys[j]) {
+				return len(keys[i]) > len(keys[j])
+			}
+			return keys[i] < keys[j]
+		})
+		for _, needle := range keys {
 			if strings.Contains(cwd, needle) {
-				return group
+				return mappings[needle]
 			}
 		}
 	}

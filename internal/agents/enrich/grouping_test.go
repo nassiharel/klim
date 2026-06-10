@@ -90,3 +90,45 @@ func TestResolveGrouping(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveLongestMappingWins verifies that overlapping mapping
+// patterns are resolved deterministically by longest-key-first, so
+// `klim-fork` beats `klim` no matter what order the YAML store
+// happened to enumerate them in.
+func TestResolveLongestMappingWins(t *testing.T) {
+	t.Parallel()
+	mappings := map[string]string{
+		"klim":      "Klim",
+		"klim-fork": "Klim Fork",
+	}
+	got := Resolve(p("dev", "klim-fork"), "", "", "", mappings)
+	if got != "Klim Fork" {
+		t.Errorf("longest-key wins: got %q, want %q", got, "Klim Fork")
+	}
+}
+
+// TestResolveMappingDeterministic asserts the resolver returns the
+// same group for the same input across many repeated calls, even
+// when the input has multiple overlapping mappings. Without sorted
+// iteration the map's randomised range order would flicker between
+// groups.
+func TestResolveMappingDeterministic(t *testing.T) {
+	t.Parallel()
+	mappings := map[string]string{
+		"alpha": "Alpha",
+		"beta":  "Beta",
+		"gamma": "Gamma",
+		"delta": "Delta",
+		"epsil": "Epsilon",
+	}
+	// A cwd that contains MULTIPLE mapping keys — the resolver must
+	// pick the same one every call.
+	cwd := p("alpha", "beta", "gamma", "delta", "epsil")
+	first := Resolve(cwd, "", "", "", mappings)
+	for i := 0; i < 100; i++ {
+		got := Resolve(cwd, "", "", "", mappings)
+		if got != first {
+			t.Fatalf("non-deterministic: call %d got %q, want %q", i, got, first)
+		}
+	}
+}

@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"golang.org/x/term"
 
-	"github.com/nassiharel/klim/internal/agents"
 	"github.com/nassiharel/klim/internal/sessionstui"
 )
 
@@ -33,7 +32,6 @@ func init() {
 			tea.WithContext(ctx),
 		)
 		_, err := prog.Run()
-		_ = agents.SessionStatusActive // sentinel to keep agents import non-dead
 		return err
 	}
 }

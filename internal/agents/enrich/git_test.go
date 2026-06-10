@@ -72,6 +72,35 @@ func TestBranchAtCwd(t *testing.T) {
 			t.Errorf("got %q, want %q", got, want)
 		}
 	})
+
+	t.Run("worktree .git file with relative gitdir resolves against the .git file's dir", func(t *testing.T) {
+		t.Parallel()
+		// Layout mirrors `git worktree add ../wt`:
+		//   <root>/main/.git/             (real repo dir)
+		//   <root>/main/.git/worktrees/wt (the wt's gitdir)
+		//   <root>/wt/.git                 (a FILE containing "gitdir: ../main/.git/worktrees/wt")
+		root := t.TempDir()
+		mainRepo := filepath.Join(root, "main")
+		wtDir := filepath.Join(root, "wt")
+		gitdirReal := filepath.Join(mainRepo, ".git", "worktrees", "wt")
+		if err := os.MkdirAll(gitdirReal, 0o755); err != nil {
+			t.Fatalf("mkdir gitdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(gitdirReal, "HEAD"), []byte("ref: refs/heads/feat/wt\n"), 0o644); err != nil {
+			t.Fatalf("write HEAD: %v", err)
+		}
+		if err := os.MkdirAll(wtDir, 0o755); err != nil {
+			t.Fatalf("mkdir wt: %v", err)
+		}
+		// gitdir points at the real gitdir RELATIVELY from the wt's dir.
+		rel := filepath.Join("..", "main", ".git", "worktrees", "wt")
+		if err := os.WriteFile(filepath.Join(wtDir, ".git"), []byte("gitdir: "+rel+"\n"), 0o644); err != nil {
+			t.Fatalf("write .git file: %v", err)
+		}
+		if got, want := BranchAtCwd(wtDir), "feat/wt"; got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
 }
 
 func TestRepoFromCwd(t *testing.T) {

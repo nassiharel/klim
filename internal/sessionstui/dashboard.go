@@ -154,6 +154,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			loadCmd(m.svc, true),
 			tea.Tick(slowTick, func(t time.Time) tea.Msg { return slowTickMsg(t) }),
 		)
+	case statusMsg:
+		// Set by runResumeCmd's tea.ExecProcess callback (or any other
+		// command that wants to surface a one-line outcome to the user).
+		m.status = msg.text
 	case tea.KeyMsg:
 		cmd := m.handleKey(msg)
 		return m, cmd
@@ -263,7 +267,10 @@ func (m *Model) selected() (agents.Session, bool) {
 
 // runResumeCmd hands control to the underlying agent CLI. tea.ExecProcess
 // suspends the bubbletea program for the duration so signals (Ctrl-C)
-// reach the agent rather than klim.
+// reach the agent rather than klim. The error returned by ExecProcess
+// (non-zero exit, spawn failure) is surfaced back to the user as a
+// status line so the dashboard doesn't quietly report success on a
+// failed resume.
 func runResumeCmd(s agents.Session) tea.Cmd {
 	provID := providerForSessionID(s.ID)
 	if provID == "" {
@@ -280,6 +287,9 @@ func runResumeCmd(s agents.Session) tea.Cmd {
 	// Use /bin/sh -c (or cmd /c on Windows) so the `cd && cli` form
 	// works as-is.
 	return tea.ExecProcess(shellExec(s.RestartCommand), func(err error) tea.Msg {
+		if err != nil {
+			return statusMsg{text: "resume failed: " + err.Error()}
+		}
 		return statusMsg{text: "resumed (exit ok)"}
 	})
 }

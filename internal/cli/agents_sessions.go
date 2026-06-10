@@ -1119,6 +1119,15 @@ func extractFilePathsFromTranscript(path string) map[string]bool {
 				if c.Type != "tool_use" {
 					continue
 				}
+				// Only count tools that semantically operate on a
+				// file by path — the `files` command exists to
+				// answer "what did you edit / read recently?", so
+				// counting every tool that happens to carry a
+				// path-shaped input (e.g. Bash, Glob) would inflate
+				// the picture.
+				if !isFileEditTool(c.Name) {
+					continue
+				}
 				for _, p := range []string{c.Input.FilePath, c.Input.Path, c.Input.NotebookPath} {
 					if p != "" {
 						out[p] = true
@@ -1128,6 +1137,25 @@ func extractFilePathsFromTranscript(path string) map[string]bool {
 		}
 	}
 	return out
+}
+
+// isFileEditTool reports whether `name` is one of the per-file Claude
+// tools that the `files` aggregate considers a real read/edit. The
+// list is conservative: we only count tools whose primary purpose is
+// reading or writing one named file (or notebook cell).
+//
+// Tools deliberately excluded:
+//
+//   - Bash / Glob / Grep — accept paths but as search inputs, not
+//     edit targets.
+//   - WebFetch / WebSearch — no file involved.
+//   - Skill / Agent / Task* — orchestration, no direct file work.
+func isFileEditTool(name string) bool {
+	switch name {
+	case "Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "NotebookRead":
+		return true
+	}
+	return false
 }
 
 // ----- sessions star / unstar -----

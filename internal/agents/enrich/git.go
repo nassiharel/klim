@@ -47,6 +47,13 @@ func BranchAtCwd(cwd string) string {
 // directories and `.git` files pointing to a worktree's gitdir), or
 // the empty string when no repo is found.
 //
+// Worktree handling: when `.git` is a file, its body is
+// `gitdir: <path>`. That path can be absolute OR relative; git
+// itself resolves relative paths against the directory that contains
+// the `.git` file, not the process CWD. We do the same, otherwise
+// `filepath.Join(gitDir, "HEAD")` would walk to the wrong place and
+// branch detection would silently break for worktrees.
+//
 // Stops walking at the filesystem root.
 func findGitDir(start string) string {
 	cur := filepath.Clean(start)
@@ -63,7 +70,16 @@ func findGitDir(start string) string {
 				for _, line := range strings.Split(string(data), "\n") {
 					line = strings.TrimSpace(line)
 					if strings.HasPrefix(line, "gitdir:") {
-						return strings.TrimSpace(strings.TrimPrefix(line, "gitdir:"))
+						gd := strings.TrimSpace(strings.TrimPrefix(line, "gitdir:"))
+						if gd == "" {
+							continue
+						}
+						if !filepath.IsAbs(gd) {
+							// Resolve against the directory holding
+							// the .git file, NOT the process CWD.
+							gd = filepath.Join(cur, gd)
+						}
+						return filepath.Clean(gd)
 					}
 				}
 			}

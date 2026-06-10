@@ -393,12 +393,13 @@ func (m Marketplace) MarshalJSON() ([]byte, error) {
 // MarshalJSON omits zero Created / LastModified on Sessions.
 //
 // New enrichment fields (LiveState, RecentActivity, ToolCounts, etc.)
-// carry json:"…,omitempty" tags directly, so they're stripped by the
-// standard encoder before we even see them here. We only need custom
-// handling for time.Time (which omitempty doesn't recognise) and for
-// the nil-vs-empty distinction on ToolCounts: json.Marshal will emit
-// `"tool_counts": null` for a nil map even with omitempty, so we delete
-// it explicitly when the map ended up empty.
+// carry json:"…,omitempty" tags directly, so the standard encoder
+// strips them (including nil maps and nil slices) before we ever
+// see them here — no defensive deletion needed for those. We only
+// override marshaling for time.Time because encoding/json's
+// omitempty does NOT recognise a zero time.Time as empty: without
+// this custom handler a Session with no Created would emit
+// `"Created": "0001-01-01T00:00:00Z"`.
 func (s Session) MarshalJSON() ([]byte, error) {
 	type alias Session
 	a := alias(s)
@@ -415,12 +416,6 @@ func (s Session) MarshalJSON() ([]byte, error) {
 	}
 	if s.LastModified.IsZero() {
 		delete(generic, "LastModified")
-	}
-	if len(s.ToolCounts) == 0 {
-		delete(generic, "tool_counts")
-	}
-	if len(s.MCPServers) == 0 {
-		delete(generic, "mcp_servers")
 	}
 	return json.Marshal(generic)
 }

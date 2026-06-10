@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -411,11 +412,25 @@ func hydrateSessionExtras(snap *Snapshot) {
 		for _, e := range st.All() {
 			starred[e.SessionID] = true
 		}
+	} else if err != nil {
+		// Bookmarks file is corrupt or unreadable — surface a hint
+		// to stderr so a "my stars aren't showing" issue is visible
+		// at the source rather than silently ignored. We still
+		// proceed with an empty starred set so the rest of the
+		// snapshot stays usable.
+		fmt.Fprintf(os.Stderr, "agents: bookmarks load failed (stars not hydrated): %v\n", err)
 	}
 
 	mappings := map[string]string{}
 	if gm, err := enrich.LoadGroupingMappings(); err == nil && gm != nil {
 		mappings = gm.All()
+	} else if err != nil {
+		// Grouping file is corrupt or unreadable — same approach as
+		// bookmarks: warn loudly to stderr so a "my custom groups
+		// stopped working" issue is debuggable, then fall back to
+		// the empty mapping set (resolver still produces a group
+		// via repo / cwd / keyword fallback).
+		fmt.Fprintf(os.Stderr, "agents: grouping mappings load failed (custom groups not applied): %v\n", err)
 	}
 
 	home := homeDir()

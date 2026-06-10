@@ -9,9 +9,10 @@
 // vocabularies into the generic [Event] type and call this package's
 // pure functions.
 //
-// All functions here are deterministic and side-effect-free except for
-// optional git probing via [BranchAtCwd] (which only runs `git` if the
-// binary is on PATH and the cwd is a worktree).
+// All functions here are deterministic and side-effect-free. The
+// optional git probe [BranchAtCwd] reads `.git/HEAD` directly off
+// the filesystem — it never shells out to `git`, so it works without
+// the git binary on PATH and without spawning a process per session.
 package enrich
 
 // EventKind classifies an event from a session's append-only log.

@@ -126,8 +126,9 @@ var agentsSessionsCmd = &cobra.Command{
 transcripts and presents them as a glanceable dashboard.
 
 Bare ` + "`klim agents sessions`" + ` opens a TUI dashboard when stdout
-is a TTY; when piped (or with --no-tui) it runs the equivalent of
-` + "`klim agents sessions list`" + ` so existing pipelines keep working.
+is a TTY; when piped (or when stdout is not a terminal) it runs the
+equivalent of ` + "`klim agents sessions list`" + ` so existing
+pipelines keep working.
 
 Examples:
   klim agents sessions
