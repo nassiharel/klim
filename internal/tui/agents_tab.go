@@ -2,7 +2,9 @@ package tui
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image/color"
@@ -1885,7 +1887,20 @@ func computeColumnWidths(cols []column, totalWidth int) []column {
 	gaps := gap * (len(out) - 1)
 	available := totalWidth - leadPad - fixed - gaps
 	if available < minGrow {
-		available = minGrow
+		// CRITICAL: if minGrow would push the row past totalWidth,
+		// every row wraps to 2 visual rows and the footer alignment
+		// math (which budgets visibleRows based on line count, not
+		// visual rows) falls apart. The Sessions sub-tab hit this
+		// at any terminal width up to ~145 cols because it has
+		// 8 columns / 7 gaps + an em-dash heavy table. Better to
+		// squeeze the grow column hard than to wrap the whole row.
+		//
+		// Floor at 0 (not 1) so totalWidth that exactly equals the
+		// fixed+gaps total still doesn't overflow — the grow column
+		// just disappears.
+		if available < 0 {
+			available = 0
+		}
 	}
 	out[growIdx].width = available
 	return out
@@ -2771,18 +2786,28 @@ func cycleMarketplaceFilter(current string, available []string) string {
 	return available[0]
 }
 
-// readSessionTranscript reads at most `max` lines from a session
-// transcript file. Returns the lines so the viewer modal can render them.
+// readSessionTranscript reads at most `max` rendered lines from a
+// session transcript and returns them ready for the viewer modal.
 //
 // When given a directory, looks for the canonical Copilot
 // `events.jsonl` first; if that's missing, falls back to the most
 // recently modified `*.jsonl` in the directory (Claude project
 // dirs follow this layout — one file per session UUID).
 //
-// Each returned line is capped at 4 KiB to keep the transcript
-// viewer's layout from exploding when a single Claude event embeds
-// a multi-megabyte tool result (hook outputs, pasted code blocks).
-// Truncated lines get a trailing `…` so the viewer indicates the cut.
+// Each entry in the transcript is a JSON event. The viewer doesn't
+// need the raw envelope — it needs the conversation. We parse each
+// line and extract just the user-friendly bits:
+//
+//   - Claude `user` / `assistant` messages → `[role] <first text>`
+//   - Claude `tool_use` blocks → `[tool] <name>(<arg-summary>)`
+//   - Copilot `user.message` / `assistant.message` → same shape
+//   - Other event types (queue-operation, hook_success, telemetry)
+//     → skipped, since they're noise to the human reader
+//
+// Lines that don't parse as JSON fall through unchanged (capped at
+// 4 KiB) so non-JSONL transcripts (legacy formats) still show up.
+// Each rendered line is capped at 200 chars so a single event with
+// a multi-megabyte payload can't blow up the viewer's layout.
 func readSessionTranscript(path string, limit int) ([]string, error) {
 	st, err := os.Stat(path)
 	if err != nil {
@@ -2802,23 +2827,140 @@ func readSessionTranscript(path string, limit int) ([]string, error) {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	const maxLineBytes = 4096
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	const maxRenderedLine = 200
 	var lines []string
-	br := bufio.NewReader(f)
-	for i := 0; i < limit; i++ {
-		line, err := br.ReadString('\n')
-		if line != "" {
-			line = strings.TrimRight(line, "\r\n")
-			if len(line) > maxLineBytes {
-				line = line[:maxLineBytes-1] + "…"
-			}
-			lines = append(lines, line)
+	for scanner.Scan() && len(lines) < limit {
+		raw := scanner.Bytes()
+		rendered := renderTranscriptLine(raw)
+		if rendered == "" {
+			continue
 		}
-		if err != nil {
-			break
+		if len(rendered) > maxRenderedLine {
+			rendered = rendered[:maxRenderedLine-1] + "…"
 		}
+		lines = append(lines, rendered)
 	}
 	return lines, nil
+}
+
+// renderTranscriptLine turns one raw JSONL transcript line into a
+// human-friendly string. Returns "" for lines the viewer should skip
+// (telemetry, hooks, mode changes — anything that isn't part of the
+// conversation).
+//
+// Format:
+//
+//	[user]      <text>
+//	[assistant] <text>
+//	[tool]      <name>(<first-arg>)
+//
+// When the JSON has neither a recognised user/assistant message nor
+// a tool_use, returns "" to skip the line.
+func renderTranscriptLine(raw []byte) string {
+	// Skip non-JSON noise (rare but possible for legacy transcripts).
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		if len(raw) > 200 {
+			return string(raw[:199]) + "…"
+		}
+		return string(raw)
+	}
+
+	// Single struct that fits both Claude and Copilot shapes — we use
+	// only the fields that are present for the role we're looking at.
+	var ev struct {
+		Type    string `json:"type"`
+		Message struct {
+			Role    string `json:"role"`
+			Content []struct {
+				Type  string                 `json:"type"`
+				Text  string                 `json:"text"`
+				Name  string                 `json:"name"`
+				Input map[string]interface{} `json:"input"`
+			} `json:"content"`
+		} `json:"message"`
+		// Copilot wraps everything in data.message.{text,content}.
+		Data struct {
+			Message struct {
+				Role    string `json:"role"`
+				Text    string `json:"text"`
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &ev); err != nil {
+		return "" // unparseable — skip
+	}
+
+	switch ev.Type {
+	case "user", "assistant":
+		role := ev.Type
+		// Walk Claude's content blocks for the first text / tool_use.
+		for _, c := range ev.Message.Content {
+			switch c.Type {
+			case "text":
+				if c.Text != "" {
+					return "[" + role + "] " + collapseWhitespace(c.Text)
+				}
+			case "tool_use":
+				return "[tool]      " + c.Name + "(" + summariseInput(c.Input) + ")"
+			}
+		}
+		return ""
+	case "user.message", "assistant.message":
+		role := "user"
+		if ev.Type == "assistant.message" {
+			role = "assistant"
+		}
+		text := ev.Data.Message.Text
+		if text == "" {
+			text = ev.Data.Message.Content
+		}
+		if text == "" {
+			return ""
+		}
+		return "[" + role + "] " + collapseWhitespace(text)
+	}
+	return ""
+}
+
+// summariseInput renders a tool input map as a short summary like
+// `path="src/foo.go"`. Picks the first value-bearing key from a fixed
+// short list of common ones; falls back to "..." when nothing useful
+// is present.
+func summariseInput(in map[string]interface{}) string {
+	for _, key := range []string{"file_path", "path", "notebook_path", "command", "query", "pattern", "url"} {
+		if v, ok := in[key]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				if len(s) > 60 {
+					s = s[:59] + "…"
+				}
+				return key + "=" + strconv.Quote(s)
+			}
+		}
+	}
+	return "..."
+}
+
+// collapseWhitespace flattens \r\n\t into single spaces so a single
+// transcript line stays on a single visual row.
+func collapseWhitespace(s string) string {
+	var b strings.Builder
+	prevSpace := false
+	for _, r := range s {
+		if r == '\r' || r == '\n' || r == '\t' || r == ' ' {
+			if !prevSpace {
+				b.WriteByte(' ')
+				prevSpace = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		prevSpace = false
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // fileExists is a tiny stat-only helper so readSessionTranscript can

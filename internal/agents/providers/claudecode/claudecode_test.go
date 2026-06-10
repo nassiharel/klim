@@ -392,3 +392,59 @@ func TestProvider_UpdatePlugin_UnsupportedSurfacesClearError(t *testing.T) {
 		t.Errorf("got err=%v, want 'update not supported by claude-code'", err)
 	}
 }
+
+// TestResolveSessionUUID covers the dir-name → in-file UUID
+// resolution that BuildLaunch relies on to resume Claude sessions
+// (claude -r wants the UUID, not the URL-encoded dir name).
+func TestResolveSessionUUID(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "C--dev-klim")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	transcript := filepath.Join(projDir, "abc.jsonl")
+	const line = `{"type":"queue-operation","sessionId":"3b4dc369-3956-43b0-a52b-cd066984d618","timestamp":"2026-06-10T08:00:00Z"}` + "\n"
+	if err := os.WriteFile(transcript, []byte(line), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	if got, want := p.resolveSessionUUID("C--dev-klim"), "3b4dc369-3956-43b0-a52b-cd066984d618"; got != want {
+		t.Errorf("resolveSessionUUID(dirname) = %q, want %q", got, want)
+	}
+	// Bare UUID input → returned as-is (no double-dash, no %2F).
+	if got, want := p.resolveSessionUUID("3b4dc369-already-a-uuid"), "3b4dc369-already-a-uuid"; got != want {
+		t.Errorf("resolveSessionUUID(uuid) = %q, want %q", got, want)
+	}
+	// Dir name with no transcript → empty (caller falls back).
+	if got := p.resolveSessionUUID("does--not--exist"); got != "" {
+		t.Errorf("missing transcript: got %q, want empty", got)
+	}
+}
+
+// TestResolveProjectCwd covers the dir-name → real cwd lookup that
+// DeleteSession uses. Lossy `home-user-repo` → `/home/user/repo`
+// recovery is impossible from the dir name alone, so we read the cwd
+// field from the most recent transcript instead.
+func TestResolveProjectCwd(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "home-user-repo")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	transcript := filepath.Join(projDir, "abc.jsonl")
+	// Forward-slash path so JSON escaping isn't an issue (a Windows
+	// path needs `\\` in the source which gofmt collapses).
+	const line = `{"type":"user","cwd":"/home/user/repo","timestamp":"2026-06-10T08:00:00Z"}` + "\n"
+	if err := os.WriteFile(transcript, []byte(line), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	if got, want := p.resolveProjectCwd("home-user-repo"), "/home/user/repo"; got != want {
+		t.Errorf("resolveProjectCwd = %q, want %q", got, want)
+	}
+	if got := p.resolveProjectCwd("nonexistent"); got != "" {
+		t.Errorf("missing dir: got %q, want empty", got)
+	}
+}

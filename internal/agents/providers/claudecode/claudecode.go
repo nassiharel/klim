@@ -997,13 +997,82 @@ func (p *Provider) EnableMCP(ctx context.Context, name string, enabled bool) err
 	return agents.ErrNotSupported
 }
 
-// DeleteSession deletes a session via the provider CLI.
+// DeleteSession purges a Claude project's transcripts via
+// `claude project purge <path> -y`.
+//
+// The session ID we receive is `"claude:" + <encoded-dir-name>` where
+// the dir name was created by Claude with a lossy encoding (every
+// path separator → "-"), so we can't faithfully reverse it. Instead
+// we read the project dir's most recent transcript and pull the
+// authoritative cwd out of it. Falls back to a literal decode of the
+// dir name as a last resort.
+//
+// We pass `-y` so claude doesn't prompt for interactive confirmation —
+// callers from the TUI control their own confirm-modal, and stdio
+// inheritance during a Bubbletea program corrupts the rendered view.
+// stdout/stderr are CAPTURED (not inherited) for the same reason; on
+// failure the captured output becomes part of the returned error so
+// users still see what went wrong.
 func (p *Provider) DeleteSession(ctx context.Context, id string) error {
-	// Claude exposes session purge via `claude project purge <path>`.
-	// id here is the URL-encoded directory name from Sessions().
 	id = strings.TrimPrefix(id, "claude:")
-	decoded := decodeProjectPath(id)
-	return p.runCLI(ctx, "project", "purge", decoded)
+	cwd := p.resolveProjectCwd(id)
+	if cwd == "" {
+		cwd = decodeProjectPath(id)
+	}
+	return p.runCLISilent(ctx, "project", "purge", cwd, "-y")
+}
+
+// resolveProjectCwd returns the authoritative project path for a
+// Claude session dir by peeking at the first 20 events of the dir's
+// most recent transcript. Empty when no transcript / no cwd found.
+//
+// Mirrors resolveSessionUUID's lookup strategy so both stay cheap.
+func (p *Provider) resolveProjectCwd(dirName string) string {
+	projectDir := filepath.Join(p.claudeDir(), "projects", dirName)
+	tr := latestTranscript(projectDir)
+	if tr == "" {
+		return ""
+	}
+	f, err := os.Open(tr)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	dec := json.NewDecoder(f)
+	for i := 0; i < 20; i++ {
+		var ev struct {
+			Cwd string `json:"cwd"`
+		}
+		if err := dec.Decode(&ev); err != nil {
+			return ""
+		}
+		if ev.Cwd != "" {
+			return ev.Cwd
+		}
+	}
+	return ""
+}
+
+// runCLISilent invokes the provider CLI without inheriting stdio.
+// stdout/stderr are captured and folded into the returned error on
+// failure. Used by mutations that may run while the TUI is on screen
+// (DeleteSession, etc.) — stdio inheritance would otherwise corrupt
+// the Bubbletea screen.
+func (p *Provider) runCLISilent(ctx context.Context, args ...string) error {
+	bin := p.binary()
+	if bin == "" {
+		return agents.ErrProviderNotInstalled
+	}
+	cmd := exec.CommandContext(ctx, bin, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		trimmed := strings.TrimSpace(string(out))
+		if trimmed == "" {
+			return err
+		}
+		return fmt.Errorf("%w: %s", err, trimmed)
+	}
+	return nil
 }
 
 func (p *Provider) runCLI(ctx context.Context, args ...string) error {
