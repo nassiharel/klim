@@ -3,10 +3,14 @@ package agents
 import (
 	"context"
 	"errors"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nassiharel/klim/internal/agents/bookmarks"
+	"github.com/nassiharel/klim/internal/agents/enrich"
 )
 
 // Service is the composition root for the agents subsystem. It owns the
@@ -71,11 +75,24 @@ func (s *Service) Registry() *Registry { return s.registry }
 // LoadAll returns the merged Snapshot across every registered provider.
 // Uses the cache when present and acceptable; otherwise scans fresh and
 // writes a new cache.
+//
+// hydrateSessionExtras runs on every return path — even cache hits —
+// because star toggles and grouping mapping edits happen outside the
+// scan and must be reflected on the next list / TUI render. The
+// helper is idempotent and fast (one bookmarks load + one mappings
+// load + a linear pass over Sessions).
 func (s *Service) LoadAll(ctx context.Context, opts LoadOpts) (*Snapshot, error) {
 	if !opts.Refresh {
 		if c, ok, err := LoadCache(); err == nil && ok {
 			if opts.MaxAge == 0 || time.Since(c.WrittenAt) <= opts.MaxAge {
 				snap := c.Snapshot
+				// Clear any stale Starred flags so a removed bookmark
+				// doesn't linger after `unstar`. Group is left alone
+				// since it's content-derived and persists naturally.
+				for i := range snap.Sessions {
+					snap.Sessions[i].Starred = false
+				}
+				hydrateSessionExtras(&snap)
 				s.mu.Lock()
 				s.snapshot = &snap
 				s.mu.Unlock()
@@ -200,6 +217,7 @@ func (s *Service) scan(ctx context.Context) (*Snapshot, error) {
 	}
 
 	sortSnapshot(snap)
+	hydrateSessionExtras(snap)
 	return snap, nil
 }
 
@@ -369,3 +387,57 @@ func (s *Service) Launch(spec LaunchSpec) (ExecPlan, error) {
 
 // ProviderFor returns the registered provider with the given ID, or nil.
 func (s *Service) ProviderFor(id ProviderID) Provider { return s.registry.Get(id) }
+
+// hydrateSessionExtras fills in dashboard-only Session fields that are
+// not derivable from a single provider's view: the Starred flag (from
+// the bookmarks store) and the Group label (from the smart grouping
+// resolver, with user-defined cwd→group overrides).
+//
+// Failures are silent: a missing bookmarks store or grouping file is
+// not an error condition — the snapshot's Group and Starred fields
+// just stay at their zero values, and `klim agents sessions list`
+// renders without grouping headers.
+//
+// $HOME (or %USERPROFILE% on Windows) is resolved once here and
+// passed into Resolve so the "🏠 Home" special-case fires correctly.
+func hydrateSessionExtras(snap *Snapshot) {
+	if snap == nil || len(snap.Sessions) == 0 {
+		return
+	}
+
+	var starred map[string]bool
+	if st, err := bookmarks.Load(); err == nil && st != nil {
+		starred = make(map[string]bool, st.Count())
+		for _, e := range st.All() {
+			starred[e.SessionID] = true
+		}
+	}
+
+	mappings := map[string]string{}
+	if gm, err := enrich.LoadGroupingMappings(); err == nil && gm != nil {
+		mappings = gm.All()
+	}
+
+	home := homeDir()
+
+	for i := range snap.Sessions {
+		s := &snap.Sessions[i]
+		if starred[s.ID] {
+			s.Starred = true
+		}
+		// Always recompute Group so user mapping edits (saved via
+		// `klim agents sessions group set …`) take effect on the
+		// next list / TUI render even when the snapshot comes from
+		// cache.
+		s.Group = enrich.Resolve(s.ProjectPath, s.Repository, s.Title, home, mappings)
+	}
+}
+
+// homeDir returns the user's home directory across POSIX and Windows,
+// or the empty string when neither HOME nor USERPROFILE is set.
+func homeDir() string {
+	if env := os.Getenv("HOME"); env != "" {
+		return env
+	}
+	return os.Getenv("USERPROFILE")
+}

@@ -283,14 +283,112 @@ type pluginManifest struct {
 	Keywords   []string `json:"keywords,omitempty"`
 }
 
+// installedPluginRecord mirrors one entry in the array under each
+// plugin key in ~/.claude/plugins/installed_plugins.json.
+type installedPluginRecord struct {
+	Scope        string `json:"scope"`
+	InstallPath  string `json:"installPath"`
+	Version      string `json:"version"`
+	InstalledAt  string `json:"installedAt"`
+	LastUpdated  string `json:"lastUpdated"`
+	GitCommitSha string `json:"gitCommitSha"`
+}
+
+// installedPluginsFile mirrors ~/.claude/plugins/installed_plugins.json.
+type installedPluginsFile struct {
+	Version int                                `json:"version"`
+	Plugins map[string][]installedPluginRecord `json:"plugins"`
+}
+
+// readInstalledPlugins reads ~/.claude/plugins/installed_plugins.json
+// and returns a map keyed by "<name>@<marketplace>" -> first install
+// record (the array supports multi-scope but in practice has one entry).
+//
+// Returns nil if the file is missing or unreadable; callers should treat
+// nil as "no info — fall back to scanning disk" so legacy fixtures and
+// fresh installs without the registry file continue to surface plugins.
+func (p *Provider) readInstalledPlugins() map[string]installedPluginRecord {
+	cd := p.claudeDir()
+	if cd == "" {
+		return nil
+	}
+	data, err := os.ReadFile(filepath.Join(cd, "plugins", "installed_plugins.json"))
+	if err != nil {
+		return nil
+	}
+	var f installedPluginsFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		return nil
+	}
+	out := make(map[string]installedPluginRecord, len(f.Plugins))
+	for key, records := range f.Plugins {
+		if len(records) == 0 {
+			// Present but empty array — still record key presence so the
+			// caller treats it as installed (even without metadata).
+			out[key] = installedPluginRecord{}
+			continue
+		}
+		out[key] = records[0]
+	}
+	return out
+}
+
+// readEnabledPlugins merges enabledPlugins maps from ~/.claude/settings.json
+// and ~/.claude/settings.local.json (local takes precedence per key).
+// Returns nil when neither file yields any entries; callers should
+// default a plugin's Enabled field to true in that case.
+//
+// TODO: settings files may technically contain JSONC (// comments).
+// We use plain json.Unmarshal here — if that becomes an issue, swap in
+// a JSONC-tolerant parser.
+func (p *Provider) readEnabledPlugins() map[string]bool {
+	cd := p.claudeDir()
+	if cd == "" {
+		return nil
+	}
+	out := map[string]bool{}
+	// Order matters: local is read after global so it overrides per-key.
+	for _, name := range []string{"settings.json", "settings.local.json"} {
+		data, err := os.ReadFile(filepath.Join(cd, name))
+		if err != nil {
+			continue
+		}
+		var doc struct {
+			EnabledPlugins map[string]bool `json:"enabledPlugins"`
+		}
+		if err := json.Unmarshal(data, &doc); err != nil {
+			continue
+		}
+		for k, v := range doc.EnabledPlugins {
+			out[k] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // Plugins discovers installed plugins by scanning the marketplace
 // clones. Real Claude Code layout nests plugins under
 // `<mp>/plugins/<plugin>` and `<mp>/external_plugins/<plugin>`; older
 // test fixtures put them at `<mp>/<plugin>` directly. We accept all
 // three.
+//
+// Claude itself only considers a plugin "installed" if it's recorded in
+// ~/.claude/plugins/installed_plugins.json (keyed by `name@marketplace`).
+// When that file exists we filter the on-disk scan to only those
+// entries — otherwise `klim agents plugins uninstall X` would shell out
+// to `claude plugin uninstall X` and fail with "not found" for plugins
+// that merely happen to sit in a cloned marketplace. When the file is
+// absent (fresh install, fixture-based tests) we fall back to the
+// legacy behavior of treating every on-disk manifest as installed.
 func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
 	var plugins []agents.Plugin
 	seen := make(map[string]bool)
+
+	installed := p.readInstalledPlugins()
+	enabled := p.readEnabledPlugins()
 
 	for _, root := range p.marketplaceRoots() {
 		mEntries, err := os.ReadDir(root)
@@ -329,6 +427,24 @@ func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
 					if seen[id] {
 						continue
 					}
+
+					// installed_plugins.json keys are name@marketplace,
+					// distinct from our ID format (mp/name) which other
+					// code depends on — keep ID untouched.
+					key := m.Name + "@" + mpName
+					if installed != nil {
+						if _, ok := installed[key]; !ok {
+							continue
+						}
+					}
+
+					isEnabled := true
+					if enabled != nil {
+						if v, ok := enabled[key]; ok {
+							isEnabled = v
+						}
+					}
+
 					seen[id] = true
 					plugins = append(plugins, agents.Plugin{
 						ID:          id,
@@ -343,7 +459,7 @@ func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
 						Provider:    p.ID(),
 						Marketplace: mpName,
 						Installed:   true,
-						Enabled:     true,
+						Enabled:     isEnabled,
 						InstallPath: pluginDir,
 						Scope:       agents.ScopeUser,
 						Source:      agents.SourceLocalClaude,
@@ -620,16 +736,25 @@ func redactHeaders(in map[string]string) map[string]string {
 // ---------- Sessions ----------
 
 // Sessions enumerates per-project directories under ~/.claude/projects/.
-// Exact session-transcript filename format is undocumented [TBV]; we
-// expose each project as one "latest session" entry with last-modified
-// times pulled from the project dir mtime.
+// Each project dir contains one or more `<sessionId>.jsonl` transcripts.
+// We pick the most recently modified transcript per project as that
+// project's "current" session, then parse it (via enrichSessionFromJSONL)
+// to populate dashboard fields: title, created/last-modified times,
+// turn count, live state, recent activity, tool counts, MCP servers,
+// branch, group, and a paste-ready restart command.
+//
+// Sessions are returned sorted by LastModified descending.
 func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	dir := filepath.Join(p.claudeDir(), "projects")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil // no projects yet — empty is fine
 	}
+
+	now := time.Now()
 	var sessions []agents.Session
+	bin := p.binary() // empty when claude isn't on PATH — RestartCommand falls back to "claude"
+
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -640,16 +765,97 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 			continue
 		}
 		decoded := decodeProjectPath(e.Name())
-		sessions = append(sessions, agents.Session{
+		s := agents.Session{
 			ID:             "claude:" + e.Name(),
 			Provider:       p.ID(),
 			ProjectPath:    decoded,
 			LastModified:   fi.ModTime(),
 			TranscriptPath: full,
 			Source:         agents.SourceLocalClaude,
-		})
+		}
+
+		// Parse the most recent transcript for enrichment. When no
+		// .jsonl exists (fresh project dir, or pre-1.0 layout) we
+		// fall back to the dir-mtime baseline above.
+		if tr := latestTranscript(full); tr != "" {
+			scan := enrichSessionFromJSONL(tr, now)
+			if scan.SessionID != "" {
+				// Prefer the in-file id when available — the dir
+				// name is URL-encoded and harder to read.
+				s.ID = "claude:" + scan.SessionID
+			}
+			if scan.Cwd != "" {
+				s.ProjectPath = scan.Cwd
+			}
+			if scan.Branch != "" {
+				s.Branch = scan.Branch
+			}
+			if scan.FirstUserMsg != "" {
+				s.Title = scan.FirstUserMsg
+			}
+			if !scan.Created.IsZero() {
+				s.Created = scan.Created
+			}
+			if !scan.LastSeen.IsZero() {
+				s.LastModified = scan.LastSeen
+			}
+			s.TranscriptPath = tr
+			agents.ApplyEnrichment(&s, scan.Result)
+		}
+
+		// Status fallback: when no terminal event fired, treat the
+		// session as active so the dashboard's --status=active filter
+		// surfaces it. Sessions without any transcript stay
+		// SessionStatusUnknown.
+		if s.Status == agents.SessionStatusUnknown && (s.LiveState != agents.StateUnknown || !s.LastModified.IsZero()) {
+			s.Status = agents.SessionStatusActive
+		}
+
+		if s.Type == "" {
+			s.Type = "interactive"
+		}
+
+		// Build the copy-paste resume command. Bin defaults to
+		// "claude" when claude isn't on PATH so the snippet still
+		// makes sense in a foreign shell.
+		idForResume := strings.TrimPrefix(s.ID, "claude:")
+		cli := bin
+		if cli == "" {
+			cli = "claude"
+		}
+		if s.ProjectPath != "" {
+			s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume " + idForResume
+		} else {
+			s.RestartCommand = cli + " --resume " + idForResume
+		}
+
+		// Repository name (best-effort).
+		if s.Repository == "" && s.ProjectPath != "" {
+			s.Repository = filepath.Base(filepath.Clean(s.ProjectPath))
+		}
+
+		sessions = append(sessions, s)
 	}
+	sort.SliceStable(sessions, func(i, j int) bool {
+		return sessions[i].LastModified.After(sessions[j].LastModified)
+	})
 	return sessions, nil
+}
+
+// quoteForShell wraps `s` in double quotes when it contains a space
+// or other shell-significant character. Keeps the rendered restart
+// command paste-safe across both POSIX shells and PowerShell, both
+// of which honour double-quoted strings for cd targets.
+func quoteForShell(s string) string {
+	if s == "" {
+		return `""`
+	}
+	for _, r := range s {
+		if r == ' ' || r == '\t' || r == '"' || r == '$' || r == '`' {
+			return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+		}
+	}
+	return s
 }
 
 // decodeProjectPath converts Claude's URL-encoded project directory

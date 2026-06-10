@@ -150,6 +150,72 @@ func TestProvider_Plugins(t *testing.T) {
 	}
 }
 
+func TestProvider_Plugins_FiltersByInstalledPluginsJSON(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+
+	// Two plugins (A and B) sit on disk in a cloned marketplace ...
+	writeFile(t, filepath.Join(home, ".claude", "plugins", "marketplaces",
+		"my-marketplace", "plugins", "plugin-a",
+		".claude-plugin", "plugin.json"), `{"name":"plugin-a","version":"1.0.0"}`)
+	writeFile(t, filepath.Join(home, ".claude", "plugins", "marketplaces",
+		"my-marketplace", "plugins", "plugin-b",
+		".claude-plugin", "plugin.json"), `{"name":"plugin-b","version":"1.0.0"}`)
+
+	// ... but only A is recorded as installed by Claude.
+	writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), `{
+  "version": 2,
+  "plugins": {
+    "plugin-a@my-marketplace": [
+      {
+        "scope": "user",
+        "installPath": "/x/plugin-a",
+        "version": "1.0.0",
+        "installedAt": "2026-05-01T00:00:00Z",
+        "lastUpdated": "2026-05-01T00:00:00Z",
+        "gitCommitSha": "abc"
+      }
+    ]
+  }
+}`)
+	// Disable plugin-a in settings.json — also verifies the Enabled
+	// field plumbing works.
+	writeFile(t, filepath.Join(home, ".claude", "settings.json"), `{
+  "enabledPlugins": {"plugin-a@my-marketplace": false}
+}`)
+
+	p := &Provider{HomeOverride: home}
+	plugins, err := p.Plugins(context.Background())
+	if err != nil {
+		t.Fatalf("Plugins: %v", err)
+	}
+	if len(plugins) != 1 {
+		t.Fatalf("expected 1 plugin (A only), got %d: %+v", len(plugins), plugins)
+	}
+	pl := plugins[0]
+	if pl.Name != "plugin-a" {
+		t.Errorf("name = %q, want plugin-a", pl.Name)
+	}
+	if !pl.Installed {
+		t.Error("expected Installed=true")
+	}
+	if pl.Enabled {
+		t.Error("expected Enabled=false (settings.json disables plugin-a)")
+	}
+
+	// settings.local.json should override settings.json per-key.
+	writeFile(t, filepath.Join(home, ".claude", "settings.local.json"), `{
+  "enabledPlugins": {"plugin-a@my-marketplace": true}
+}`)
+	plugins, err = p.Plugins(context.Background())
+	if err != nil {
+		t.Fatalf("Plugins (after local): %v", err)
+	}
+	if len(plugins) != 1 || !plugins[0].Enabled {
+		t.Errorf("expected plugin-a Enabled=true after settings.local.json override, got %+v", plugins)
+	}
+}
+
 func TestProvider_Marketplaces_KnownAndRealLayout(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")

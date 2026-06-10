@@ -109,7 +109,37 @@ var agentsMarketplacesCmd = &cobra.Command{Use: "marketplaces", Aliases: []strin
 var agentsPluginsCmd = &cobra.Command{Use: "plugins", Aliases: []string{"plugin"}, Short: "Manage agent plugins"}
 var agentsSkillsCmd = &cobra.Command{Use: "skills", Aliases: []string{"skill"}, Short: "Browse agent skills"}
 var agentsMCPsCmd = &cobra.Command{Use: "mcps", Aliases: []string{"mcp"}, Short: "Manage MCP servers"}
-var agentsSessionsCmd = &cobra.Command{Use: "sessions", Aliases: []string{"session"}, Short: "List, resume, and delete agent sessions"}
+
+// agentsSessionsCmd is the umbrella for `klim agents sessions …`.
+// With no args it launches the focused sessions dashboard (Bubbletea
+// TUI) when stdout is a TTY, falling back to a one-shot list when the
+// output is piped — this keeps `klim agents sessions | head` and other
+// scripting use cases working unchanged.
+//
+// Explicit subcommands (resume, view, tail, stats, files, star,
+// unstar, group, delete) handle the rest of the dashboard surface.
+var agentsSessionsCmd = &cobra.Command{
+	Use:     "sessions",
+	Aliases: []string{"session"},
+	Short:   "List, resume, view, and manage agent sessions",
+	Long: `sessions inspects Claude Code and Copilot CLI session
+transcripts and presents them as a glanceable dashboard.
+
+Bare ` + "`klim agents sessions`" + ` opens a TUI dashboard when stdout
+is a TTY; when piped (or with --no-tui) it runs the equivalent of
+` + "`klim agents sessions list`" + ` so existing pipelines keep working.
+
+Examples:
+  klim agents sessions
+  klim agents sessions list --status waiting --since 2h
+  klim agents sessions view claude:3b4dc369-…
+  klim agents sessions tail claude:3b4dc369-…
+  klim agents sessions stats --output json
+  klim agents sessions files --top 10
+  klim agents sessions star claude:3b4dc369-…
+  klim agents sessions group set klim=Klim`,
+	RunE: runAgentsSessionsDefault,
+}
 
 // ---------------- launch ----------------
 
@@ -198,7 +228,14 @@ func init() {
 	agentsMCPsCmd.AddCommand(makeListSub("list MCPs", agentsListMCPs))
 	agentsMCPsCmd.AddCommand(&cobra.Command{Use: "remove <name>", Short: "Remove an MCP server", Args: cobra.ExactArgs(1), RunE: agentsRemoveMCP})
 
-	agentsSessionsCmd.AddCommand(makeListSub("list sessions", agentsListSessions))
+	agentsSessionsCmd.AddCommand(newAgentsSessionsListCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsViewCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsTailCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsStatsCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsFilesCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsStarCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsUnstarCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsGroupCmd())
 	agentsSessionsCmd.AddCommand(&cobra.Command{Use: "resume <id>", Short: "Resume a session (exec the agent CLI)", Args: cobra.ExactArgs(1), RunE: agentsResumeSession})
 	agentsSessionsCmd.AddCommand(&cobra.Command{Use: "delete <id>", Short: "Delete a session", Args: cobra.ExactArgs(1), RunE: agentsDeleteSession})
 
@@ -725,11 +762,37 @@ func agentsRemoveMCP(cmd *cobra.Command, args []string) error {
 }
 func agentsResumeSession(cmd *cobra.Command, args []string) error {
 	id := args[0]
+	svc := newAgentsService()
+
+	// When the arg isn't already a provider-prefixed id, try to
+	// resolve it against the snapshot: a "--last" sentinel picks the
+	// most-recently-modified session, otherwise we fall through to a
+	// fuzzy match by ID / project / title.
+	if !strings.HasPrefix(id, "claude:") && !strings.HasPrefix(id, "copilot:") {
+		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+		defer cancel()
+		snap, err := svc.LoadAll(ctx, agents.LoadOpts{})
+		if err != nil {
+			return err
+		}
+		if id == "--last" || id == "last" {
+			if len(snap.Sessions) == 0 {
+				return fmt.Errorf("resume: no sessions available")
+			}
+			id = snap.Sessions[0].ID
+		} else {
+			match, ok := findSession(snap.Sessions, id)
+			if !ok {
+				return fmt.Errorf("resume: cannot resolve %q to a unique session — pass the full provider-prefixed id (claude:… or copilot:…)", id)
+			}
+			id = match.ID
+		}
+	}
+
 	provID := providerForSessionID(id)
 	if provID == "" {
 		return fmt.Errorf("resume: cannot infer provider from session id %q (expected claude:… or copilot:…)", id)
 	}
-	svc := newAgentsService()
 	plan, err := svc.Launch(agents.LaunchSpec{Provider: provID, SessionID: id})
 	if err != nil {
 		return err

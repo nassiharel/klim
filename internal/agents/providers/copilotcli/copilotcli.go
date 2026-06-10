@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/enrich"
 	"gopkg.in/yaml.v3"
 )
 
@@ -499,6 +500,10 @@ func redactHeaders(in map[string]string) map[string]string {
 // couple of lines of `events.jsonl` to lift the session id + cwd, and
 // fall back to two pre-1.0 layout candidates so older installs keep
 // working. Sessions are returned recent-first.
+//
+// Each session is enriched (live state, recent activity, tool counts,
+// MCP servers, branch, restart command) by [enrichFromEventsJSONL]
+// running our generic state machine over the event log.
 func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	root := p.copilotHome()
 	candidates := []string{
@@ -506,6 +511,8 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 		filepath.Join(root, "sessions"),
 		filepath.Join(root, "state"),
 	}
+	now := time.Now()
+	bin := p.binary()
 	var sessions []agents.Session
 	seen := make(map[string]bool)
 	for _, c := range candidates {
@@ -531,7 +538,26 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 			if fi, err := e.Info(); err == nil {
 				s.LastModified = fi.ModTime()
 			}
-			enrichFromEventsJSONL(filepath.Join(dir, "events.jsonl"), &s)
+			enrichFromEventsJSONL(filepath.Join(dir, "events.jsonl"), &s, now)
+
+			// Repository fallback — derive from cwd when the
+			// transcript didn't carry an explicit repository tag.
+			if s.Repository == "" && s.ProjectPath != "" {
+				s.Repository = filepath.Base(filepath.Clean(s.ProjectPath))
+			}
+
+			// Restart command (paste-ready).
+			cli := bin
+			if cli == "" {
+				cli = "copilot"
+			}
+			idForResume := strings.TrimPrefix(s.ID, "copilot:")
+			if s.ProjectPath != "" {
+				s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume " + idForResume
+			} else {
+				s.RestartCommand = cli + " --resume " + idForResume
+			}
+
 			sessions = append(sessions, s)
 		}
 	}
@@ -544,10 +570,27 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	return sessions, nil
 }
 
+// quoteForShell wraps `s` in double quotes when it contains a space
+// or other shell-significant character. Keeps the rendered restart
+// command paste-safe across both POSIX shells and PowerShell.
+func quoteForShell(s string) string {
+	if s == "" {
+		return `""`
+	}
+	for _, r := range s {
+		if r == ' ' || r == '\t' || r == '"' || r == '$' || r == '`' {
+			return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+		}
+	}
+	return s
+}
+
 // enrichFromEventsJSONL streams the full transcript to populate
-// Created/Modified/Type/Status/TurnCount/ProjectPath/Title. It bails out
-// gracefully on parse error or missing file — sessions stay usable with
-// just their id + dir mtime when the transcript can't be parsed.
+// Created/Modified/Type/Status/TurnCount/ProjectPath/Title plus the
+// dashboard-friendly enrichment fields (live state, recent activity,
+// tool counts, MCP servers). It bails out gracefully on parse error
+// or missing file — sessions stay usable with just their id + dir
+// mtime when the transcript can't be parsed.
 //
 // Heuristics:
 //   - Created   = data.startTime of the first session.start event.
@@ -556,7 +599,9 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 //   - Status    = derived from the last event type: session.end →
 //     completed; session.stopped → stopped; otherwise active.
 //   - TurnCount = number of `turn.start` / `user.message` events.
-func enrichFromEventsJSONL(path string, s *agents.Session) {
+//
+// `now` is used only for the live-state staleness threshold.
+func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 	f, err := os.Open(path)
 	if err != nil {
 		return
@@ -567,6 +612,7 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 	var lastType string
 	var firstStart, lastTS time.Time
 	turns := 0
+	var events []enrich.TimedEvent
 
 	for {
 		var ev struct {
@@ -580,13 +626,29 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 					Repository string `json:"repository"`
 					HostType   string `json:"hostType"`
 				} `json:"context"`
+				Tool struct {
+					Name string `json:"name"`
+				} `json:"tool"`
+				MCP struct {
+					Server string `json:"server"`
+				} `json:"mcp"`
+				Subagent struct {
+					Name string `json:"name"`
+				} `json:"subagent"`
+				Message struct {
+					Text    string   `json:"text"`
+					Content string   `json:"content"`
+					Choices []string `json:"choices"`
+				} `json:"message"`
 			} `json:"data"`
 		}
 		if err := dec.Decode(&ev); err != nil {
 			break
 		}
 		lastType = ev.Type
-		if ts, err := time.Parse(time.RFC3339Nano, ev.Timestamp); err == nil {
+		var ts time.Time
+		if t, err := time.Parse(time.RFC3339Nano, ev.Timestamp); err == nil {
+			ts = t
 			if firstStart.IsZero() {
 				firstStart = ts
 			}
@@ -604,6 +666,7 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 		}
 		if ev.Data.Context.Repository != "" && s.Title == "" {
 			s.Title = ev.Data.Context.Repository
+			s.Repository = ev.Data.Context.Repository
 		}
 		if ev.Data.Context.HostType != "" && s.Type == "" {
 			s.Type = ev.Data.Context.HostType
@@ -611,6 +674,34 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 		switch ev.Type {
 		case "turn.start", "user.message":
 			turns++
+		}
+
+		// Translate to generic events for the state machine.
+		if kind := translateCopilotKind(ev.Type); kind != enrich.KindOther {
+			te := enrich.TimedEvent{
+				Event:     enrich.Event{Kind: kind},
+				Timestamp: ts,
+			}
+			switch kind {
+			case enrich.KindToolStarted, enrich.KindToolCompleted:
+				te.Name = ev.Data.Tool.Name
+			case enrich.KindMCPUsed:
+				te.Name = ev.Data.MCP.Server
+			case enrich.KindSubagentStarted, enrich.KindSubagentCompleted:
+				te.Name = ev.Data.Subagent.Name
+			case enrich.KindAskUser, enrich.KindAskPermission:
+				te.Text = ev.Data.Message.Text
+				if te.Text == "" {
+					te.Text = ev.Data.Message.Content
+				}
+				te.Choices = ev.Data.Message.Choices
+			case enrich.KindAssistantMessage:
+				te.Text = ev.Data.Message.Text
+				if te.Text == "" {
+					te.Text = ev.Data.Message.Content
+				}
+			}
+			events = append(events, te)
 		}
 	}
 
@@ -636,6 +727,47 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 	default:
 		s.Status = agents.SessionStatusActive
 	}
+
+	// Run the state machine over the translated events.
+	if len(events) > 0 {
+		result := enrich.DeriveState(events, now)
+		agents.ApplyEnrichment(s, result)
+	}
+}
+
+// translateCopilotKind maps a Copilot CLI event type string to the
+// generic [enrich.EventKind] vocabulary. Returns KindOther for types
+// that don't influence the live state.
+func translateCopilotKind(t string) enrich.EventKind {
+	switch t {
+	case "tool.start", "tool.started", "tool_use", "tool_use.start":
+		return enrich.KindToolStarted
+	case "tool.end", "tool.completed", "tool.complete", "tool_use.end":
+		return enrich.KindToolCompleted
+	case "ask_user", "user.ask", "prompt.required":
+		return enrich.KindAskUser
+	case "ask_permission", "permission.required":
+		return enrich.KindAskPermission
+	case "user.answered", "permission.granted", "permission.denied":
+		return enrich.KindAnswered
+	case "subagent.started", "subagent.start":
+		return enrich.KindSubagentStarted
+	case "subagent.completed", "subagent.end", "subagent.complete":
+		return enrich.KindSubagentCompleted
+	case "mcp.use", "mcp.used", "mcp.invoke":
+		return enrich.KindMCPUsed
+	case "user.message", "user.msg":
+		return enrich.KindUserMessage
+	case "assistant.message", "assistant.msg":
+		return enrich.KindAssistantMessage
+	case "session.start":
+		return enrich.KindSessionStart
+	case "session.end", "session.close", "session.completed":
+		return enrich.KindSessionEnd
+	case "session.stopped":
+		return enrich.KindSessionStopped
+	}
+	return enrich.KindOther
 }
 
 // ---------- Mutations ----------

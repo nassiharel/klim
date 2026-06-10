@@ -182,7 +182,38 @@ const (
 	SessionStatusUnknown   SessionStatus = ""
 )
 
+// LiveState is the derived run-state of a session, computed from the
+// tail of its event log. It complements the persisted Status field
+// (which only flips on a terminal event): LiveState reflects "what is
+// this session doing right now?" and is updated on every scan.
+//
+// The state machine follows ghcpCliDashboard's model:
+//
+//   - StateWorking   — at least one tool execution is still pending.
+//   - StateThinking  — a turn is in progress with no pending tool calls.
+//   - StateWaiting   — the agent is blocked on user input (ask_user /
+//     ask_permission), with the question in WaitingContext.
+//   - StateIdle      — no events for ≥60s; the CLI is probably idle or
+//     has crashed.
+//   - StateUnknown   — no event log or unparseable.
+type LiveState string
+
+// LiveState values.
+const (
+	StateUnknown  LiveState = ""
+	StateWorking  LiveState = "working"
+	StateThinking LiveState = "thinking"
+	StateWaiting  LiveState = "waiting"
+	StateIdle     LiveState = "idle"
+)
+
 // Session is a saved or recent agent session.
+//
+// Fields after Source are optional enrichment derived from the
+// per-session event log (where available). They are populated by the
+// provider's enrich pass and used by `klim agents sessions` to render
+// a glanceable dashboard. All such fields use `omitempty` so JSON /
+// YAML output stays compact for providers that can't fill them.
 type Session struct {
 	ID             string        `yaml:"id"`
 	Name           string        `yaml:"name,omitempty"`
@@ -196,6 +227,55 @@ type Session struct {
 	Status         SessionStatus `yaml:"status,omitempty"` // active | completed | stopped | ""
 	TranscriptPath string        `yaml:"transcript_path,omitempty"`
 	Source         Source        `yaml:"source"`
+
+	// ---------- Enrichment fields (optional) ----------
+
+	// LiveState is the derived running state at scan time.
+	LiveState LiveState `json:"live_state,omitempty" yaml:"live_state,omitempty"`
+
+	// WaitingContext carries the active ask_user prompt text when
+	// LiveState == StateWaiting. Truncated to ~200 chars.
+	WaitingContext string `json:"waiting_context,omitempty" yaml:"waiting_context,omitempty"`
+
+	// RecentActivity is a short, one-line description of the most
+	// recent event (tool call name, last assistant message snippet,
+	// etc.). Capped at ~120 chars for terminal rendering.
+	RecentActivity string `json:"recent_activity,omitempty" yaml:"recent_activity,omitempty"`
+
+	// Branch is the active git branch at the session's cwd, read
+	// live from .git/HEAD. Empty when the cwd isn't a git repo.
+	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
+
+	// Repository is the derived repo name (last segment of the
+	// remote URL, or the directory basename when no remote).
+	Repository string `json:"repository,omitempty" yaml:"repository,omitempty"`
+
+	// Group is the smart project group resolved via grouping.Resolve.
+	// Used as the section header in the grouped CLI / TUI list.
+	Group string `json:"group,omitempty" yaml:"group,omitempty"`
+
+	// RestartCommand is a shell-paste-ready snippet that resumes
+	// this session in a new terminal: `cd "<cwd>" && <cli> --resume <id>`.
+	RestartCommand string `json:"restart_command,omitempty" yaml:"restart_command,omitempty"`
+
+	// ToolCounts maps tool names to call counts (e.g. {"Bash": 4}).
+	// Used by the Stats tab and the tools-used bar chart.
+	ToolCounts map[string]int `json:"tool_counts,omitempty" yaml:"tool_counts,omitempty"`
+
+	// MCPServers lists MCP server names that participated in this
+	// session.
+	MCPServers []string `json:"mcp_servers,omitempty" yaml:"mcp_servers,omitempty"`
+
+	// SubagentRuns counts subagent invocations seen across the log.
+	SubagentRuns int `json:"subagent_runs,omitempty" yaml:"subagent_runs,omitempty"`
+
+	// BackgroundTasks is the number of subagents still running at
+	// scan time (started events minus completed events).
+	BackgroundTasks int `json:"background_tasks,omitempty" yaml:"background_tasks,omitempty"`
+
+	// Starred is true when the session is in the bookmarks store.
+	// Hydrated by Service.LoadAll, not by providers.
+	Starred bool `json:"starred,omitempty" yaml:"starred,omitempty"`
 }
 
 // PluginRef identifies a plugin to install. Either a marketplace-qualified
@@ -311,6 +391,14 @@ func (m Marketplace) MarshalJSON() ([]byte, error) {
 }
 
 // MarshalJSON omits zero Created / LastModified on Sessions.
+//
+// New enrichment fields (LiveState, RecentActivity, ToolCounts, etc.)
+// carry json:"…,omitempty" tags directly, so they're stripped by the
+// standard encoder before we even see them here. We only need custom
+// handling for time.Time (which omitempty doesn't recognise) and for
+// the nil-vs-empty distinction on ToolCounts: json.Marshal will emit
+// `"tool_counts": null` for a nil map even with omitempty, so we delete
+// it explicitly when the map ended up empty.
 func (s Session) MarshalJSON() ([]byte, error) {
 	type alias Session
 	a := alias(s)
@@ -327,6 +415,12 @@ func (s Session) MarshalJSON() ([]byte, error) {
 	}
 	if s.LastModified.IsZero() {
 		delete(generic, "LastModified")
+	}
+	if len(s.ToolCounts) == 0 {
+		delete(generic, "tool_counts")
+	}
+	if len(s.MCPServers) == 0 {
+		delete(generic, "mcp_servers")
 	}
 	return json.Marshal(generic)
 }
