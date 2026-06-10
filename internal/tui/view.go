@@ -452,7 +452,19 @@ func (m Model) renderView() string {
 	sidebarOnRight := m.cfg != nil && m.cfg.UI.SidebarRight
 
 	sidebarLines := m.buildSidebarLines(visibleRows)
-	toolLines := m.buildToolLines(visibleRows)
+	// When the user has switched the current tab to tile mode, the
+	// dense table is replaced by a grid of bordered cards. Only
+	// applies to the My Tools / Marketplace tabs — other paths
+	// (For You, Onboard, Packs, empty marketplace) still use the
+	// list-based renderer.
+	var toolLines []string
+	tilesOn := isToolsTab(m.activeTab) && m.toolsViewMode[m.activeTab] == toolsViewTiles
+	discoverNotTools := m.activeTab == tabDiscover && m.discoverSubTab != discoverTools
+	if tilesOn && !discoverNotTools {
+		toolLines = m.buildToolTileLines(visibleRows)
+	} else {
+		toolLines = m.buildToolLines(visibleRows)
+	}
 
 	// Always produce exactly visibleRows lines so footer position is stable.
 	totalLines := visibleRows
@@ -493,6 +505,44 @@ func (m Model) renderView() string {
 // including the rule separator line above it.
 func (m Model) footerHeight() int {
 	return visualRows(m.renderHelp(), m.width) + 1 // +1 for rule line
+}
+
+// bodyDims returns the visible (width, rows) budget for the main
+// body area on the active tab. Consolidates three previously
+// inlined computations (visibleRows in renderView, padWidth in
+// renderInstalledRow, descWidth in renderDiscoverRow) so future
+// renderers (tile views, plugin tabs, …) don't have to re-derive
+// the math.
+//
+// width:
+//   - terminal width when there's no sidebar
+//   - terminal width minus the sidebar column and its " │ "
+//     separator when the sidebar is open
+//
+// rows:
+//   - terminal height minus the chrome the rest of renderView lays
+//     down (title + tabs + rule + spacing + sub-tabs + footer).
+//
+// Both values are clamped to safe minimums so callers don't need
+// defensive arithmetic.
+func (m Model) bodyDims() (width, rows int) {
+	width = m.width
+	if len(m.sidebarItems) > 0 {
+		width = m.width - colSidebar - 3 // 3 = " │ "
+	}
+	if width < 20 {
+		width = 20
+	}
+	// Mirror the visibleRows computation in renderView.
+	overhead := 7 + m.footerHeight() + m.subtabRows()
+	if m.activeTab == tabDiscover {
+		overhead += 2 // sub-tab bar + blank line
+	}
+	rows = m.height - overhead
+	if rows < 3 {
+		rows = 3
+	}
+	return width, rows
 }
 
 // layoutWithFooter pads `body` with blank lines so that `footer` sticks to the

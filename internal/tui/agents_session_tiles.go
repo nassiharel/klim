@@ -20,19 +20,10 @@ import (
 //
 // Lives in its own file because the rendering is independent of the
 // table-based renderRow / renderHeader machinery — different layout
-// primitive, different sizing rules.
-
-// Tile geometry. Cards are sized to fit two columns at narrow widths
-// and grow to three columns when the terminal can hold them. Each
-// card is exactly tileHeight rows tall so the responsive row math in
-// the caller stays simple.
-const (
-	tileMinWidth  = 32 // sub-this, fall back to single-column
-	tileIdealMax  = 56 // wider tiles waste horizontal space
-	tileGap       = 2  // horizontal space between cards
-	tileHeight    = 7  // 5 content rows + the rounded-border top/bottom
-	tileBodyLines = 5  // content lines inside the border
-)
+// primitive, different sizing rules. The generic tile-layout helpers
+// (chooseTileLayout, withGutters, padOrTruncTile, tile geometry
+// constants) live in tile_layout.go and are shared with other
+// per-entity tile renderers (tools, plugins, …).
 
 // renderSessionTiles renders the given session rows as a grid of
 // bordered cards. `cursor` is the index of the highlighted row (-1
@@ -84,51 +75,6 @@ func renderSessionTiles(rows []agentRow, cursor int, totalWidth int) string {
 		b.WriteByte('\n')
 	}
 	return b.String()
-}
-
-// chooseTileLayout picks (tileWidth, columnCount) for the available
-// horizontal budget. Bias toward 2 columns until we have room for 3
-// without each tile dropping below the ideal max; never more than 3
-// because cards start to look like the table they're replacing.
-func chooseTileLayout(totalWidth int) (int, int) {
-	// Try 3 cols first.
-	if w := (totalWidth - 2*tileGap) / 3; w >= tileMinWidth {
-		if w > tileIdealMax {
-			w = tileIdealMax
-		}
-		return w, 3
-	}
-	// Try 2 cols.
-	if w := (totalWidth - tileGap) / 2; w >= tileMinWidth {
-		if w > tileIdealMax {
-			w = tileIdealMax
-		}
-		return w, 2
-	}
-	// Single column — clamp so a 200-col terminal doesn't produce a
-	// single absurdly wide card.
-	w := totalWidth
-	if w > tileIdealMax {
-		w = tileIdealMax
-	}
-	return w, 1
-}
-
-// withGutters interleaves blank gutter strings between the tiles in
-// a row so JoinHorizontal produces the expected spacing.
-func withGutters(tiles []string) []string {
-	if len(tiles) <= 1 {
-		return tiles
-	}
-	gutter := strings.Repeat(" ", tileGap)
-	out := make([]string, 0, len(tiles)*2-1)
-	for i, t := range tiles {
-		if i > 0 {
-			out = append(out, gutter)
-		}
-		out = append(out, t)
-	}
-	return out
 }
 
 // renderOneTile draws a single session card at `width` columns.
@@ -248,24 +194,6 @@ func renderBadgesRow(s agents.Session, innerW int) string {
 	}
 	joined := strings.Join(parts, "  ")
 	return padOrTruncTile(joined, innerW)
-}
-
-// padOrTruncTile pads or truncates `s` to exactly `n` visual cells.
-// Truncation uses a horizontal ellipsis so it's obvious to the user.
-// Used inside tiles where we need each line to be a known width so
-// the rounded border stays aligned.
-func padOrTruncTile(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	w := lipgloss.Width(s)
-	if w == n {
-		return s
-	}
-	if w < n {
-		return s + strings.Repeat(" ", n-w)
-	}
-	return truncateANSI(s, n-1) + "…"
 }
 
 // tileDisplayTitle picks the most useful string for the tile's
