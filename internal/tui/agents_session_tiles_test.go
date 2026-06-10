@@ -151,7 +151,7 @@ func TestFooterAlignsToBottom_TilesMode(t *testing.T) {
 		m.activeTab = tabAgents
 		m.agents = newAgentsState()
 		m.agents.subTab = agentsSubSessions
-		m.agents.sessionsViewMode = sessionsViewTiles
+		m.agents.subTabViewMode = map[int]sessionsViewMode{agentsSubSessions: sessionsViewTiles}
 		m.agents.snapshot = makeTileSnap(sessionCount)
 		m.agents.loadedAt = time.Now()
 		return m

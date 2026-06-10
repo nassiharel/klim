@@ -64,28 +64,24 @@ func isToolsTab(tab int) bool {
 
 // renderToolTile draws a single tool card at `width` columns.
 //
-// Layout (5 content lines bracketed top/bottom by the rounded border):
-//
-//	╭─────────────────────────────────────╮
-//	│ ★ 1.2k                              │   ← stars chip (or marketplace "new" pip)
-//	│ ● ⭐ Tool Display Name      ⌬ winget │   ← state dot + reserved star slot + title + chip
-//	│ Category                            │   ← category (or first GH topic)
-//	│ ▸ short github description          │   ← description (dim)
-//	│ 1.2.3 → 1.3.0          [x]          │   ← version row (chevron when update) + checkbox
-//	╰─────────────────────────────────────╯
+// Unselected tiles have a neutral (dim) border — install state is
+// signalled by the colored dot on the title row and the colored
+// version line, NOT by the border. The cursor-selected tile is the
+// only tile whose border is colored (bright cyan), so it pops
+// without making the grid noisy.
 //
 // `showCheckbox` should be true only for the Updates tab — it adds a
 // right-anchored [x]/[ ] selection box on the version row that
 // mirrors the Space-to-select semantics of the list view.
 func renderToolTile(t registry.Tool, width int, opts toolTileOpts) string {
 	state := toolTileState(&t, opts.marketplaceNew)
-	barColor := toolStateColor(state)
+	borderColor := cyberFGDim
 	if opts.selected {
-		barColor = cyberPrimary
+		borderColor = cyberPrimary
 	}
 	border := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(barColor).
+		BorderForeground(borderColor).
 		Width(width).
 		Padding(0, 1)
 

@@ -79,28 +79,22 @@ func renderSessionTiles(rows []agentRow, cursor int, totalWidth int) string {
 
 // renderOneTile draws a single session card at `width` columns.
 //
-// Layout (5 content lines bracketed top/bottom by the rounded border):
-//
-//	╭─────────────────────────────────────╮
-//	│ started 3m ago                      │   ← subtitle
-//	│ ● ⭐ Refactor session tiles  ✦ Claude│   ← dot + star + title + provider chip
-//	│ ⎇ feat/tiles-redesign               │   ← branch pill
-//	│ ▸ edited agents_session_tiles.go    │   ← recent activity (state-colored)
-//	│ 💬 14  🔌 3  · working              │   ← badges + state label
-//	╰─────────────────────────────────────╯
+// Unselected tiles use a neutral (dim) border — state is signalled
+// by the colored dot on the title row and the bold state label in
+// the badges row, not by the border. The cursor-selected tile is
+// the ONLY tile whose border carries color (bright cyan), so it
+// pops without making the grid noisy.
 //
 // Star slot is always reserved (2 cells) so the title's column
-// doesn't shift between starred and unstarred tiles. The bordering
-// rounded box is colored by live state, and brightens to cyber-cyan
-// when this tile is the cursor selection.
+// doesn't shift between starred and unstarred tiles.
 func renderOneTile(s agents.Session, width int, selected bool) string {
-	barColor := stateBarColor(s.LiveState)
+	borderColor := cyberFGDim
 	if selected {
-		barColor = cyberPrimary
+		borderColor = cyberPrimary
 	}
 	border := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(barColor).
+		BorderForeground(borderColor).
 		Width(width).
 		Padding(0, 1)
 
