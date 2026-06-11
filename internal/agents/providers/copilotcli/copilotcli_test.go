@@ -153,6 +153,79 @@ func TestProvider_Sessions_RealLayout(t *testing.T) {
 	}
 }
 
+// TestProvider_Sessions_CopilotCLI_1_0_61 covers the event-type
+// vocabulary actually emitted by Copilot CLI 1.0.x: tool events use
+// `tool.execution_start` / `tool.execution_complete` (NOT `tool.start`),
+// per-turn boundaries use `assistant.turn_start` / `assistant.turn_end`
+// (NOT `turn.start`), tool name lives at `data.toolName` (NOT
+// `data.tool.name`), and the session-context block carries a `branch`
+// field. Earlier vocabulary checks left ToolCounts / Branch / TurnCount
+// empty, which surfaced as a uniformly-empty Sessions sub-tab in the
+// TUI even though the directories were being discovered.
+func TestProvider_Sessions_CopilotCLI_1_0_61(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "copilot-home")
+	sid := "0ad57e31-6530-43c3-bf9c-afdc40385c93"
+	dir := filepath.Join(home, "session-state", sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Real-shape snippet captured from a Copilot CLI 1.0.61 transcript.
+	// Two assistant turns; the first turn invokes two tools (one
+	// completes, one is left pending so LiveState should be "working"
+	// when `now` is close to the last event timestamp).
+	events := `{"type":"session.start","data":{"sessionId":"` + sid + `","version":1,"producer":"copilot-agent","copilotVersion":"1.0.61","startTime":"2026-06-11T15:29:59.225Z","context":{"cwd":"C:\\dev\\Foo","gitRoot":"C:\\dev\\Foo","branch":"nassiharel/feature-x","repository":"DefaultCollection/Org/Foo","hostType":"ado"}},"id":"e1","timestamp":"2026-06-11T15:30:00.102Z","parentId":null}
+{"type":"user.message","data":{"sessionId":"` + sid + `","text":"hi"},"id":"e2","timestamp":"2026-06-11T15:30:05.000Z","parentId":"e1"}
+{"type":"assistant.turn_start","data":{"sessionId":"` + sid + `","turnId":"0"},"id":"e3","timestamp":"2026-06-11T15:30:06.000Z","parentId":"e2"}
+{"type":"tool.execution_start","data":{"toolCallId":"tc-1","toolName":"glob","arguments":{"pattern":"**/AGENTS.md"},"turnId":"0"},"id":"e4","timestamp":"2026-06-11T15:30:07.000Z","parentId":"e3"}
+{"type":"tool.execution_start","data":{"toolCallId":"tc-2","toolName":"glob","arguments":{"pattern":"*.md"},"turnId":"0"},"id":"e5","timestamp":"2026-06-11T15:30:07.100Z","parentId":"e4"}
+{"type":"tool.execution_complete","data":{"toolCallId":"tc-1","toolName":"glob","turnId":"0"},"id":"e6","timestamp":"2026-06-11T15:30:08.000Z","parentId":"e5"}
+`
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	sessions, err := p.Sessions(context.Background())
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(sessions))
+	}
+	s := sessions[0]
+
+	// Branch (from data.context.branch) drives the branch pill in
+	// the tile renderer. Empty here was the most visible "looks
+	// empty" symptom.
+	if s.Branch != "nassiharel/feature-x" {
+		t.Errorf("Branch = %q, want nassiharel/feature-x", s.Branch)
+	}
+
+	// ToolCounts populates the 🔌 chip and the Stats tab bar chart.
+	if got := s.ToolCounts["glob"]; got != 2 {
+		t.Errorf("ToolCounts[glob] = %d, want 2 (got map = %+v)", got, s.ToolCounts)
+	}
+
+	// One user.message → TurnCount should be 1 (turn.start aliases
+	// are also counted but assistant.turn_start should NOT double-
+	// count, since that would diverge from Claude's per-user-prompt
+	// semantics).
+	if s.TurnCount != 1 {
+		t.Errorf("TurnCount = %d, want 1", s.TurnCount)
+	}
+
+	// One tool started but never completed → pendingTools > 0 →
+	// StateWorking (when within the stale threshold). The stale
+	// threshold is 60s; the last event in the fixture is at
+	// 15:30:08, so checking against StateWorking OR StateIdle keeps
+	// this test independent of wall clock. The important assertion
+	// is that LiveState is NOT empty.
+	if s.LiveState == "" {
+		t.Errorf("LiveState empty; expected derived state from translated tool events")
+	}
+}
+
 func TestProvider_UpdatePlugin_UnsupportedSurfacesClearError(t *testing.T) {
 	p := &Provider{BinaryOverride: "/usr/bin/copilot"}
 	prev := PluginUpdateProbe

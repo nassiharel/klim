@@ -505,15 +505,84 @@ func redactHeaders(in map[string]string) map[string]string {
 // MCP servers, branch, restart command) by [enrichFromEventsJSONL]
 // running our generic state machine over the event log.
 func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
+	now := time.Now()
+	bin := p.binary()
+	var sessions []agents.Session
+	for _, d := range p.sessionDirs() {
+		s := agents.Session{
+			ID:             "copilot:" + d.ID,
+			Provider:       p.ID(),
+			TranscriptPath: d.Path,
+			Source:         agents.SourceLocalCopilot,
+		}
+		if fi, err := os.Stat(d.Path); err == nil {
+			s.LastModified = fi.ModTime()
+		}
+		enrichFromEventsJSONL(filepath.Join(d.Path, "events.jsonl"), &s, now)
+
+		// Repository fallback — derive from cwd when the
+		// transcript didn't carry an explicit repository tag.
+		if s.Repository == "" && s.ProjectPath != "" {
+			s.Repository = filepath.Base(filepath.Clean(s.ProjectPath))
+		}
+
+		// Restart command (paste-ready).
+		cli := bin
+		if cli == "" {
+			cli = "copilot"
+		}
+		idForResume := strings.TrimPrefix(s.ID, "copilot:")
+		if s.ProjectPath != "" {
+			s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume " + idForResume
+		} else {
+			s.RestartCommand = cli + " --resume " + idForResume
+		}
+
+		sessions = append(sessions, s)
+	}
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].LastModified.After(sessions[j].LastModified)
+	})
+	if len(sessions) > 100 {
+		sessions = sessions[:100]
+	}
+	return sessions, nil
+}
+
+// sessionDir is a discovered Copilot session directory, returned by
+// [Provider.sessionDirs]. Callers iterate over the slice to read each
+// session's events.jsonl (or any other per-session file) without
+// having to re-implement the layout-fallback / dedup logic.
+type sessionDir struct {
+	// ID is the bare session id (the directory name; no "copilot:"
+	// prefix). Use this when building agents.Session.ID via
+	// `"copilot:" + d.ID`.
+	ID string
+	// Path is the absolute path to the session directory.
+	Path string
+}
+
+// sessionDirs walks Copilot's per-session storage layouts (1.x
+// `session-state/`, with pre-1.0 `sessions/` and `state/` fallbacks)
+// and returns one entry per unique session id. A session that exists
+// in more than one layout — e.g. left over from an upgrade — is
+// reported once, taking the FIRST candidate's directory; this matches
+// the order [Provider.Sessions] uses so callers see the same paths
+// the listing surfaces. Missing root directories are silently
+// skipped — they're the common case on hosts that have only ever
+// run one Copilot generation.
+//
+// Callers across this package (Sessions, SessionTexts, TokenSamples)
+// share this helper so a future layout change has exactly one place
+// to update.
+func (p *Provider) sessionDirs() []sessionDir {
 	root := p.copilotHome()
 	candidates := []string{
 		filepath.Join(root, "session-state"),
 		filepath.Join(root, "sessions"),
 		filepath.Join(root, "state"),
 	}
-	now := time.Now()
-	bin := p.binary()
-	var sessions []agents.Session
+	var out []sessionDir
 	seen := make(map[string]bool)
 	for _, c := range candidates {
 		entries, err := os.ReadDir(c)
@@ -528,46 +597,10 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 				continue
 			}
 			seen[e.Name()] = true
-			dir := filepath.Join(c, e.Name())
-			s := agents.Session{
-				ID:             "copilot:" + e.Name(),
-				Provider:       p.ID(),
-				TranscriptPath: dir,
-				Source:         agents.SourceLocalCopilot,
-			}
-			if fi, err := e.Info(); err == nil {
-				s.LastModified = fi.ModTime()
-			}
-			enrichFromEventsJSONL(filepath.Join(dir, "events.jsonl"), &s, now)
-
-			// Repository fallback — derive from cwd when the
-			// transcript didn't carry an explicit repository tag.
-			if s.Repository == "" && s.ProjectPath != "" {
-				s.Repository = filepath.Base(filepath.Clean(s.ProjectPath))
-			}
-
-			// Restart command (paste-ready).
-			cli := bin
-			if cli == "" {
-				cli = "copilot"
-			}
-			idForResume := strings.TrimPrefix(s.ID, "copilot:")
-			if s.ProjectPath != "" {
-				s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume " + idForResume
-			} else {
-				s.RestartCommand = cli + " --resume " + idForResume
-			}
-
-			sessions = append(sessions, s)
+			out = append(out, sessionDir{ID: e.Name(), Path: filepath.Join(c, e.Name())})
 		}
 	}
-	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].LastModified.After(sessions[j].LastModified)
-	})
-	if len(sessions) > 100 {
-		sessions = sessions[:100]
-	}
-	return sessions, nil
+	return out
 }
 
 // quoteForShell renders `s` so it can be pasted into a POSIX shell
@@ -671,8 +704,15 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 					Cwd        string `json:"cwd"`
 					Repository string `json:"repository"`
 					HostType   string `json:"hostType"`
+					Branch     string `json:"branch"`
 				} `json:"context"`
-				Tool struct {
+				// ToolName is the Copilot CLI 1.x shape:
+				// tool.execution_start / tool.execution_complete
+				// emit `data.toolName` as a flat string. The legacy
+				// nested `data.tool.name` shape is kept for pre-1.0
+				// compatibility — whichever is non-empty wins.
+				ToolName string `json:"toolName"`
+				Tool     struct {
 					Name string `json:"name"`
 				} `json:"tool"`
 				MCP struct {
@@ -717,6 +757,9 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 		if ev.Data.Context.HostType != "" && s.Type == "" {
 			s.Type = ev.Data.Context.HostType
 		}
+		if ev.Data.Context.Branch != "" && s.Branch == "" {
+			s.Branch = ev.Data.Context.Branch
+		}
 		switch ev.Type {
 		case "turn.start", "user.message":
 			turns++
@@ -730,7 +773,13 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 			}
 			switch kind {
 			case enrich.KindToolStarted, enrich.KindToolCompleted:
-				te.Name = ev.Data.Tool.Name
+				// Copilot CLI 1.x emits `data.toolName` (flat
+				// string); older builds emit nested
+				// `data.tool.name`. Pick whichever is present.
+				te.Name = ev.Data.ToolName
+				if te.Name == "" {
+					te.Name = ev.Data.Tool.Name
+				}
 			case enrich.KindMCPUsed:
 				te.Name = ev.Data.MCP.Server
 			case enrich.KindSubagentStarted, enrich.KindSubagentCompleted:
@@ -784,11 +833,24 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 // translateCopilotKind maps a Copilot CLI event type string to the
 // generic [enrich.EventKind] vocabulary. Returns KindOther for types
 // that don't influence the live state.
+//
+// The vocabulary covers two generations of Copilot CLI:
+//
+//   - 1.x (current): `tool.execution_start`, `tool.execution_complete`,
+//     `assistant.turn_start`, `assistant.turn_end`.
+//   - pre-1.0: `tool.start`, `tool.end`, `turn.start`.
+//
+// Falling out of sync with the producer is a silent failure — sessions
+// continue to be listed but every enrichment field stays empty,
+// which is what users perceive as a "blank Sessions tab". Keep this
+// table in sync when the producer ships new event names.
 func translateCopilotKind(t string) enrich.EventKind {
 	switch t {
-	case "tool.start", "tool.started", "tool_use", "tool_use.start":
+	case "tool.start", "tool.started", "tool_use", "tool_use.start",
+		"tool.execution_start":
 		return enrich.KindToolStarted
-	case "tool.end", "tool.completed", "tool.complete", "tool_use.end":
+	case "tool.end", "tool.completed", "tool.complete", "tool_use.end",
+		"tool.execution_complete":
 		return enrich.KindToolCompleted
 	case "ask_user", "user.ask", "prompt.required":
 		return enrich.KindAskUser
