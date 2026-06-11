@@ -297,7 +297,7 @@ func (m *Model) renderAgentsDetailPage() string {
 	// nothing when they triggered View Transcript. Render it
 	// inline now so it sits within the visible body window.
 	if st.viewerOpen {
-		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines))
+		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines, m.width))
 	} else {
 		// Metadata section
 		b.WriteString(renderAgentDetailFull(row, st.snapshot))

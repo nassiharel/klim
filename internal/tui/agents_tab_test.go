@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/klim/internal/agents"
 	"github.com/nassiharel/klim/internal/agents/health"
@@ -321,19 +322,49 @@ func TestWindowAgentRowsAligned_DefaultMatchesOriginal(t *testing.T) {
 // content actually appears in the rendered string.
 func TestRenderTranscriptViewer_RendersTitleAndLines(t *testing.T) {
 	t.Parallel()
-	got := renderTranscriptViewer("/tmp/session/foo.jsonl", []string{
+	got := stripANSIForTest(renderTranscriptViewer("/tmp/session/foo.jsonl", []string{
 		"[user] hello there",
 		"[assistant] hi back",
-	})
+		"[tool]      Bash(command=\"ls -la\")",
+	}, 120))
 	for _, want := range []string{
 		"Transcript",
 		"/tmp/session/foo.jsonl",
-		"[user] hello there",
-		"[assistant] hi back",
+		"hello there",
+		"hi back",
+		"Bash(command=",
 		"Esc / Enter / q = close",
+		// Role chips are rendered through transcriptRoleChip, which
+		// applies background colour + padding. The plain-text strip
+		// preserves the words.
+		"user",
+		"assistant",
+		"tool",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("renderTranscriptViewer output missing %q\n--- got:\n%s", want, got)
+		}
+	}
+}
+
+// TestRenderTranscriptViewer_BorderAlignsToTerminalWidth pins the
+// fix for the "borders are broken" complaint. The previous version
+// drew a hand-rolled box with hard-coded 56-char top/bottom borders,
+// so on a 120-col terminal the box looked stranded on the left edge.
+// We now use lipgloss `Width(totalWidth - 4)` so the visual width
+// of every rendered row equals (totalWidth - 4) regardless of
+// content length.
+func TestRenderTranscriptViewer_BorderAlignsToTerminalWidth(t *testing.T) {
+	t.Parallel()
+	for _, w := range []int{80, 120, 200} {
+		out := renderTranscriptViewer("/x", []string{"[user] hi"}, w)
+		rows := strings.Split(strings.TrimRight(out, "\n"), "\n")
+		want := w - 4
+		for i, r := range rows {
+			if got := lipgloss.Width(r); got != want {
+				t.Errorf("totalWidth=%d row=%d width=%d want=%d\n%s", w, i, got, want, out)
+				break
+			}
 		}
 	}
 }
@@ -346,9 +377,34 @@ func TestRenderTranscriptViewer_RendersTitleAndLines(t *testing.T) {
 // hollow border.
 func TestRenderTranscriptViewer_EmptyTranscriptShowsHint(t *testing.T) {
 	t.Parallel()
-	got := renderTranscriptViewer("/tmp/empty.jsonl", nil)
+	got := stripANSIForTest(renderTranscriptViewer("/tmp/empty.jsonl", nil, 120))
 	if !strings.Contains(got, "empty transcript") {
 		t.Errorf("empty transcript should surface a hint; got:\n%s", got)
+	}
+}
+
+// TestSplitTranscriptRolePrefix walks every recognised role prefix
+// shape that renderTranscriptLine emits. The viewer relies on this
+// split to drive per-row colour, so a regression here would silently
+// downgrade colored rows to dim raw text.
+func TestSplitTranscriptRolePrefix(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in       string
+		wantRole string
+		wantRest string
+	}{
+		{"[user] hello there", "user", "hello there"},
+		{"[assistant] hi back", "assistant", "hi back"},
+		{"[tool]      Bash(command=\"ls -la\")", "tool", "Bash(command=\"ls -la\")"},
+		{"raw line", "", "raw line"},
+		{"", "", ""},
+	}
+	for _, tc := range cases {
+		role, rest := splitTranscriptRolePrefix(tc.in)
+		if role != tc.wantRole || rest != tc.wantRest {
+			t.Errorf("split(%q) = (%q, %q), want (%q, %q)", tc.in, role, rest, tc.wantRole, tc.wantRest)
+		}
 	}
 }
 

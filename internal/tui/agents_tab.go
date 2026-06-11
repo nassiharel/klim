@@ -1734,7 +1734,7 @@ func (m *Model) renderAgentsView() string {
 	// off-screen. Render it as the body instead so it always sits
 	// inside the visible viewport.
 	if st.viewerOpen {
-		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines))
+		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines, m.width))
 		if st.flash != "" && time.Now().Before(st.flashEnd) {
 			b.WriteString("\n  " + st.flash + "\n")
 		}
@@ -1903,32 +1903,104 @@ func renderAgentNotePrompt(st *agentsState) string {
 // Both the list view (renderAgentsView) and the detail page
 // (renderAgentsDetailPage) call this when st.viewerOpen is true.
 //
-// History (bug #fixed): the viewer used to be inlined in both
-// renderers and APPENDED at the very bottom of the body. The list
-// view passes its body through fitToVisibleRows which clips from
-// the bottom; the detail page pads its body to fill m.height
-// before appending — both paths therefore pushed the modal off
-// the visible viewport, so users who pressed `v` or activated
-// "View Transcript" from the action bar saw nothing change.
+// History: the original implementation drew a hand-rolled box with
+// hard-coded 56-char top/bottom borders and 80-char content
+// truncation, then was APPENDED at the very bottom of the body —
+// past the height-padding in renderAgentsDetailPage and past
+// fitToVisibleRows' bottom-clip in renderAgentsView. Both paths
+// pushed the modal off-screen entirely.
 //
-// Centralising the render here lets both callers render the modal
-// as part of the in-window body (not as a trailing tail) so it
-// always lands on-screen.
-func renderTranscriptViewer(title string, lines []string) string {
-	var b strings.Builder
-	b.WriteString("  ╔ Transcript ══════════════════════════════════════════╗\n")
-	b.WriteString("  ║ " + truncAgentRow(title, 64) + "\n")
-	b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
+// The current implementation uses lipgloss' `RoundedBorder()` and
+// `Width(totalWidth - 4)` so the borders always align with the
+// terminal width, drops the hard-coded truncation in favour of
+// truncating to the actual available content width, and colours
+// each row by its role chip (`user` / `assistant` / `tool`) for
+// the same hierarchy the search-overlay viewer provides. Callers
+// render the box in place of the body content (like the existing
+// searchOverlay pattern) so it always lands inside the visible
+// viewport.
+func renderTranscriptViewer(title string, lines []string, totalWidth int) string {
+	if totalWidth <= 0 {
+		totalWidth = 80
+	}
+	const minWidth = 40
+	if totalWidth < minWidth {
+		totalWidth = minWidth
+	}
+	boxWidth := totalWidth - 4
+	// Inner content width: lipgloss Padding(0, 1) eats 1 cell each
+	// side, the rounded border eats 1 cell each side. Used to size
+	// the per-row text so a "[user] …" line fits without wrapping.
+	innerW := boxWidth - 4
+	if innerW < 20 {
+		innerW = 20
+	}
+
+	box := lipgloss.NewStyle().
+		Foreground(cyberFG).
+		Background(cyberSelectedBg).
+		BorderForeground(cyberAccent).
+		BorderStyle(lipgloss.RoundedBorder()).
+		Padding(0, 1).
+		Width(boxWidth)
+
+	header := lipgloss.NewStyle().Bold(true).Foreground(cyberPrimary).Render("📜 Transcript") +
+		"  " + dimVersion.Render(truncAgentRow(title, innerW-16))
+
+	out := []string{header, ""}
+
 	if len(lines) == 0 {
-		b.WriteString("  ║ " + dimVersion.Render("(empty transcript)") + "\n")
+		out = append(out, dimVersion.Render("(empty transcript — no events recorded yet)"))
 	}
-	for _, line := range lines {
-		b.WriteString("  ║ " + truncAgentRow(line, 80) + "\n")
+	for _, raw := range lines {
+		out = append(out, renderTranscriptRow(raw, innerW))
 	}
-	b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
-	b.WriteString("  ║ Esc / Enter / q = close\n")
-	b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
-	return b.String()
+
+	out = append(out, "", dimVersion.Render(fmt.Sprintf("%d lines · Esc / Enter / q = close", len(lines))))
+	return box.Render(strings.Join(out, "\n"))
+}
+
+// renderTranscriptRow colours a single transcript line based on the
+// role prefix that renderTranscriptLine emits (`[user]`, `[assistant]`,
+// `[tool]`). Lines without a recognised prefix fall through with
+// the dim foreground so JSONL noise (rare in practice) is still
+// readable but visually demoted.
+func renderTranscriptRow(line string, innerW int) string {
+	role, rest := splitTranscriptRolePrefix(line)
+	if role == "" {
+		// No recognised prefix — render as dim raw text.
+		return lipgloss.NewStyle().Foreground(cyberFGDim).
+			Render(truncAgentRow(line, innerW))
+	}
+	chip := transcriptRoleChip(role)
+	// innerW budget: chip + 1-space gap + text.
+	textW := innerW - lipgloss.Width(chip) - 1
+	if textW < 8 {
+		textW = 8
+	}
+	textStyle := lipgloss.NewStyle().Foreground(cyberFG)
+	if role == "tool" {
+		textStyle = textStyle.Foreground(cyberFGDim)
+	}
+	return chip + " " + textStyle.Render(truncAgentRow(rest, textW))
+}
+
+// splitTranscriptRolePrefix splits a "[role] body" line produced by
+// renderTranscriptLine into (role, body). Returns ("", line) when
+// the line doesn't start with a recognised role prefix.
+func splitTranscriptRolePrefix(line string) (role, rest string) {
+	switch {
+	case strings.HasPrefix(line, "[user] "):
+		return "user", strings.TrimPrefix(line, "[user] ")
+	case strings.HasPrefix(line, "[assistant] "):
+		return "assistant", strings.TrimPrefix(line, "[assistant] ")
+	case strings.HasPrefix(line, "[tool]"):
+		// renderTranscriptLine emits "[tool]      Name(...)" with
+		// extra padding so a column aligns in plain text — strip it.
+		rest := strings.TrimPrefix(line, "[tool]")
+		return "tool", strings.TrimLeft(rest, " ")
+	}
+	return "", line
 }
 
 func truncAgentRow(s string, n int) string {
