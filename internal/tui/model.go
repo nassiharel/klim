@@ -388,6 +388,13 @@ type Model struct {
 	favMode         string          // "" (list), "export", "share"
 	favClearConfirm bool            // true = awaiting y/n to clear all favorites
 
+	// toolsViewMode toggles between dense table (default) and tile
+	// grid for the My Tools (Installed/Updates/Favorites) and
+	// Marketplace tabs. Per-tab so each surface remembers its own
+	// view; cycled with the `t` key. Lazily initialised — a nil map
+	// reads back as toolsViewList (the zero value).
+	toolsViewMode map[int]toolsViewMode
+
 	// Config editor state.
 	configCursor    int
 	configEditing   bool            // true = text input active for a setting
@@ -2607,6 +2614,24 @@ func (m Model) handleKeyDefault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor < len(m.filteredIndex) {
 			m.openDetailView(m.filteredIndex[m.cursor])
 		}
+		return m, nil
+	case "t":
+		// Tile / list toggle. Per-sub-tab — each surface remembers
+		// its own preference. Only active on the row-list tabs (My
+		// Tools + Marketplace's Tools sub-tab); other tabs may bind
+		// `t` for their own purposes (Health PATH uses it as a
+		// list/tree toggle, for instance).
+		if !isToolsTab(m.activeTab) {
+			return m, nil
+		}
+		if m.activeTab == tabDiscover && m.discoverSubTab != discoverTools {
+			return m, nil
+		}
+		if m.toolsViewMode == nil {
+			m.toolsViewMode = make(map[int]toolsViewMode)
+		}
+		m.toolsViewMode[m.activeTab] = m.toolsViewMode[m.activeTab].next()
+		m.statusMsg = "view: " + m.toolsViewMode[m.activeTab].label()
 		return m, nil
 	case "r":
 		// On the Marketplace tab, refresh the catalog from GitHub.

@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/enrich"
 	"gopkg.in/yaml.v3"
 )
 
@@ -499,6 +500,10 @@ func redactHeaders(in map[string]string) map[string]string {
 // couple of lines of `events.jsonl` to lift the session id + cwd, and
 // fall back to two pre-1.0 layout candidates so older installs keep
 // working. Sessions are returned recent-first.
+//
+// Each session is enriched (live state, recent activity, tool counts,
+// MCP servers, branch, restart command) by [enrichFromEventsJSONL]
+// running our generic state machine over the event log.
 func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	root := p.copilotHome()
 	candidates := []string{
@@ -506,6 +511,8 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 		filepath.Join(root, "sessions"),
 		filepath.Join(root, "state"),
 	}
+	now := time.Now()
+	bin := p.binary()
 	var sessions []agents.Session
 	seen := make(map[string]bool)
 	for _, c := range candidates {
@@ -531,7 +538,26 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 			if fi, err := e.Info(); err == nil {
 				s.LastModified = fi.ModTime()
 			}
-			enrichFromEventsJSONL(filepath.Join(dir, "events.jsonl"), &s)
+			enrichFromEventsJSONL(filepath.Join(dir, "events.jsonl"), &s, now)
+
+			// Repository fallback — derive from cwd when the
+			// transcript didn't carry an explicit repository tag.
+			if s.Repository == "" && s.ProjectPath != "" {
+				s.Repository = filepath.Base(filepath.Clean(s.ProjectPath))
+			}
+
+			// Restart command (paste-ready).
+			cli := bin
+			if cli == "" {
+				cli = "copilot"
+			}
+			idForResume := strings.TrimPrefix(s.ID, "copilot:")
+			if s.ProjectPath != "" {
+				s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume " + idForResume
+			} else {
+				s.RestartCommand = cli + " --resume " + idForResume
+			}
+
 			sessions = append(sessions, s)
 		}
 	}
@@ -544,10 +570,73 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	return sessions, nil
 }
 
+// quoteForShell renders `s` so it can be pasted into a POSIX shell
+// without further interpretation. Uses single-quote escaping: wraps
+// the whole string in single quotes and replaces any interior single
+// quote with the four-character sequence  ' \ ' '  (close the quoted
+// run, escape one literal quote, re-open the quoted run). Inside
+// single quotes, nothing is expanded — no `$VAR`, no `$(...)`, no
+// backticks, no globs — so this is the safe choice for a copy/paste
+// snippet that must survive arbitrary metacharacters in ProjectPath.
+//
+// IMPORTANT — POSIX shells only:
+//
+//   - PowerShell uses `""` (doubled) or a backtick to escape an
+//     embedded single quote, NOT the close/escape/reopen trick.
+//     Users on Windows are expected to copy the cwd separately or
+//     use the dashboard's resume action (which goes through
+//     Provider.BuildLaunch for a no-shell exec, no quoting needed
+//     at all).
+//   - For non-POSIX shells the safer path is to display the cwd as
+//     a separate field; we keep the snippet to ease the common
+//     POSIX terminal case.
+//
+// The RestartCommand field is intended for copy-to-clipboard only;
+// the dashboard's resume action no longer pipes it through /bin/sh.
+// If a future caller wants to actually execute this snippet, use
+// the provider's BuildLaunch instead — it returns (bin, args, cwd)
+// for a no-shell exec.
+func quoteForShell(s string) string {
+	if s == "" {
+		return `''`
+	}
+	// Fast path: no shell-meaningful characters → no quoting needed.
+	// We still wrap if the string contains a single quote, since the
+	// caller pastes it into a sentence where unquoted whitespace
+	// matters.
+	//
+	// `!` is treated as unsafe even though it's inert under
+	// non-interactive shells: bash with history expansion enabled
+	// (the default on interactive prompts) and zsh both expand
+	// unquoted `!` sequences when the snippet is pasted at a
+	// terminal — which is exactly the use case for RestartCommand.
+	// Single-quote wrapping (the slow path below) suppresses history
+	// expansion across both shells.
+	safe := true
+	for _, r := range s {
+		if r == ' ' || r == '\t' || r == '\n' || r == '\'' || r == '"' ||
+			r == '$' || r == '`' || r == '\\' || r == '|' || r == '&' ||
+			r == ';' || r == '<' || r == '>' || r == '(' || r == ')' ||
+			r == '*' || r == '?' || r == '[' || r == ']' || r == '{' ||
+			r == '}' || r == '#' || r == '~' || r == '!' {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	// Single-quote wrap. Interior single quotes use the close /
+	// escape-quote / re-open dance described above.
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // enrichFromEventsJSONL streams the full transcript to populate
-// Created/Modified/Type/Status/TurnCount/ProjectPath/Title. It bails out
-// gracefully on parse error or missing file — sessions stay usable with
-// just their id + dir mtime when the transcript can't be parsed.
+// Created/Modified/Type/Status/TurnCount/ProjectPath/Title plus the
+// dashboard-friendly enrichment fields (live state, recent activity,
+// tool counts, MCP servers). It bails out gracefully on parse error
+// or missing file — sessions stay usable with just their id + dir
+// mtime when the transcript can't be parsed.
 //
 // Heuristics:
 //   - Created   = data.startTime of the first session.start event.
@@ -556,7 +645,9 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 //   - Status    = derived from the last event type: session.end →
 //     completed; session.stopped → stopped; otherwise active.
 //   - TurnCount = number of `turn.start` / `user.message` events.
-func enrichFromEventsJSONL(path string, s *agents.Session) {
+//
+// `now` is used only for the live-state staleness threshold.
+func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 	f, err := os.Open(path)
 	if err != nil {
 		return
@@ -567,6 +658,7 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 	var lastType string
 	var firstStart, lastTS time.Time
 	turns := 0
+	var events []enrich.TimedEvent
 
 	for {
 		var ev struct {
@@ -580,13 +672,29 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 					Repository string `json:"repository"`
 					HostType   string `json:"hostType"`
 				} `json:"context"`
+				Tool struct {
+					Name string `json:"name"`
+				} `json:"tool"`
+				MCP struct {
+					Server string `json:"server"`
+				} `json:"mcp"`
+				Subagent struct {
+					Name string `json:"name"`
+				} `json:"subagent"`
+				Message struct {
+					Text    string   `json:"text"`
+					Content string   `json:"content"`
+					Choices []string `json:"choices"`
+				} `json:"message"`
 			} `json:"data"`
 		}
 		if err := dec.Decode(&ev); err != nil {
 			break
 		}
 		lastType = ev.Type
-		if ts, err := time.Parse(time.RFC3339Nano, ev.Timestamp); err == nil {
+		var ts time.Time
+		if t, err := time.Parse(time.RFC3339Nano, ev.Timestamp); err == nil {
+			ts = t
 			if firstStart.IsZero() {
 				firstStart = ts
 			}
@@ -604,6 +712,7 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 		}
 		if ev.Data.Context.Repository != "" && s.Title == "" {
 			s.Title = ev.Data.Context.Repository
+			s.Repository = ev.Data.Context.Repository
 		}
 		if ev.Data.Context.HostType != "" && s.Type == "" {
 			s.Type = ev.Data.Context.HostType
@@ -611,6 +720,34 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 		switch ev.Type {
 		case "turn.start", "user.message":
 			turns++
+		}
+
+		// Translate to generic events for the state machine.
+		if kind := translateCopilotKind(ev.Type); kind != enrich.KindOther {
+			te := enrich.TimedEvent{
+				Event:     enrich.Event{Kind: kind},
+				Timestamp: ts,
+			}
+			switch kind {
+			case enrich.KindToolStarted, enrich.KindToolCompleted:
+				te.Name = ev.Data.Tool.Name
+			case enrich.KindMCPUsed:
+				te.Name = ev.Data.MCP.Server
+			case enrich.KindSubagentStarted, enrich.KindSubagentCompleted:
+				te.Name = ev.Data.Subagent.Name
+			case enrich.KindAskUser, enrich.KindAskPermission:
+				te.Text = ev.Data.Message.Text
+				if te.Text == "" {
+					te.Text = ev.Data.Message.Content
+				}
+				te.Choices = ev.Data.Message.Choices
+			case enrich.KindAssistantMessage:
+				te.Text = ev.Data.Message.Text
+				if te.Text == "" {
+					te.Text = ev.Data.Message.Content
+				}
+			}
+			events = append(events, te)
 		}
 	}
 
@@ -636,6 +773,47 @@ func enrichFromEventsJSONL(path string, s *agents.Session) {
 	default:
 		s.Status = agents.SessionStatusActive
 	}
+
+	// Run the state machine over the translated events.
+	if len(events) > 0 {
+		result := enrich.DeriveState(events, now)
+		agents.ApplyEnrichment(s, result)
+	}
+}
+
+// translateCopilotKind maps a Copilot CLI event type string to the
+// generic [enrich.EventKind] vocabulary. Returns KindOther for types
+// that don't influence the live state.
+func translateCopilotKind(t string) enrich.EventKind {
+	switch t {
+	case "tool.start", "tool.started", "tool_use", "tool_use.start":
+		return enrich.KindToolStarted
+	case "tool.end", "tool.completed", "tool.complete", "tool_use.end":
+		return enrich.KindToolCompleted
+	case "ask_user", "user.ask", "prompt.required":
+		return enrich.KindAskUser
+	case "ask_permission", "permission.required":
+		return enrich.KindAskPermission
+	case "user.answered", "permission.granted", "permission.denied":
+		return enrich.KindAnswered
+	case "subagent.started", "subagent.start":
+		return enrich.KindSubagentStarted
+	case "subagent.completed", "subagent.end", "subagent.complete":
+		return enrich.KindSubagentCompleted
+	case "mcp.use", "mcp.used", "mcp.invoke":
+		return enrich.KindMCPUsed
+	case "user.message", "user.msg":
+		return enrich.KindUserMessage
+	case "assistant.message", "assistant.msg":
+		return enrich.KindAssistantMessage
+	case "session.start":
+		return enrich.KindSessionStart
+	case "session.end", "session.close", "session.completed":
+		return enrich.KindSessionEnd
+	case "session.stopped":
+		return enrich.KindSessionStopped
+	}
+	return enrich.KindOther
 }
 
 // ---------- Mutations ----------
@@ -748,10 +926,76 @@ func (p *Provider) EnableMCP(ctx context.Context, name string, enabled bool) err
 	return p.runCLI(ctx, "mcp", "disable", name)
 }
 
-// DeleteSession deletes a session via the provider CLI.
+// DeleteSession removes a Copilot session's on-disk state.
+//
+// Copilot CLI as of 1.x does NOT expose a `session delete` subcommand —
+// running `copilot session delete <id>` returns exit 1 with
+// `error: Invalid command format. Did you mean: copilot -i "session
+// delete <id>"?` on stderr. The previous implementation shelled out
+// to that nonexistent command via runCLI which inherits stdio; in the
+// TUI those 191 bytes of error text were written straight onto the
+// rendered screen, corrupting the layout, AND the session wasn't
+// actually deleted.
+//
+// We remove the session directory directly instead. Layouts checked
+// (matching Sessions() — keep in sync if one changes):
+//
+//	~/.copilot/session-state/<uuid>/   (1.x default)
+//	~/.copilot/sessions/<uuid>/        (pre-1.0)
+//	~/.copilot/state/<uuid>/           (older fallback)
+//
+// The first existing dir is removed. Returns nil when at least one
+// dir was found and removed; an error otherwise. The orphan row in
+// ~/.copilot/session-store.db (the SQLite index Copilot keeps) is
+// NOT cleaned up — Sessions() reads the dirs directly so the entry
+// disappears from our UI either way, and we deliberately stay free
+// of an SQLite dependency.
 func (p *Provider) DeleteSession(ctx context.Context, id string) error {
+	_ = ctx // no IO that can be cancelled; kept for interface conformance
 	id = strings.TrimPrefix(id, "copilot:")
-	return p.runCLI(ctx, "session", "delete", id)
+	if id == "" {
+		return errors.New("delete: session id is required")
+	}
+	// Reject anything that isn't a plain directory name: path
+	// separators (`/`, `\`), drive letters, parent refs (`..`), or
+	// the current-dir ref (`.`) would let a crafted id escape the
+	// Copilot home root and let os.RemoveAll wipe an arbitrary
+	// directory. filepath.Base + Clean catches the common cases
+	// across both POSIX and Windows path semantics.
+	if id == "." || id == ".." ||
+		strings.ContainsAny(id, `/\`) ||
+		filepath.Base(id) != id ||
+		filepath.Clean(id) != id {
+		return fmt.Errorf("delete: invalid session id %q", id)
+	}
+	root := p.copilotHome()
+	var lastErr error
+	removed := false
+	for _, sub := range []string{"session-state", "sessions", "state"} {
+		dir := filepath.Join(root, sub, id)
+		info, err := os.Stat(dir)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				lastErr = err
+			}
+			continue
+		}
+		if !info.IsDir() {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			lastErr = err
+			continue
+		}
+		removed = true
+	}
+	if removed {
+		return nil
+	}
+	if lastErr != nil {
+		return fmt.Errorf("delete: %w", lastErr)
+	}
+	return fmt.Errorf("delete: session %q not found under %s", id, root)
 }
 
 func (p *Provider) runCLI(ctx context.Context, args ...string) error {

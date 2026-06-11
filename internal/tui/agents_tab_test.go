@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nassiharel/klim/internal/agents"
 	"github.com/nassiharel/klim/internal/agents/health"
@@ -232,6 +233,267 @@ func TestWindowAgentRows(t *testing.T) {
 	}
 }
 
+// TestWindowAgentRowsAligned_TileGridDoesNotReshuffle pins the fix
+// for the "tiles reorder on every keypress" bug. In a 3-column tile
+// grid, navigating must shift the window by full rows of tiles
+// (multiples of cols), never by one tile — otherwise every visible
+// tile cycles position diagonally underneath the user.
+//
+// Two invariants are checked:
+//  1. start is always a multiple of cols (tiles align to row
+//     boundaries — no half-row offsets).
+//  2. consecutive cursor moves change start by 0 or a multiple of
+//     cols (the grid is stationary, or it pages by a full row).
+func TestWindowAgentRowsAligned_TileGridDoesNotReshuffle(t *testing.T) {
+	rows := make([]agentRow, 100)
+	for i := range rows {
+		rows[i] = agentRow{name: "r" + string(rune('0'+i%10))}
+	}
+
+	const cols = 3
+	const visRows = 4
+	const maxRows = visRows * cols // 12 visible tiles
+
+	prevStart := -1
+	for cursor := 0; cursor < len(rows); cursor++ {
+		_, start, _, _, _ := windowAgentRowsAligned(rows, cursor, maxRows, cols)
+		if start%cols != 0 {
+			t.Errorf("cursor=%d: start=%d is not aligned to cols=%d", cursor, start, cols)
+		}
+		if prevStart >= 0 {
+			delta := start - prevStart
+			if delta%cols != 0 {
+				t.Errorf("cursor=%d→%d: start shifted by %d (not a multiple of cols=%d) — tiles will reshuffle diagonally", cursor-1, cursor, delta, cols)
+			}
+		}
+		prevStart = start
+	}
+}
+
+// TestWindowAgentRowsAligned_StationaryInsideFirstRow asserts that
+// moving the cursor across the first row of tiles (the part of the
+// first window that the centred-cursor algorithm doesn't try to
+// shift past) leaves start unchanged. Without the alignment, start
+// would tick up by 1 the moment the cursor crossed maxRows/2.
+func TestWindowAgentRowsAligned_StationaryInsideFirstRow(t *testing.T) {
+	rows := make([]agentRow, 100)
+	for i := range rows {
+		rows[i] = agentRow{name: "r"}
+	}
+	const cols = 3
+	const maxRows = 12
+
+	// For cursors 0..maxRows/2 the centred-cursor formula keeps
+	// start=0; the snap is a no-op there. This verifies the snap
+	// hasn't broken the easy case.
+	for cursor := 0; cursor <= maxRows/2; cursor++ {
+		_, start, _, _, _ := windowAgentRowsAligned(rows, cursor, maxRows, cols)
+		if start != 0 {
+			t.Errorf("cursor=%d: start should remain 0 in the first half-window, got %d", cursor, start)
+		}
+	}
+}
+
+// TestWindowAgentRowsAligned_DefaultMatchesOriginal asserts that
+// passing colAlign=1 (the default the table renderer uses) produces
+// the same behaviour as the original windowAgentRows.
+func TestWindowAgentRowsAligned_DefaultMatchesOriginal(t *testing.T) {
+	rows := make([]agentRow, 50)
+	for i := range rows {
+		rows[i] = agentRow{name: "r"}
+	}
+	for cursor := 0; cursor < len(rows); cursor++ {
+		v1, s1, d1, ha1, hb1 := windowAgentRows(rows, cursor, 10)
+		v2, s2, d2, ha2, hb2 := windowAgentRowsAligned(rows, cursor, 10, 1)
+		if len(v1) != len(v2) || s1 != s2 || d1 != d2 || ha1 != ha2 || hb1 != hb2 {
+			t.Errorf("cursor=%d: aligned(_,_,_,1) diverged from original: %d/%d/%d/%d/%d vs %d/%d/%d/%d/%d",
+				cursor, len(v1), s1, d1, ha1, hb1, len(v2), s2, d2, ha2, hb2)
+		}
+	}
+}
+
+// TestRenderTranscriptViewer_RendersTitleAndLines pins the inline
+// modal renderer used by both renderAgentsView and
+// renderAgentsDetailPage. The previous implementation appended the
+// modal at the very bottom of the rendered body — outside the
+// fitToVisibleRows window for the list view and past the
+// height-padding for the detail page — so the user saw nothing.
+// We now render the modal in-band; this test asserts the modal
+// content actually appears in the rendered string.
+func TestRenderTranscriptViewer_RendersTitleAndLines(t *testing.T) {
+	t.Parallel()
+	got := stripANSIForTest(renderTranscriptViewer("/tmp/session/foo.jsonl", []string{
+		"[user] hello there",
+		"[assistant] hi back",
+		"[tool]      Bash(command=\"ls -la\")",
+	}, 0, 120, 40))
+	for _, want := range []string{
+		"Transcript",
+		"/tmp/session/foo.jsonl",
+		"hello there",
+		"hi back",
+		"Bash(command=",
+		"Esc close",
+		// Scroll position hint shows up in the footer so the user
+		// sees how many lines are loaded and where they are.
+		"lines 1-3 / 3",
+		// Role chips are rendered through transcriptRoleChip, which
+		// applies background colour + padding. The plain-text strip
+		// preserves the words.
+		"user",
+		"assistant",
+		"tool",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("renderTranscriptViewer output missing %q\n--- got:\n%s", want, got)
+		}
+	}
+}
+
+// TestRenderTranscriptViewer_ScrollsToOffset asserts that passing a
+// non-zero scroll offset hides the leading lines and shifts the
+// "lines X-Y / N" footer accordingly. This is the regression test
+// for "the View Transcript is not scrollable".
+func TestRenderTranscriptViewer_ScrollsToOffset(t *testing.T) {
+	t.Parallel()
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("[user] line-%d", i)
+	}
+	// Tall terminal so we get a generous visible window; scroll
+	// by 40 lines and assert lines 0-39 are GONE and line 40 is
+	// shown.
+	got := stripANSIForTest(renderTranscriptViewer("/x", lines, 40, 120, 60))
+	if strings.Contains(got, "line-0\n") || strings.Contains(got, "line-0 ") {
+		t.Errorf("scroll=40 should hide line-0; got:\n%s", got)
+	}
+	if !strings.Contains(got, "line-40") {
+		t.Errorf("scroll=40 should show line-40 at the top:\n%s", got)
+	}
+	if !strings.Contains(got, "lines 41-") {
+		t.Errorf("scroll=40 should advertise the lines window in the footer:\n%s", got)
+	}
+}
+
+// TestHandleViewerScrollKey covers the input handler that the
+// viewer modal owns — closes on Esc/Enter/q, advances on the
+// arrow / page / Home / End keys, clamps the scroll to a sane
+// range. Mirrors the same key map both list-view and detail-page
+// handlers delegate to.
+func TestHandleViewerScrollKey(t *testing.T) {
+	t.Parallel()
+	mkState := func(n int) *agentsState {
+		lines := make([]string, n)
+		for i := range lines {
+			lines[i] = "x"
+		}
+		return &agentsState{viewerOpen: true, viewerLines: lines}
+	}
+
+	t.Run("down advances", func(t *testing.T) {
+		st := mkState(20)
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'j', Text: "j"}))
+		if st.viewerScroll != 1 {
+			t.Errorf("down: scroll = %d, want 1", st.viewerScroll)
+		}
+	})
+
+	t.Run("up clamps at 0", func(t *testing.T) {
+		st := mkState(20)
+		st.viewerScroll = 0
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'k', Text: "k"}))
+		if st.viewerScroll != 0 {
+			t.Errorf("up at 0: scroll = %d, want 0", st.viewerScroll)
+		}
+	})
+
+	t.Run("end pins to last line", func(t *testing.T) {
+		st := mkState(20)
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'G', Text: "G"}))
+		if st.viewerScroll != 19 {
+			t.Errorf("end: scroll = %d, want 19", st.viewerScroll)
+		}
+	})
+
+	t.Run("home returns to top", func(t *testing.T) {
+		st := mkState(20)
+		st.viewerScroll = 10
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'g', Text: "g"}))
+		if st.viewerScroll != 0 {
+			t.Errorf("home: scroll = %d, want 0", st.viewerScroll)
+		}
+	})
+
+	t.Run("esc closes", func(t *testing.T) {
+		st := mkState(20)
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape, Text: "esc"}))
+		if st.viewerOpen {
+			t.Errorf("esc should close viewer")
+		}
+	})
+}
+
+// TestRenderTranscriptViewer_BorderAlignsToTerminalWidth pins the
+// fix for the "borders are broken" complaint. The previous version
+// drew a hand-rolled box with hard-coded 56-char top/bottom borders,
+// so on a 120-col terminal the box looked stranded on the left edge.
+// We now use lipgloss `Width(totalWidth - 4)` so the visual width
+// of every rendered row equals (totalWidth - 4) regardless of
+// content length.
+func TestRenderTranscriptViewer_BorderAlignsToTerminalWidth(t *testing.T) {
+	t.Parallel()
+	for _, w := range []int{80, 120, 200} {
+		out := renderTranscriptViewer("/x", []string{"[user] hi"}, 0, w, 30)
+		rows := strings.Split(strings.TrimRight(out, "\n"), "\n")
+		want := w - 4
+		for i, r := range rows {
+			if got := lipgloss.Width(r); got != want {
+				t.Errorf("totalWidth=%d row=%d width=%d want=%d\n%s", w, i, got, want, out)
+				break
+			}
+		}
+	}
+}
+
+// TestRenderTranscriptViewer_EmptyTranscriptShowsHint guards against
+// silent "the box is just borders" output when readSessionTranscript
+// returns zero lines (e.g. a brand-new session whose first event
+// hasn't been written yet). The viewer should make it obvious to
+// the user that the file is empty rather than just rendering a
+// hollow border.
+func TestRenderTranscriptViewer_EmptyTranscriptShowsHint(t *testing.T) {
+	t.Parallel()
+	got := stripANSIForTest(renderTranscriptViewer("/tmp/empty.jsonl", nil, 0, 120, 30))
+	if !strings.Contains(got, "empty transcript") {
+		t.Errorf("empty transcript should surface a hint; got:\n%s", got)
+	}
+}
+
+// TestSplitTranscriptRolePrefix walks every recognised role prefix
+// shape that renderTranscriptLine emits. The viewer relies on this
+// split to drive per-row colour, so a regression here would silently
+// downgrade colored rows to dim raw text.
+func TestSplitTranscriptRolePrefix(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in       string
+		wantRole string
+		wantRest string
+	}{
+		{"[user] hello there", "user", "hello there"},
+		{"[assistant] hi back", "assistant", "hi back"},
+		{"[tool]      Bash(command=\"ls -la\")", "tool", "Bash(command=\"ls -la\")"},
+		{"raw line", "", "raw line"},
+		{"", "", ""},
+	}
+	for _, tc := range cases {
+		role, rest := splitTranscriptRolePrefix(tc.in)
+		if role != tc.wantRole || rest != tc.wantRest {
+			t.Errorf("split(%q) = (%q, %q), want (%q, %q)", tc.in, role, rest, tc.wantRole, tc.wantRest)
+		}
+	}
+}
+
 func TestRowCopyText(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -452,7 +714,7 @@ func detailTestModel() Model {
 			{ID: "pl2", Name: "pl2", Provider: agents.ProviderCopilotCLI, Marketplace: "mp1", Installed: false},
 		},
 		Skills:   []agents.Skill{{ID: "sk1", Name: "sk1", Provider: agents.ProviderCopilotCLI, Scope: agents.ScopeUser}},
-		MCPs:     []agents.MCP{{ID: "mc1", Name: "mc1", Provider: agents.ProviderCopilotCLI, Scope: agents.ScopeUser, Enabled: true}},
+		MCPs:     []agents.MCP{{ID: "mc1", Name: "mc1", Provider: agents.ProviderCopilotCLI, Scope: agents.ScopeUser, Transport: "stdio", Enabled: true}},
 		Sessions: []agents.Session{{ID: "se1", Name: "se1", Provider: agents.ProviderCopilotCLI, TranscriptPath: "/tmp/x"}},
 	}
 	m.agents.loadedAt = time.Now()
@@ -738,6 +1000,84 @@ func TestBuildAgentsSidebarItems_Plugins_HasExpectedSections(t *testing.T) {
 			t.Errorf("missing %q header section; got %v", want, sections)
 		}
 	}
+}
+
+// TestSetSubTab_RefreshesSidebarItems pins the fix for "filter
+// sidebar in Agents tab isn't updating according to the sub-tab".
+//
+// Each sub-tab has its own sidebar section list (Marketplaces:
+// status + provider; MCPs: status + transport + scope + provider;
+// Skills: scope + provider; …). The sidebar column is rendered
+// next to the row table whether or not the picker (`f`) is open,
+// so when the user presses 2 → 4 to walk between sub-tabs the
+// displayed sidebar must follow them.
+//
+// Before this fix, setSubTab only rebuilt sidebarItems when
+// `sidebarOpen` was true. A user who switched sub-tabs without
+// ever opening the picker (the common case) kept seeing the
+// initial sub-tab's sections — e.g. an MCP-specific TRANSPORT
+// header lingering on the Plugins sub-tab.
+func TestSetSubTab_RefreshesSidebarItems(t *testing.T) {
+	m := detailTestModel()
+
+	// Land on Marketplaces and seed sidebarItems the way
+	// renderAgentsView's lazy build does. Sidebar picker is NOT
+	// open — this is the bug-trigger condition.
+	m.agents.subTab = agentsSubMarketplaces
+	m.agents.sidebarOpen = false
+	m.agents.sidebarItems = buildAgentsSidebarItems(m.agents)
+	mpHeaders := collectSidebarHeaders(m.agents.sidebarItems)
+	if !sliceHas(mpHeaders, "STATUS") || !sliceHas(mpHeaders, "PROVIDER") {
+		t.Fatalf("setup: marketplaces sidebar should have STATUS+PROVIDER, got %v", mpHeaders)
+	}
+	// The MCP-only TRANSPORT header MUST NOT be in the marketplaces
+	// sidebar — its presence after the switch is the bug we're
+	// guarding against (in the opposite direction).
+
+	// Switch to MCPs.
+	m.agents.setSubTab(agentsSubMCPs)
+
+	got := collectSidebarHeaders(m.agents.sidebarItems)
+	for _, want := range []string{"STATUS", "TRANSPORT", "SCOPE", "PROVIDER"} {
+		if !sliceHas(got, want) {
+			t.Errorf("after setSubTab(MCPs): missing %q header in sidebar; got %v", want, got)
+		}
+	}
+
+	// Switch back to Marketplaces — the MCP-only TRANSPORT /
+	// SCOPE headers must disappear from the sidebar.
+	m.agents.setSubTab(agentsSubMarketplaces)
+	got = collectSidebarHeaders(m.agents.sidebarItems)
+	for _, banned := range []string{"TRANSPORT", "SCOPE"} {
+		if sliceHas(got, banned) {
+			t.Errorf("after setSubTab(Marketplaces): stale %q header leaked; got %v", banned, got)
+		}
+	}
+}
+
+// collectSidebarHeaders returns the labels of header rows in the
+// sidebar item list. Test helper for sidebar-shape assertions.
+func collectSidebarHeaders(items []agentSidebarItem) []string {
+	var headers []string
+	for _, it := range items {
+		if it.isHeader {
+			headers = append(headers, it.label)
+		}
+	}
+	return headers
+}
+
+// sliceHas is a tiny `slices.Contains` shim local to this test
+// file. (A package-level `contains(string, string)` already exists
+// for substring checks in another test file — the signatures
+// don't match, so we use a distinct name here.)
+func sliceHas(haystack []string, needle string) bool {
+	for _, h := range haystack {
+		if h == needle {
+			return true
+		}
+	}
+	return false
 }
 
 func TestAgentsApplySidebarSelection_Provider(t *testing.T) {

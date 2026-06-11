@@ -31,6 +31,22 @@ var newAgentsService = func() *agents.Service {
 	return svc
 }
 
+// surfaceSnapshotWarnings writes any snap.Warnings to stderr with a
+// `agents: ` prefix. This is the CLI-side equivalent of the library
+// fold: `hydrateSessionExtras` no longer writes to stderr directly
+// (that corrupts the TUI's screen), so each CLI command that loads
+// a snapshot routes warnings to stderr explicitly here. No-op when
+// snap is nil or has no warnings. The TUI ignores this helper and
+// surfaces snap.Warnings through its status row instead.
+func surfaceSnapshotWarnings(snap *agents.Snapshot) {
+	if snap == nil || len(snap.Warnings) == 0 {
+		return
+	}
+	for _, w := range snap.Warnings {
+		fmt.Fprintln(os.Stderr, "agents: "+w)
+	}
+}
+
 // catalogAdapter bridges catalog.Fetcher to agents.RemoteCatalog. The
 // agents package defines the RemoteCatalog interface so it never needs
 // to import the catalog package (which would create a cycle since
@@ -109,7 +125,38 @@ var agentsMarketplacesCmd = &cobra.Command{Use: "marketplaces", Aliases: []strin
 var agentsPluginsCmd = &cobra.Command{Use: "plugins", Aliases: []string{"plugin"}, Short: "Manage agent plugins"}
 var agentsSkillsCmd = &cobra.Command{Use: "skills", Aliases: []string{"skill"}, Short: "Browse agent skills"}
 var agentsMCPsCmd = &cobra.Command{Use: "mcps", Aliases: []string{"mcp"}, Short: "Manage MCP servers"}
-var agentsSessionsCmd = &cobra.Command{Use: "sessions", Aliases: []string{"session"}, Short: "List, resume, and delete agent sessions"}
+
+// agentsSessionsCmd is the umbrella for `klim agents sessions …`.
+// With no args it launches the focused sessions dashboard (Bubbletea
+// TUI) when stdout is a TTY, falling back to a one-shot list when the
+// output is piped — this keeps `klim agents sessions | head` and other
+// scripting use cases working unchanged.
+//
+// Explicit subcommands (resume, view, tail, stats, files, star,
+// unstar, group, delete) handle the rest of the dashboard surface.
+var agentsSessionsCmd = &cobra.Command{
+	Use:     "sessions",
+	Aliases: []string{"session"},
+	Short:   "List, resume, view, and manage agent sessions",
+	Long: `sessions inspects Claude Code and Copilot CLI session
+transcripts and presents them as a glanceable dashboard.
+
+Bare ` + "`klim agents sessions`" + ` opens a TUI dashboard when stdout
+is a TTY; when piped (or when stdout is not a terminal) it runs the
+equivalent of ` + "`klim agents sessions list`" + ` so existing
+pipelines keep working.
+
+Examples:
+  klim agents sessions
+  klim agents sessions list --status waiting --since 2h
+  klim agents sessions view claude:3b4dc369-…
+  klim agents sessions tail claude:3b4dc369-…
+  klim agents sessions stats --output json
+  klim agents sessions files --top 10
+  klim agents sessions star claude:3b4dc369-…
+  klim agents sessions group set klim=Klim`,
+	RunE: runAgentsSessionsDefault,
+}
 
 // ---------------- launch ----------------
 
@@ -139,8 +186,9 @@ var agentsRefreshCmd = &cobra.Command{
 		svc.Invalidate()
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 		defer cancel()
-		_, err := svc.LoadAll(ctx, agents.LoadOpts{Refresh: true})
+		snap, err := svc.LoadAll(ctx, agents.LoadOpts{Refresh: true})
 		if err == nil {
+			surfaceSnapshotWarnings(snap)
 			fmt.Fprintln(os.Stderr, "agents: cache refreshed")
 		}
 		return err
@@ -198,8 +246,31 @@ func init() {
 	agentsMCPsCmd.AddCommand(makeListSub("list MCPs", agentsListMCPs))
 	agentsMCPsCmd.AddCommand(&cobra.Command{Use: "remove <name>", Short: "Remove an MCP server", Args: cobra.ExactArgs(1), RunE: agentsRemoveMCP})
 
-	agentsSessionsCmd.AddCommand(makeListSub("list sessions", agentsListSessions))
-	agentsSessionsCmd.AddCommand(&cobra.Command{Use: "resume <id>", Short: "Resume a session (exec the agent CLI)", Args: cobra.ExactArgs(1), RunE: agentsResumeSession})
+	agentsSessionsCmd.AddCommand(newAgentsSessionsListCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsViewCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsTailCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsStatsCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsFilesCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsStarCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsUnstarCmd())
+	agentsSessionsCmd.AddCommand(newAgentsSessionsGroupCmd())
+	resumeCmd := &cobra.Command{
+		Use:   "resume [id]",
+		Short: "Resume a session (exec the agent CLI)",
+		Long: `Resume a session by id, by fuzzy match on title/project, or by passing --last.
+
+Examples:
+  klim agents sessions resume claude:foo-bar
+  klim agents sessions resume "fix cron"   # fuzzy match on title/project
+  klim agents sessions resume --last        # most recently modified session`,
+		// usageArgs ensures `accepts at most 1 arg(s)` (cobra's
+		// MaximumNArgs message) surfaces as *UsageError → exit 2,
+		// matching the >1-args contract in CLI-CONVENTIONS.md.
+		Args: usageArgs(cobra.MaximumNArgs(1)),
+		RunE: agentsResumeSession,
+	}
+	resumeCmd.Flags().Bool("last", false, "resume the most recently modified session")
+	agentsSessionsCmd.AddCommand(resumeCmd)
 	agentsSessionsCmd.AddCommand(&cobra.Command{Use: "delete <id>", Short: "Delete a session", Args: cobra.ExactArgs(1), RunE: agentsDeleteSession})
 
 	// PR #77 review #3: drop the confusingly-named `--provider-filter`
@@ -239,6 +310,7 @@ func runAgentsList(cmd *cobra.Command, _ []string, entityFilter agents.EntityTyp
 	if err != nil {
 		return fmt.Errorf("agents list: %w", err)
 	}
+	surfaceSnapshotWarnings(snap)
 
 	// CLI-provided --type wins when no per-entity wrapper supplied one.
 	if entityFilter == "" {
@@ -463,9 +535,11 @@ func runAgentsSearch(cmd *cobra.Command, query string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
 	svc := newAgentsService()
-	if _, err := svc.LoadAll(ctx, agents.LoadOpts{}); err != nil {
+	snap, err := svc.LoadAll(ctx, agents.LoadOpts{})
+	if err != nil {
 		return err
 	}
+	surfaceSnapshotWarnings(snap)
 	results := svc.Search(query, "")
 	format, err := agentsSearchFormatGetter()
 	if err != nil {
@@ -570,9 +644,11 @@ func inferLaunchProvider(ctx context.Context, svc *agents.Service, skill, sessio
 	}
 
 	// Otherwise scan the snapshot and count provider matches.
-	if _, err := svc.LoadAll(ctx, agents.LoadOpts{}); err != nil {
+	scanned, err := svc.LoadAll(ctx, agents.LoadOpts{})
+	if err != nil {
 		return "", "", fmt.Errorf("scan: %w", err)
 	}
+	surfaceSnapshotWarnings(scanned)
 	snap := svc.Snapshot()
 	if snap == nil {
 		return "", "", errors.New("no scan data available")
@@ -653,9 +729,11 @@ func runAgentsDoctor(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 	defer cancel()
 	svc := newAgentsService()
-	if _, err := svc.LoadAll(ctx, agents.LoadOpts{}); err != nil {
+	loaded, err := svc.LoadAll(ctx, agents.LoadOpts{})
+	if err != nil {
 		return err
 	}
+	surfaceSnapshotWarnings(loaded)
 	snap := svc.Snapshot()
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	defer func() { _ = w.Flush() }()
@@ -693,9 +771,10 @@ func agentsListSkills(cmd *cobra.Command, _ []string) error {
 func agentsListMCPs(cmd *cobra.Command, _ []string) error {
 	return runAgentsList(cmd, nil, agents.EntityMCP)
 }
-func agentsListSessions(cmd *cobra.Command, _ []string) error {
-	return runAgentsList(cmd, nil, agents.EntitySession)
-}
+
+// (agentsListSessions removed — the dashboard's runAgentsSessionsList
+// in agents_sessions.go fully replaces it, with filter / sort / group
+// flags and a TUI fallthrough.)
 
 func agentsAddMarketplace(cmd *cobra.Command, args []string) error {
 	return forEachProvider(cmd.Context(), func(p agents.Provider) error {
@@ -724,12 +803,50 @@ func agentsRemoveMCP(cmd *cobra.Command, args []string) error {
 	})
 }
 func agentsResumeSession(cmd *cobra.Command, args []string) error {
-	id := args[0]
+	last, _ := cmd.Flags().GetBool("last")
+	if last && len(args) > 0 {
+		return usageErrorf("resume: --last cannot be combined with an explicit session id")
+	}
+	if !last && len(args) == 0 {
+		return usageErrorf("resume: pass a session id, a fuzzy match string, or --last")
+	}
+
+	svc := newAgentsService()
+
+	var id string
+	if !last {
+		id = args[0]
+	}
+
+	// When the user asked for --last, OR the supplied arg is not
+	// already a provider-prefixed id, load the snapshot and resolve.
+	if last || (!strings.HasPrefix(id, "claude:") && !strings.HasPrefix(id, "copilot:")) {
+		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+		defer cancel()
+		snap, err := svc.LoadAll(ctx, agents.LoadOpts{})
+		if err != nil {
+			return err
+		}
+		surfaceSnapshotWarnings(snap)
+		switch {
+		case last:
+			if len(snap.Sessions) == 0 {
+				return usageErrorf("resume: no sessions available")
+			}
+			id = snap.Sessions[0].ID
+		default:
+			match, ok := findSession(snap.Sessions, id)
+			if !ok {
+				return usageErrorf("resume: cannot resolve %q to a unique session — pass the full provider-prefixed id (claude:… or copilot:…) or use --last", id)
+			}
+			id = match.ID
+		}
+	}
+
 	provID := providerForSessionID(id)
 	if provID == "" {
-		return fmt.Errorf("resume: cannot infer provider from session id %q (expected claude:… or copilot:…)", id)
+		return usageErrorf("resume: cannot infer provider from session id %q (expected claude:… or copilot:…)", id)
 	}
-	svc := newAgentsService()
 	plan, err := svc.Launch(agents.LaunchSpec{Provider: provID, SessionID: id})
 	if err != nil {
 		return err
@@ -741,7 +858,7 @@ func agentsDeleteSession(cmd *cobra.Command, args []string) error {
 	id := args[0]
 	provID := providerForSessionID(id)
 	if provID == "" {
-		return fmt.Errorf("delete: cannot infer provider from session id %q", id)
+		return usageErrorf("delete: cannot infer provider from session id %q", id)
 	}
 	svc := newAgentsService()
 	p := svc.ProviderFor(provID)

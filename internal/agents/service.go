@@ -3,10 +3,15 @@ package agents
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nassiharel/klim/internal/agents/bookmarks"
+	"github.com/nassiharel/klim/internal/agents/enrich"
 )
 
 // Service is the composition root for the agents subsystem. It owns the
@@ -71,11 +76,34 @@ func (s *Service) Registry() *Registry { return s.registry }
 // LoadAll returns the merged Snapshot across every registered provider.
 // Uses the cache when present and acceptable; otherwise scans fresh and
 // writes a new cache.
+//
+// hydrateSessionExtras runs on every return path — even cache hits —
+// because star toggles and grouping mapping edits happen outside the
+// scan and must be reflected on the next list / TUI render. The
+// helper is idempotent and fast (one bookmarks load + one mappings
+// load + a linear pass over Sessions).
 func (s *Service) LoadAll(ctx context.Context, opts LoadOpts) (*Snapshot, error) {
 	if !opts.Refresh {
 		if c, ok, err := LoadCache(); err == nil && ok {
 			if opts.MaxAge == 0 || time.Since(c.WrittenAt) <= opts.MaxAge {
 				snap := c.Snapshot
+				// Clear any stale Starred flags so a removed bookmark
+				// doesn't linger after `unstar`. Group is reset to
+				// "" here too — hydrateSessionExtras below recomputes
+				// it from the latest user mappings + cwd, so a
+				// `group set` edit shows up on the next render even
+				// when the snapshot comes from cache.
+				for i := range snap.Sessions {
+					snap.Sessions[i].Starred = false
+					snap.Sessions[i].Group = ""
+				}
+				// Wipe any warnings the cached snapshot may have
+				// carried from a previous load — Warnings reflect
+				// THIS load's hydration outcome, not the historical
+				// state, so an old "bookmarks corrupt" message
+				// won't linger after the file is fixed.
+				snap.Warnings = nil
+				hydrateSessionExtras(&snap)
 				s.mu.Lock()
 				s.snapshot = &snap
 				s.mu.Unlock()
@@ -200,6 +228,7 @@ func (s *Service) scan(ctx context.Context) (*Snapshot, error) {
 	}
 
 	sortSnapshot(snap)
+	hydrateSessionExtras(snap)
 	return snap, nil
 }
 
@@ -369,3 +398,105 @@ func (s *Service) Launch(spec LaunchSpec) (ExecPlan, error) {
 
 // ProviderFor returns the registered provider with the given ID, or nil.
 func (s *Service) ProviderFor(id ProviderID) Provider { return s.registry.Get(id) }
+
+// hydrateSessionExtras fills in dashboard-only Session fields that are
+// not derivable from a single provider's view: the Starred flag (from
+// the bookmarks store) and the Group label (from the smart grouping
+// resolver, with user-defined cwd→group overrides).
+//
+// Best-effort with surfaced warnings: a missing bookmarks or grouping
+// file is not an error and silently leaves Starred / Group at their
+// zero values. A corrupt or unreadable file is appended to
+// snap.Warnings (so a "my stars aren't showing" / "my custom groups
+// stopped working" issue is debuggable at the source) but does not
+// fail the call — the snapshot still proceeds with the unaffected
+// fields populated. Callers are responsible for surfacing the
+// warnings (CLI → stderr, TUI → status row); the library itself does
+// NOT write to stderr because that corrupts a running Bubbletea
+// screen.
+//
+// $HOME (or %USERPROFILE% on Windows) is resolved once here and
+// passed into Resolve so the "🏠 Home" special-case fires correctly.
+func hydrateSessionExtras(snap *Snapshot) {
+	if snap == nil || len(snap.Sessions) == 0 {
+		return
+	}
+
+	var starred map[string]bool
+	if st, err := bookmarks.Load(); err == nil && st != nil {
+		starred = make(map[string]bool, st.Count())
+		for _, e := range st.All() {
+			starred[e.SessionID] = true
+		}
+	} else if err != nil {
+		// Bookmarks file is corrupt or unreadable — surface a hint
+		// via snap.Warnings so a "my stars aren't showing" issue is
+		// visible at the source rather than silently ignored. We
+		// still proceed with an empty starred set so the rest of
+		// the snapshot stays usable. We don't write to stderr here
+		// because hydrateSessionExtras runs from inside the
+		// sessions TUI's tea.Cmd; a Fprintf to stderr would land
+		// on top of the rendered screen and garble the layout.
+		snap.Warnings = append(snap.Warnings,
+			fmt.Sprintf("bookmarks load failed (stars not hydrated): %v", err))
+	}
+
+	mappings := map[string]string{}
+	if gm, err := enrich.LoadGroupingMappings(); err == nil && gm != nil {
+		mappings = gm.All()
+	} else if err != nil {
+		// Grouping file is corrupt or unreadable — same approach as
+		// bookmarks: warn via snap.Warnings so a "my custom groups
+		// stopped working" issue is debuggable, then fall back to
+		// the empty mapping set (resolver still produces a group
+		// via repo / cwd / keyword fallback). Same TUI rationale
+		// as above for not writing to stderr from library code.
+		snap.Warnings = append(snap.Warnings,
+			fmt.Sprintf("grouping mappings load failed (custom groups not applied): %v", err))
+	}
+
+	home := homeDir()
+
+	for i := range snap.Sessions {
+		s := &snap.Sessions[i]
+		if starred[s.ID] {
+			s.Starred = true
+		}
+		// Always recompute Group so user mapping edits (saved via
+		// `klim agents sessions group set …`) take effect on the
+		// next list / TUI render even when the snapshot comes from
+		// cache.
+		s.Group = enrich.Resolve(s.ProjectPath, s.Repository, s.Title, home, mappings)
+	}
+}
+
+// homeDir returns the user's home directory across POSIX and Windows.
+//
+// Resolution order:
+//  1. $HOME (POSIX, and respected by Git Bash / WSL on Windows)
+//  2. %USERPROFILE% (native Windows)
+//  3. os.UserHomeDir (last-resort fallback; on Unix it consults
+//     passwd records when $HOME is missing, which is exactly the
+//     case some sandboxed runtimes hit — cron jobs, certain login
+//     shells. On Windows os.UserHomeDir also goes through
+//     USERPROFILE, so the fallback is mostly POSIX-relevant, but
+//     we call it on both platforms for consistency.)
+//
+// Returns the empty string only when every source fails; callers
+// then disable the "🏠 Home" group special-case rather than
+// incorrectly grouping sessions.
+func homeDir() string {
+	if env := os.Getenv("HOME"); env != "" {
+		return env
+	}
+	if env := os.Getenv("USERPROFILE"); env != "" {
+		return env
+	}
+	// os.UserHomeDir consults passwd entries on Unix when the env
+	// vars are unset — a strictly broader probe than the env vars
+	// alone for POSIX sandboxed contexts.
+	if dir, err := os.UserHomeDir(); err == nil {
+		return dir
+	}
+	return ""
+}

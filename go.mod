@@ -1,6 +1,6 @@
 module github.com/nassiharel/klim
 
-go 1.25.10
+go 1.25.11
 
 require (
 	charm.land/bubbles/v2 v2.1.0

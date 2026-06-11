@@ -120,6 +120,19 @@ type Snapshot struct {
 	MCPs           []MCP                 `yaml:"mcps"`
 	Sessions       []Session             `yaml:"sessions"`
 	ProviderStatus map[ProviderID]Status `yaml:"provider_status,omitempty"`
+
+	// Warnings collects non-fatal diagnostics produced while building
+	// or hydrating the snapshot (e.g. corrupt bookmarks YAML,
+	// unreadable grouping mappings file). Callers SHOULD surface
+	// these — the CLI path writes them to stderr; the TUI shows them
+	// in its status row. We collect on the snapshot rather than
+	// writing to stderr inside library code so the agents package
+	// stays reusable: stderr writes from inside a Bubbletea program
+	// corrupt the rendered screen, and a library that
+	// unconditionally prints can't be embedded cleanly anywhere
+	// else. Hydration / scan failures are best-effort — the snapshot
+	// still proceeds with whatever fields could be populated.
+	Warnings []string `json:"warnings,omitempty" yaml:"warnings,omitempty"`
 }
 
 // Count returns the count of entities of the given type.

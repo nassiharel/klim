@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/nassiharel/klim/internal/agents"
 	"github.com/nassiharel/klim/internal/agents/costs"
 	"github.com/nassiharel/klim/internal/agents/search"
@@ -165,5 +167,72 @@ func TestForEachProvider_HonoursProviderFlag(t *testing.T) {
 	})
 	if len(hits) == 0 {
 		t.Error("empty filter should walk providers")
+	}
+}
+
+// TestAgentsResume_BadArgsReturnUsageError pins the convention that
+// argument/flag validation failures from `klim agents sessions resume`
+// surface as *UsageError so Run() maps them to exit code 2 (per
+// CLI-CONVENTIONS.md). Prior to this they were returned as plain
+// errors.New(...) which exited with code 1 — indistinguishable from
+// a genuine runtime failure.
+func TestAgentsResume_BadArgsReturnUsageError(t *testing.T) {
+	t.Parallel()
+
+	mkCmd := func() *cobra.Command {
+		c := &cobra.Command{Use: "resume"}
+		c.Flags().Bool("last", false, "")
+		return c
+	}
+
+	t.Run("no args, no --last", func(t *testing.T) {
+		err := agentsResumeSession(mkCmd(), nil)
+		var ue *UsageError
+		if !errors.As(err, &ue) {
+			t.Fatalf("err = %v (%T), want *UsageError", err, err)
+		}
+		if !strings.Contains(err.Error(), "session id") {
+			t.Errorf("unexpected message: %v", err)
+		}
+	})
+
+	t.Run("--last with explicit id", func(t *testing.T) {
+		c := mkCmd()
+		_ = c.Flags().Set("last", "true")
+		err := agentsResumeSession(c, []string{"claude:abc"})
+		var ue *UsageError
+		if !errors.As(err, &ue) {
+			t.Fatalf("err = %v (%T), want *UsageError", err, err)
+		}
+		if !strings.Contains(err.Error(), "--last cannot be combined") {
+			t.Errorf("unexpected message: %v", err)
+		}
+	})
+}
+
+// TestAgentsResume_TooManyArgsReturnsUsageError pins the >1-args
+// path through Cobra's Args validator. Without the usageArgs wrap,
+// cobra.MaximumNArgs(1) returns a plain error whose message
+// ("accepts at most 1 arg(s), received N") does NOT match
+// isCobraUsageError's prefix list, so Run() would exit 1 instead of
+// 2 (violates CLI-CONVENTIONS.md). The wrap ensures the error type
+// is *UsageError regardless of message wording.
+//
+// We exercise the validator directly to avoid spinning up the full
+// rootCmd graph.
+func TestAgentsResume_TooManyArgsReturnsUsageError(t *testing.T) {
+	t.Parallel()
+
+	// Reconstruct the same Args validator the production command
+	// uses so the test stays decoupled from how the command is
+	// wired together.
+	validator := usageArgs(cobra.MaximumNArgs(1))
+	err := validator(&cobra.Command{Use: "resume"}, []string{"a", "b"})
+	if err == nil {
+		t.Fatal("expected error from >1 args, got nil")
+	}
+	var ue *UsageError
+	if !errors.As(err, &ue) {
+		t.Fatalf("err = %v (%T), want *UsageError", err, err)
 	}
 }

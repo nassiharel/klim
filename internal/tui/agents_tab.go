@@ -2,7 +2,9 @@ package tui
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image/color"
@@ -51,6 +53,13 @@ type agentsState struct {
 	// sortMode is per sub-tab: see agentsSortMode* below.
 	sortMode map[int]agentsSortMode
 
+	// subTabViewMode toggles between dense table (default) and tile
+	// grid per Agents sub-tab. Lazily initialised; a nil map reads
+	// back as sessionsViewList (zero value). Cycled with the `t`
+	// key. Originally session-only — now per-sub-tab so plugins,
+	// MCPs, etc. can flip independently.
+	subTabViewMode map[int]sessionsViewMode
+
 	// statusFilter is per sub-tab: see agentsFilter* below.
 	statusFilter map[int]agentsFilter
 
@@ -64,10 +73,14 @@ type agentsState struct {
 	deleteAction tea.Cmd
 
 	// viewerLines holds the first N lines of a session transcript so the
-	// user can peek at it without leaving the TUI.
-	viewerOpen  bool
-	viewerTitle string
-	viewerLines []string
+	// user can peek at it without leaving the TUI. viewerScroll is the
+	// zero-based index into viewerLines of the topmost VISIBLE row;
+	// the modal renders `viewerLines[viewerScroll : viewerScroll+window]`.
+	// Wired to ↑/↓/PgUp/PgDn/Home/End in the modal's input handler.
+	viewerOpen   bool
+	viewerTitle  string
+	viewerLines  []string
+	viewerScroll int
 
 	flash    string
 	flashEnd time.Time
@@ -204,6 +217,35 @@ const (
 // entry. Older caches still render immediately but trigger a
 // background refresh so the user sees latest state on the next tick.
 const agentsCacheTTL = 10 * time.Minute
+
+// sessionsViewMode controls how an Agents sub-tab renders its rows
+// (dense per-row table vs bordered tile grid). The name is historical
+// — sessions were the first sub-tab to ship a tile view — but the
+// type is reused for every sub-tab's tile toggle, keyed by sub-tab
+// id on agentsState.subTabViewMode.
+type sessionsViewMode int
+
+// Session view modes.
+const (
+	sessionsViewList  sessionsViewMode = 0 // default — dense table
+	sessionsViewTiles sessionsViewMode = 1 // bordered tile grid
+)
+
+// next returns the view mode that follows v in the toggle cycle.
+func (v sessionsViewMode) next() sessionsViewMode {
+	if v == sessionsViewList {
+		return sessionsViewTiles
+	}
+	return sessionsViewList
+}
+
+// label returns a short human label for the current view mode.
+func (v sessionsViewMode) label() string {
+	if v == sessionsViewTiles {
+		return "tiles"
+	}
+	return "list"
+}
 
 const (
 	agentsSubMarketplaces = 0
@@ -440,12 +482,10 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, nil
 	}
 
-	// Viewer modal closes on Esc/Enter/q.
+	// Viewer modal owns input while open: Esc/Enter/q close, the
+	// arrow / page / Home / End family scrolls the transcript.
 	if st.viewerOpen {
-		switch msg.String() {
-		case "esc", "enter", "q":
-			st.viewerOpen = false
-		}
+		handleViewerScrollKey(st, msg)
 		return true, nil
 	}
 	// Bulk-confirmation prompt owns input while open.
@@ -535,6 +575,29 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			agentsClearSelection(st, st.subTab)
 			return true, nil
 		}
+	}
+
+	// Shift+A on any bulk-capable sub-tab selects every currently-
+	// visible row (after filter / search / sort). Combined with
+	// Shift+X (delete) this gives the user a two-step "delete all
+	// visible sessions" path without a new dedicated key. The
+	// confirmation prompt that fires from agentsBulkActionForKey
+	// surfaces the count so the user sees how many rows will be
+	// affected before committing.
+	if msg.String() == "A" && agentsBulkCapable(st.subTab) {
+		rows := m.agentsVisibleRows()
+		if len(rows) == 0 {
+			st.flash = "no rows to select"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		sel := agentsSelected(st, st.subTab)
+		for _, r := range rows {
+			sel[r.id] = true
+		}
+		st.flash = fmt.Sprintf("selected all %d visible rows", len(rows))
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
 	}
 
 	switch msg.String() {
@@ -819,7 +882,7 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			st.flashEnd = time.Now().Add(2 * time.Second)
 			return true, nil
 		}
-		lines, err := readSessionTranscript(path, 60)
+		lines, err := readSessionTranscript(path, transcriptReadLimit)
 		if err != nil {
 			st.flash = "view error: " + err.Error()
 			st.flashEnd = time.Now().Add(3 * time.Second)
@@ -828,6 +891,7 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		st.viewerOpen = true
 		st.viewerTitle = path
 		st.viewerLines = lines
+		st.viewerScroll = 0
 		return true, nil
 	case "o":
 		// Open the current row's primary URL in the user's browser.
@@ -875,6 +939,24 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		// Full-text search overlay across every indexed transcript
 		// (Shift+S — `/` stays as the per-tab fuzzy filter).
 		return true, m.agentsSearchOpenCmd()
+	case "t":
+		// View mode toggle — list ↔ tiles. Works on every Agents
+		// list sub-tab (marketplaces / plugins / skills / MCPs /
+		// sessions). Costs and Health have custom layouts and
+		// ignore the binding silently.
+		//
+		// `v` is already taken by "View transcript", so the toggle
+		// lives on `t` for "tiles / table".
+		if st.subTab == agentsSubCosts || st.subTab == agentsSubHealth {
+			return true, nil
+		}
+		if st.subTabViewMode == nil {
+			st.subTabViewMode = make(map[int]sessionsViewMode)
+		}
+		st.subTabViewMode[st.subTab] = st.subTabViewMode[st.subTab].next()
+		st.flash = "view: " + st.subTabViewMode[st.subTab].label()
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
 	case "r":
 		st.loading = true
 		st.flash = "refreshing…"
@@ -1002,8 +1084,15 @@ func (st *agentsState) setSubTab(i int) {
 	st.subTab = i
 	st.cursor = 0
 	st.detailOpen = false
-	// Sidebar is sub-tab-specific — recompute items when switching.
-	if st.sidebarOpen {
+	// Sidebar is sub-tab-specific (Marketplaces gets STATUS+PROVIDER,
+	// MCPs gets STATUS+TRANSPORT+SCOPE+PROVIDER, etc.) and is
+	// rendered next to the row table whether or not the picker (`f`)
+	// is open. Rebuild items unconditionally so the visible passive
+	// sidebar always matches the active sub-tab — gating this on
+	// sidebarOpen left stale headers (e.g. an MCP-only TRANSPORT
+	// row lingering on the Plugins sub-tab) for users who switched
+	// tabs without ever opening the picker.
+	if st.snapshot != nil {
 		st.sidebarItems = buildAgentsSidebarItems(st)
 		st.sidebarIdx = 0
 		for k, it := range st.sidebarItems {
@@ -1071,6 +1160,25 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		if st.sidebarOpen || len(st.sidebarItems) > 0 {
 			st.sidebarItems = buildAgentsSidebarItems(st)
 		}
+		// Prune any detail-stack frames whose entity disappeared from
+		// the refreshed snapshot (e.g. the user just deleted the
+		// session that was open in detail view). Without this the
+		// detail page renders "entity no longer present — press Esc
+		// to return" until the user manually dismisses it, which is
+		// noise: the action they took succeeded, and the screen
+		// should follow them back to the list automatically.
+		if st.detailPage && len(st.detailStack) > 0 {
+			pruned := st.detailStack[:0]
+			for _, frame := range st.detailStack {
+				if _, ok := m.resolveDetailRow(frame); ok {
+					pruned = append(pruned, frame)
+				}
+			}
+			st.detailStack = pruned
+			if len(st.detailStack) == 0 {
+				st.detailPage = false
+			}
+		}
 		return true, nil
 	case agentsLaunchedMsg:
 		if v.err != nil {
@@ -1084,7 +1192,15 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		if v.err != nil {
 			st.flash = "delete failed: " + v.err.Error()
 			st.flashEnd = time.Now().Add(4 * time.Second)
-			return true, nil
+			// Refresh anyway: a "not found" / "already deleted"
+			// error often means our snapshot was stale (or the
+			// user already removed the dir out of band). Without
+			// the reload the failing row stays visibly on screen
+			// forever and the user can't tell whether the action
+			// took. The error toast still surfaces the underlying
+			// failure for cases where the delete genuinely failed
+			// (permissions, disk full, etc.).
+			return true, loadAgentsCmd(true)
 		}
 		st.flash = fmt.Sprintf("deleted %s %s", v.typ, v.id)
 		st.flashEnd = time.Now().Add(3 * time.Second)
@@ -1094,7 +1210,11 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		if v.err != nil {
 			st.flash = "✗ " + v.label + ": " + v.err.Error()
 			st.flashEnd = time.Now().Add(5 * time.Second)
-			return true, nil
+			// Same recovery pattern as agentsDeletedMsg: refresh on
+			// error so a stale row whose backing state already
+			// changed (e.g. plugin uninstalled out of band) doesn't
+			// linger on screen.
+			return true, loadAgentsCmd(true)
 		}
 		st.flash = "✓ " + v.label
 		st.flashEnd = time.Now().Add(3 * time.Second)
@@ -1109,6 +1229,7 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		st.viewerOpen = true
 		st.viewerTitle = v.path
 		st.viewerLines = v.lines
+		st.viewerScroll = 0
 		return true, nil
 	case agentLaunchPlanMsg:
 		st.actionRunning = ""
@@ -1585,8 +1706,22 @@ func (m *Model) renderAgentsView() string {
 		b.WriteString("  filter: " + st.searchInput + "  " + dimVersion.Render("/ edit · esc clear"))
 		b.WriteString("\n")
 	default:
-		// Single, subtle hint — full keymap lives behind ?.
-		b.WriteString("  " + dimVersion.Render("/ filter · s sort · S search transcripts · ? help") + "\n")
+		// Single, subtle hint — full keymap lives behind ?. Every
+		// list sub-tab gets the `t` toggle hint with its current
+		// label so users see at a glance what mode they're in.
+		hint := "/ filter · s sort · S search transcripts · ? help"
+		if st.subTab != agentsSubCosts && st.subTab != agentsSubHealth {
+			label := st.subTabViewMode[st.subTab].label()
+			hint = "/ filter · s sort · t " + label + " view · S search · ? help"
+		}
+		if st.subTab == agentsSubSessions {
+			// Surface the bulk-delete shortcut so users discover it
+			// without selecting first: Shift+A picks every visible
+			// session, then Shift+X deletes the lot. The pair is
+			// the "delete all visible sessions" recipe.
+			hint = "/ filter · v view · Shift+A select all · Shift+X delete sel · ? help"
+		}
+		b.WriteString("  " + dimVersion.Render(hint) + "\n")
 	}
 
 	// Active-filter chip row — only rendered when at least one filter
@@ -1633,6 +1768,20 @@ func (m *Model) renderAgentsView() string {
 		return b.String()
 	}
 
+	// Transcript viewer modal replaces the table body. The previous
+	// implementation appended the modal after the table at the very
+	// bottom — but the outer view wrapper clips the rendered body
+	// from the bottom to fit `visibleRows`, which dropped the modal
+	// off-screen. Render it as the body instead so it always sits
+	// inside the visible viewport.
+	if st.viewerOpen {
+		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines, st.viewerScroll, m.width, m.height))
+		if st.flash != "" && time.Now().Before(st.flashEnd) {
+			b.WriteString("\n  " + st.flash + "\n")
+		}
+		return b.String()
+	}
+
 	rows := m.agentsVisibleRows()
 	if len(rows) == 0 {
 		switch st.subTab {
@@ -1662,7 +1811,31 @@ func (m *Model) renderAgentsView() string {
 	if maxRows < 6 {
 		maxRows = 6
 	}
-	visible, windowStart, displayCursor, hiddenAbove, hiddenBelow := windowAgentRows(rows, st.cursor, maxRows)
+	// Tile mode budgets differently: each card is `tileHeight` rows
+	// tall and we lay them out in 1–3 columns. Translate the visual
+	// row budget into an entity-count budget so windowAgentRows
+	// returns enough rows to fill the available tile rows without
+	// overflowing them. Reserve 2 lines for the up/down indicator
+	// rows ("↑ N above" / "↓ N below") so a near-full grid with
+	// both indicators visible doesn't push past maxRows and get
+	// clipped mid-card.
+	tileCols := 1
+	if st.subTabViewMode[st.subTab] == sessionsViewTiles {
+		tileTotalW := m.width - agentsSidebarColWidth - 3
+		_, cols := chooseTileLayout(tileTotalW)
+		tileCols = cols
+		const tileIndicatorBudget = 2
+		tileRows := (maxRows - tileIndicatorBudget) / tileHeight
+		if tileRows < 1 {
+			tileRows = 1
+		}
+		maxRows = tileRows * cols
+	}
+	// In tile mode we snap the window start to a column boundary
+	// (tileCols) so navigating doesn't reshuffle the visible tiles
+	// every keystroke. For the dense table tileCols==1 makes this
+	// a no-op vs. the original centred-cursor behaviour.
+	visible, windowStart, displayCursor, hiddenAbove, hiddenBelow := windowAgentRowsAligned(rows, st.cursor, maxRows, tileCols)
 	_ = windowStart
 
 	// Build the table area into its own buffer so we can lay it out
@@ -1671,7 +1844,20 @@ func (m *Model) renderAgentsView() string {
 	if hiddenAbove > 0 {
 		fmt.Fprintf(&tbl, "  %s\n", dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)))
 	}
-	tbl.WriteString(renderAgentsTable(st.subTab, visible, displayCursor, st.sortMode[st.subTab], m.width-agentsSidebarColWidth-3))
+	// On every Agents list sub-tab, the user can toggle between the
+	// dense table and a tile grid via the `t` keybinding. Sessions
+	// keeps its own session-specific tile renderer; other sub-tabs
+	// use the generic agents-entity tile renderer (marketplaces,
+	// plugins, skills, MCPs).
+	if st.subTabViewMode[st.subTab] == sessionsViewTiles {
+		if st.subTab == agentsSubSessions {
+			tbl.WriteString(renderSessionTiles(visible, displayCursor, m.width-agentsSidebarColWidth-3))
+		} else {
+			tbl.WriteString(renderAgentsTiles(visible, displayCursor, m.width-agentsSidebarColWidth-3))
+		}
+	} else {
+		tbl.WriteString(renderAgentsTable(st.subTab, visible, displayCursor, st.sortMode[st.subTab], m.width-agentsSidebarColWidth-3))
+	}
 	if hiddenBelow > 0 {
 		fmt.Fprintf(&tbl, "  %s\n", dimVersion.Render(fmt.Sprintf("↓ %d below", hiddenBelow)))
 	}
@@ -1719,27 +1905,24 @@ func (m *Model) renderAgentsView() string {
 	}
 
 	if st.deleteTarget != "" {
-		b.WriteString("\n  ╔ Confirm delete ══════════════════════════════════════╗\n")
-		b.WriteString("  ║ Delete " + st.deleteTarget + "?\n")
-		b.WriteString("  ║ y/Enter = delete · n/Esc = cancel\n")
-		b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
+		b.WriteString("\n")
+		b.WriteString(renderConfirmModal(
+			"⚠ Confirm delete",
+			"Delete "+st.deleteTarget+"?\nThis action cannot be undone.",
+			"y/Enter = delete · n/Esc = cancel",
+			m.width,
+		))
+		b.WriteString("\n")
 	}
 
 	if st.bulkPrompt != "" {
-		b.WriteString(renderBulkConfirmPrompt(st))
+		b.WriteString(renderBulkConfirmPrompt(st, m.width))
 	}
 
-	if st.viewerOpen {
-		b.WriteString("\n  ╔ Transcript ══════════════════════════════════════════╗\n")
-		b.WriteString("  ║ " + truncAgentRow(st.viewerTitle, 64) + "\n")
-		b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
-		for _, line := range st.viewerLines {
-			b.WriteString("  ║ " + truncAgentRow(line, 80) + "\n")
-		}
-		b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
-		b.WriteString("  ║ Esc / Enter / q = close\n")
-		b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
-	}
+	// Note: when st.viewerOpen is true we render the viewer earlier
+	// (above the rows table) and return immediately, so we don't
+	// append it again here — the previous trailing block was clipped
+	// off-screen by the outer view's bottom-truncating fitter.
 
 	if st.noteOpen {
 		b.WriteString(renderAgentNotePrompt(st))
@@ -1759,6 +1942,253 @@ func renderAgentNotePrompt(st *agentsState) string {
 	b.WriteString("  ║ " + dimVersion.Render("Enter = save · Esc = cancel · Backspace = edit") + "\n")
 	b.WriteString("  ╚════════════════════════════════════════════════════════╝\n")
 	return b.String()
+}
+
+// renderTranscriptViewer renders the session-transcript viewer modal.
+// Both the list view (renderAgentsView) and the detail page
+// (renderAgentsDetailPage) call this when st.viewerOpen is true.
+//
+// History: the original implementation drew a hand-rolled box with
+// hard-coded 56-char top/bottom borders and 80-char content
+// truncation, then was APPENDED at the very bottom of the body —
+// past the height-padding in renderAgentsDetailPage and past
+// fitToVisibleRows' bottom-clip in renderAgentsView. Both paths
+// pushed the modal off-screen entirely.
+//
+// The current implementation uses lipgloss' `RoundedBorder()` and
+// `Width(totalWidth - 4)` so the borders always align with the
+// terminal width, drops the hard-coded truncation in favour of
+// truncating to the actual available content width, and colours
+// each row by its role chip (`user` / `assistant` / `tool`) for
+// the same hierarchy the search-overlay viewer provides. Callers
+// render the box in place of the body content (like the existing
+// searchOverlay pattern) so it always lands inside the visible
+// viewport.
+//
+// scroll is the zero-based index of the topmost visible row;
+// totalHeight is the terminal height (used to budget how many
+// transcript rows fit). Both are bounded internally — scroll past
+// the end pins to the last visible window; a zero/unknown height
+// falls back to a sensible default so a hidden terminal-size
+// resize doesn't blank the modal.
+func renderTranscriptViewer(title string, lines []string, scroll, totalWidth, totalHeight int) string {
+	if totalWidth <= 0 {
+		totalWidth = 80
+	}
+	const minWidth = 40
+	if totalWidth < minWidth {
+		totalWidth = minWidth
+	}
+	boxWidth := totalWidth - 4
+	// Inner content width: lipgloss Padding(0, 1) eats 1 cell each
+	// side, the rounded border eats 1 cell each side. Used to size
+	// the per-row text so a "[user] …" line fits without wrapping.
+	innerW := boxWidth - 4
+	if innerW < 20 {
+		innerW = 20
+	}
+
+	// Budget the visible rows: terminal height minus surrounding
+	// chrome (tab strip + sub-tab + status + filter + footer = ~10
+	// rows) minus the box's own header / blank / footer / border
+	// (~7 rows). Floor at 5 so very small terminals still show
+	// something useful. Default to 20 when totalHeight is 0 (e.g.
+	// in tests).
+	visRows := totalHeight - 17
+	if totalHeight <= 0 {
+		visRows = 20
+	}
+	if visRows < 5 {
+		visRows = 5
+	}
+
+	box := lipgloss.NewStyle().
+		Foreground(cyberFG).
+		Background(cyberSelectedBg).
+		BorderForeground(cyberAccent).
+		BorderStyle(lipgloss.RoundedBorder()).
+		Padding(0, 1).
+		Width(boxWidth)
+
+	header := lipgloss.NewStyle().Bold(true).Foreground(cyberPrimary).Render("📜 Transcript") +
+		"  " + dimVersion.Render(truncAgentRow(title, innerW-16))
+
+	out := []string{header, ""}
+
+	if len(lines) == 0 {
+		out = append(out,
+			dimVersion.Render("(empty transcript — no events recorded yet)"),
+			"",
+			dimVersion.Render("0 lines · Esc / Enter / q = close"))
+		return box.Render(strings.Join(out, "\n"))
+	}
+
+	// Clamp scroll so a stale value doesn't render a blank viewer.
+	if scroll < 0 {
+		scroll = 0
+	}
+	if scroll >= len(lines) {
+		scroll = len(lines) - 1
+	}
+	end := scroll + visRows
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	for i := scroll; i < end; i++ {
+		out = append(out, renderTranscriptRow(lines[i], innerW))
+	}
+
+	// Surface scroll position + key hints in the footer so the user
+	// always knows where they are in the conversation and how to
+	// move. Mirrors the dimVersion hint pattern used elsewhere.
+	hint := fmt.Sprintf("lines %d-%d / %d · ↑/↓ scroll · PgUp/PgDn page · g/G top/bottom · Esc close",
+		scroll+1, end, len(lines))
+	out = append(out, "", dimVersion.Render(hint))
+	return box.Render(strings.Join(out, "\n"))
+}
+
+// renderTranscriptRow colours a single transcript line based on the
+// role prefix that renderTranscriptLine emits (`[user]`, `[assistant]`,
+// `[tool]`). Lines without a recognised prefix fall through with
+// the dim foreground so JSONL noise (rare in practice) is still
+// readable but visually demoted.
+func renderTranscriptRow(line string, innerW int) string {
+	role, rest := splitTranscriptRolePrefix(line)
+	if role == "" {
+		// No recognised prefix — render as dim raw text.
+		return lipgloss.NewStyle().Foreground(cyberFGDim).
+			Render(truncAgentRow(line, innerW))
+	}
+	chip := transcriptRoleChip(role)
+	// innerW budget: chip + 1-space gap + text.
+	textW := innerW - lipgloss.Width(chip) - 1
+	if textW < 8 {
+		textW = 8
+	}
+	textStyle := lipgloss.NewStyle().Foreground(cyberFG)
+	if role == "tool" {
+		textStyle = textStyle.Foreground(cyberFGDim)
+	}
+	return chip + " " + textStyle.Render(truncAgentRow(rest, textW))
+}
+
+// splitTranscriptRolePrefix splits a "[role] body" line produced by
+// renderTranscriptLine into (role, body). Returns ("", line) when
+// the line doesn't start with a recognised role prefix.
+func splitTranscriptRolePrefix(line string) (role, rest string) {
+	switch {
+	case strings.HasPrefix(line, "[user] "):
+		return "user", strings.TrimPrefix(line, "[user] ")
+	case strings.HasPrefix(line, "[assistant] "):
+		return "assistant", strings.TrimPrefix(line, "[assistant] ")
+	case strings.HasPrefix(line, "[tool]"):
+		// renderTranscriptLine emits "[tool]      Name(...)" with
+		// extra padding so a column aligns in plain text — strip it.
+		rest := strings.TrimPrefix(line, "[tool]")
+		return "tool", strings.TrimLeft(rest, " ")
+	}
+	return "", line
+}
+
+// handleViewerScrollKey routes a keypress while the transcript
+// viewer modal is open. Esc/Enter/q close the modal; the cursor
+// keys + Page/Home/End move viewerScroll. Called by both the
+// list-view and the detail-page input handlers so they share the
+// same scroll semantics.
+//
+// The page step is a heuristic (8 lines): the viewer renders an
+// arbitrary slice of viewerLines and doesn't know its visible
+// height at input time (terminal size lives on the Model, not on
+// agentsState). 8 is large enough to feel like a page on small
+// terminals and short enough that the cursor doesn't jump past
+// the visible window on tall ones.
+func handleViewerScrollKey(st *agentsState, msg tea.KeyMsg) {
+	const pageStep = 8
+	switch msg.String() {
+	case "esc", "enter", "q":
+		st.viewerOpen = false
+		return
+	case "down", "j":
+		clampViewerScroll(st, st.viewerScroll+1)
+	case "up", "k":
+		clampViewerScroll(st, st.viewerScroll-1)
+	case "pgdown", "pagedown", "ctrl+f", " ":
+		clampViewerScroll(st, st.viewerScroll+pageStep)
+	case "pgup", "pageup", "ctrl+b":
+		clampViewerScroll(st, st.viewerScroll-pageStep)
+	case "home", "g":
+		st.viewerScroll = 0
+	case "end", "G":
+		// Scroll to bottom — clampViewerScroll pins to a sane max.
+		clampViewerScroll(st, len(st.viewerLines))
+	}
+}
+
+// clampViewerScroll constrains viewerScroll to a valid index. It
+// never lets the user scroll past the last line (which would
+// render an empty viewer); the lower bound is always 0.
+func clampViewerScroll(st *agentsState, want int) {
+	if want < 0 {
+		want = 0
+	}
+	maxScroll := len(st.viewerLines) - 1
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if want > maxScroll {
+		want = maxScroll
+	}
+	st.viewerScroll = want
+}
+
+// renderConfirmModal renders the shared yes/no confirmation card
+// used by every modal prompt in the Agents tab (delete, bulk
+// action, etc.). Replaces the per-prompt hand-rolled ASCII boxes
+// that had three structural problems: hard-coded border widths
+// that didn't match the terminal, no right border on content rows
+// (so long messages bled past the visible edge), and no way to
+// surface a multi-line description without breaking alignment.
+//
+// `title` is the bold header (e.g. "Confirm delete"); `message`
+// is the user-facing question (can be multi-line — `\n` separates
+// rows and each row is truncated to fit the inner width); `hint`
+// is the dim key-hint line at the bottom (e.g.
+// "y/Enter = delete · n/Esc = cancel").
+//
+// `totalWidth` is the terminal width; the card sizes itself to
+// `totalWidth - 4` so the rounded border lines up cleanly with the
+// surrounding chrome.
+func renderConfirmModal(title, message, hint string, totalWidth int) string {
+	if totalWidth <= 0 {
+		totalWidth = 80
+	}
+	const minWidth = 40
+	if totalWidth < minWidth {
+		totalWidth = minWidth
+	}
+	boxWidth := totalWidth - 4
+	innerW := boxWidth - 4 // padding + border
+	if innerW < 20 {
+		innerW = 20
+	}
+
+	box := lipgloss.NewStyle().
+		Foreground(cyberFG).
+		Background(cyberSelectedBg).
+		BorderForeground(cyberAccent).
+		BorderStyle(lipgloss.RoundedBorder()).
+		Padding(0, 1).
+		Width(boxWidth)
+
+	header := lipgloss.NewStyle().Bold(true).Foreground(cyberPrimary).Render(title)
+
+	rows := []string{header, ""}
+	for _, line := range strings.Split(message, "\n") {
+		rows = append(rows, truncAgentRow(line, innerW))
+	}
+	rows = append(rows, "", dimVersion.Render(hint))
+	return box.Render(strings.Join(rows, "\n"))
 }
 
 func truncAgentRow(s string, n int) string {
@@ -1885,7 +2315,20 @@ func computeColumnWidths(cols []column, totalWidth int) []column {
 	gaps := gap * (len(out) - 1)
 	available := totalWidth - leadPad - fixed - gaps
 	if available < minGrow {
-		available = minGrow
+		// CRITICAL: if minGrow would push the row past totalWidth,
+		// every row wraps to 2 visual rows and the footer alignment
+		// math (which budgets visibleRows based on line count, not
+		// visual rows) falls apart. The Sessions sub-tab hit this
+		// at any terminal width up to ~145 cols because it has
+		// 8 columns / 7 gaps + an em-dash heavy table. Better to
+		// squeeze the grow column hard than to wrap the whole row.
+		//
+		// Floor at 0 (not 1) so totalWidth that exactly equals the
+		// fixed+gaps total still doesn't overflow — the grow column
+		// just disappears.
+		if available < 0 {
+			available = 0
+		}
 	}
 	out[growIdx].width = available
 	return out
@@ -2012,6 +2455,23 @@ func sortColumnFor(subTab int, mode agentsSortMode) int {
 // and returns the slice plus the cursor position within the slice and
 // the counts hidden above/below for the scroll indicators.
 func windowAgentRows(rows []agentRow, cursor, maxRows int) (visible []agentRow, start, displayCursor, hiddenAbove, hiddenBelow int) {
+	return windowAgentRowsAligned(rows, cursor, maxRows, 1)
+}
+
+// windowAgentRowsAligned is the tile-aware variant of windowAgentRows.
+// When `colAlign` > 1 (used by the tile grid renderers), `start` is
+// snapped to a multiple of colAlign so the visible window scrolls
+// by full rows of tiles rather than one tile at a time.
+//
+// Bug history: with the old centred-cursor windowing, moving the
+// cursor by one tile in a 3-column grid shifted every visible tile
+// diagonally — A,B,C / D,E,F / G,H,I became B,C,D / E,F,G / H,I,J
+// on a single ↓ keypress. Users couldn't track the cursor because
+// every tile reshuffled position underneath them. Snapping start
+// to a column boundary keeps the grid stationary until the cursor
+// actually leaves the visible window, then pages by a full row of
+// tiles.
+func windowAgentRowsAligned(rows []agentRow, cursor, maxRows, colAlign int) (visible []agentRow, start, displayCursor, hiddenAbove, hiddenBelow int) {
 	n := len(rows)
 	if n == 0 {
 		return nil, 0, 0, 0, 0
@@ -2025,6 +2485,9 @@ func windowAgentRows(rows []agentRow, cursor, maxRows int) (visible []agentRow, 
 	if n <= maxRows {
 		return rows, 0, cursor, 0, 0
 	}
+	if colAlign < 1 {
+		colAlign = 1
+	}
 
 	// Center the cursor in the window when possible.
 	start = cursor - maxRows/2
@@ -2034,7 +2497,26 @@ func windowAgentRows(rows []agentRow, cursor, maxRows int) (visible []agentRow, 
 	if start+maxRows > n {
 		start = n - maxRows
 	}
+	// Snap start to a row boundary so a multi-column tile grid
+	// shifts by whole rows. For 1-column callers (the dense table)
+	// colAlign==1 makes this a no-op.
+	if colAlign > 1 {
+		start = (start / colAlign) * colAlign
+		if start+maxRows > n {
+			// After snapping, the window might extend past the
+			// end. Pull start back to the last aligned position
+			// that still fits, but never go past 0.
+			lastAligned := ((n - maxRows) / colAlign) * colAlign
+			if lastAligned < 0 {
+				lastAligned = 0
+			}
+			start = lastAligned
+		}
+	}
 	end := start + maxRows
+	if end > n {
+		end = n
+	}
 	visible = rows[start:end]
 	displayCursor = cursor - start
 	hiddenAbove = start
@@ -2443,13 +2925,17 @@ func renderAgentDetail(r agentRow, snap *agents.Snapshot) string {
 			_, _ = fmt.Fprintf(tw, "  turns\t%d\n", s.TurnCount)
 		}
 		if s.ProjectPath != "" {
-			_, _ = fmt.Fprintf(tw, "  project\t%s\n", s.ProjectPath)
+			_, _ = fmt.Fprintf(tw, "  project\t%s\n", truncAgentRow(s.ProjectPath, 80))
 		}
 		if s.Title != "" {
-			_, _ = fmt.Fprintf(tw, "  title\t%s\n", s.Title)
+			// Cap the title so a long first-user-message doesn't wrap
+			// across two visual rows and throw off footer alignment.
+			// 80 chars is a generous cap that still reads as the first
+			// sentence of an intent on every reasonable terminal width.
+			_, _ = fmt.Fprintf(tw, "  title\t%s\n", truncAgentRow(s.Title, 80))
 		}
 		if s.TranscriptPath != "" {
-			_, _ = fmt.Fprintf(tw, "  transcript\t%s\n", s.TranscriptPath)
+			_, _ = fmt.Fprintf(tw, "  transcript\t%s\n", truncAgentRow(s.TranscriptPath, 80))
 		}
 	default:
 		_, _ = fmt.Fprintf(tw, "  id\t%s\n", r.id)
@@ -2767,33 +3253,280 @@ func cycleMarketplaceFilter(current string, available []string) string {
 	return available[0]
 }
 
-// readSessionTranscript reads at most `max` lines from a session
-// transcript file. Returns the lines so the viewer modal can render them.
+// readSessionTranscript reads at most `max` rendered lines from a
+// session transcript and returns them ready for the viewer modal.
+//
+// When given a directory, looks for the canonical Copilot
+// `events.jsonl` first; if that's missing, falls back to the most
+// recently modified `*.jsonl` in the directory (Claude project
+// dirs follow this layout — one file per session UUID).
+//
+// Each entry in the transcript is a JSON event. The viewer doesn't
+// need the raw envelope — it needs the conversation. We parse each
+// line and extract just the user-friendly bits:
+//
+//   - Claude `user` / `assistant` messages → `[role] <first text>`
+//   - Claude `tool_use` blocks → `[tool] <name>(<arg-summary>)`
+//   - Copilot `user.message` / `assistant.message` → same shape
+//   - Other event types (queue-operation, hook_success, telemetry)
+//     → skipped, since they're noise to the human reader
+//
+// Lines that don't parse as JSON fall through unchanged (capped at
+// 4 KiB) so non-JSONL transcripts (legacy formats) still show up.
+// Each rendered line is capped at 200 chars so a single event with
+// a multi-megabyte payload can't blow up the viewer's layout.
 func readSessionTranscript(path string, limit int) ([]string, error) {
 	st, err := os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
 	if st.IsDir() {
-		path = filepath.Join(path, "events.jsonl")
+		if eventsPath := filepath.Join(path, "events.jsonl"); fileExists(eventsPath) {
+			path = eventsPath
+		} else if newest := newestJSONL(path); newest != "" {
+			path = newest
+		} else {
+			return nil, fmt.Errorf("no transcript file found in %s", path)
+		}
 	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	const maxRenderedLine = 200
 	var lines []string
-	br := bufio.NewReader(f)
-	for i := 0; i < limit; i++ {
-		line, err := br.ReadString('\n')
-		if line != "" {
-			lines = append(lines, strings.TrimRight(line, "\r\n"))
+	for scanner.Scan() && len(lines) < limit {
+		raw := scanner.Bytes()
+		rendered := renderTranscriptLine(raw)
+		if rendered == "" {
+			continue
 		}
-		if err != nil {
-			break
+		if len(rendered) > maxRenderedLine {
+			rendered = rendered[:maxRenderedLine-1] + "…"
 		}
+		lines = append(lines, rendered)
 	}
 	return lines, nil
+}
+
+// renderTranscriptLine turns one raw JSONL transcript line into a
+// human-friendly string. Returns "" for lines the viewer should skip
+// (telemetry, hooks, mode changes — anything that isn't part of the
+// conversation).
+//
+// Format:
+//
+//	[user]      <text>
+//	[assistant] <text>
+//	[tool]      <name>(<first-arg>)
+//
+// When the JSON has neither a recognised user/assistant message nor
+// a tool_use, returns "" to skip the line.
+func renderTranscriptLine(raw []byte) string {
+	// Skip non-JSON noise (rare but possible for legacy transcripts).
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		if len(raw) > 200 {
+			return string(raw[:199]) + "…"
+		}
+		return string(raw)
+	}
+
+	// Single struct that fits both Claude and Copilot shapes — we use
+	// only the fields that are present for the role we're looking at.
+	//
+	// `message.content` is intentionally json.RawMessage: in real
+	// Claude transcripts it appears in TWO shapes — a plain string
+	// (`"content":"hi there"`, the dominant case for user-typed
+	// messages) AND an array of typed blocks (`"content":[{"type":
+	// "text",...}]`, used for assistant turns and tool calls).
+	// Declaring it as `[]struct{...}` made json.Unmarshal fail with
+	// a type mismatch on every string-form line, which was returned
+	// as "" and silently dropped — so the viewer rendered an empty
+	// box for sessions where the user-typed messages dominated. We
+	// now branch on the first byte of the raw value to handle both.
+	var ev struct {
+		Type    string `json:"type"`
+		Message struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		} `json:"message"`
+		// Copilot wraps everything in data.message.{text,content}.
+		Data struct {
+			Message struct {
+				Role    string `json:"role"`
+				Text    string `json:"text"`
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &ev); err != nil {
+		// Malformed JSON (typically a partially-written tail line
+		// from an in-progress session). The doc contract for this
+		// function is "lines that don't parse fall through unchanged
+		// at 4 KiB" — so don't silently drop, surface the raw text
+		// (capped) so the user still sees that something happened.
+		const maxRaw = 4096
+		if len(raw) > maxRaw {
+			return string(raw[:maxRaw-1]) + "…"
+		}
+		return string(raw)
+	}
+
+	switch ev.Type {
+	case "user", "assistant":
+		role := ev.Type
+		text, tool := extractClaudeContent(ev.Message.Content)
+		if tool != "" {
+			return tool
+		}
+		if text != "" {
+			return "[" + role + "] " + collapseWhitespace(text)
+		}
+		return ""
+	case "user.message", "assistant.message":
+		role := "user"
+		if ev.Type == "assistant.message" {
+			role = "assistant"
+		}
+		text := ev.Data.Message.Text
+		if text == "" {
+			text = ev.Data.Message.Content
+		}
+		if text == "" {
+			return ""
+		}
+		return "[" + role + "] " + collapseWhitespace(text)
+	}
+	return ""
+}
+
+// extractClaudeContent unpacks the polymorphic `message.content`
+// field from a Claude transcript event. Returns (text, toolLine):
+//   - text:     non-empty when the content was a plain string OR an
+//     array containing a text block. The caller wraps it
+//     in the role prefix.
+//   - toolLine: a fully-rendered "[tool] name(arg)" string when the
+//     content was an array containing a tool_use block.
+//     When non-empty the caller uses it verbatim and
+//     ignores `text`.
+//
+// Returns ("", "") when the content is empty, neither shape, or
+// only contains blocks the viewer should skip (e.g. tool_result
+// payloads belong to the tool, not the conversation).
+func extractClaudeContent(raw json.RawMessage) (text, toolLine string) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return "", ""
+	}
+	// String form: `"content":"plain text from the user"`. This is
+	// the dominant case for user-typed messages and was the source
+	// of the viewer-is-blank bug before the json.RawMessage switch.
+	if trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err == nil {
+			return s, ""
+		}
+		return "", ""
+	}
+	// Array form: walk blocks for the first text or tool_use.
+	if trimmed[0] == '[' {
+		var blocks []struct {
+			Type  string                 `json:"type"`
+			Text  string                 `json:"text"`
+			Name  string                 `json:"name"`
+			Input map[string]interface{} `json:"input"`
+		}
+		if err := json.Unmarshal(trimmed, &blocks); err != nil {
+			return "", ""
+		}
+		for _, c := range blocks {
+			switch c.Type {
+			case "text":
+				if c.Text != "" {
+					return c.Text, ""
+				}
+			case "tool_use":
+				return "", "[tool]      " + c.Name + "(" + summariseInput(c.Input) + ")"
+			}
+		}
+	}
+	return "", ""
+}
+
+// summariseInput renders a tool input map as a short summary like
+// `path="src/foo.go"`. Picks the first value-bearing key from a fixed
+// short list of common ones; falls back to "..." when nothing useful
+// is present.
+func summariseInput(in map[string]interface{}) string {
+	for _, key := range []string{"file_path", "path", "notebook_path", "command", "query", "pattern", "url"} {
+		if v, ok := in[key]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				if len(s) > 60 {
+					s = s[:59] + "…"
+				}
+				return key + "=" + strconv.Quote(s)
+			}
+		}
+	}
+	return "..."
+}
+
+// collapseWhitespace flattens \r\n\t into single spaces so a single
+// transcript line stays on a single visual row.
+func collapseWhitespace(s string) string {
+	var b strings.Builder
+	prevSpace := false
+	for _, r := range s {
+		if r == '\r' || r == '\n' || r == '\t' || r == ' ' {
+			if !prevSpace {
+				b.WriteByte(' ')
+				prevSpace = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		prevSpace = false
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// fileExists is a tiny stat-only helper so readSessionTranscript can
+// distinguish "events.jsonl missing" from "events.jsonl unreadable".
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// newestJSONL returns the path to the most recently modified `.jsonl`
+// file in `dir`, or the empty string when none exist. Used by the
+// transcript viewer to surface the most recent Claude project
+// session when the project dir doesn't carry the canonical
+// `events.jsonl` filename.
+func newestJSONL(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var newest string
+	var newestTime time.Time
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		fi, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if newest == "" || fi.ModTime().After(newestTime) {
+			newest = filepath.Join(dir, e.Name())
+			newestTime = fi.ModTime()
+		}
+	}
+	return newest
 }
 
 // deleteAgentEntityCmd builds the Bubbletea command that deletes a

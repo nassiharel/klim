@@ -26,12 +26,10 @@ func (m *Model) handleAgentsDetailKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	}
 
 	// Viewer/launch/delete modals overlay the detail page; let them own
-	// input the same way the list view does.
+	// input the same way the list view does. The viewer also gets
+	// the arrow / page / Home / End keys for scrolling.
 	if st.viewerOpen {
-		switch msg.String() {
-		case "esc", "enter", "q":
-			st.viewerOpen = false
-		}
+		handleViewerScrollKey(st, msg)
 		return true, nil
 	}
 	if st.launchPrompt != "" {
@@ -291,18 +289,27 @@ func (m *Model) renderAgentsDetailPage() string {
 	}
 	b.WriteString("\n\n")
 
-	// Metadata section
-	b.WriteString(renderAgentDetailFull(row, st.snapshot))
-	b.WriteString("\n")
+	// Viewer modal takes over the body when open. It used to be
+	// appended AFTER the body was padded to fill the terminal —
+	// which pushed the modal off-screen entirely, so users saw
+	// nothing when they triggered View Transcript. Render it
+	// inline now so it sits within the visible body window.
+	if st.viewerOpen {
+		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines, st.viewerScroll, m.width, m.height))
+	} else {
+		// Metadata section
+		b.WriteString(renderAgentDetailFull(row, st.snapshot))
+		b.WriteString("\n")
 
-	// Action bar
-	b.WriteString(renderAgentActionBar(actions, top.actionIdx, m.width))
-	b.WriteString("\n")
+		// Action bar
+		b.WriteString(renderAgentActionBar(actions, top.actionIdx, m.width))
+		b.WriteString("\n")
 
-	// Contextual body
-	body := renderAgentDetailBody(m, top, row)
-	if body != "" {
-		b.WriteString(body)
+		// Contextual body
+		body := renderAgentDetailBody(m, top, row)
+		if body != "" {
+			b.WriteString(body)
+		}
 	}
 
 	// Footer hints + running/flash. Captured separately so we can
@@ -395,17 +402,11 @@ func (m *Model) renderAgentsDetailPage() string {
 		b.WriteString("  ║ y/Enter = run · n/Esc = cancel\n")
 		b.WriteString("  ╚════════════════════════════════════════════════════╝\n")
 	}
-	if st.viewerOpen {
-		b.WriteString("\n  ╔ Transcript ══════════════════════════════════════════╗\n")
-		b.WriteString("  ║ " + truncAgentRow(st.viewerTitle, 64) + "\n")
-		b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
-		for _, line := range st.viewerLines {
-			b.WriteString("  ║ " + truncAgentRow(line, 80) + "\n")
-		}
-		b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
-		b.WriteString("  ║ Esc / Enter / q = close\n")
-		b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
-	}
+	// (Viewer modal is rendered inline at the top of the body via
+	// renderTranscriptViewer when st.viewerOpen is set — no trailing
+	// modal block is needed here. A previous version appended one,
+	// but it lived past the body's height-padding and was therefore
+	// never on-screen.)
 	if st.promotePicker.Open {
 		b.WriteString(renderAgentsPromotePicker(st, m.width))
 	}

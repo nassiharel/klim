@@ -164,3 +164,175 @@ func TestProvider_UpdatePlugin_UnsupportedSurfacesClearError(t *testing.T) {
 		t.Errorf("got err=%v, want 'update not supported by copilot-cli'", err)
 	}
 }
+
+// TestProvider_DeleteSession_RemovesDirectory verifies the Copilot
+// DeleteSession path: Copilot CLI 1.x has no `session delete`
+// subcommand, so we delete the on-disk session-state dir directly
+// instead of shelling out (which would print "Invalid command format"
+// to the TUI's inherited stderr and leave the session intact).
+//
+// Covers all three layout candidates Sessions() supports, plus the
+// "not found" error path so callers see a clean message instead of
+// silent success.
+func TestProvider_DeleteSession_RemovesDirectory(t *testing.T) {
+	for _, layout := range []string{"session-state", "sessions", "state"} {
+		t.Run(layout, func(t *testing.T) {
+			home := t.TempDir()
+			sid := "0596511c-4387-4cc2-8d08-4302511cc586"
+			dir := filepath.Join(home, layout, sid)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte("{}\n"), 0o644); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			p := &Provider{HomeOverride: home}
+
+			if err := p.DeleteSession(context.Background(), "copilot:"+sid); err != nil {
+				t.Fatalf("DeleteSession: %v", err)
+			}
+			if _, err := os.Stat(dir); !os.IsNotExist(err) {
+				t.Errorf("expected dir removed, got stat err=%v", err)
+			}
+		})
+	}
+}
+
+func TestProvider_DeleteSession_MissingReturnsError(t *testing.T) {
+	home := t.TempDir()
+	p := &Provider{HomeOverride: home}
+	err := p.DeleteSession(context.Background(), "copilot:does-not-exist")
+	if err == nil {
+		t.Fatal("expected error for missing session, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("err=%v, want 'not found'", err)
+	}
+}
+
+func TestProvider_DeleteSession_EmptyIDIsError(t *testing.T) {
+	p := &Provider{HomeOverride: t.TempDir()}
+	err := p.DeleteSession(context.Background(), "copilot:")
+	if err == nil {
+		t.Fatal("expected error for empty id, got nil")
+	}
+}
+
+// TestProvider_DeleteSession_LeavesOtherSessions covers the
+// blast-radius worry: removing one session must NOT touch others
+// that happen to share the parent directory. The most common failure
+// mode would be a path-construction bug that lands on the parent
+// itself.
+func TestProvider_DeleteSession_LeavesOtherSessions(t *testing.T) {
+	home := t.TempDir()
+	keep := filepath.Join(home, "session-state", "keep-me")
+	doomed := filepath.Join(home, "session-state", "doomed")
+	for _, d := range []string{keep, doomed} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+	}
+	p := &Provider{HomeOverride: home}
+
+	if err := p.DeleteSession(context.Background(), "copilot:doomed"); err != nil {
+		t.Fatalf("DeleteSession: %v", err)
+	}
+	if _, err := os.Stat(doomed); !os.IsNotExist(err) {
+		t.Errorf("doomed dir not removed: %v", err)
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Errorf("kept dir was unexpectedly removed: %v", err)
+	}
+}
+
+// TestProvider_DeleteSession_RejectsPathTraversal pins the
+// path-traversal guard added in response to PR #93 review. An id
+// containing a path separator, "..", or a non-canonical form must
+// be rejected BEFORE filepath.Join + os.RemoveAll get a chance to
+// escape the Copilot home root.
+func TestProvider_DeleteSession_RejectsPathTraversal(t *testing.T) {
+	home := t.TempDir()
+	// A canary directory OUTSIDE the Copilot home that a successful
+	// traversal would delete. If the guard fails, this disappears.
+	canary := filepath.Join(filepath.Dir(home), "canary")
+	if err := os.MkdirAll(canary, 0o755); err != nil {
+		t.Fatalf("mkdir canary: %v", err)
+	}
+	p := &Provider{HomeOverride: home}
+
+	cases := []struct {
+		name string
+		id   string
+	}{
+		{"parent dir", ".."},
+		{"current dir", "."},
+		{"forward slash", "foo/bar"},
+		{"backslash", `foo\bar`},
+		{"escaping slash", "../canary"},
+		{"escaping backslash", `..\canary`},
+		{"deep escape", "../../etc/passwd"},
+		{"trailing slash", "foo/"},
+		{"leading slash", "/abs/path"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := p.DeleteSession(context.Background(), "copilot:"+tc.id)
+			if err == nil {
+				t.Fatalf("expected error for id %q, got nil", tc.id)
+			}
+			if !strings.Contains(err.Error(), "invalid") {
+				t.Errorf("err=%v, want 'invalid' in message", err)
+			}
+		})
+	}
+	// Canary must still exist after every rejection.
+	if _, err := os.Stat(canary); err != nil {
+		t.Fatalf("canary was unexpectedly removed: %v", err)
+	}
+}
+
+// TestQuoteForShell pins the POSIX single-quote escaping that
+// quoteForShell uses for paths embedded in RestartCommand. The
+// previous double-quote approach allowed `$`, backticks, and
+// `$(...)` to expand when pasted into a POSIX shell — a
+// command-injection vector when ProjectPath was attacker-controlled.
+// Single quotes inhibit ALL expansion so the snippet is safe to
+// paste even with hostile metacharacters.
+func TestQuoteForShell(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", `''`},
+		{"plain", "abc", "abc"},
+		{"absolute path no spaces", "/home/user/repo", "/home/user/repo"},
+		{"with space", "my repo", `'my repo'`},
+		{"with dollar sign", "$HOME/x", `'$HOME/x'`},
+		{"with backtick", "a`whoami`b", `'a` + "`whoami`" + `b'`},
+		{"with cmd subst", "x$(rm -rf /)y", `'x$(rm -rf /)y'`},
+		{"with semicolon", "a;rm -rf /;b", `'a;rm -rf /;b'`},
+		{"with pipe", "a|b", `'a|b'`},
+		{"with ampersand", "a&b", `'a&b'`},
+		{"with single quote", "it's", `'it'\''s'`},
+		{"with double quote", `say "hi"`, `'say "hi"'`},
+		{"with newline", "a\nb", "'a\nb'"},
+		{"with glob", "*.go", `'*.go'`},
+		// Bash with interactive history expansion (the default on
+		// interactive prompts) and zsh both expand unquoted `!`
+		// sequences when the snippet is pasted at a prompt — exactly
+		// the use case for RestartCommand. Single-quote wrapping
+		// (the slow path) suppresses the expansion across both
+		// shells; unquoted, `!!` becomes the previous command and
+		// can change the pasted line's meaning entirely.
+		{"with bang", "a!b", `'a!b'`},
+		{"with bang history-expand sequence", "echo !!", `'echo !!'`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := quoteForShell(tc.in); got != tc.want {
+				t.Errorf("quoteForShell(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}

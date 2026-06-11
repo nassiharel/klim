@@ -254,7 +254,7 @@ func TestSessionMarshalJSON_OmitsZeroTimes(t *testing.T) {
 		t.Fatalf("Marshal: %v", err)
 	}
 	out := string(raw)
-	if strings.Contains(out, "Created") || strings.Contains(out, "LastModified") {
+	if strings.Contains(out, "created") || strings.Contains(out, "last_modified") {
 		t.Errorf("zero time fields should be omitted; got %s", out)
 	}
 	if strings.Contains(out, "0001-01-01") {
@@ -271,7 +271,53 @@ func TestSessionMarshalJSON_KeepsNonZeroTimes(t *testing.T) {
 		t.Fatalf("Marshal: %v", err)
 	}
 	out := string(raw)
-	if !strings.Contains(out, "Created") || !strings.Contains(out, "LastModified") {
+	if !strings.Contains(out, `"created":`) || !strings.Contains(out, `"last_modified":`) {
 		t.Errorf("non-zero time fields should be present; got %s", out)
+	}
+}
+
+// TestSessionMarshalJSON_UsesSnakeCaseKeys pins the unified schema:
+// every Session field — both original (id, name, project_path,
+// created, …) and enrichment (live_state, recent_activity, …) —
+// serialises as snake_case. Before this fix the encoder mixed the
+// two: original fields used Go field names (ID, ProjectPath, …) and
+// only enrichment fields had explicit json tags, which is a
+// confusing schema for `--output json` consumers.
+func TestSessionMarshalJSON_UsesSnakeCaseKeys(t *testing.T) {
+	s := Session{
+		ID:          "s1",
+		Name:        "name",
+		Provider:    ProviderClaudeCode,
+		ProjectPath: "/dev/klim",
+		TurnCount:   3,
+		Title:       "fix",
+		Source:      SourceLocalClaude,
+	}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	out := string(raw)
+	for _, want := range []string{
+		`"id":`,
+		`"name":`,
+		`"provider":`,
+		`"project_path":`,
+		`"turn_count":`,
+		`"title":`,
+		`"source":`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected snake_case key %s in output; got %s", want, out)
+		}
+	}
+	for _, banned := range []string{
+		`"ID":`,
+		`"ProjectPath":`,
+		`"TurnCount":`,
+	} {
+		if strings.Contains(out, banned) {
+			t.Errorf("legacy Go-cased key %s leaked; got %s", banned, out)
+		}
 	}
 }

@@ -32,6 +32,7 @@ type claudeMessageEnvelope struct {
 type claudeContentBlock struct {
 	Type string `json:"type"`
 	Text string `json:"text"`
+	Name string `json:"name"` // tool_use.name; only present for tool_use blocks
 }
 
 // SessionTexts walks every `~/.claude/projects/<encoded>/*.jsonl` and

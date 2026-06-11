@@ -283,15 +283,270 @@ type pluginManifest struct {
 	Keywords   []string `json:"keywords,omitempty"`
 }
 
-// Plugins discovers installed plugins by scanning the marketplace
-// clones. Real Claude Code layout nests plugins under
-// `<mp>/plugins/<plugin>` and `<mp>/external_plugins/<plugin>`; older
-// test fixtures put them at `<mp>/<plugin>` directly. We accept all
-// three.
+// installedPluginRecord mirrors one entry in the array under each
+// plugin key in ~/.claude/plugins/installed_plugins.json.
+type installedPluginRecord struct {
+	Scope        string `json:"scope"`
+	InstallPath  string `json:"installPath"`
+	Version      string `json:"version"`
+	InstalledAt  string `json:"installedAt"`
+	LastUpdated  string `json:"lastUpdated"`
+	GitCommitSha string `json:"gitCommitSha"`
+}
+
+// installedPluginsFile mirrors ~/.claude/plugins/installed_plugins.json.
+type installedPluginsFile struct {
+	Version int                                `json:"version"`
+	Plugins map[string][]installedPluginRecord `json:"plugins"`
+}
+
+// readInstalledPlugins reads ~/.claude/plugins/installed_plugins.json
+// and returns a map keyed by "<name>@<marketplace>" -> first install
+// record (the array supports multi-scope but in practice has one entry).
+//
+// Returns nil if the file is missing or unreadable; callers should treat
+// nil as "no info — fall back to scanning disk" so legacy fixtures and
+// fresh installs without the registry file continue to surface plugins.
+func (p *Provider) readInstalledPlugins() map[string]installedPluginRecord {
+	cd := p.claudeDir()
+	if cd == "" {
+		return nil
+	}
+	data, err := os.ReadFile(filepath.Join(cd, "plugins", "installed_plugins.json"))
+	if err != nil {
+		return nil
+	}
+	var f installedPluginsFile
+	if err := json.Unmarshal(data, &f); err != nil {
+		return nil
+	}
+	out := make(map[string]installedPluginRecord, len(f.Plugins))
+	for key, records := range f.Plugins {
+		if len(records) == 0 {
+			// Present but empty array — still record key presence so the
+			// caller treats it as installed (even without metadata).
+			out[key] = installedPluginRecord{}
+			continue
+		}
+		out[key] = records[0]
+	}
+	return out
+}
+
+// readEnabledPlugins merges enabledPlugins maps from ~/.claude/settings.json
+// and ~/.claude/settings.local.json (local takes precedence per key).
+// Returns nil when neither file yields any entries; callers should
+// default a plugin's Enabled field to true in that case.
+//
+// TODO: settings files may technically contain JSONC (// comments).
+// We use plain json.Unmarshal here — if that becomes an issue, swap in
+// a JSONC-tolerant parser.
+func (p *Provider) readEnabledPlugins() map[string]bool {
+	cd := p.claudeDir()
+	if cd == "" {
+		return nil
+	}
+	out := map[string]bool{}
+	// Order matters: local is read after global so it overrides per-key.
+	for _, name := range []string{"settings.json", "settings.local.json"} {
+		data, err := os.ReadFile(filepath.Join(cd, name))
+		if err != nil {
+			continue
+		}
+		var doc struct {
+			EnabledPlugins map[string]bool `json:"enabledPlugins"`
+		}
+		if err := json.Unmarshal(data, &doc); err != nil {
+			continue
+		}
+		for k, v := range doc.EnabledPlugins {
+			out[k] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// Plugins returns the plugins Claude Code considers installed.
+//
+// The authoritative source is ~/.claude/plugins/installed_plugins.json,
+// whose entries pair a `<name>@<marketplace>` key with the on-disk
+// install path. Real-world Claude installs put the plugin's actual
+// code under
+// ~/.claude/plugins/cache/<mp>/<name>/<version>/.claude-plugin/plugin.json
+// — NOT under the marketplaces clone — so this is the only path we
+// can rely on to find the manifest of a real installed plugin.
+//
+// We support three layouts in priority order:
+//
+//  1. installed_plugins.json drives discovery (real installs).
+//     For each entry we read the manifest from `installPath` and
+//     fall back to walking the marketplace clone if it's missing,
+//     and finally synthesize minimal metadata from the registry
+//     record when no manifest exists anywhere (some installs leave
+//     only LICENSE/README in the cache dir).
+//
+//  2. Legacy marketplace scan (fixture-based tests / fresh installs
+//     without installed_plugins.json). Walks
+//     `<mp>/<plugin>`, `<mp>/plugins/<plugin>`,
+//     `<mp>/external_plugins/<plugin>` for `plugin.json` manifests
+//     and treats every discovered manifest as installed.
 func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
+	enabled := p.readEnabledPlugins()
+	installed := p.readInstalledPlugins()
+
+	if len(installed) > 0 {
+		return p.pluginsFromInstalledRegistry(installed, enabled), nil
+	}
+	return p.pluginsFromMarketplaceScan(enabled), nil
+}
+
+// pluginsFromInstalledRegistry produces the plugin slice from the
+// `installed_plugins.json` registry. The registry is the single
+// source of truth Claude consults for `claude plugin ...` commands,
+// so anything in it is "installed" by definition — even when the
+// manifest is missing on disk (some installs only ship LICENSE +
+// README into the cache dir; we still need to surface the row).
+func (p *Provider) pluginsFromInstalledRegistry(
+	installed map[string]installedPluginRecord,
+	enabled map[string]bool,
+) []agents.Plugin {
+	plugins := make([]agents.Plugin, 0, len(installed))
+	for key, rec := range installed {
+		name, mp := splitInstalledKey(key)
+		if name == "" {
+			continue
+		}
+
+		// Try the manifest at installPath first (real install), then
+		// fall back to a marketplace clone (less common but supported
+		// by some plugins). Either way the manifest's fields take
+		// precedence over the registry record — the registry doesn't
+		// carry author / description / homepage.
+		var m *pluginManifest
+		var manifestDir string
+		if rec.InstallPath != "" {
+			if mm, err := readPluginManifest(filepath.Join(rec.InstallPath, ".claude-plugin", "plugin.json")); err == nil {
+				m = mm
+				manifestDir = rec.InstallPath
+			}
+		}
+		if m == nil {
+			if mm, dir := p.findManifestInMarketplaces(name, mp); mm != nil {
+				m = mm
+				manifestDir = dir
+			}
+		}
+
+		// Synthesize a minimal manifest when neither the install dir
+		// nor any marketplace clone has one. Without this fallback the
+		// row would silently disappear from `klim agents plugins list`
+		// — the opposite of useful for a user trying to inspect what
+		// Claude has installed.
+		if m == nil {
+			m = &pluginManifest{Name: name, Version: rec.Version}
+		}
+		if m.Version == "" {
+			m.Version = rec.Version
+		}
+		if manifestDir == "" {
+			manifestDir = rec.InstallPath
+		}
+
+		scope := agents.ScopeUser
+		if strings.EqualFold(rec.Scope, "project") {
+			scope = agents.ScopeProject
+		}
+
+		plugins = append(plugins, p.buildPlugin(m, mp, manifestDir, scope, isEnabledForKey(enabled, key)))
+	}
+	sort.Slice(plugins, func(i, j int) bool { return plugins[i].Name < plugins[j].Name })
+	return plugins
+}
+
+// splitInstalledKey parses a `name@marketplace` registry key. Plugin
+// names can technically contain `@` themselves (rare), so we split on
+// the LAST `@` to keep `super@cool@my-marketplace` parsable.
+func splitInstalledKey(key string) (name, marketplace string) {
+	at := strings.LastIndex(key, "@")
+	if at <= 0 || at == len(key)-1 {
+		return "", ""
+	}
+	return key[:at], key[at+1:]
+}
+
+// isEnabledForKey returns the Enabled value for a registry key.
+// When the key isn't in the enabled map at all, we default to true:
+// Claude treats a missing entry as enabled.
+func isEnabledForKey(enabled map[string]bool, key string) bool {
+	if v, ok := enabled[key]; ok {
+		return v
+	}
+	return true
+}
+
+// buildPlugin assembles the agents.Plugin record from a manifest +
+// the metadata we already know about its installation. Centralised
+// so the registry-driven and marketplace-scan code paths produce
+// structurally identical Plugin records — the only path-specific
+// inputs are the manifest, the marketplace name, the install path,
+// the scope, and the enabled flag.
+func (p *Provider) buildPlugin(m *pluginManifest, marketplace, installPath string, scope agents.Scope, enabled bool) agents.Plugin {
+	return agents.Plugin{
+		ID:          marketplace + "/" + m.Name,
+		Name:        m.Name,
+		Description: m.Description,
+		Version:     m.Version,
+		Author:      m.Author.Name,
+		Homepage:    m.Homepage,
+		Repository:  m.Repository,
+		License:     m.License,
+		Keywords:    m.Keywords,
+		Provider:    p.ID(),
+		Marketplace: marketplace,
+		Installed:   true,
+		Enabled:     enabled,
+		InstallPath: installPath,
+		Scope:       scope,
+		Source:      agents.SourceLocalClaude,
+	}
+}
+
+// findManifestInMarketplaces locates a plugin.json for the given
+// (name, marketplace) pair by walking the marketplaces clone tree.
+// Used as a fallback when the registry's installPath doesn't contain
+// a manifest — historically some plugins shipped the manifest only in
+// the marketplace tree.
+func (p *Provider) findManifestInMarketplaces(name, marketplace string) (*pluginManifest, string) {
+	for _, root := range p.marketplaceRoots() {
+		mpDir := filepath.Join(root, marketplace)
+		candidates := []string{
+			filepath.Join(mpDir, name),
+			filepath.Join(mpDir, "plugins", name),
+			filepath.Join(mpDir, "external_plugins", name),
+		}
+		for _, dir := range candidates {
+			if m, err := readPluginManifest(filepath.Join(dir, ".claude-plugin", "plugin.json")); err == nil {
+				return m, dir
+			}
+		}
+	}
+	return nil, ""
+}
+
+// pluginsFromMarketplaceScan walks every marketplace clone and emits
+// a plugin per `.claude-plugin/plugin.json` it finds. Treats every
+// discovered manifest as installed — the legacy behavior preserved
+// for fixture-based tests and fresh installs that don't yet have an
+// `installed_plugins.json`.
+//
+// This path is NOT reached when `installed_plugins.json` exists; the
+// registry-driven path handles real installs (see Plugins).
+func (p *Provider) pluginsFromMarketplaceScan(enabled map[string]bool) []agents.Plugin {
 	var plugins []agents.Plugin
 	seen := make(map[string]bool)
-
 	for _, root := range p.marketplaceRoots() {
 		mEntries, err := os.ReadDir(root)
 		if err != nil {
@@ -303,8 +558,6 @@ func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
 			}
 			mpName := mp.Name()
 			mpDir := filepath.Join(root, mpName)
-
-			// Candidate plugin parent dirs within a marketplace clone.
 			candidates := []string{
 				mpDir,                                    // legacy: <mp>/<plugin>
 				filepath.Join(mpDir, "plugins"),          // real: first-party plugins
@@ -330,30 +583,15 @@ func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
 						continue
 					}
 					seen[id] = true
-					plugins = append(plugins, agents.Plugin{
-						ID:          id,
-						Name:        m.Name,
-						Description: m.Description,
-						Version:     m.Version,
-						Author:      m.Author.Name,
-						Homepage:    m.Homepage,
-						Repository:  m.Repository,
-						License:     m.License,
-						Keywords:    m.Keywords,
-						Provider:    p.ID(),
-						Marketplace: mpName,
-						Installed:   true,
-						Enabled:     true,
-						InstallPath: pluginDir,
-						Scope:       agents.ScopeUser,
-						Source:      agents.SourceLocalClaude,
-					})
+
+					key := m.Name + "@" + mpName
+					plugins = append(plugins, p.buildPlugin(m, mpName, pluginDir, agents.ScopeUser, isEnabledForKey(enabled, key)))
 				}
 			}
 		}
 	}
 	sort.Slice(plugins, func(i, j int) bool { return plugins[i].Name < plugins[j].Name })
-	return plugins, nil
+	return plugins
 }
 
 // pluginCacheRoots returns parent dirs that may contain marketplace
@@ -620,16 +858,40 @@ func redactHeaders(in map[string]string) map[string]string {
 // ---------- Sessions ----------
 
 // Sessions enumerates per-project directories under ~/.claude/projects/.
-// Exact session-transcript filename format is undocumented [TBV]; we
-// expose each project as one "latest session" entry with last-modified
-// times pulled from the project dir mtime.
+// Each project dir contains one or more `<sessionId>.jsonl` transcripts.
+// We pick the most recently modified transcript per project as that
+// project's "current" session, then parse it (via enrichSessionFromJSONL)
+// to populate dashboard fields: title, created/last-modified times,
+// turn count, live state, recent activity, tool counts, MCP servers,
+// branch, group, and a paste-ready restart command.
+//
+// Identifier convention (important — read before changing):
+//
+//   - s.ID stays `"claude:" + e.Name()`, where e.Name() is the
+//     URL-encoded project directory name (e.g. `C--dev-klim`). This
+//     is the form `claude project purge <decoded-path>` understands
+//     and what the TUI's Delete action passes through to
+//     [Provider.DeleteSession].
+//   - s.Name carries the in-file session UUID (when discoverable).
+//     This is what `claude -r <uuid>` expects for resume. Both the
+//     CLI and TUI launch paths read it via [Provider.BuildLaunch].
+//   - s.TranscriptPath remains the project directory, so the TUI's
+//     "Open Dir" action lands in the right folder. View Transcript
+//     handles the directory case by looking for the newest `*.jsonl`
+//     inside.
+//
+// Sessions are returned sorted by LastModified descending.
 func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	dir := filepath.Join(p.claudeDir(), "projects")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil // no projects yet — empty is fine
 	}
+
+	now := time.Now()
 	var sessions []agents.Session
+	bin := p.binary() // empty when claude isn't on PATH — RestartCommand falls back to "claude"
+
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -640,16 +902,144 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 			continue
 		}
 		decoded := decodeProjectPath(e.Name())
-		sessions = append(sessions, agents.Session{
+		s := agents.Session{
 			ID:             "claude:" + e.Name(),
 			Provider:       p.ID(),
 			ProjectPath:    decoded,
 			LastModified:   fi.ModTime(),
 			TranscriptPath: full,
 			Source:         agents.SourceLocalClaude,
-		})
+		}
+
+		// Parse the most recent transcript for enrichment. When no
+		// .jsonl exists (fresh project dir, or pre-1.0 layout) we
+		// fall back to the dir-mtime baseline above.
+		if tr := latestTranscript(full); tr != "" {
+			scan := enrichSessionFromJSONL(tr, now)
+			// Surface the in-file UUID via s.Name so BuildLaunch
+			// (and any other UUID-needing consumer) can find it
+			// without re-parsing the transcript. s.ID stays the
+			// URL-encoded dir name — see the Sessions godoc above.
+			if scan.SessionID != "" {
+				s.Name = scan.SessionID
+			}
+			if scan.Cwd != "" {
+				s.ProjectPath = scan.Cwd
+			}
+			if scan.Branch != "" {
+				s.Branch = scan.Branch
+			}
+			if scan.FirstUserMsg != "" {
+				s.Title = scan.FirstUserMsg
+			}
+			if !scan.Created.IsZero() {
+				s.Created = scan.Created
+			}
+			if !scan.LastSeen.IsZero() {
+				s.LastModified = scan.LastSeen
+			}
+			agents.ApplyEnrichment(&s, scan.Result)
+		}
+
+		// Status fallback: when no terminal event fired, treat the
+		// session as active so the dashboard's --status=active filter
+		// surfaces it. Sessions without any transcript stay
+		// SessionStatusUnknown.
+		if s.Status == agents.SessionStatusUnknown && (s.LiveState != agents.StateUnknown || !s.LastModified.IsZero()) {
+			s.Status = agents.SessionStatusActive
+		}
+
+		if s.Type == "" {
+			s.Type = "interactive"
+		}
+
+		// Build the copy-paste resume command. Prefer the in-file
+		// UUID (s.Name) since that's what `claude -r` expects; fall
+		// back to the dir-name form if no UUID was parsed (very old
+		// transcripts).
+		resumeID := s.Name
+		if resumeID == "" {
+			resumeID = strings.TrimPrefix(s.ID, "claude:")
+		}
+		cli := bin
+		if cli == "" {
+			cli = "claude"
+		}
+		if s.ProjectPath != "" {
+			s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume " + resumeID
+		} else {
+			s.RestartCommand = cli + " --resume " + resumeID
+		}
+
+		// Repository name (best-effort).
+		if s.Repository == "" && s.ProjectPath != "" {
+			s.Repository = filepath.Base(filepath.Clean(s.ProjectPath))
+		}
+
+		sessions = append(sessions, s)
 	}
+	sort.SliceStable(sessions, func(i, j int) bool {
+		return sessions[i].LastModified.After(sessions[j].LastModified)
+	})
 	return sessions, nil
+}
+
+// quoteForShell renders `s` so it can be pasted into a POSIX shell
+// without further interpretation. Uses single-quote escaping: wraps
+// the whole string in single quotes and replaces any interior single
+// quote with the four-character sequence  ' \ ' '  (close the quoted
+// run, escape one literal quote, re-open the quoted run). Inside
+// single quotes, nothing is expanded — no `$VAR`, no `$(...)`, no
+// backticks, no globs — so this is the safe choice for a copy/paste
+// snippet that must survive arbitrary metacharacters in ProjectPath.
+//
+// IMPORTANT — POSIX shells only:
+//
+//   - PowerShell uses `""` (doubled) or a backtick to escape an
+//     embedded single quote, NOT the close/escape/reopen trick.
+//     Users on Windows are expected to copy the cwd separately or
+//     use the dashboard's resume action (which goes through
+//     Provider.BuildLaunch for a no-shell exec, no quoting needed
+//     at all).
+//   - For non-POSIX shells the safer path is to display the cwd as
+//     a separate field; we keep the snippet to ease the common
+//     POSIX terminal case.
+//
+// The RestartCommand field is intended for copy-to-clipboard only;
+// the dashboard's resume action no longer pipes it through /bin/sh.
+// If a future caller wants to actually execute this snippet, use
+// Provider.BuildLaunch instead — it returns (bin, args, cwd) for
+// a no-shell exec.
+func quoteForShell(s string) string {
+	if s == "" {
+		return `''`
+	}
+	// Fast path: no shell-meaningful characters → no quoting needed.
+	//
+	// `!` is treated as unsafe even though it's inert under
+	// non-interactive shells: bash with history expansion enabled
+	// (the default on interactive prompts) and zsh both expand
+	// unquoted `!` sequences when the snippet is pasted at a
+	// terminal — which is exactly the use case for RestartCommand.
+	// Single-quote wrapping (the slow path below) suppresses history
+	// expansion across both shells.
+	safe := true
+	for _, r := range s {
+		if r == ' ' || r == '\t' || r == '\n' || r == '\'' || r == '"' ||
+			r == '$' || r == '`' || r == '\\' || r == '|' || r == '&' ||
+			r == ';' || r == '<' || r == '>' || r == '(' || r == ')' ||
+			r == '*' || r == '?' || r == '[' || r == ']' || r == '{' ||
+			r == '}' || r == '#' || r == '~' || r == '!' {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	// Single-quote wrap. Interior single quotes use the close /
+	// escape-quote / re-open dance described above.
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // decodeProjectPath converts Claude's URL-encoded project directory
@@ -771,13 +1161,82 @@ func (p *Provider) EnableMCP(ctx context.Context, name string, enabled bool) err
 	return agents.ErrNotSupported
 }
 
-// DeleteSession deletes a session via the provider CLI.
+// DeleteSession purges a Claude project's transcripts via
+// `claude project purge <path> -y`.
+//
+// The session ID we receive is `"claude:" + <encoded-dir-name>` where
+// the dir name was created by Claude with a lossy encoding (every
+// path separator → "-"), so we can't faithfully reverse it. Instead
+// we read the project dir's most recent transcript and pull the
+// authoritative cwd out of it. Falls back to a literal decode of the
+// dir name as a last resort.
+//
+// We pass `-y` so claude doesn't prompt for interactive confirmation —
+// callers from the TUI control their own confirm-modal, and stdio
+// inheritance during a Bubbletea program corrupts the rendered view.
+// stdout/stderr are CAPTURED (not inherited) for the same reason; on
+// failure the captured output becomes part of the returned error so
+// users still see what went wrong.
 func (p *Provider) DeleteSession(ctx context.Context, id string) error {
-	// Claude exposes session purge via `claude project purge <path>`.
-	// id here is the URL-encoded directory name from Sessions().
 	id = strings.TrimPrefix(id, "claude:")
-	decoded := decodeProjectPath(id)
-	return p.runCLI(ctx, "project", "purge", decoded)
+	cwd := p.resolveProjectCwd(id)
+	if cwd == "" {
+		cwd = decodeProjectPath(id)
+	}
+	return p.runCLISilent(ctx, "project", "purge", cwd, "-y")
+}
+
+// resolveProjectCwd returns the authoritative project path for a
+// Claude session dir by peeking at the first 20 events of the dir's
+// most recent transcript. Empty when no transcript / no cwd found.
+//
+// Mirrors resolveSessionUUID's lookup strategy so both stay cheap.
+func (p *Provider) resolveProjectCwd(dirName string) string {
+	projectDir := filepath.Join(p.claudeDir(), "projects", dirName)
+	tr := latestTranscript(projectDir)
+	if tr == "" {
+		return ""
+	}
+	f, err := os.Open(tr)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	dec := json.NewDecoder(f)
+	for i := 0; i < 20; i++ {
+		var ev struct {
+			Cwd string `json:"cwd"`
+		}
+		if err := dec.Decode(&ev); err != nil {
+			return ""
+		}
+		if ev.Cwd != "" {
+			return ev.Cwd
+		}
+	}
+	return ""
+}
+
+// runCLISilent invokes the provider CLI without inheriting stdio.
+// stdout/stderr are captured and folded into the returned error on
+// failure. Used by mutations that may run while the TUI is on screen
+// (DeleteSession, etc.) — stdio inheritance would otherwise corrupt
+// the Bubbletea screen.
+func (p *Provider) runCLISilent(ctx context.Context, args ...string) error {
+	bin := p.binary()
+	if bin == "" {
+		return agents.ErrProviderNotInstalled
+	}
+	cmd := exec.CommandContext(ctx, bin, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		trimmed := strings.TrimSpace(string(out))
+		if trimmed == "" {
+			return err
+		}
+		return fmt.Errorf("%w: %s", err, trimmed)
+	}
+	return nil
 }
 
 func (p *Provider) runCLI(ctx context.Context, args ...string) error {
@@ -792,6 +1251,14 @@ func (p *Provider) runCLI(ctx context.Context, args ...string) error {
 }
 
 // BuildLaunch constructs the exec plan for a LaunchSpec.
+//
+// For session resumes, Claude's `-r` flag expects the session UUID
+// (e.g. `3b4dc369-3956-…`), not the URL-encoded project directory
+// name we use for s.ID. When the SessionID we receive looks like a
+// directory name (contains `--` or `%2F`), we look up the most
+// recently modified `.jsonl` in that project directory and pull the
+// UUID out of it. Falls back to the raw trimmed string for legacy
+// callers passing a bare UUID.
 func (p *Provider) BuildLaunch(spec agents.LaunchSpec) (agents.ExecPlan, error) {
 	bin := p.binary()
 	if bin == "" {
@@ -801,8 +1268,12 @@ func (p *Provider) BuildLaunch(spec agents.LaunchSpec) (agents.ExecPlan, error) 
 	note := "Start a Claude Code session"
 	switch {
 	case spec.SessionID != "":
-		id := strings.TrimPrefix(spec.SessionID, "claude:")
-		args = append(args, "-r", id)
+		raw := strings.TrimPrefix(spec.SessionID, "claude:")
+		uuid := p.resolveSessionUUID(raw)
+		if uuid == "" {
+			uuid = raw
+		}
+		args = append(args, "-r", uuid)
 		note = "Resume Claude Code session"
 	case spec.SkillName != "":
 		// Claude has no `--skill` flag; we open a new session and the
@@ -821,6 +1292,51 @@ func (p *Provider) BuildLaunch(spec agents.LaunchSpec) (agents.ExecPlan, error) 
 		Cwd:  spec.Cwd,
 		Note: note,
 	}, nil
+}
+
+// resolveSessionUUID maps a Claude session ID (which may be either
+// a bare UUID or the URL-encoded directory name like `C--dev-klim`)
+// to the in-file session UUID by reading the directory's most recent
+// transcript. Returns the empty string when the lookup fails — the
+// caller should fall back to using the raw input.
+//
+// Best-effort: any I/O or parse error returns "" and the caller
+// proceeds with whatever it had. The cost is one stat + one small
+// JSON decode of the first event line, so this stays cheap even when
+// called from interactive paths.
+func (p *Provider) resolveSessionUUID(idOrDir string) string {
+	// Already a UUID? UUIDs have 4 dashes and no double-dash, so a
+	// `--` substring is a strong dirname signal.
+	if !strings.Contains(idOrDir, "--") && !strings.Contains(idOrDir, "%2F") {
+		return idOrDir
+	}
+	projectDir := filepath.Join(p.claudeDir(), "projects", idOrDir)
+	tr := latestTranscript(projectDir)
+	if tr == "" {
+		return ""
+	}
+	f, err := os.Open(tr)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	dec := json.NewDecoder(f)
+	// Walk a handful of events: some early events (queue-operation
+	// telemetry) carry the sessionId before any user/assistant
+	// message arrives. Cap the search so a transcript with no
+	// sessionId at all doesn't read the whole file.
+	for i := 0; i < 20; i++ {
+		var ev struct {
+			SessionID string `json:"sessionId"`
+		}
+		if err := dec.Decode(&ev); err != nil {
+			return ""
+		}
+		if ev.SessionID != "" {
+			return ev.SessionID
+		}
+	}
+	return ""
 }
 
 // Provider compile-time check.
