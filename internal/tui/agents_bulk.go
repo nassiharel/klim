@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -74,11 +73,11 @@ func agentsBulkSummary(st *agentsState) string {
 func bulkHintFor(subTab int) string {
 	switch subTab {
 	case agentsSubPlugins:
-		return "Shift+I install · Shift+U update · Shift+X uninstall · Esc clear"
+		return "Shift+A all · Shift+I install · Shift+U update · Shift+X uninstall · Esc clear"
 	case agentsSubMCPs:
-		return "Shift+E enable · Shift+D disable · Shift+R remove · Esc clear"
+		return "Shift+A all · Shift+E enable · Shift+D disable · Shift+R remove · Esc clear"
 	case agentsSubSessions:
-		return "Shift+B bookmark · Shift+X delete · Esc clear"
+		return "Shift+A all · Shift+B bookmark · Shift+X delete · Esc clear"
 	}
 	return ""
 }
@@ -214,14 +213,14 @@ func agentsBulkRenderSummary(st *agentsState) string {
 	return agentsBulkSummary(st)
 }
 
-func renderBulkConfirmPrompt(st *agentsState) string {
+func renderBulkConfirmPrompt(st *agentsState, totalWidth int) string {
 	if st.bulkPrompt == "" {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString("\n  ╔ Confirm bulk action ════════════════════════════════════╗\n")
-	b.WriteString("  ║ " + st.bulkPrompt + "\n")
-	b.WriteString("  ║ y/Enter = apply · n/Esc = cancel\n")
-	b.WriteString("  ╚══════════════════════════════════════════════════════════╝\n")
-	return b.String()
+	return "\n" + renderConfirmModal(
+		"⚠ Confirm bulk action",
+		st.bulkPrompt,
+		"y/Enter = apply · n/Esc = cancel",
+		totalWidth,
+	) + "\n"
 }

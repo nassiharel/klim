@@ -383,11 +383,19 @@ func copyTextCmd(text, label string) tea.Cmd {
 	}
 }
 
-// viewTranscriptCmd reads up to 60 lines of a session transcript and
-// opens the viewer modal. Result lands in agentTranscriptMsg.
+// transcriptReadLimit caps how many rendered transcript lines we
+// load when the viewer opens. The modal supports scrolling, so a
+// reasonably high cap lets users walk back through the whole
+// conversation without re-reading. 500 lines fits a typical long
+// session and stays cheap to render (~10ms on commodity hardware).
+const transcriptReadLimit = 500
+
+// viewTranscriptCmd reads up to transcriptReadLimit lines of a
+// session transcript and opens the viewer modal. Result lands in
+// agentTranscriptMsg.
 func viewTranscriptCmd(path string) tea.Cmd {
 	return func() tea.Msg {
-		lines, err := readSessionTranscript(path, 60)
+		lines, err := readSessionTranscript(path, transcriptReadLimit)
 		return agentTranscriptMsg{path: path, lines: lines, err: err}
 	}
 }

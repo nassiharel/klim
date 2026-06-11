@@ -73,10 +73,14 @@ type agentsState struct {
 	deleteAction tea.Cmd
 
 	// viewerLines holds the first N lines of a session transcript so the
-	// user can peek at it without leaving the TUI.
-	viewerOpen  bool
-	viewerTitle string
-	viewerLines []string
+	// user can peek at it without leaving the TUI. viewerScroll is the
+	// zero-based index into viewerLines of the topmost VISIBLE row;
+	// the modal renders `viewerLines[viewerScroll : viewerScroll+window]`.
+	// Wired to ↑/↓/PgUp/PgDn/Home/End in the modal's input handler.
+	viewerOpen   bool
+	viewerTitle  string
+	viewerLines  []string
+	viewerScroll int
 
 	flash    string
 	flashEnd time.Time
@@ -478,12 +482,10 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return true, nil
 	}
 
-	// Viewer modal closes on Esc/Enter/q.
+	// Viewer modal owns input while open: Esc/Enter/q close, the
+	// arrow / page / Home / End family scrolls the transcript.
 	if st.viewerOpen {
-		switch msg.String() {
-		case "esc", "enter", "q":
-			st.viewerOpen = false
-		}
+		handleViewerScrollKey(st, msg)
 		return true, nil
 	}
 	// Bulk-confirmation prompt owns input while open.
@@ -573,6 +575,29 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			agentsClearSelection(st, st.subTab)
 			return true, nil
 		}
+	}
+
+	// Shift+A on any bulk-capable sub-tab selects every currently-
+	// visible row (after filter / search / sort). Combined with
+	// Shift+X (delete) this gives the user a two-step "delete all
+	// visible sessions" path without a new dedicated key. The
+	// confirmation prompt that fires from agentsBulkActionForKey
+	// surfaces the count so the user sees how many rows will be
+	// affected before committing.
+	if msg.String() == "A" && agentsBulkCapable(st.subTab) {
+		rows := m.agentsVisibleRows()
+		if len(rows) == 0 {
+			st.flash = "no rows to select"
+			st.flashEnd = time.Now().Add(2 * time.Second)
+			return true, nil
+		}
+		sel := agentsSelected(st, st.subTab)
+		for _, r := range rows {
+			sel[r.id] = true
+		}
+		st.flash = fmt.Sprintf("selected all %d visible rows", len(rows))
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return true, nil
 	}
 
 	switch msg.String() {
@@ -857,7 +882,7 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			st.flashEnd = time.Now().Add(2 * time.Second)
 			return true, nil
 		}
-		lines, err := readSessionTranscript(path, 60)
+		lines, err := readSessionTranscript(path, transcriptReadLimit)
 		if err != nil {
 			st.flash = "view error: " + err.Error()
 			st.flashEnd = time.Now().Add(3 * time.Second)
@@ -866,6 +891,7 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		st.viewerOpen = true
 		st.viewerTitle = path
 		st.viewerLines = lines
+		st.viewerScroll = 0
 		return true, nil
 	case "o":
 		// Open the current row's primary URL in the user's browser.
@@ -1196,6 +1222,7 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		st.viewerOpen = true
 		st.viewerTitle = v.path
 		st.viewerLines = v.lines
+		st.viewerScroll = 0
 		return true, nil
 	case agentLaunchPlanMsg:
 		st.actionRunning = ""
@@ -1680,6 +1707,13 @@ func (m *Model) renderAgentsView() string {
 			label := st.subTabViewMode[st.subTab].label()
 			hint = "/ filter · s sort · t " + label + " view · S search · ? help"
 		}
+		if st.subTab == agentsSubSessions {
+			// Surface the bulk-delete shortcut so users discover it
+			// without selecting first: Shift+A picks every visible
+			// session, then Shift+X deletes the lot. The pair is
+			// the "delete all visible sessions" recipe.
+			hint = "/ filter · v view · Shift+A select all · Shift+X delete sel · ? help"
+		}
 		b.WriteString("  " + dimVersion.Render(hint) + "\n")
 	}
 
@@ -1734,7 +1768,7 @@ func (m *Model) renderAgentsView() string {
 	// off-screen. Render it as the body instead so it always sits
 	// inside the visible viewport.
 	if st.viewerOpen {
-		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines, m.width))
+		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines, st.viewerScroll, m.width, m.height))
 		if st.flash != "" && time.Now().Before(st.flashEnd) {
 			b.WriteString("\n  " + st.flash + "\n")
 		}
@@ -1864,14 +1898,18 @@ func (m *Model) renderAgentsView() string {
 	}
 
 	if st.deleteTarget != "" {
-		b.WriteString("\n  ╔ Confirm delete ══════════════════════════════════════╗\n")
-		b.WriteString("  ║ Delete " + st.deleteTarget + "?\n")
-		b.WriteString("  ║ y/Enter = delete · n/Esc = cancel\n")
-		b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
+		b.WriteString("\n")
+		b.WriteString(renderConfirmModal(
+			"⚠ Confirm delete",
+			"Delete "+st.deleteTarget+"?\nThis action cannot be undone.",
+			"y/Enter = delete · n/Esc = cancel",
+			m.width,
+		))
+		b.WriteString("\n")
 	}
 
 	if st.bulkPrompt != "" {
-		b.WriteString(renderBulkConfirmPrompt(st))
+		b.WriteString(renderBulkConfirmPrompt(st, m.width))
 	}
 
 	// Note: when st.viewerOpen is true we render the viewer earlier
@@ -1919,7 +1957,14 @@ func renderAgentNotePrompt(st *agentsState) string {
 // render the box in place of the body content (like the existing
 // searchOverlay pattern) so it always lands inside the visible
 // viewport.
-func renderTranscriptViewer(title string, lines []string, totalWidth int) string {
+//
+// scroll is the zero-based index of the topmost visible row;
+// totalHeight is the terminal height (used to budget how many
+// transcript rows fit). Both are bounded internally — scroll past
+// the end pins to the last visible window; a zero/unknown height
+// falls back to a sensible default so a hidden terminal-size
+// resize doesn't blank the modal.
+func renderTranscriptViewer(title string, lines []string, scroll, totalWidth, totalHeight int) string {
 	if totalWidth <= 0 {
 		totalWidth = 80
 	}
@@ -1934,6 +1979,20 @@ func renderTranscriptViewer(title string, lines []string, totalWidth int) string
 	innerW := boxWidth - 4
 	if innerW < 20 {
 		innerW = 20
+	}
+
+	// Budget the visible rows: terminal height minus surrounding
+	// chrome (tab strip + sub-tab + status + filter + footer = ~10
+	// rows) minus the box's own header / blank / footer / border
+	// (~7 rows). Floor at 5 so very small terminals still show
+	// something useful. Default to 20 when totalHeight is 0 (e.g.
+	// in tests).
+	visRows := totalHeight - 17
+	if totalHeight <= 0 {
+		visRows = 20
+	}
+	if visRows < 5 {
+		visRows = 5
 	}
 
 	box := lipgloss.NewStyle().
@@ -1951,12 +2010,32 @@ func renderTranscriptViewer(title string, lines []string, totalWidth int) string
 
 	if len(lines) == 0 {
 		out = append(out, dimVersion.Render("(empty transcript — no events recorded yet)"))
-	}
-	for _, raw := range lines {
-		out = append(out, renderTranscriptRow(raw, innerW))
+		out = append(out, "", dimVersion.Render("0 lines · Esc / Enter / q = close"))
+		return box.Render(strings.Join(out, "\n"))
 	}
 
-	out = append(out, "", dimVersion.Render(fmt.Sprintf("%d lines · Esc / Enter / q = close", len(lines))))
+	// Clamp scroll so a stale value doesn't render a blank viewer.
+	if scroll < 0 {
+		scroll = 0
+	}
+	if scroll >= len(lines) {
+		scroll = len(lines) - 1
+	}
+	end := scroll + visRows
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	for i := scroll; i < end; i++ {
+		out = append(out, renderTranscriptRow(lines[i], innerW))
+	}
+
+	// Surface scroll position + key hints in the footer so the user
+	// always knows where they are in the conversation and how to
+	// move. Mirrors the dimVersion hint pattern used elsewhere.
+	hint := fmt.Sprintf("lines %d-%d / %d · ↑/↓ scroll · PgUp/PgDn page · g/G top/bottom · Esc close",
+		scroll+1, end, len(lines))
+	out = append(out, "", dimVersion.Render(hint))
 	return box.Render(strings.Join(out, "\n"))
 }
 
@@ -2001,6 +2080,106 @@ func splitTranscriptRolePrefix(line string) (role, rest string) {
 		return "tool", strings.TrimLeft(rest, " ")
 	}
 	return "", line
+}
+
+// handleViewerScrollKey routes a keypress while the transcript
+// viewer modal is open. Esc/Enter/q close the modal; the cursor
+// keys + Page/Home/End move viewerScroll. Called by both the
+// list-view and the detail-page input handlers so they share the
+// same scroll semantics.
+//
+// The page step is a heuristic (8 lines): the viewer renders an
+// arbitrary slice of viewerLines and doesn't know its visible
+// height at input time (terminal size lives on the Model, not on
+// agentsState). 8 is large enough to feel like a page on small
+// terminals and short enough that the cursor doesn't jump past
+// the visible window on tall ones.
+func handleViewerScrollKey(st *agentsState, msg tea.KeyMsg) {
+	const pageStep = 8
+	switch msg.String() {
+	case "esc", "enter", "q":
+		st.viewerOpen = false
+		return
+	case "down", "j":
+		clampViewerScroll(st, st.viewerScroll+1)
+	case "up", "k":
+		clampViewerScroll(st, st.viewerScroll-1)
+	case "pgdown", "pagedown", "ctrl+f", " ":
+		clampViewerScroll(st, st.viewerScroll+pageStep)
+	case "pgup", "pageup", "ctrl+b":
+		clampViewerScroll(st, st.viewerScroll-pageStep)
+	case "home", "g":
+		st.viewerScroll = 0
+	case "end", "G":
+		// Scroll to bottom — clampViewerScroll pins to a sane max.
+		clampViewerScroll(st, len(st.viewerLines))
+	}
+}
+
+// clampViewerScroll constrains viewerScroll to a valid index. It
+// never lets the user scroll past the last line (which would
+// render an empty viewer); the lower bound is always 0.
+func clampViewerScroll(st *agentsState, want int) {
+	if want < 0 {
+		want = 0
+	}
+	max := len(st.viewerLines) - 1
+	if max < 0 {
+		max = 0
+	}
+	if want > max {
+		want = max
+	}
+	st.viewerScroll = want
+}
+
+// renderConfirmModal renders the shared yes/no confirmation card
+// used by every modal prompt in the Agents tab (delete, bulk
+// action, etc.). Replaces the per-prompt hand-rolled ASCII boxes
+// that had three structural problems: hard-coded border widths
+// that didn't match the terminal, no right border on content rows
+// (so long messages bled past the visible edge), and no way to
+// surface a multi-line description without breaking alignment.
+//
+// `title` is the bold header (e.g. "Confirm delete"); `message`
+// is the user-facing question (can be multi-line — `\n` separates
+// rows and each row is truncated to fit the inner width); `hint`
+// is the dim key-hint line at the bottom (e.g.
+// "y/Enter = delete · n/Esc = cancel").
+//
+// `totalWidth` is the terminal width; the card sizes itself to
+// `totalWidth - 4` so the rounded border lines up cleanly with the
+// surrounding chrome.
+func renderConfirmModal(title, message, hint string, totalWidth int) string {
+	if totalWidth <= 0 {
+		totalWidth = 80
+	}
+	const minWidth = 40
+	if totalWidth < minWidth {
+		totalWidth = minWidth
+	}
+	boxWidth := totalWidth - 4
+	innerW := boxWidth - 4 // padding + border
+	if innerW < 20 {
+		innerW = 20
+	}
+
+	box := lipgloss.NewStyle().
+		Foreground(cyberFG).
+		Background(cyberSelectedBg).
+		BorderForeground(cyberAccent).
+		BorderStyle(lipgloss.RoundedBorder()).
+		Padding(0, 1).
+		Width(boxWidth)
+
+	header := lipgloss.NewStyle().Bold(true).Foreground(cyberPrimary).Render(title)
+
+	rows := []string{header, ""}
+	for _, line := range strings.Split(message, "\n") {
+		rows = append(rows, truncAgentRow(line, innerW))
+	}
+	rows = append(rows, "", dimVersion.Render(hint))
+	return box.Render(strings.Join(rows, "\n"))
 }
 
 func truncAgentRow(s string, n int) string {

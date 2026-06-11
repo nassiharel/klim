@@ -2,6 +2,11 @@ package tui
 
 import (
 	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/nassiharel/klim/internal/agents"
 )
 
 func TestAgentsBulkCapable(t *testing.T) {
@@ -76,5 +81,67 @@ func TestSetSubTab_ClearsSelectionOnChange(t *testing.T) {
 	st.setSubTab(agentsSubMCPs)
 	if agentsSelectionCount(st, agentsSubPlugins) != 0 {
 		t.Error("selection should be cleared on sub-tab change")
+	}
+}
+
+// TestShiftA_SelectsAllVisibleSessions pins the "delete all
+// visible sessions" two-step recipe: Shift+A populates the bulk
+// selection with every currently-visible row, then the user can
+// fire Shift+X to delete them through the existing bulk pipeline.
+// This is the keybinding the user asked for ("option to delete
+// all sessions") — we keep it filter-aware so a search-narrowed
+// view only deletes what's visible.
+func TestShiftA_SelectsAllVisibleSessions(t *testing.T) {
+	m := NewModel()
+	m.activeTab = tabAgents
+	m.width = 120
+	m.agents = newAgentsState()
+	m.agents.subTab = agentsSubSessions
+	m.agents.snapshot = &agents.Snapshot{
+		Sessions: []agents.Session{
+			{ID: "claude:a", Name: "a", Provider: agents.ProviderClaudeCode},
+			{ID: "claude:b", Name: "b", Provider: agents.ProviderClaudeCode},
+			{ID: "copilot:c", Name: "c", Provider: agents.ProviderCopilotCLI},
+		},
+	}
+	m.agents.loadedAt = time.Now()
+
+	handled, _ := m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: 'A', Text: "A"}))
+	if !handled {
+		t.Fatal("Shift+A should be handled on the Sessions sub-tab")
+	}
+	if got := agentsSelectionCount(m.agents, agentsSubSessions); got != 3 {
+		t.Errorf("Shift+A should select all 3 visible sessions; got %d", got)
+	}
+
+	// Filter to a single provider — Shift+A should pick only the
+	// filtered subset, not the full snapshot.
+	agentsClearSelection(m.agents, agentsSubSessions)
+	m.agents.providerFilter = agents.ProviderClaudeCode
+	handled, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: 'A', Text: "A"}))
+	if !handled {
+		t.Fatal("Shift+A should be handled with a provider filter active")
+	}
+	if got := agentsSelectionCount(m.agents, agentsSubSessions); got != 2 {
+		t.Errorf("Shift+A is filter-aware; expected 2 selected, got %d", got)
+	}
+}
+
+// TestShiftA_NoOpOnNonBulkSubTab — Shift+A is meaningless outside
+// bulk-capable sub-tabs (Marketplaces, Skills, etc) and must not
+// silently capture selection state for them.
+func TestShiftA_NoOpOnNonBulkSubTab(t *testing.T) {
+	m := NewModel()
+	m.activeTab = tabAgents
+	m.width = 120
+	m.agents = newAgentsState()
+	m.agents.subTab = agentsSubMarketplaces
+	m.agents.snapshot = &agents.Snapshot{
+		Marketplaces: []agents.Marketplace{{ID: "x", Name: "x", Provider: agents.ProviderClaudeCode}},
+	}
+	m.agents.loadedAt = time.Now()
+	_, _ = m.handleAgentsKey(tea.KeyPressMsg(tea.Key{Code: 'A', Text: "A"}))
+	if got := agentsSelectionCount(m.agents, agentsSubMarketplaces); got != 0 {
+		t.Errorf("Shift+A should be a no-op on non-bulk sub-tabs; selected %d", got)
 	}
 }

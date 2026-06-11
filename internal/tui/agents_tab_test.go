@@ -326,14 +326,17 @@ func TestRenderTranscriptViewer_RendersTitleAndLines(t *testing.T) {
 		"[user] hello there",
 		"[assistant] hi back",
 		"[tool]      Bash(command=\"ls -la\")",
-	}, 120))
+	}, 0, 120, 40))
 	for _, want := range []string{
 		"Transcript",
 		"/tmp/session/foo.jsonl",
 		"hello there",
 		"hi back",
 		"Bash(command=",
-		"Esc / Enter / q = close",
+		"Esc close",
+		// Scroll position hint shows up in the footer so the user
+		// sees how many lines are loaded and where they are.
+		"lines 1-3 / 3",
 		// Role chips are rendered through transcriptRoleChip, which
 		// applies background colour + padding. The plain-text strip
 		// preserves the words.
@@ -347,6 +350,89 @@ func TestRenderTranscriptViewer_RendersTitleAndLines(t *testing.T) {
 	}
 }
 
+// TestRenderTranscriptViewer_ScrollsToOffset asserts that passing a
+// non-zero scroll offset hides the leading lines and shifts the
+// "lines X-Y / N" footer accordingly. This is the regression test
+// for "the View Transcript is not scrollable".
+func TestRenderTranscriptViewer_ScrollsToOffset(t *testing.T) {
+	t.Parallel()
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("[user] line-%d", i)
+	}
+	// Tall terminal so we get a generous visible window; scroll
+	// by 40 lines and assert lines 0-39 are GONE and line 40 is
+	// shown.
+	got := stripANSIForTest(renderTranscriptViewer("/x", lines, 40, 120, 60))
+	if strings.Contains(got, "line-0\n") || strings.Contains(got, "line-0 ") {
+		t.Errorf("scroll=40 should hide line-0; got:\n%s", got)
+	}
+	if !strings.Contains(got, "line-40") {
+		t.Errorf("scroll=40 should show line-40 at the top:\n%s", got)
+	}
+	if !strings.Contains(got, "lines 41-") {
+		t.Errorf("scroll=40 should advertise the lines window in the footer:\n%s", got)
+	}
+}
+
+// TestHandleViewerScrollKey covers the input handler that the
+// viewer modal owns — closes on Esc/Enter/q, advances on the
+// arrow / page / Home / End keys, clamps the scroll to a sane
+// range. Mirrors the same key map both list-view and detail-page
+// handlers delegate to.
+func TestHandleViewerScrollKey(t *testing.T) {
+	t.Parallel()
+	mkState := func(n int) *agentsState {
+		lines := make([]string, n)
+		for i := range lines {
+			lines[i] = "x"
+		}
+		return &agentsState{viewerOpen: true, viewerLines: lines}
+	}
+
+	t.Run("down advances", func(t *testing.T) {
+		st := mkState(20)
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'j', Text: "j"}))
+		if st.viewerScroll != 1 {
+			t.Errorf("down: scroll = %d, want 1", st.viewerScroll)
+		}
+	})
+
+	t.Run("up clamps at 0", func(t *testing.T) {
+		st := mkState(20)
+		st.viewerScroll = 0
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'k', Text: "k"}))
+		if st.viewerScroll != 0 {
+			t.Errorf("up at 0: scroll = %d, want 0", st.viewerScroll)
+		}
+	})
+
+	t.Run("end pins to last line", func(t *testing.T) {
+		st := mkState(20)
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'G', Text: "G"}))
+		if st.viewerScroll != 19 {
+			t.Errorf("end: scroll = %d, want 19", st.viewerScroll)
+		}
+	})
+
+	t.Run("home returns to top", func(t *testing.T) {
+		st := mkState(20)
+		st.viewerScroll = 10
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'g', Text: "g"}))
+		if st.viewerScroll != 0 {
+			t.Errorf("home: scroll = %d, want 0", st.viewerScroll)
+		}
+	})
+
+	t.Run("esc closes", func(t *testing.T) {
+		st := mkState(20)
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape, Text: "esc"}))
+		if st.viewerOpen {
+			t.Errorf("esc should close viewer")
+		}
+	})
+}
+
 // TestRenderTranscriptViewer_BorderAlignsToTerminalWidth pins the
 // fix for the "borders are broken" complaint. The previous version
 // drew a hand-rolled box with hard-coded 56-char top/bottom borders,
@@ -357,7 +443,7 @@ func TestRenderTranscriptViewer_RendersTitleAndLines(t *testing.T) {
 func TestRenderTranscriptViewer_BorderAlignsToTerminalWidth(t *testing.T) {
 	t.Parallel()
 	for _, w := range []int{80, 120, 200} {
-		out := renderTranscriptViewer("/x", []string{"[user] hi"}, w)
+		out := renderTranscriptViewer("/x", []string{"[user] hi"}, 0, w, 30)
 		rows := strings.Split(strings.TrimRight(out, "\n"), "\n")
 		want := w - 4
 		for i, r := range rows {
@@ -377,7 +463,7 @@ func TestRenderTranscriptViewer_BorderAlignsToTerminalWidth(t *testing.T) {
 // hollow border.
 func TestRenderTranscriptViewer_EmptyTranscriptShowsHint(t *testing.T) {
 	t.Parallel()
-	got := stripANSIForTest(renderTranscriptViewer("/tmp/empty.jsonl", nil, 120))
+	got := stripANSIForTest(renderTranscriptViewer("/tmp/empty.jsonl", nil, 0, 120, 30))
 	if !strings.Contains(got, "empty transcript") {
 		t.Errorf("empty transcript should surface a hint; got:\n%s", got)
 	}

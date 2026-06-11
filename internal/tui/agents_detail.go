@@ -26,12 +26,10 @@ func (m *Model) handleAgentsDetailKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	}
 
 	// Viewer/launch/delete modals overlay the detail page; let them own
-	// input the same way the list view does.
+	// input the same way the list view does. The viewer also gets
+	// the arrow / page / Home / End keys for scrolling.
 	if st.viewerOpen {
-		switch msg.String() {
-		case "esc", "enter", "q":
-			st.viewerOpen = false
-		}
+		handleViewerScrollKey(st, msg)
 		return true, nil
 	}
 	if st.launchPrompt != "" {
@@ -297,7 +295,7 @@ func (m *Model) renderAgentsDetailPage() string {
 	// nothing when they triggered View Transcript. Render it
 	// inline now so it sits within the visible body window.
 	if st.viewerOpen {
-		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines, m.width))
+		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines, st.viewerScroll, m.width, m.height))
 	} else {
 		// Metadata section
 		b.WriteString(renderAgentDetailFull(row, st.snapshot))
