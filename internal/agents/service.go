@@ -483,8 +483,8 @@ func hydrateSessionExtras(snap *Snapshot) {
 //     we call it on both platforms for consistency.)
 //
 // Returns the empty string only when every source fails; callers
-// then disable the "🏠 Home" group special-case rather than mis-
-// grouping sessions.
+// then disable the "🏠 Home" group special-case rather than
+// incorrectly grouping sessions.
 func homeDir() string {
 	if env := os.Getenv("HOME"); env != "" {
 		return env

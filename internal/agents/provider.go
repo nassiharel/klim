@@ -132,7 +132,7 @@ type Snapshot struct {
 	// unconditionally prints can't be embedded cleanly anywhere
 	// else. Hydration / scan failures are best-effort — the snapshot
 	// still proceeds with whatever fields could be populated.
-	Warnings []string `yaml:"warnings,omitempty"`
+	Warnings []string `json:"warnings,omitempty" yaml:"warnings,omitempty"`
 }
 
 // Count returns the count of entities of the given type.
