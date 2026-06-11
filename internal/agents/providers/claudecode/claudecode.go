@@ -893,13 +893,21 @@ func quoteForShell(s string) string {
 		return `''`
 	}
 	// Fast path: no shell-meaningful characters → no quoting needed.
+	//
+	// `!` is treated as unsafe even though it's inert under
+	// non-interactive shells: bash with history expansion enabled
+	// (the default on interactive prompts) and zsh both expand
+	// unquoted `!` sequences when the snippet is pasted at a
+	// terminal — which is exactly the use case for RestartCommand.
+	// Single-quote wrapping (the slow path below) suppresses history
+	// expansion across both shells.
 	safe := true
 	for _, r := range s {
 		if r == ' ' || r == '\t' || r == '\n' || r == '\'' || r == '"' ||
 			r == '$' || r == '`' || r == '\\' || r == '|' || r == '&' ||
 			r == ';' || r == '<' || r == '>' || r == '(' || r == ')' ||
 			r == '*' || r == '?' || r == '[' || r == ']' || r == '{' ||
-			r == '}' || r == '#' || r == '~' {
+			r == '}' || r == '#' || r == '~' || r == '!' {
 			safe = false
 			break
 		}

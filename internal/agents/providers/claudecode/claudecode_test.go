@@ -448,3 +448,38 @@ func TestResolveProjectCwd(t *testing.T) {
 		t.Errorf("missing dir: got %q, want empty", got)
 	}
 }
+
+// TestQuoteForShell pins the POSIX single-quote escaping used to
+// embed paths in RestartCommand. Parallel set to the Copilot CLI
+// provider's TestQuoteForShell — both helpers run the same fast-path
+// metacharacter list, so a divergence here would be a latent bug.
+//
+// `!` is explicitly checked because bash with history expansion
+// (interactive default) and zsh both expand unquoted `!` sequences
+// when the snippet is pasted at a prompt, and earlier versions of
+// the helper let `!` through the safe-fast-path. Single quotes
+// inhibit history expansion.
+func TestQuoteForShell(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", `''`},
+		{"plain", "abc", "abc"},
+		{"with space", "my repo", `'my repo'`},
+		{"with dollar sign", "$HOME/x", `'$HOME/x'`},
+		{"with backtick", "a`whoami`b", `'a` + "`whoami`" + `b'`},
+		{"with cmd subst", "x$(rm -rf /)y", `'x$(rm -rf /)y'`},
+		{"with single quote", "it's", `'it'\''s'`},
+		{"with bang", "a!b", `'a!b'`},
+		{"with bang history-expand sequence", "echo !!", `'echo !!'`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := quoteForShell(tc.in); got != tc.want {
+				t.Errorf("quoteForShell(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}

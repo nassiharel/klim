@@ -318,6 +318,15 @@ func TestQuoteForShell(t *testing.T) {
 		{"with double quote", `say "hi"`, `'say "hi"'`},
 		{"with newline", "a\nb", "'a\nb'"},
 		{"with glob", "*.go", `'*.go'`},
+		// Bash with interactive history expansion (the default on
+		// interactive prompts) and zsh both expand unquoted `!`
+		// sequences when the snippet is pasted at a prompt — exactly
+		// the use case for RestartCommand. Single-quote wrapping
+		// (the slow path) suppresses the expansion across both
+		// shells; unquoted, `!!` becomes the previous command and
+		// can change the pasted line's meaning entirely.
+		{"with bang", "a!b", `'a!b'`},
+		{"with bang history-expand sequence", "echo !!", `'echo !!'`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

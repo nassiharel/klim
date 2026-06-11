@@ -470,11 +470,33 @@ func hydrateSessionExtras(snap *Snapshot) {
 	}
 }
 
-// homeDir returns the user's home directory across POSIX and Windows,
-// or the empty string when neither HOME nor USERPROFILE is set.
+// homeDir returns the user's home directory across POSIX and Windows.
+//
+// Resolution order:
+//  1. $HOME (POSIX, and respected by Git Bash / WSL on Windows)
+//  2. %USERPROFILE% (native Windows)
+//  3. os.UserHomeDir (last-resort fallback; on Unix it consults
+//     passwd records when $HOME is missing, which is exactly the
+//     case some sandboxed runtimes hit — cron jobs, certain login
+//     shells. On Windows os.UserHomeDir also goes through
+//     USERPROFILE, so the fallback is mostly POSIX-relevant, but
+//     we call it on both platforms for consistency.)
+//
+// Returns the empty string only when every source fails; callers
+// then disable the "🏠 Home" group special-case rather than mis-
+// grouping sessions.
 func homeDir() string {
 	if env := os.Getenv("HOME"); env != "" {
 		return env
 	}
-	return os.Getenv("USERPROFILE")
+	if env := os.Getenv("USERPROFILE"); env != "" {
+		return env
+	}
+	// os.UserHomeDir consults passwd entries on Unix when the env
+	// vars are unset — a strictly broader probe than the env vars
+	// alone for POSIX sandboxed contexts.
+	if dir, err := os.UserHomeDir(); err == nil {
+		return dir
+	}
+	return ""
 }

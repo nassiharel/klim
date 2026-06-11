@@ -7,6 +7,7 @@ package tui
 // stays binary.
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -264,5 +265,202 @@ func TestBuildToolTileLines_EmptyFilteredIndexShowsMessage(t *testing.T) {
 			t.Errorf("tab=%d hasCat=%v: expected empty-state %q in output, got:\n%s",
 				tc.tab, tc.hasCat, tc.wantSub, joined)
 		}
+	}
+}
+
+// TestRenderToolTile_NarrowWidthKeepsContentInsideBorder is the
+// regression for the "innerW expanded past width-4 on narrow tiles"
+// PR comment. Previously, renderToolTile clamped innerW *up* to
+// tileMinWidth-4 — so a tile rendered at the minimum width still
+// got content sized for a wider box, breaking alignment / wrapping
+// rows past the card edge.
+//
+// `renderToolTile` is documented to require width >= tileMinWidth
+// (callers shorter than that fall back to list mode at the layout
+// level — see buildToolTileLines). The widths exercised here are
+// all valid tile widths; the assertion is that content fits inside
+// the border at the *exact* width supplied (no upward clamping).
+func TestRenderToolTile_NarrowWidthKeepsContentInsideBorder(t *testing.T) {
+	t.Parallel()
+	tool := mkTool("foo-bar-baz-with-a-long-name", "1.0.0", "1.0.0",
+		registry.PackageIDs{Winget: "Foo"})
+
+	for _, width := range []int{tileMinWidth, tileMinWidth + 4, 40, tileIdealMax} {
+		tile := renderToolTile(tool, width, toolTileOpts{})
+		lines := strings.Split(tile, "\n")
+		if len(lines) != tileHeight {
+			t.Errorf("width=%d: expected %d lines, got %d:\n%s",
+				width, tileHeight, len(lines), tile)
+			continue
+		}
+		// Every rendered line must be exactly `width` cells — the
+		// contract padOrTruncTile + lipgloss border enforce when
+		// content fits inside innerW. A wider line means innerW
+		// overflowed the border.
+		for i, ln := range lines {
+			if w := lipgloss.Width(ln); w != width {
+				t.Errorf("width=%d line %d: visual width %d, want %d:\n%q",
+					width, i, w, width, ln)
+			}
+		}
+	}
+}
+
+// TestRenderToolTitleRow_NoTrailingBlankWhenChipMissing is the
+// regression for the "title row reserves a trailing space for the
+// package-source chip even when chip is empty" PR comment. The pre-
+// fix renderer always appended ` + " " + chip`, which (with chip=="")
+// shrank the title budget by 1 cell. The fix: when chip is empty,
+// the title row uses the freed-up cell.
+//
+// We assert this by rendering two title rows at the same innerW —
+// one with a chip, one without — and confirming the no-chip variant
+// gets one extra cell for the title text.
+func TestRenderToolTitleRow_NoTrailingBlankWhenChipMissing(t *testing.T) {
+	t.Parallel()
+	const innerW = 40
+	// Use a long name so we can measure where padOrTruncTile cuts.
+	const longName = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+	noChipTool := mkTool(longName, "", "", registry.PackageIDs{})
+	withChipTool := mkTool(longName, "", "", registry.PackageIDs{Winget: "X"})
+
+	noChipRow := stripANSIForTest(renderToolTitleRow(&noChipTool, false, false, innerW))
+	withChipRow := stripANSIForTest(renderToolTitleRow(&withChipTool, false, false, innerW))
+
+	// Count the A's that survived truncation in each row. The
+	// no-chip row should keep at least one MORE 'A' than the
+	// with-chip row (the cell that used to be the trailing blank
+	// is now used for title content).
+	noChipAs := strings.Count(noChipRow, "A")
+	withChipAs := strings.Count(withChipRow, "A")
+	if noChipAs <= withChipAs {
+		t.Errorf("no-chip row should fit more title text than with-chip row;\nno chip: %q (A×%d)\nwith chip: %q (A×%d)",
+			noChipRow, noChipAs, withChipRow, withChipAs)
+	}
+	// And the chip variant must still actually render its chip — so
+	// we haven't accidentally suppressed it via the no-chip branch.
+	if !strings.Contains(withChipRow, "winget") {
+		t.Errorf("chip should still render when Packages.Winget is set: %q", withChipRow)
+	}
+}
+
+// TestBuildToolTileLines_SnapsStartToColumnBoundary is the regression
+// for the "tile window reshuffles diagonally" PR comment. windowWith-
+// Indicators centres start on the cursor index; in tile mode that
+// means a cursor move across a row boundary can shift `start` by 1,
+// reshuffling every visible tile by one column. The fix pins start
+// to a multiple of `cols` (with cols > 1) so the grid is spatially
+// stable as the cursor walks the list.
+//
+// We exercise the build indirectly via a deterministic dataset and
+// assert that across consecutive cursor positions within a single
+// "row" the rendered tile sequence shifts by entire rows only.
+func TestBuildToolTileLines_SnapsStartToColumnBoundary(t *testing.T) {
+	t.Parallel()
+	// 30 tools so a 3-col grid windows them and `start` is not pinned
+	// to zero.
+	tools := make([]registry.Tool, 0, 30)
+	idx := make([]int, 0, 30)
+	for i := 0; i < 30; i++ {
+		// Distinct DisplayName so the rendered tiles are easy to
+		// distinguish in the assertion.
+		name := fmt.Sprintf("Tool%02d", i)
+		tools = append(tools, mkTool(name, "1.0.0", "1.0.0",
+			registry.PackageIDs{Winget: "F"}))
+		idx = append(idx, i)
+	}
+
+	// Run with a width that comfortably yields cols=3
+	// (chooseTileLayout's 3-column branch needs >= 3*tileMinWidth +
+	// 2*tileGap = 100).
+	const termWidth = 130
+
+	// Build a tile snapshot at cursor=cursorIdx and return the set
+	// of DisplayName strings rendered as tiles (ignoring header /
+	// indicators).
+	snapAt := func(cursorIdx int) []string {
+		m := Model{
+			activeTab:     tabInstalled,
+			tools:         tools,
+			filteredIndex: idx,
+			phase:         phaseDone,
+			width:         termWidth,
+			height:        40,
+			cursor:        cursorIdx,
+		}
+		lines := m.buildToolTileLines(40)
+		var seen []string
+		joined := stripANSIForTest(strings.Join(lines, "\n"))
+		for i := 0; i < 30; i++ {
+			name := fmt.Sprintf("Tool%02d", i)
+			if strings.Contains(joined, name) {
+				seen = append(seen, name)
+			}
+		}
+		return seen
+	}
+
+	// At cursor=8, the row containing the cursor is row 2 (indices
+	// 6,7,8 with cols=3). At cursor=7 (same row) the snapshot's
+	// first tile MUST match the one at cursor=8 — i.e. moving the
+	// cursor within a row never shifts the visible grid.
+	at7 := snapAt(7)
+	at8 := snapAt(8)
+	if len(at7) == 0 || len(at8) == 0 {
+		t.Fatalf("expected non-empty tile sets, got at7=%v at8=%v", at7, at8)
+	}
+	if at7[0] != at8[0] {
+		t.Errorf("moving cursor within a row shifted the grid: cursor=7 first=%q cursor=8 first=%q",
+			at7[0], at8[0])
+	}
+	// All starts must be multiples of cols (=3) given termWidth >=
+	// 3-col threshold. We check via the first tile name (Tool00 →
+	// idx 0, Tool03 → idx 3, …).
+	if name := at8[0]; name != "" {
+		var startIdx int
+		_, _ = fmt.Sscanf(name, "Tool%02d", &startIdx)
+		if startIdx%3 != 0 {
+			t.Errorf("window start %d (from tile %q) is not aligned to col=3 boundary", startIdx, name)
+		}
+	}
+}
+
+// TestBuildToolTileLines_FallsBackToListOnTinyTerminal is the
+// regression for the "tileRows forced to min 1 even when too small"
+// PR comment. Previously, when maxRows could not fit a full tile
+// (header + indicators + tileHeight = 10 lines), the builder still
+// forced tileRows = 1 and accepted that renderView would clip the
+// card mid-render. The fix falls back to list mode for the remaining
+// row budget so the user sees truncated rows instead of half-cards.
+func TestBuildToolTileLines_FallsBackToListOnTinyTerminal(t *testing.T) {
+	t.Parallel()
+	tools := []registry.Tool{mkTool("foo", "1.0.0", "1.0.0",
+		registry.PackageIDs{Winget: "F"})}
+	m := Model{
+		activeTab:     tabInstalled,
+		tools:         tools,
+		filteredIndex: []int{0},
+		phase:         phaseDone,
+		width:         120,
+		height:        40,
+	}
+	// maxRows=5 leaves (5 - 1 header - 2 indicators) / 7 tileHeight
+	// = 0/7 → pre-fix path went tileRows = 1 (clipped tiles).
+	lines := m.buildToolTileLines(5)
+	joined := stripANSIForTest(strings.Join(lines, "\n"))
+	// List mode emits the header row in a different shape than the
+	// tile mode (it uses tab-separated columns). The signature we
+	// rely on: list mode renders "foo" without the rounded border
+	// glyphs (╭ ╮ │ ╰ ╯). If any tile-border glyph appears we know
+	// we fell into the broken clipped-tile path instead of list
+	// mode.
+	for _, g := range []string{"╭", "╮", "╰", "╯"} {
+		if strings.Contains(joined, g) {
+			t.Errorf("expected list-mode fallback when maxRows is too small for a tile; tile-border glyph %q found:\n%s", g, joined)
+		}
+	}
+	if !strings.Contains(joined, "foo") {
+		t.Errorf("list-mode fallback should still render the tool row; got:\n%s", joined)
 	}
 }

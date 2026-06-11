@@ -402,13 +402,11 @@ func (m *Model) renderAgentsDetailPage() string {
 		b.WriteString("  ║ y/Enter = run · n/Esc = cancel\n")
 		b.WriteString("  ╚════════════════════════════════════════════════════╝\n")
 	}
-	if st.viewerOpen {
-		// Viewer modal is rendered inline at the top of the body
-		// now (see renderTranscriptViewer above). Nothing to append
-		// here — the previous trailing block lived past the body's
-		// height-padding and was therefore never on-screen.
-		_ = st.viewerTitle
-	}
+	// (Viewer modal is rendered inline at the top of the body via
+	// renderTranscriptViewer when st.viewerOpen is set — no trailing
+	// modal block is needed here. A previous version appended one,
+	// but it lived past the body's height-padding and was therefore
+	// never on-screen.)
 	if st.promotePicker.Open {
 		b.WriteString(renderAgentsPromotePicker(st, m.width))
 	}

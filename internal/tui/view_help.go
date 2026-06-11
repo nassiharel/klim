@@ -90,7 +90,7 @@ func (m Model) renderHelpOverlay() string {
 				{"/", "fuzzy filter"},
 				{"S", "search transcripts"},
 				{"s", "sort"},
-				{"t", "list/tiles (Sessions)"},
+				{"t", "list/tiles (except Costs/Health)"},
 				{"f", "filter sidebar"},
 				{"i", "installed filter"},
 				{"Space", "bulk select"},

@@ -73,6 +73,12 @@ func isToolsTab(tab int) bool {
 // `showCheckbox` should be true only for the Updates tab — it adds a
 // right-anchored [x]/[ ] selection box on the version row that
 // mirrors the Space-to-select semantics of the list view.
+//
+// Precondition: `width >= tileMinWidth`. Callers narrower than that
+// must fall back to list mode at the layout layer (buildToolTileLines
+// enforces this). The renderer floors innerW at 4 so it won't panic
+// on smaller widths, but the title / chip rows assume there's room
+// for the full set of cells (dot + sp + star + sp + title + sp + chip).
 func renderToolTile(t registry.Tool, width int, opts toolTileOpts) string {
 	state := toolTileState(&t, opts.marketplaceStatus)
 	borderColor := cyberFGDim
@@ -85,9 +91,18 @@ func renderToolTile(t registry.Tool, width int, opts toolTileOpts) string {
 		Width(width).
 		Padding(0, 1)
 
+	// innerW is the budget inside the rounded border + 1-cell padding
+	// on each side (4 cells reserved total). Never expand past the
+	// caller-supplied width — earlier versions clamped innerW *up* to
+	// tileMinWidth-4, which made content wider than the border on
+	// narrow terminals and broke alignment / wrapped rows past the
+	// card edge. Floor at 4 instead so per-row arithmetic that
+	// subtracts leaders / chips doesn't go negative; the layout layer
+	// (chooseTileLayout) is responsible for falling back to a single
+	// column / list mode when the terminal is too narrow.
 	innerW := width - 4
-	if innerW < tileMinWidth-4 {
-		innerW = tileMinWidth - 4
+	if innerW < 4 {
+		innerW = 4
 	}
 
 	rows := []string{
@@ -209,12 +224,21 @@ func renderToolTitleRow(t *registry.Tool, favorited, selected bool, innerW int) 
 	if title == "" {
 		title = t.Name
 	}
-	// Budget: innerW - dot(1) - sp(1) - star(2) - sp(1) - chipW - sp(1).
-	titleW := innerW - 1 - 1 - 2 - 1 - lipgloss.Width(chip) - 1
+	// Budget: innerW - dot(1) - sp(1) - star(2) - sp(1) - [sp(1) + chipW]
+	// (the sp + chip group only counts when chip is non-empty, otherwise
+	// it'd steal a column and append a trailing blank).
+	chipBudget := 0
+	if chip != "" {
+		chipBudget = 1 + lipgloss.Width(chip)
+	}
+	titleW := innerW - 1 - 1 - 2 - 1 - chipBudget
 	if titleW < 6 {
 		titleW = 6
 	}
 	titleText := titleStyle.Render(padOrTruncTile(title, titleW))
+	if chip == "" {
+		return dot + " " + star + " " + titleText
+	}
 	return dot + " " + star + " " + titleText + " " + chip
 }
 
@@ -352,6 +376,16 @@ func (m Model) buildToolTileLines(maxRows int) []string {
 	bodyW, _ := m.bodyDims()
 	tileW, cols := chooseTileLayout(bodyW)
 
+	// Terminal too narrow for a usable tile: fall back to list
+	// mode. chooseTileLayout's single-column branch returns whatever
+	// the terminal width is — without this guard, narrow terminals
+	// render tiles where the title row can't even fit the package
+	// chip, producing wrapped rows that break the border. List mode
+	// degrades gracefully via column truncation in renderRow.
+	if tileW < tileMinWidth {
+		return m.buildToolLines(maxRows)
+	}
+
 	// Budget the tile data rows. One tile-row = tileHeight visual
 	// lines. We must also reserve room for:
 	//   - the header row (already pushed above): 1 line
@@ -367,7 +401,14 @@ func (m Model) buildToolTileLines(maxRows int) []string {
 	const headerBudget = 1
 	tileRows := (maxRows - headerBudget - indicatorBudget) / tileHeight
 	if tileRows < 1 {
-		tileRows = 1
+		// Not enough vertical room for even one full tile row.
+		// Previously we forced tileRows = 1 and accepted that
+		// renderView would clip the card mid-render; reviewer
+		// flagged that as a clearly-broken visual. Fall back to
+		// list mode for the remaining row budget — it degrades
+		// gracefully on tiny terminals (truncated rows instead of
+		// half-rendered cards).
+		return m.buildToolLines(maxRows)
 	}
 	maxTiles := tileRows * cols
 
@@ -375,6 +416,34 @@ func (m Model) buildToolTileLines(maxRows int) []string {
 	// scheme as buildToolLines (↑ N above / ↓ N below).
 	total := len(m.filteredIndex)
 	start, hiddenAbove, hiddenBelow, windowSize := windowWithIndicators(total, m.cursor, maxTiles)
+
+	// Snap `start` to a multiple of `cols` so the grid stays
+	// spatially stable as the cursor moves. windowWithIndicators
+	// centres on the item index, so a cursor move that crosses a
+	// row boundary can shift `start` by 1 — which makes every visible
+	// tile re-flow to a different column on screen, producing the
+	// "tiles reshuffle diagonally" effect the reviewer flagged. By
+	// pinning the window's first index to a row boundary, navigation
+	// only ever scrolls whole tile-rows.
+	if cols > 1 && start%cols != 0 {
+		snapped := start - (start % cols)
+		// Snapping down only ever pulls the visible window earlier
+		// — never past the cursor's row — so the cursor stays in
+		// view. Recompute the hidden counts; the windowSize is
+		// preserved (it was already capped at maxTiles).
+		if snapped < 0 {
+			snapped = 0
+		}
+		start = snapped
+		hiddenAbove = start
+		if start+windowSize > total {
+			windowSize = total - start
+		}
+		hiddenBelow = total - start - windowSize
+		if hiddenBelow < 0 {
+			hiddenBelow = 0
+		}
+	}
 
 	if hiddenAbove > 0 {
 		lines = append(lines, "  "+dimVersion.Render(fmt.Sprintf("↑ %d above", hiddenAbove)))
