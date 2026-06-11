@@ -1084,8 +1084,15 @@ func (st *agentsState) setSubTab(i int) {
 	st.subTab = i
 	st.cursor = 0
 	st.detailOpen = false
-	// Sidebar is sub-tab-specific — recompute items when switching.
-	if st.sidebarOpen {
+	// Sidebar is sub-tab-specific (Marketplaces gets STATUS+PROVIDER,
+	// MCPs gets STATUS+TRANSPORT+SCOPE+PROVIDER, etc.) and is
+	// rendered next to the row table whether or not the picker (`f`)
+	// is open. Rebuild items unconditionally so the visible passive
+	// sidebar always matches the active sub-tab — gating this on
+	// sidebarOpen left stale headers (e.g. an MCP-only TRANSPORT
+	// row lingering on the Plugins sub-tab) for users who switched
+	// tabs without ever opening the picker.
+	if st.snapshot != nil {
 		st.sidebarItems = buildAgentsSidebarItems(st)
 		st.sidebarIdx = 0
 		for k, it := range st.sidebarItems {

@@ -714,7 +714,7 @@ func detailTestModel() Model {
 			{ID: "pl2", Name: "pl2", Provider: agents.ProviderCopilotCLI, Marketplace: "mp1", Installed: false},
 		},
 		Skills:   []agents.Skill{{ID: "sk1", Name: "sk1", Provider: agents.ProviderCopilotCLI, Scope: agents.ScopeUser}},
-		MCPs:     []agents.MCP{{ID: "mc1", Name: "mc1", Provider: agents.ProviderCopilotCLI, Scope: agents.ScopeUser, Enabled: true}},
+		MCPs:     []agents.MCP{{ID: "mc1", Name: "mc1", Provider: agents.ProviderCopilotCLI, Scope: agents.ScopeUser, Transport: "stdio", Enabled: true}},
 		Sessions: []agents.Session{{ID: "se1", Name: "se1", Provider: agents.ProviderCopilotCLI, TranscriptPath: "/tmp/x"}},
 	}
 	m.agents.loadedAt = time.Now()
@@ -1000,6 +1000,84 @@ func TestBuildAgentsSidebarItems_Plugins_HasExpectedSections(t *testing.T) {
 			t.Errorf("missing %q header section; got %v", want, sections)
 		}
 	}
+}
+
+// TestSetSubTab_RefreshesSidebarItems pins the fix for "filter
+// sidebar in Agents tab isn't updating according to the sub-tab".
+//
+// Each sub-tab has its own sidebar section list (Marketplaces:
+// status + provider; MCPs: status + transport + scope + provider;
+// Skills: scope + provider; …). The sidebar column is rendered
+// next to the row table whether or not the picker (`f`) is open,
+// so when the user presses 2 → 4 to walk between sub-tabs the
+// displayed sidebar must follow them.
+//
+// Before this fix, setSubTab only rebuilt sidebarItems when
+// `sidebarOpen` was true. A user who switched sub-tabs without
+// ever opening the picker (the common case) kept seeing the
+// initial sub-tab's sections — e.g. an MCP-specific TRANSPORT
+// header lingering on the Plugins sub-tab.
+func TestSetSubTab_RefreshesSidebarItems(t *testing.T) {
+	m := detailTestModel()
+
+	// Land on Marketplaces and seed sidebarItems the way
+	// renderAgentsView's lazy build does. Sidebar picker is NOT
+	// open — this is the bug-trigger condition.
+	m.agents.subTab = agentsSubMarketplaces
+	m.agents.sidebarOpen = false
+	m.agents.sidebarItems = buildAgentsSidebarItems(m.agents)
+	mpHeaders := collectSidebarHeaders(m.agents.sidebarItems)
+	if !sliceHas(mpHeaders, "STATUS") || !sliceHas(mpHeaders, "PROVIDER") {
+		t.Fatalf("setup: marketplaces sidebar should have STATUS+PROVIDER, got %v", mpHeaders)
+	}
+	// The MCP-only TRANSPORT header MUST NOT be in the marketplaces
+	// sidebar — its presence after the switch is the bug we're
+	// guarding against (in the opposite direction).
+
+	// Switch to MCPs.
+	m.agents.setSubTab(agentsSubMCPs)
+
+	got := collectSidebarHeaders(m.agents.sidebarItems)
+	for _, want := range []string{"STATUS", "TRANSPORT", "SCOPE", "PROVIDER"} {
+		if !sliceHas(got, want) {
+			t.Errorf("after setSubTab(MCPs): missing %q header in sidebar; got %v", want, got)
+		}
+	}
+
+	// Switch back to Marketplaces — the MCP-only TRANSPORT /
+	// SCOPE headers must disappear from the sidebar.
+	m.agents.setSubTab(agentsSubMarketplaces)
+	got = collectSidebarHeaders(m.agents.sidebarItems)
+	for _, banned := range []string{"TRANSPORT", "SCOPE"} {
+		if sliceHas(got, banned) {
+			t.Errorf("after setSubTab(Marketplaces): stale %q header leaked; got %v", banned, got)
+		}
+	}
+}
+
+// collectSidebarHeaders returns the labels of header rows in the
+// sidebar item list. Test helper for sidebar-shape assertions.
+func collectSidebarHeaders(items []agentSidebarItem) []string {
+	var headers []string
+	for _, it := range items {
+		if it.isHeader {
+			headers = append(headers, it.label)
+		}
+	}
+	return headers
+}
+
+// sliceHas is a tiny `slices.Contains` shim local to this test
+// file. (A package-level `contains(string, string)` already exists
+// for substring checks in another test file — the signatures
+// don't match, so we use a distinct name here.)
+func sliceHas(haystack []string, needle string) bool {
+	for _, h := range haystack {
+		if h == needle {
+			return true
+		}
+	}
+	return false
 }
 
 func TestAgentsApplySidebarSelection_Provider(t *testing.T) {
