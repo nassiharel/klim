@@ -40,22 +40,55 @@ func TestRenderToolTile_PerState(t *testing.T) {
 		name      string
 		installed string
 		latest    string
-		marketNew bool
+		marketSt  registry.MarketplaceStatus
 		want      string
 	}{
-		{"not installed", "", "1.0.0", false, "uninstalled"},
-		{"installed current", "1.0.0", "1.0.0", false, "installed"},
-		{"installed has update", "1.0.0", "1.2.0", false, "update"},
-		{"marketplace new", "", "", true, "new"},
+		{"not installed", "", "1.0.0", registry.StatusUnchanged, "uninstalled"},
+		{"installed current", "1.0.0", "1.0.0", registry.StatusUnchanged, "installed"},
+		{"installed has update", "1.0.0", "1.2.0", registry.StatusUnchanged, "update"},
+		{"marketplace new", "", "", registry.StatusNew, "new"},
+		// Regression: StatusChanged used to fall through to "new"
+		// because the caller passed a boolean that conflated the
+		// two. Pin them as distinct visual states.
+		{"marketplace changed", "", "", registry.StatusChanged, "changed"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tool := mkTool("foo", tt.installed, tt.latest, registry.PackageIDs{Winget: "Foo"})
-			got := toolTileState(&tool, tt.marketNew)
+			got := toolTileState(&tool, tt.marketSt)
 			if got != tt.want {
 				t.Errorf("toolTileState = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestRenderToolTile_ChangedTileShowsUpdatedBadgeNotNew is the
+// regression test for the "tile view mislabels marketplace-changed
+// tools as new" PR comment. Before the fix, toolTileOpts had a single
+// boolean `marketplaceNew` that was set for both StatusNew and
+// StatusChanged, so a changed tool rendered "● new". The fix passes
+// the full MarketplaceStatus through; this test asserts a Changed
+// tool emits the "updated" pip and NOT the "new" pip.
+func TestRenderToolTile_ChangedTileShowsUpdatedBadgeNotNew(t *testing.T) {
+	t.Parallel()
+	tool := mkTool("foo", "", "1.0.0", registry.PackageIDs{Winget: "Foo"})
+
+	changed := stripANSIForTest(renderToolTile(tool, 60, toolTileOpts{
+		marketplaceStatus: registry.StatusChanged,
+	}))
+	if !strings.Contains(changed, "updated") {
+		t.Errorf("StatusChanged tile missing 'updated' pip:\n%s", changed)
+	}
+	if strings.Contains(changed, "● new") {
+		t.Errorf("StatusChanged tile should NOT show 'new' pip:\n%s", changed)
+	}
+
+	fresh := stripANSIForTest(renderToolTile(tool, 60, toolTileOpts{
+		marketplaceStatus: registry.StatusNew,
+	}))
+	if !strings.Contains(fresh, "new") {
+		t.Errorf("StatusNew tile missing 'new' pip:\n%s", fresh)
 	}
 }
 

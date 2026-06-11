@@ -866,6 +866,16 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 // or other shell-significant character. Keeps the rendered restart
 // command paste-safe across both POSIX shells and PowerShell, both
 // of which honour double-quoted strings for cd targets.
+//
+// IMPORTANT — display only. This is NOT a safe shell-escape: $,
+// backticks, $(...), and command substitution all expand inside
+// double-quoted strings in POSIX shells, so a malicious or
+// pathological ProjectPath could still hide an injection. The
+// RestartCommand field is intended for copy-to-clipboard only; the
+// dashboard's resume action no longer pipes it through /bin/sh.
+// If a future caller wants to actually execute this snippet, use
+// Provider.BuildLaunch instead — it returns (bin, args, cwd) for
+// a no-shell exec.
 func quoteForShell(s string) string {
 	if s == "" {
 		return `""`

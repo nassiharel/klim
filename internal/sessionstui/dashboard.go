@@ -25,6 +25,7 @@ package sessionstui
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -216,7 +217,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.rebuildView()
 	case "r":
 		if s, ok := m.selected(); ok {
-			return runResumeCmd(s)
+			return m.runResumeCmd(s)
 		}
 	case "c":
 		if s, ok := m.selected(); ok && s.RestartCommand != "" {
@@ -271,27 +272,59 @@ func (m *Model) selected() (agents.Session, bool) {
 // (non-zero exit, spawn failure) is surfaced back to the user as a
 // status line so the dashboard doesn't quietly report success on a
 // failed resume.
-func runResumeCmd(s agents.Session) tea.Cmd {
-	provID := providerForSessionID(s.ID)
-	if provID == "" {
-		return nil
+//
+// Security note: we DO NOT shell out the session's RestartCommand
+// string here. That field is paste-ready ("cd ... && claude --resume
+// <id>") and only safe via copy-to-clipboard; piping it through
+// /bin/sh -c (or cmd.exe /c) makes any unescaped shell metacharacter
+// in ProjectPath (e.g. `;`, `$(...)`, backtick, `&`) a command-
+// injection vector. Instead, we ask the provider's BuildLaunch for a
+// clean (bin, args, cwd) triple and exec the binary directly with
+// Cmd.Dir set — no shell layer at all.
+func (m *Model) runResumeCmd(s agents.Session) tea.Cmd {
+	cmd, err := m.buildResumeExec(s)
+	if err != nil {
+		msg := "resume: " + err.Error()
+		return func() tea.Msg { return statusMsg{text: msg} }
 	}
-	// We don't have direct access to the Service here without
-	// threading more state; build a minimal launch plan inline using
-	// the session's RestartCommand if present, else punt. The
-	// RestartCommand is a shell snippet (cd + cli), which we can't
-	// exec directly without invoking the shell.
-	if s.RestartCommand == "" {
-		return nil
-	}
-	// Use /bin/sh -c (or cmd /c on Windows) so the `cd && cli` form
-	// works as-is.
-	return tea.ExecProcess(shellExec(s.RestartCommand), func(err error) tea.Msg {
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		if err != nil {
 			return statusMsg{text: "resume failed: " + err.Error()}
 		}
 		return statusMsg{text: "resumed (exit ok)"}
 	})
+}
+
+// buildResumeExec returns an *exec.Cmd that will resume the session
+// without going through any shell. Extracted so tests can pin the
+// no-shell contract (the cmd's Path must be the agent binary, not
+// /bin/sh / cmd.exe, regardless of what shell metacharacters might
+// appear in the session's ProjectPath).
+func (m *Model) buildResumeExec(s agents.Session) (*exec.Cmd, error) {
+	provID := providerForSessionID(s.ID)
+	if provID == "" {
+		return nil, fmt.Errorf("cannot infer provider from id %q", s.ID)
+	}
+	if m.svc == nil {
+		return nil, fmt.Errorf("no service wired")
+	}
+	p := m.svc.ProviderFor(provID)
+	if p == nil {
+		return nil, fmt.Errorf("provider %q not registered", provID)
+	}
+	plan, err := p.BuildLaunch(agents.LaunchSpec{
+		Provider:  provID,
+		SessionID: s.ID,
+		Cwd:       s.ProjectPath,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(plan.Bin, plan.Args...)
+	if plan.Cwd != "" {
+		cmd.Dir = plan.Cwd
+	}
+	return cmd, nil
 }
 
 type statusMsg struct{ text string }

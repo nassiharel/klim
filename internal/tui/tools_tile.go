@@ -74,7 +74,7 @@ func isToolsTab(tab int) bool {
 // right-anchored [x]/[ ] selection box on the version row that
 // mirrors the Space-to-select semantics of the list view.
 func renderToolTile(t registry.Tool, width int, opts toolTileOpts) string {
-	state := toolTileState(&t, opts.marketplaceNew)
+	state := toolTileState(&t, opts.marketplaceStatus)
 	borderColor := cyberFGDim
 	if opts.selected {
 		borderColor = cyberPrimary
@@ -104,23 +104,30 @@ func renderToolTile(t registry.Tool, width int, opts toolTileOpts) string {
 // caller (buildToolTileLines) knows whether the row is favorited,
 // selected by cursor, etc.
 type toolTileOpts struct {
-	favorited      bool
-	selected       bool
-	showCheckbox   bool // Updates tab only
-	checked        bool // current state of the row's batch-select
-	marketplaceNew bool // tag tools that are new/changed in the latest market refresh
+	favorited    bool
+	selected     bool
+	showCheckbox bool // Updates tab only
+	checked      bool // current state of the row's batch-select
+	// marketplaceStatus is the per-tool diff label from the latest
+	// market refresh — StatusNew, StatusChanged, or StatusUnchanged.
+	// Replaces the old boolean `marketplaceNew` which conflated New
+	// with Changed (list view shows separate NEW / UPDATED badges;
+	// tile mode now matches).
+	marketplaceStatus registry.MarketplaceStatus
 }
 
 // toolTileState classifies a tool into one of the visual states the
 // border color maps from.
-func toolTileState(t *registry.Tool, marketNew bool) string {
+func toolTileState(t *registry.Tool, marketStatus registry.MarketplaceStatus) string {
 	switch {
 	case t.HasUpdate():
 		return "update"
 	case t.IsInstalled():
 		return "installed"
-	case marketNew:
+	case marketStatus == registry.StatusNew:
 		return "new"
+	case marketStatus == registry.StatusChanged:
+		return "changed"
 	default:
 		return "uninstalled"
 	}
@@ -132,7 +139,7 @@ func toolStateColor(state string) color.Color {
 	switch state {
 	case "installed":
 		return cyberOK
-	case "update":
+	case "update", "changed":
 		return cyberAccent
 	case "new":
 		return cyberPrimary
@@ -146,7 +153,7 @@ func toolStateDot(state string) string {
 	switch state {
 	case "installed":
 		glyph = "●"
-	case "update":
+	case "update", "changed":
 		glyph = "◐"
 	case "new":
 		glyph = "▲"
@@ -155,7 +162,8 @@ func toolStateDot(state string) string {
 }
 
 // renderToolStarsRow renders the top subtitle row: GitHub stars (when
-// known) or the marketplace-new pip. Empty placeholder when neither.
+// known) or the marketplace-new / marketplace-updated pip. Empty
+// placeholder when neither.
 func renderToolStarsRow(t *registry.Tool, state string, innerW int) string {
 	parts := []string{}
 	if t.GitHubInfo != nil && t.GitHubInfo.Stars > 0 {
@@ -163,9 +171,15 @@ func renderToolStarsRow(t *registry.Tool, state string, innerW int) string {
 			Render("★ " + formatStars(t.GitHubInfo.Stars))
 		parts = append(parts, stars)
 	}
-	if state == "new" {
-		pip := lipgloss.NewStyle().Foreground(cyberPrimary).Bold(true).Render("● new")
-		parts = append(parts, pip)
+	switch state {
+	case "new":
+		parts = append(parts,
+			lipgloss.NewStyle().Foreground(cyberPrimary).Bold(true).Render("● new"))
+	case "changed":
+		// Matches the list view's UPDATED badge so changed tools
+		// don't masquerade as new ones.
+		parts = append(parts,
+			lipgloss.NewStyle().Foreground(cyberAccent).Bold(true).Render("◐ updated"))
 	}
 	if t.GitHubInfo != nil && t.GitHubInfo.Archived {
 		warn := lipgloss.NewStyle().Foreground(cyberFGDim).Render("⌧ archived")
@@ -181,7 +195,7 @@ func renderToolStarsRow(t *registry.Tool, state string, innerW int) string {
 // bold tool name + colored package chip. The reserved slot keeps
 // the title's column position identical whether starred or not.
 func renderToolTitleRow(t *registry.Tool, favorited, selected bool, innerW int) string {
-	dot := toolStateDot(toolTileState(t, false)) // dot mirrors install state, ignore "new" flag here
+	dot := toolStateDot(toolTileState(t, registry.StatusUnchanged)) // dot mirrors install state, ignore new/changed flag here
 	star := "  "
 	if favorited {
 		star = "⭐"
@@ -372,11 +386,18 @@ func (m Model) buildToolTileLines(maxRows int) []string {
 		toolIdx := m.filteredIndex[vi]
 		tool := m.tools[toolIdx]
 		opts := toolTileOpts{
-			favorited:      m.favoriteNames[tool.Name],
-			selected:       vi == m.cursor && !m.categoryPicker,
-			showCheckbox:   m.activeTab == tabUpdates,
-			checked:        m.activeTab == tabUpdates && m.updateSelected[toolIdx],
-			marketplaceNew: m.activeTab == tabDiscover && tool.MarketplaceStatus != registry.StatusUnchanged,
+			favorited:    m.favoriteNames[tool.Name],
+			selected:     vi == m.cursor && !m.categoryPicker,
+			showCheckbox: m.activeTab == tabUpdates,
+			checked:      m.activeTab == tabUpdates && m.updateSelected[toolIdx],
+		}
+		// Tag the tile with its marketplace status (StatusNew /
+		// StatusChanged / StatusUnchanged) so the renderer can
+		// distinguish a brand-new tool from an updated one — list
+		// view shows separate NEW / UPDATED badges and tile mode
+		// now matches.
+		if m.activeTab == tabDiscover {
+			opts.marketplaceStatus = tool.MarketplaceStatus
 		}
 		tiles = append(tiles, renderToolTile(tool, tileW, opts))
 	}
