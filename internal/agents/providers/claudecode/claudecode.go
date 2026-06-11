@@ -369,27 +369,184 @@ func (p *Provider) readEnabledPlugins() map[string]bool {
 	return out
 }
 
-// Plugins discovers installed plugins by scanning the marketplace
-// clones. Real Claude Code layout nests plugins under
-// `<mp>/plugins/<plugin>` and `<mp>/external_plugins/<plugin>`; older
-// test fixtures put them at `<mp>/<plugin>` directly. We accept all
-// three.
+// Plugins returns the plugins Claude Code considers installed.
 //
-// Claude itself only considers a plugin "installed" if it's recorded in
-// ~/.claude/plugins/installed_plugins.json (keyed by `name@marketplace`).
-// When that file exists we filter the on-disk scan to only those
-// entries — otherwise `klim agents plugins uninstall X` would shell out
-// to `claude plugin uninstall X` and fail with "not found" for plugins
-// that merely happen to sit in a cloned marketplace. When the file is
-// absent (fresh install, fixture-based tests) we fall back to the
-// legacy behavior of treating every on-disk manifest as installed.
+// The authoritative source is ~/.claude/plugins/installed_plugins.json,
+// whose entries pair a `<name>@<marketplace>` key with the on-disk
+// install path. Real-world Claude installs put the plugin's actual
+// code under
+// ~/.claude/plugins/cache/<mp>/<name>/<version>/.claude-plugin/plugin.json
+// — NOT under the marketplaces clone — so this is the only path we
+// can rely on to find the manifest of a real installed plugin.
+//
+// We support three layouts in priority order:
+//
+//  1. installed_plugins.json drives discovery (real installs).
+//     For each entry we read the manifest from `installPath` and
+//     fall back to walking the marketplace clone if it's missing,
+//     and finally synthesize minimal metadata from the registry
+//     record when no manifest exists anywhere (some installs leave
+//     only LICENSE/README in the cache dir).
+//
+//  2. Legacy marketplace scan (fixture-based tests / fresh installs
+//     without installed_plugins.json). Walks
+//     `<mp>/<plugin>`, `<mp>/plugins/<plugin>`,
+//     `<mp>/external_plugins/<plugin>` for `plugin.json` manifests
+//     and treats every discovered manifest as installed.
 func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
+	enabled := p.readEnabledPlugins()
+	installed := p.readInstalledPlugins()
+
+	if len(installed) > 0 {
+		return p.pluginsFromInstalledRegistry(installed, enabled), nil
+	}
+	return p.pluginsFromMarketplaceScan(enabled), nil
+}
+
+// pluginsFromInstalledRegistry produces the plugin slice from the
+// `installed_plugins.json` registry. The registry is the single
+// source of truth Claude consults for `claude plugin ...` commands,
+// so anything in it is "installed" by definition — even when the
+// manifest is missing on disk (some installs only ship LICENSE +
+// README into the cache dir; we still need to surface the row).
+func (p *Provider) pluginsFromInstalledRegistry(
+	installed map[string]installedPluginRecord,
+	enabled map[string]bool,
+) []agents.Plugin {
+	plugins := make([]agents.Plugin, 0, len(installed))
+	for key, rec := range installed {
+		name, mp := splitInstalledKey(key)
+		if name == "" {
+			continue
+		}
+
+		// Try the manifest at installPath first (real install), then
+		// fall back to a marketplace clone (less common but supported
+		// by some plugins). Either way the manifest's fields take
+		// precedence over the registry record — the registry doesn't
+		// carry author / description / homepage.
+		var m *pluginManifest
+		var manifestDir string
+		if rec.InstallPath != "" {
+			if mm, err := readPluginManifest(filepath.Join(rec.InstallPath, ".claude-plugin", "plugin.json")); err == nil {
+				m = mm
+				manifestDir = rec.InstallPath
+			}
+		}
+		if m == nil {
+			if mm, dir := p.findManifestInMarketplaces(name, mp); mm != nil {
+				m = mm
+				manifestDir = dir
+			}
+		}
+
+		// Synthesize a minimal manifest when neither the install dir
+		// nor any marketplace clone has one. Without this fallback the
+		// row would silently disappear from `klim agents plugins list`
+		// — the opposite of useful for a user trying to inspect what
+		// Claude has installed.
+		if m == nil {
+			m = &pluginManifest{Name: name, Version: rec.Version}
+		}
+		if m.Version == "" {
+			m.Version = rec.Version
+		}
+		if manifestDir == "" {
+			manifestDir = rec.InstallPath
+		}
+
+		scope := agents.ScopeUser
+		if strings.EqualFold(rec.Scope, "project") {
+			scope = agents.ScopeProject
+		}
+
+		plugins = append(plugins, p.buildPlugin(m, mp, manifestDir, scope, isEnabledForKey(enabled, key)))
+	}
+	sort.Slice(plugins, func(i, j int) bool { return plugins[i].Name < plugins[j].Name })
+	return plugins
+}
+
+// splitInstalledKey parses a `name@marketplace` registry key. Plugin
+// names can technically contain `@` themselves (rare), so we split on
+// the LAST `@` to keep `super@cool@my-marketplace` parsable.
+func splitInstalledKey(key string) (name, marketplace string) {
+	at := strings.LastIndex(key, "@")
+	if at <= 0 || at == len(key)-1 {
+		return "", ""
+	}
+	return key[:at], key[at+1:]
+}
+
+// isEnabledForKey returns the Enabled value for a registry key.
+// When the key isn't in the enabled map at all, we default to true:
+// Claude treats a missing entry as enabled.
+func isEnabledForKey(enabled map[string]bool, key string) bool {
+	if v, ok := enabled[key]; ok {
+		return v
+	}
+	return true
+}
+
+// buildPlugin assembles the agents.Plugin record from a manifest +
+// the metadata we already know about its installation. Centralised
+// so the registry-driven and marketplace-scan code paths produce
+// structurally identical Plugin records — the only path-specific
+// inputs are the manifest, the marketplace name, the install path,
+// the scope, and the enabled flag.
+func (p *Provider) buildPlugin(m *pluginManifest, marketplace, installPath string, scope agents.Scope, enabled bool) agents.Plugin {
+	return agents.Plugin{
+		ID:          marketplace + "/" + m.Name,
+		Name:        m.Name,
+		Description: m.Description,
+		Version:     m.Version,
+		Author:      m.Author.Name,
+		Homepage:    m.Homepage,
+		Repository:  m.Repository,
+		License:     m.License,
+		Keywords:    m.Keywords,
+		Provider:    p.ID(),
+		Marketplace: marketplace,
+		Installed:   true,
+		Enabled:     enabled,
+		InstallPath: installPath,
+		Scope:       scope,
+		Source:      agents.SourceLocalClaude,
+	}
+}
+
+// findManifestInMarketplaces locates a plugin.json for the given
+// (name, marketplace) pair by walking the marketplaces clone tree.
+// Used as a fallback when the registry's installPath doesn't contain
+// a manifest — historically some plugins shipped the manifest only in
+// the marketplace tree.
+func (p *Provider) findManifestInMarketplaces(name, marketplace string) (*pluginManifest, string) {
+	for _, root := range p.marketplaceRoots() {
+		mpDir := filepath.Join(root, marketplace)
+		candidates := []string{
+			filepath.Join(mpDir, name),
+			filepath.Join(mpDir, "plugins", name),
+			filepath.Join(mpDir, "external_plugins", name),
+		}
+		for _, dir := range candidates {
+			if m, err := readPluginManifest(filepath.Join(dir, ".claude-plugin", "plugin.json")); err == nil {
+				return m, dir
+			}
+		}
+	}
+	return nil, ""
+}
+
+// pluginsFromMarketplaceScan walks every marketplace clone and emits
+// a plugin per `.claude-plugin/plugin.json` it finds. Treats every
+// discovered manifest as installed — the legacy behavior preserved
+// for fixture-based tests and fresh installs that don't yet have an
+// `installed_plugins.json`.
+//
+// This path is NOT reached when `installed_plugins.json` exists; the
+// registry-driven path handles real installs (see Plugins).
+func (p *Provider) pluginsFromMarketplaceScan(enabled map[string]bool) []agents.Plugin {
 	var plugins []agents.Plugin
 	seen := make(map[string]bool)
-
-	installed := p.readInstalledPlugins()
-	enabled := p.readEnabledPlugins()
-
 	for _, root := range p.marketplaceRoots() {
 		mEntries, err := os.ReadDir(root)
 		if err != nil {
@@ -401,8 +558,6 @@ func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
 			}
 			mpName := mp.Name()
 			mpDir := filepath.Join(root, mpName)
-
-			// Candidate plugin parent dirs within a marketplace clone.
 			candidates := []string{
 				mpDir,                                    // legacy: <mp>/<plugin>
 				filepath.Join(mpDir, "plugins"),          // real: first-party plugins
@@ -427,49 +582,16 @@ func (p *Provider) Plugins(ctx context.Context) ([]agents.Plugin, error) {
 					if seen[id] {
 						continue
 					}
-
-					// installed_plugins.json keys are name@marketplace,
-					// distinct from our ID format (mp/name) which other
-					// code depends on — keep ID untouched.
-					key := m.Name + "@" + mpName
-					if installed != nil {
-						if _, ok := installed[key]; !ok {
-							continue
-						}
-					}
-
-					isEnabled := true
-					if enabled != nil {
-						if v, ok := enabled[key]; ok {
-							isEnabled = v
-						}
-					}
-
 					seen[id] = true
-					plugins = append(plugins, agents.Plugin{
-						ID:          id,
-						Name:        m.Name,
-						Description: m.Description,
-						Version:     m.Version,
-						Author:      m.Author.Name,
-						Homepage:    m.Homepage,
-						Repository:  m.Repository,
-						License:     m.License,
-						Keywords:    m.Keywords,
-						Provider:    p.ID(),
-						Marketplace: mpName,
-						Installed:   true,
-						Enabled:     isEnabled,
-						InstallPath: pluginDir,
-						Scope:       agents.ScopeUser,
-						Source:      agents.SourceLocalClaude,
-					})
+
+					key := m.Name + "@" + mpName
+					plugins = append(plugins, p.buildPlugin(m, mpName, pluginDir, agents.ScopeUser, isEnabledForKey(enabled, key)))
 				}
 			}
 		}
 	}
 	sort.Slice(plugins, func(i, j int) bool { return plugins[i].Name < plugins[j].Name })
-	return plugins, nil
+	return plugins
 }
 
 // pluginCacheRoots returns parent dirs that may contain marketplace
