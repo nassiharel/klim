@@ -263,7 +263,10 @@ Examples:
   klim agents sessions resume claude:foo-bar
   klim agents sessions resume "fix cron"   # fuzzy match on title/project
   klim agents sessions resume --last        # most recently modified session`,
-		Args: cobra.MaximumNArgs(1),
+		// usageArgs ensures `accepts at most 1 arg(s)` (cobra's
+		// MaximumNArgs message) surfaces as *UsageError → exit 2,
+		// matching the >1-args contract in CLI-CONVENTIONS.md.
+		Args: usageArgs(cobra.MaximumNArgs(1)),
 		RunE: agentsResumeSession,
 	}
 	resumeCmd.Flags().Bool("last", false, "resume the most recently modified session")

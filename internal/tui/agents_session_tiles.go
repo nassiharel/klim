@@ -104,8 +104,14 @@ func renderOneTile(s agents.Session, width int, selected bool) string {
 		innerW = tileMinWidth - 4
 	}
 
+	// Tile subtitle: humanised "<relative> ago" off the field
+	// actually displayed (LastModified). Previous wording said
+	// "started <relative>" but used LastModified, which conflated
+	// session-creation with last-activity time — the latter is far
+	// more useful for spotting stale sessions, so we keep the field
+	// and update the label to match.
 	subtitle := lipgloss.NewStyle().Foreground(cyberFGDim).
-		Render(padOrTruncTile("started "+humaniseTime(s.LastModified), innerW))
+		Render(padOrTruncTile("modified "+humaniseTime(s.LastModified), innerW))
 
 	titleRow := renderTitleRow(s, innerW, selected)
 	branchRow := renderBranchRow(s, innerW)

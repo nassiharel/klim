@@ -1,6 +1,7 @@
 package enrich
 
 import (
+	"errors"
 	"io"
 	"os"
 )
@@ -49,15 +50,34 @@ func ReadTail(path string, maxBytes int64, trimToLine bool) []byte {
 		}
 	}
 
-	buf := make([]byte, size-startAt)
-	if _, err := io.ReadFull(f, buf); err != nil {
-		// Short read is fine — return what we got. A real error
-		// returns nil to stay best-effort.
-		if err != io.ErrUnexpectedEOF {
+	return readTailFromReader(f, size-startAt, startAt > 0 && trimToLine)
+}
+
+// readTailFromReader reads up to `want` bytes from r and applies the
+// trim-to-line logic. Separated from ReadTail so the short-read
+// (io.ErrUnexpectedEOF) path can be exercised by tests without
+// racing against the filesystem.
+//
+// On short read — which happens when the file shrinks between
+// Stat() and the ReadFull (log rotation, a concurrent writer
+// truncating) — the returned slice is trimmed to the bytes actually
+// read so callers never see trailing NUL bytes that would otherwise
+// break downstream JSONL parsers.
+//
+// Any other read error returns nil (stay best-effort).
+func readTailFromReader(r io.Reader, want int64, trimToLine bool) []byte {
+	if want <= 0 {
+		return nil
+	}
+	buf := make([]byte, want)
+	n, err := io.ReadFull(r, buf)
+	if err != nil {
+		if !errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil
 		}
+		buf = buf[:n]
 	}
-	if trimToLine && startAt > 0 {
+	if trimToLine {
 		// Drop everything up to (and including) the first newline so
 		// the consumer's first decode doesn't see a half-line.
 		for i := 0; i < len(buf); i++ {
