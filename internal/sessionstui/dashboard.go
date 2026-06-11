@@ -24,6 +24,7 @@ package sessionstui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"sort"
@@ -317,7 +318,7 @@ func (m *Model) buildResumeExec(s agents.Session) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("cannot infer provider from id %q", s.ID)
 	}
 	if m.svc == nil {
-		return nil, fmt.Errorf("no service wired")
+		return nil, errors.New("no service wired")
 	}
 	p := m.svc.ProviderFor(provID)
 	if p == nil {

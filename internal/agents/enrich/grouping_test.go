@@ -59,8 +59,8 @@ func TestResolveGrouping(t *testing.T) {
 			want: "🏠 Home",
 		},
 		{
-			name: "title bucket: bug",
-			cwd:  p("Users"),
+			name:  "title bucket: bug",
+			cwd:   p("Users"),
 			title: "fix a small bug in widget",
 			want:  "Bug Fixes",
 		},

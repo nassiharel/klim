@@ -91,12 +91,12 @@ func idsOf(in []agents.Session) []string {
 // binary directly — never via a shell — regardless of how dirty
 // the session's ProjectPath might be.
 type fakeProvider struct {
-	id           agents.ProviderID
-	launchBin    string
-	launchArgs   []string
-	launchErr    error
-	captureSpec  *agents.LaunchSpec
-	respectCwd   bool // when true, BuildLaunch echoes spec.Cwd into the plan
+	id          agents.ProviderID
+	launchBin   string
+	launchArgs  []string
+	launchErr   error
+	captureSpec *agents.LaunchSpec
+	respectCwd  bool // when true, BuildLaunch echoes spec.Cwd into the plan
 }
 
 func (f *fakeProvider) ID() agents.ProviderID                                        { return f.id }

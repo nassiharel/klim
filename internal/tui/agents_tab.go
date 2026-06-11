@@ -2016,8 +2016,10 @@ func renderTranscriptViewer(title string, lines []string, scroll, totalWidth, to
 	out := []string{header, ""}
 
 	if len(lines) == 0 {
-		out = append(out, dimVersion.Render("(empty transcript — no events recorded yet)"))
-		out = append(out, "", dimVersion.Render("0 lines · Esc / Enter / q = close"))
+		out = append(out,
+			dimVersion.Render("(empty transcript — no events recorded yet)"),
+			"",
+			dimVersion.Render("0 lines · Esc / Enter / q = close"))
 		return box.Render(strings.Join(out, "\n"))
 	}
 
@@ -2130,12 +2132,12 @@ func clampViewerScroll(st *agentsState, want int) {
 	if want < 0 {
 		want = 0
 	}
-	max := len(st.viewerLines) - 1
-	if max < 0 {
-		max = 0
+	maxScroll := len(st.viewerLines) - 1
+	if maxScroll < 0 {
+		maxScroll = 0
 	}
-	if want > max {
-		want = max
+	if want > maxScroll {
+		want = maxScroll
 	}
 	st.viewerScroll = want
 }

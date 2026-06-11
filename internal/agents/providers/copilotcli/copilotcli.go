@@ -572,19 +572,21 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 
 // quoteForShell renders `s` so it can be pasted into a POSIX shell
 // without further interpretation. Uses single-quote escaping: wraps
-// the whole string in `'...'` and escapes any interior `'` as
-// `'\''` (close-quote, escaped-quote, re-open-quote). Inside single
-// quotes, nothing is expanded — no `$VAR`, no `$(...)`, no
+// the whole string in single quotes and replaces any interior single
+// quote with the four-character sequence  ' \ ' '  (close the quoted
+// run, escape one literal quote, re-open the quoted run). Inside
+// single quotes, nothing is expanded — no `$VAR`, no `$(...)`, no
 // backticks, no globs — so this is the safe choice for a copy/paste
 // snippet that must survive arbitrary metacharacters in ProjectPath.
 //
 // IMPORTANT — POSIX shells only:
 //
 //   - PowerShell uses `""` (doubled) or a backtick to escape an
-//     embedded single quote, NOT `'\''`. Users on Windows are
-//     expected to copy the cwd separately or use the dashboard's
-//     resume action (which goes through Provider.BuildLaunch for a
-//     no-shell exec, no quoting needed at all).
+//     embedded single quote, NOT the close/escape/reopen trick.
+//     Users on Windows are expected to copy the cwd separately or
+//     use the dashboard's resume action (which goes through
+//     Provider.BuildLaunch for a no-shell exec, no quoting needed
+//     at all).
 //   - For non-POSIX shells the safer path is to display the cwd as
 //     a separate field; we keep the snippet to ease the common
 //     POSIX terminal case.
@@ -616,7 +618,8 @@ func quoteForShell(s string) string {
 	if safe {
 		return s
 	}
-	// Single-quote wrap. Interior `'` becomes `'\''`.
+	// Single-quote wrap. Interior single quotes use the close /
+	// escape-quote / re-open dance described above.
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
