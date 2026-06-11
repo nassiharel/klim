@@ -331,9 +331,20 @@ func (m Model) buildToolTileLines(maxRows int) []string {
 	bodyW, _ := m.bodyDims()
 	tileW, cols := chooseTileLayout(bodyW)
 
-	// One tile-row takes tileHeight visual lines; budget the tile
-	// data rows so the grid fits in maxRows after the header.
-	tileRows := (maxRows - 1) / tileHeight
+	// Budget the tile data rows. One tile-row = tileHeight visual
+	// lines. We must also reserve room for:
+	//   - the header row (already pushed above): 1 line
+	//   - the "↑ N above" indicator: up to 1 line
+	//   - the "↓ N below" indicator: up to 1 line
+	// Without reserving the indicators, a near-full grid plus both
+	// indicators overflows `maxRows` and renderView truncates the
+	// last tile row mid-card. We always reserve both slots even
+	// when only one (or neither) will ultimately render — the
+	// trade-off is one wasted line when the cursor sits at either
+	// end of the list, which is preferable to clipped tiles.
+	const indicatorBudget = 2
+	const headerBudget = 1
+	tileRows := (maxRows - headerBudget - indicatorBudget) / tileHeight
 	if tileRows < 1 {
 		tileRows = 1
 	}

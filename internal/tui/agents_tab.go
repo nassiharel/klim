@@ -1760,11 +1760,15 @@ func (m *Model) renderAgentsView() string {
 	// tall and we lay them out in 1–3 columns. Translate the visual
 	// row budget into an entity-count budget so windowAgentRows
 	// returns enough rows to fill the available tile rows without
-	// overflowing them.
+	// overflowing them. Reserve 2 lines for the up/down indicator
+	// rows ("↑ N above" / "↓ N below") so a near-full grid with
+	// both indicators visible doesn't push past maxRows and get
+	// clipped mid-card.
 	if st.subTabViewMode[st.subTab] == sessionsViewTiles {
 		tileTotalW := m.width - agentsSidebarColWidth - 3
 		_, cols := chooseTileLayout(tileTotalW)
-		tileRows := maxRows / tileHeight
+		const tileIndicatorBudget = 2
+		tileRows := (maxRows - tileIndicatorBudget) / tileHeight
 		if tileRows < 1 {
 			tileRows = 1
 		}
@@ -3016,7 +3020,16 @@ func renderTranscriptLine(raw []byte) string {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &ev); err != nil {
-		return "" // unparsable — skip
+		// Malformed JSON (typically a partially-written tail line
+		// from an in-progress session). The doc contract for this
+		// function is "lines that don't parse fall through unchanged
+		// at 4 KiB" — so don't silently drop, surface the raw text
+		// (capped) so the user still sees that something happened.
+		const maxRaw = 4096
+		if len(raw) > maxRaw {
+			return string(raw[:maxRaw-1]) + "…"
+		}
+		return string(raw)
 	}
 
 	switch ev.Type {

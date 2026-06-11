@@ -9,7 +9,13 @@ package tui
 // test the unit-test fix could pass while the real-world experience
 // remains broken.
 //
-// Skipped when no transcript is available (CI on a fresh machine).
+// Hermeticity: this test reads the developer's actual home directory,
+// which is not OK to do on every `go test ./...` invocation — the
+// results vary by machine, by what's currently being edited, and
+// implicitly leak whatever conversation text happens to be in the
+// transcript. We gate it behind the `KLIM_E2E` env var so the test
+// runs only when explicitly opted into (`KLIM_E2E=1 go test ./...`).
+// When unset (the common case) the test skips with a clear message.
 
 import (
 	"os"
@@ -19,6 +25,9 @@ import (
 )
 
 func TestRenderTranscriptLine_RealOnDiskTranscript(t *testing.T) {
+	if os.Getenv("KLIM_E2E") == "" {
+		t.Skip("KLIM_E2E not set; skipping test that reads developer's ~/.claude/projects (non-hermetic)")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skip("no home dir")

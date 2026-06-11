@@ -237,7 +237,20 @@ func init() {
 	agentsSessionsCmd.AddCommand(newAgentsSessionsStarCmd())
 	agentsSessionsCmd.AddCommand(newAgentsSessionsUnstarCmd())
 	agentsSessionsCmd.AddCommand(newAgentsSessionsGroupCmd())
-	agentsSessionsCmd.AddCommand(&cobra.Command{Use: "resume <id>", Short: "Resume a session (exec the agent CLI)", Args: cobra.ExactArgs(1), RunE: agentsResumeSession})
+	resumeCmd := &cobra.Command{
+		Use:   "resume [id]",
+		Short: "Resume a session (exec the agent CLI)",
+		Long: `Resume a session by id, by fuzzy match on title/project, or by passing --last.
+
+Examples:
+  klim agents sessions resume claude:foo-bar
+  klim agents sessions resume "fix cron"   # fuzzy match on title/project
+  klim agents sessions resume --last        # most recently modified session`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: agentsResumeSession,
+	}
+	resumeCmd.Flags().Bool("last", false, "resume the most recently modified session")
+	agentsSessionsCmd.AddCommand(resumeCmd)
 	agentsSessionsCmd.AddCommand(&cobra.Command{Use: "delete <id>", Short: "Delete a session", Args: cobra.ExactArgs(1), RunE: agentsDeleteSession})
 
 	// PR #77 review #3: drop the confusingly-named `--provider-filter`
@@ -763,29 +776,40 @@ func agentsRemoveMCP(cmd *cobra.Command, args []string) error {
 	})
 }
 func agentsResumeSession(cmd *cobra.Command, args []string) error {
-	id := args[0]
+	last, _ := cmd.Flags().GetBool("last")
+	if last && len(args) > 0 {
+		return errors.New("resume: --last cannot be combined with an explicit session id")
+	}
+	if !last && len(args) == 0 {
+		return errors.New("resume: pass a session id, a fuzzy match string, or --last")
+	}
+
 	svc := newAgentsService()
 
-	// When the arg isn't already a provider-prefixed id, try to
-	// resolve it against the snapshot: a "--last" sentinel picks the
-	// most-recently-modified session, otherwise we fall through to a
-	// fuzzy match by ID / project / title.
-	if !strings.HasPrefix(id, "claude:") && !strings.HasPrefix(id, "copilot:") {
+	var id string
+	if !last {
+		id = args[0]
+	}
+
+	// When the user asked for --last, OR the supplied arg is not
+	// already a provider-prefixed id, load the snapshot and resolve.
+	if last || (!strings.HasPrefix(id, "claude:") && !strings.HasPrefix(id, "copilot:")) {
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 		defer cancel()
 		snap, err := svc.LoadAll(ctx, agents.LoadOpts{})
 		if err != nil {
 			return err
 		}
-		if id == "--last" || id == "last" {
+		switch {
+		case last:
 			if len(snap.Sessions) == 0 {
 				return errors.New("resume: no sessions available")
 			}
 			id = snap.Sessions[0].ID
-		} else {
+		default:
 			match, ok := findSession(snap.Sessions, id)
 			if !ok {
-				return fmt.Errorf("resume: cannot resolve %q to a unique session — pass the full provider-prefixed id (claude:… or copilot:…)", id)
+				return fmt.Errorf("resume: cannot resolve %q to a unique session — pass the full provider-prefixed id (claude:… or copilot:…) or use --last", id)
 			}
 			id = match.ID
 		}

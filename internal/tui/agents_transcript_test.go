@@ -62,3 +62,25 @@ func TestRenderTranscriptLine_SkipsNoiseEvents(t *testing.T) {
 		}
 	}
 }
+
+// TestRenderTranscriptLine_MalformedJSONFallsThrough covers the
+// reviewer-flagged silent-drop bug: when a line looks like JSON
+// (starts with `{`) but json.Unmarshal fails — typically a
+// partially-written tail line at the end of an in-progress session
+// — the old code returned "" and the user saw nothing. The doc
+// contract for this function says "lines that don't parse fall
+// through unchanged at 4 KiB"; this test pins that contract.
+func TestRenderTranscriptLine_MalformedJSONFallsThrough(t *testing.T) {
+	t.Parallel()
+	// A truncated assistant event — valid JSON shape, invalid
+	// because the array is unterminated. Real-world cause: a
+	// session in mid-write when the user opened the viewer.
+	raw := []byte(`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"unfini`)
+	got := renderTranscriptLine(raw)
+	if got == "" {
+		t.Fatal("malformed JSON line silently dropped — doc says it should fall through unchanged")
+	}
+	if !strings.Contains(got, "unfini") {
+		t.Errorf("expected the raw fragment to surface, got %q", got)
+	}
+}

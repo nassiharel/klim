@@ -514,22 +514,19 @@ func (m Model) footerHeight() int {
 // renderers (tile views, plugin tabs, …) don't have to re-derive
 // the math.
 //
-// width:
-//   - terminal width when there's no sidebar
-//   - terminal width minus the sidebar column and its " │ "
-//     separator when the sidebar is open
+// width: terminal width minus the sidebar column and its " │ "
+// separator. renderView always joins the body with a fixed-width
+// sidebar pad (line 488/490) even when sidebarItems is empty, so
+// callers that ignore that column overestimate body width and end
+// up with rendering that overflows / wraps. We always subtract.
 //
-// rows:
-//   - terminal height minus the chrome the rest of renderView lays
-//     down (title + tabs + rule + spacing + sub-tabs + footer).
+// rows: terminal height minus the chrome the rest of renderView
+// lays down (title + tabs + rule + spacing + sub-tabs + footer).
 //
 // Both values are clamped to safe minimums so callers don't need
 // defensive arithmetic.
 func (m Model) bodyDims() (width, rows int) {
-	width = m.width
-	if len(m.sidebarItems) > 0 {
-		width = m.width - colSidebar - 3 // 3 = " │ "
-	}
+	width = m.width - colSidebar - 3 // 3 = " │ "
 	if width < 20 {
 		width = 20
 	}
