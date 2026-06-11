@@ -194,3 +194,42 @@ func TestRenderToolTile_HighlightedHasDifferentBar(t *testing.T) {
 		t.Error("selected tile must differ from idle tile")
 	}
 }
+
+// TestBuildToolTileLines_EmptyFilteredIndexShowsMessage pins the
+// fix for the "tile mode is completely blank when filters hide all
+// tools" bug. Tile mode used to return []string{""} for an empty
+// filtered index, bypassing the list-mode empty-state messages.
+// Now it mirrors buildToolLines and renders e.g.
+// "All tools are up to date! ✓" inside the tile body so the user
+// understands why the grid is empty.
+func TestBuildToolTileLines_EmptyFilteredIndexShowsMessage(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		tab     int
+		hasCat  bool
+		wantSub string
+	}{
+		{tabInstalled, true, "No installed tools found."},
+		{tabUpdates, true, "All tools are up to date!"},
+		{tabDiscover, true, "All marketplace tools are installed!"},
+		{tabInstalled, false, "No tools loaded."},
+	}
+	for _, tc := range cases {
+		m := Model{
+			activeTab:     tc.tab,
+			filteredIndex: nil,
+			phase:         phaseDone,
+			width:         120,
+			height:        40,
+		}
+		if tc.hasCat {
+			m.tools = []registry.Tool{mkTool("foo", "1.0.0", "1.0.0", registry.PackageIDs{Winget: "F"})}
+		}
+		lines := m.buildToolTileLines(20)
+		joined := stripANSIForTest(strings.Join(lines, "\n"))
+		if !strings.Contains(joined, tc.wantSub) {
+			t.Errorf("tab=%d hasCat=%v: expected empty-state %q in output, got:\n%s",
+				tc.tab, tc.hasCat, tc.wantSub, joined)
+		}
+	}
+}

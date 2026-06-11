@@ -59,16 +59,8 @@ func TestResolveGrouping(t *testing.T) {
 			want: "🏠 Home",
 		},
 		{
-			name: "user mapping overrides the home label",
-			cwd:  p("Users", "n"),
-			home: p("Users", "n"),
-			// Substring match: "n" is in the path, but we don't want
-			// a 1-char accidental match; use a clearly intentional key.
-			want: "🏠 Home",
-		},
-		{
-			name:  "title bucket: bug",
-			cwd:   p("Users"),
+			name: "title bucket: bug",
+			cwd:  p("Users"),
 			title: "fix a small bug in widget",
 			want:  "Bug Fixes",
 		},
@@ -88,6 +80,26 @@ func TestResolveGrouping(t *testing.T) {
 					tt.cwd, tt.repo, tt.title, tt.home, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestResolveMappingOverridesHome pins the documented precedence in
+// Resolve: when both a user mapping matches the cwd AND the cwd is
+// the home directory, the mapping wins. The previous version of this
+// test sat inside the table above and asserted "🏠 Home" without
+// supplying any mapping that matched — leaving the precedence
+// untested even though the test name claimed it.
+func TestResolveMappingOverridesHome(t *testing.T) {
+	t.Parallel()
+	home := p("Users", "n")
+	mappings := map[string]string{
+		// "Users" matches the home cwd; without the mapping-first
+		// precedence this would resolve to "🏠 Home".
+		"Users": "PersonalLab",
+	}
+	got := Resolve(home, "", "", home, mappings)
+	if got != "PersonalLab" {
+		t.Errorf("mapping should override home label: got %q, want %q", got, "PersonalLab")
 	}
 }
 

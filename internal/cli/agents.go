@@ -778,10 +778,10 @@ func agentsRemoveMCP(cmd *cobra.Command, args []string) error {
 func agentsResumeSession(cmd *cobra.Command, args []string) error {
 	last, _ := cmd.Flags().GetBool("last")
 	if last && len(args) > 0 {
-		return errors.New("resume: --last cannot be combined with an explicit session id")
+		return usageErrorf("resume: --last cannot be combined with an explicit session id")
 	}
 	if !last && len(args) == 0 {
-		return errors.New("resume: pass a session id, a fuzzy match string, or --last")
+		return usageErrorf("resume: pass a session id, a fuzzy match string, or --last")
 	}
 
 	svc := newAgentsService()
@@ -803,13 +803,13 @@ func agentsResumeSession(cmd *cobra.Command, args []string) error {
 		switch {
 		case last:
 			if len(snap.Sessions) == 0 {
-				return errors.New("resume: no sessions available")
+				return usageErrorf("resume: no sessions available")
 			}
 			id = snap.Sessions[0].ID
 		default:
 			match, ok := findSession(snap.Sessions, id)
 			if !ok {
-				return fmt.Errorf("resume: cannot resolve %q to a unique session — pass the full provider-prefixed id (claude:… or copilot:…) or use --last", id)
+				return usageErrorf("resume: cannot resolve %q to a unique session — pass the full provider-prefixed id (claude:… or copilot:…) or use --last", id)
 			}
 			id = match.ID
 		}
@@ -817,7 +817,7 @@ func agentsResumeSession(cmd *cobra.Command, args []string) error {
 
 	provID := providerForSessionID(id)
 	if provID == "" {
-		return fmt.Errorf("resume: cannot infer provider from session id %q (expected claude:… or copilot:…)", id)
+		return usageErrorf("resume: cannot infer provider from session id %q (expected claude:… or copilot:…)", id)
 	}
 	plan, err := svc.Launch(agents.LaunchSpec{Provider: provID, SessionID: id})
 	if err != nil {
@@ -830,7 +830,7 @@ func agentsDeleteSession(cmd *cobra.Command, args []string) error {
 	id := args[0]
 	provID := providerForSessionID(id)
 	if provID == "" {
-		return fmt.Errorf("delete: cannot infer provider from session id %q", id)
+		return usageErrorf("delete: cannot infer provider from session id %q", id)
 	}
 	svc := newAgentsService()
 	p := svc.ProviderFor(provID)

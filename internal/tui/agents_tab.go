@@ -1727,6 +1727,20 @@ func (m *Model) renderAgentsView() string {
 		return b.String()
 	}
 
+	// Transcript viewer modal replaces the table body. The previous
+	// implementation appended the modal after the table at the very
+	// bottom — but the outer view wrapper clips the rendered body
+	// from the bottom to fit `visibleRows`, which dropped the modal
+	// off-screen. Render it as the body instead so it always sits
+	// inside the visible viewport.
+	if st.viewerOpen {
+		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines))
+		if st.flash != "" && time.Now().Before(st.flashEnd) {
+			b.WriteString("\n  " + st.flash + "\n")
+		}
+		return b.String()
+	}
+
 	rows := m.agentsVisibleRows()
 	if len(rows) == 0 {
 		switch st.subTab {
@@ -1764,9 +1778,11 @@ func (m *Model) renderAgentsView() string {
 	// rows ("↑ N above" / "↓ N below") so a near-full grid with
 	// both indicators visible doesn't push past maxRows and get
 	// clipped mid-card.
+	tileCols := 1
 	if st.subTabViewMode[st.subTab] == sessionsViewTiles {
 		tileTotalW := m.width - agentsSidebarColWidth - 3
 		_, cols := chooseTileLayout(tileTotalW)
+		tileCols = cols
 		const tileIndicatorBudget = 2
 		tileRows := (maxRows - tileIndicatorBudget) / tileHeight
 		if tileRows < 1 {
@@ -1774,7 +1790,11 @@ func (m *Model) renderAgentsView() string {
 		}
 		maxRows = tileRows * cols
 	}
-	visible, windowStart, displayCursor, hiddenAbove, hiddenBelow := windowAgentRows(rows, st.cursor, maxRows)
+	// In tile mode we snap the window start to a column boundary
+	// (tileCols) so navigating doesn't reshuffle the visible tiles
+	// every keystroke. For the dense table tileCols==1 makes this
+	// a no-op vs. the original centred-cursor behaviour.
+	visible, windowStart, displayCursor, hiddenAbove, hiddenBelow := windowAgentRowsAligned(rows, st.cursor, maxRows, tileCols)
 	_ = windowStart
 
 	// Build the table area into its own buffer so we can lay it out
@@ -1854,17 +1874,10 @@ func (m *Model) renderAgentsView() string {
 		b.WriteString(renderBulkConfirmPrompt(st))
 	}
 
-	if st.viewerOpen {
-		b.WriteString("\n  ╔ Transcript ══════════════════════════════════════════╗\n")
-		b.WriteString("  ║ " + truncAgentRow(st.viewerTitle, 64) + "\n")
-		b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
-		for _, line := range st.viewerLines {
-			b.WriteString("  ║ " + truncAgentRow(line, 80) + "\n")
-		}
-		b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
-		b.WriteString("  ║ Esc / Enter / q = close\n")
-		b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
-	}
+	// Note: when st.viewerOpen is true we render the viewer earlier
+	// (above the rows table) and return immediately, so we don't
+	// append it again here — the previous trailing block was clipped
+	// off-screen by the outer view's bottom-truncating fitter.
 
 	if st.noteOpen {
 		b.WriteString(renderAgentNotePrompt(st))
@@ -1883,6 +1896,38 @@ func renderAgentNotePrompt(st *agentsState) string {
 	b.WriteString("  ║ " + st.noteBuffer + lipgloss.NewStyle().Foreground(cyberAccent).Render("▌") + "\n")
 	b.WriteString("  ║ " + dimVersion.Render("Enter = save · Esc = cancel · Backspace = edit") + "\n")
 	b.WriteString("  ╚════════════════════════════════════════════════════════╝\n")
+	return b.String()
+}
+
+// renderTranscriptViewer renders the session-transcript viewer modal.
+// Both the list view (renderAgentsView) and the detail page
+// (renderAgentsDetailPage) call this when st.viewerOpen is true.
+//
+// History (bug #fixed): the viewer used to be inlined in both
+// renderers and APPENDED at the very bottom of the body. The list
+// view passes its body through fitToVisibleRows which clips from
+// the bottom; the detail page pads its body to fill m.height
+// before appending — both paths therefore pushed the modal off
+// the visible viewport, so users who pressed `v` or activated
+// "View Transcript" from the action bar saw nothing change.
+//
+// Centralising the render here lets both callers render the modal
+// as part of the in-window body (not as a trailing tail) so it
+// always lands on-screen.
+func renderTranscriptViewer(title string, lines []string) string {
+	var b strings.Builder
+	b.WriteString("  ╔ Transcript ══════════════════════════════════════════╗\n")
+	b.WriteString("  ║ " + truncAgentRow(title, 64) + "\n")
+	b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
+	if len(lines) == 0 {
+		b.WriteString("  ║ " + dimVersion.Render("(empty transcript)") + "\n")
+	}
+	for _, line := range lines {
+		b.WriteString("  ║ " + truncAgentRow(line, 80) + "\n")
+	}
+	b.WriteString("  ╟──────────────────────────────────────────────────────╢\n")
+	b.WriteString("  ║ Esc / Enter / q = close\n")
+	b.WriteString("  ╚══════════════════════════════════════════════════════╝\n")
 	return b.String()
 }
 
@@ -2150,6 +2195,23 @@ func sortColumnFor(subTab int, mode agentsSortMode) int {
 // and returns the slice plus the cursor position within the slice and
 // the counts hidden above/below for the scroll indicators.
 func windowAgentRows(rows []agentRow, cursor, maxRows int) (visible []agentRow, start, displayCursor, hiddenAbove, hiddenBelow int) {
+	return windowAgentRowsAligned(rows, cursor, maxRows, 1)
+}
+
+// windowAgentRowsAligned is the tile-aware variant of windowAgentRows.
+// When `colAlign` > 1 (used by the tile grid renderers), `start` is
+// snapped to a multiple of colAlign so the visible window scrolls
+// by full rows of tiles rather than one tile at a time.
+//
+// Bug history: with the old centred-cursor windowing, moving the
+// cursor by one tile in a 3-column grid shifted every visible tile
+// diagonally — A,B,C / D,E,F / G,H,I became B,C,D / E,F,G / H,I,J
+// on a single ↓ keypress. Users couldn't track the cursor because
+// every tile reshuffled position underneath them. Snapping start
+// to a column boundary keeps the grid stationary until the cursor
+// actually leaves the visible window, then pages by a full row of
+// tiles.
+func windowAgentRowsAligned(rows []agentRow, cursor, maxRows, colAlign int) (visible []agentRow, start, displayCursor, hiddenAbove, hiddenBelow int) {
 	n := len(rows)
 	if n == 0 {
 		return nil, 0, 0, 0, 0
@@ -2163,6 +2225,9 @@ func windowAgentRows(rows []agentRow, cursor, maxRows int) (visible []agentRow, 
 	if n <= maxRows {
 		return rows, 0, cursor, 0, 0
 	}
+	if colAlign < 1 {
+		colAlign = 1
+	}
 
 	// Center the cursor in the window when possible.
 	start = cursor - maxRows/2
@@ -2172,7 +2237,26 @@ func windowAgentRows(rows []agentRow, cursor, maxRows int) (visible []agentRow, 
 	if start+maxRows > n {
 		start = n - maxRows
 	}
+	// Snap start to a row boundary so a multi-column tile grid
+	// shifts by whole rows. For 1-column callers (the dense table)
+	// colAlign==1 makes this a no-op.
+	if colAlign > 1 {
+		start = (start / colAlign) * colAlign
+		if start+maxRows > n {
+			// After snapping, the window might extend past the
+			// end. Pull start back to the last aligned position
+			// that still fits, but never go past 0.
+			lastAligned := ((n - maxRows) / colAlign) * colAlign
+			if lastAligned < 0 {
+				lastAligned = 0
+			}
+			start = lastAligned
+		}
+	}
 	end := start + maxRows
+	if end > n {
+		end = n
+	}
 	visible = rows[start:end]
 	displayCursor = cursor - start
 	hiddenAbove = start

@@ -88,10 +88,14 @@ func (s *Service) LoadAll(ctx context.Context, opts LoadOpts) (*Snapshot, error)
 			if opts.MaxAge == 0 || time.Since(c.WrittenAt) <= opts.MaxAge {
 				snap := c.Snapshot
 				// Clear any stale Starred flags so a removed bookmark
-				// doesn't linger after `unstar`. Group is left alone
-				// since it's content-derived and persists naturally.
+				// doesn't linger after `unstar`. Group is reset to
+				// "" here too — hydrateSessionExtras below recomputes
+				// it from the latest user mappings + cwd, so a
+				// `group set` edit shows up on the next render even
+				// when the snapshot comes from cache.
 				for i := range snap.Sessions {
 					snap.Sessions[i].Starred = false
+					snap.Sessions[i].Group = ""
 				}
 				hydrateSessionExtras(&snap)
 				s.mu.Lock()
@@ -394,10 +398,12 @@ func (s *Service) ProviderFor(id ProviderID) Provider { return s.registry.Get(id
 // the bookmarks store) and the Group label (from the smart grouping
 // resolver, with user-defined cwd→group overrides).
 //
-// Failures are silent: a missing bookmarks store or grouping file is
-// not an error condition — the snapshot's Group and Starred fields
-// just stay at their zero values, and `klim agents sessions list`
-// renders without grouping headers.
+// Best-effort with audible failures: a missing bookmarks or grouping
+// file is not an error and silently leaves Starred / Group at their
+// zero values. A corrupt or unreadable file is logged to stderr (so a
+// "my stars aren't showing" / "my custom groups stopped working" issue
+// is debuggable at the source) but does not fail the call — the
+// snapshot still proceeds with the unaffected fields populated.
 //
 // $HOME (or %USERPROFILE% on Windows) is resolved once here and
 // passed into Resolve so the "🏠 Home" special-case fires correctly.

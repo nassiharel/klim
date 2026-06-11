@@ -317,11 +317,18 @@ func pickPackageSource(t *registry.Tool) string {
 // inside the same row budget the list mode uses.
 func (m Model) buildToolTileLines(maxRows int) []string {
 	if len(m.filteredIndex) == 0 {
-		// Defer to the empty-state path inside buildToolLines by
-		// returning the same blank shell — the renderView loop will
-		// pad as needed. Re-using the list-mode banner / header here
-		// would create double chrome.
-		return []string{""}
+		// Mirror buildToolLines: show the same empty-state message
+		// (e.g. "No installed tools found." / "All tools are up to
+		// date!") instead of a blank body. Without this, switching
+		// to tile mode while a filter hid every tool produced a
+		// completely empty view with no hint about why.
+		lines := []string{m.renderHeader()}
+		if m.phase >= phaseDone {
+			if msg := m.emptyStateMessage(); msg != "" {
+				lines = append(lines, dimVersion.Render(msg))
+			}
+		}
+		return lines
 	}
 	// Header row (kept so the tab still looks like part of klim
 	// rather than a free-floating grid).

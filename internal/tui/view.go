@@ -1320,29 +1320,7 @@ func (m Model) buildToolLines(maxRows int) []string {
 
 	// Empty state.
 	if len(m.filteredIndex) == 0 && m.phase >= phaseDone {
-		msg := ""
-		noCatalog := len(m.tools) == 0
-		switch m.activeTab {
-		case tabInstalled:
-			if noCatalog {
-				msg = "No tools loaded."
-			} else {
-				msg = "No installed tools found."
-			}
-		case tabUpdates:
-			if noCatalog {
-				msg = "No tools loaded."
-			} else {
-				msg = "All tools are up to date! ✓"
-			}
-		case tabDiscover:
-			if noCatalog {
-				msg = "No tools loaded."
-			} else {
-				msg = "All marketplace tools are installed!"
-			}
-		}
-		if msg != "" {
+		if msg := m.emptyStateMessage(); msg != "" {
 			lines = append(lines, dimVersion.Render(msg))
 		}
 	}
@@ -1350,6 +1328,33 @@ func (m Model) buildToolLines(maxRows int) []string {
 	// No padding here — layoutWithFooter handles bottom alignment.
 
 	return lines
+}
+
+// emptyStateMessage returns the user-facing message to render when
+// the active tab's tool list is empty. Returns "" when the tab has
+// no special empty-state message. Extracted so the tile-mode builder
+// (buildToolTileLines) can mirror the list mode's behaviour instead
+// of rendering a blank body when filters hide every tool.
+func (m Model) emptyStateMessage() string {
+	noCatalog := len(m.tools) == 0
+	switch m.activeTab {
+	case tabInstalled:
+		if noCatalog {
+			return "No tools loaded."
+		}
+		return "No installed tools found."
+	case tabUpdates:
+		if noCatalog {
+			return "No tools loaded."
+		}
+		return "All tools are up to date! ✓"
+	case tabDiscover:
+		if noCatalog {
+			return "No tools loaded."
+		}
+		return "All marketplace tools are installed!"
+	}
+	return ""
 }
 
 // fixedWidthANSI pads a styled string (which may contain ANSI codes) to the

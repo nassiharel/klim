@@ -232,6 +232,126 @@ func TestWindowAgentRows(t *testing.T) {
 	}
 }
 
+// TestWindowAgentRowsAligned_TileGridDoesNotReshuffle pins the fix
+// for the "tiles reorder on every keypress" bug. In a 3-column tile
+// grid, navigating must shift the window by full rows of tiles
+// (multiples of cols), never by one tile — otherwise every visible
+// tile cycles position diagonally underneath the user.
+//
+// Two invariants are checked:
+//  1. start is always a multiple of cols (tiles align to row
+//     boundaries — no half-row offsets).
+//  2. consecutive cursor moves change start by 0 or a multiple of
+//     cols (the grid is stationary, or it pages by a full row).
+func TestWindowAgentRowsAligned_TileGridDoesNotReshuffle(t *testing.T) {
+	rows := make([]agentRow, 100)
+	for i := range rows {
+		rows[i] = agentRow{name: "r" + string(rune('0'+i%10))}
+	}
+
+	const cols = 3
+	const visRows = 4
+	const maxRows = visRows * cols // 12 visible tiles
+
+	prevStart := -1
+	for cursor := 0; cursor < len(rows); cursor++ {
+		_, start, _, _, _ := windowAgentRowsAligned(rows, cursor, maxRows, cols)
+		if start%cols != 0 {
+			t.Errorf("cursor=%d: start=%d is not aligned to cols=%d", cursor, start, cols)
+		}
+		if prevStart >= 0 {
+			delta := start - prevStart
+			if delta%cols != 0 {
+				t.Errorf("cursor=%d→%d: start shifted by %d (not a multiple of cols=%d) — tiles will reshuffle diagonally", cursor-1, cursor, delta, cols)
+			}
+		}
+		prevStart = start
+	}
+}
+
+// TestWindowAgentRowsAligned_StationaryInsideFirstRow asserts that
+// moving the cursor across the first row of tiles (the part of the
+// first window that the centred-cursor algorithm doesn't try to
+// shift past) leaves start unchanged. Without the alignment, start
+// would tick up by 1 the moment the cursor crossed maxRows/2.
+func TestWindowAgentRowsAligned_StationaryInsideFirstRow(t *testing.T) {
+	rows := make([]agentRow, 100)
+	for i := range rows {
+		rows[i] = agentRow{name: "r"}
+	}
+	const cols = 3
+	const maxRows = 12
+
+	// For cursors 0..maxRows/2 the centred-cursor formula keeps
+	// start=0; the snap is a no-op there. This verifies the snap
+	// hasn't broken the easy case.
+	for cursor := 0; cursor <= maxRows/2; cursor++ {
+		_, start, _, _, _ := windowAgentRowsAligned(rows, cursor, maxRows, cols)
+		if start != 0 {
+			t.Errorf("cursor=%d: start should remain 0 in the first half-window, got %d", cursor, start)
+		}
+	}
+}
+
+// TestWindowAgentRowsAligned_DefaultMatchesOriginal asserts that
+// passing colAlign=1 (the default the table renderer uses) produces
+// the same behaviour as the original windowAgentRows.
+func TestWindowAgentRowsAligned_DefaultMatchesOriginal(t *testing.T) {
+	rows := make([]agentRow, 50)
+	for i := range rows {
+		rows[i] = agentRow{name: "r"}
+	}
+	for cursor := 0; cursor < len(rows); cursor++ {
+		v1, s1, d1, ha1, hb1 := windowAgentRows(rows, cursor, 10)
+		v2, s2, d2, ha2, hb2 := windowAgentRowsAligned(rows, cursor, 10, 1)
+		if len(v1) != len(v2) || s1 != s2 || d1 != d2 || ha1 != ha2 || hb1 != hb2 {
+			t.Errorf("cursor=%d: aligned(_,_,_,1) diverged from original: %d/%d/%d/%d/%d vs %d/%d/%d/%d/%d",
+				cursor, len(v1), s1, d1, ha1, hb1, len(v2), s2, d2, ha2, hb2)
+		}
+	}
+}
+
+// TestRenderTranscriptViewer_RendersTitleAndLines pins the inline
+// modal renderer used by both renderAgentsView and
+// renderAgentsDetailPage. The previous implementation appended the
+// modal at the very bottom of the rendered body — outside the
+// fitToVisibleRows window for the list view and past the
+// height-padding for the detail page — so the user saw nothing.
+// We now render the modal in-band; this test asserts the modal
+// content actually appears in the rendered string.
+func TestRenderTranscriptViewer_RendersTitleAndLines(t *testing.T) {
+	t.Parallel()
+	got := renderTranscriptViewer("/tmp/session/foo.jsonl", []string{
+		"[user] hello there",
+		"[assistant] hi back",
+	})
+	for _, want := range []string{
+		"Transcript",
+		"/tmp/session/foo.jsonl",
+		"[user] hello there",
+		"[assistant] hi back",
+		"Esc / Enter / q = close",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("renderTranscriptViewer output missing %q\n--- got:\n%s", want, got)
+		}
+	}
+}
+
+// TestRenderTranscriptViewer_EmptyTranscriptShowsHint guards against
+// silent "the box is just borders" output when readSessionTranscript
+// returns zero lines (e.g. a brand-new session whose first event
+// hasn't been written yet). The viewer should make it obvious to
+// the user that the file is empty rather than just rendering a
+// hollow border.
+func TestRenderTranscriptViewer_EmptyTranscriptShowsHint(t *testing.T) {
+	t.Parallel()
+	got := renderTranscriptViewer("/tmp/empty.jsonl", nil)
+	if !strings.Contains(got, "empty transcript") {
+		t.Errorf("empty transcript should surface a hint; got:\n%s", got)
+	}
+}
+
 func TestRowCopyText(t *testing.T) {
 	cases := []struct {
 		name     string
