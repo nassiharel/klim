@@ -862,21 +862,24 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	return sessions, nil
 }
 
-// quoteForShell wraps `s` in double quotes when it contains a space
-// or other shell-significant character.
+// quoteForShell renders `s` so it can be pasted into a POSIX shell
+// without further interpretation. Uses single-quote escaping: wraps
+// the whole string in `'...'` and escapes any interior `'` as
+// `'\''` (close-quote, escaped-quote, re-open-quote). Inside single
+// quotes, nothing is expanded — no `$VAR`, no `$(...)`, no
+// backticks, no globs — so this is the safe choice for a copy/paste
+// snippet that must survive arbitrary metacharacters in ProjectPath.
 //
-// IMPORTANT — POSIX shells only, display use only:
+// IMPORTANT — POSIX shells only:
 //
-//   - The escape strategy (`\"` inside `"..."`) is POSIX-only.
-//     PowerShell uses `""` or a backtick to escape an embedded
-//     double quote, so a path containing a `"` will paste
-//     incorrectly into PowerShell. Users on Windows are expected
-//     to copy the cwd separately or use `Provider.BuildLaunch` for
-//     a no-shell exec.
-//   - This is NOT a safe shell-escape even on POSIX: `$`, backticks,
-//     `$(...)`, and command substitution all expand inside POSIX
-//     double-quoted strings, so a malicious or pathological
-//     ProjectPath could still hide an injection.
+//   - PowerShell uses `""` (doubled) or a backtick to escape an
+//     embedded single quote, NOT `'\''`. Users on Windows are
+//     expected to copy the cwd separately or use the dashboard's
+//     resume action (which goes through Provider.BuildLaunch for a
+//     no-shell exec, no quoting needed at all).
+//   - For non-POSIX shells the safer path is to display the cwd as
+//     a separate field; we keep the snippet to ease the common
+//     POSIX terminal case.
 //
 // The RestartCommand field is intended for copy-to-clipboard only;
 // the dashboard's resume action no longer pipes it through /bin/sh.
@@ -885,14 +888,25 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 // a no-shell exec.
 func quoteForShell(s string) string {
 	if s == "" {
-		return `""`
+		return `''`
 	}
+	// Fast path: no shell-meaningful characters → no quoting needed.
+	safe := true
 	for _, r := range s {
-		if r == ' ' || r == '\t' || r == '"' || r == '$' || r == '`' {
-			return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+		if r == ' ' || r == '\t' || r == '\n' || r == '\'' || r == '"' ||
+			r == '$' || r == '`' || r == '\\' || r == '|' || r == '&' ||
+			r == ';' || r == '<' || r == '>' || r == '(' || r == ')' ||
+			r == '*' || r == '?' || r == '[' || r == ']' || r == '{' ||
+			r == '}' || r == '#' || r == '~' {
+			safe = false
+			break
 		}
 	}
-	return s
+	if safe {
+		return s
+	}
+	// Single-quote wrap. Interior `'` becomes `'\''`.
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // decodeProjectPath converts Claude's URL-encoded project directory

@@ -141,6 +141,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.snap != nil {
 			m.snapshot = msg.snap
 			m.updatedAt = m.now()
+			// Surface hydration warnings (corrupt bookmarks YAML,
+			// unreadable grouping file, …) via the status row.
+			// hydrateSessionExtras can't write to stderr because
+			// stderr writes from a tea.Cmd land on top of the
+			// rendered screen — the snap carries the messages
+			// instead and we splice them into the status line.
+			// Multiple warnings join with " | " so the row stays
+			// single-line.
+			if len(msg.snap.Warnings) > 0 {
+				m.status = strings.Join(msg.snap.Warnings, " | ")
+			}
 			m.rebuildView()
 		}
 	case fastTickMsg:

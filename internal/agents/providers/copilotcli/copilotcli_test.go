@@ -244,3 +244,86 @@ func TestProvider_DeleteSession_LeavesOtherSessions(t *testing.T) {
 		t.Errorf("kept dir was unexpectedly removed: %v", err)
 	}
 }
+
+// TestProvider_DeleteSession_RejectsPathTraversal pins the
+// path-traversal guard added in response to PR #93 review. An id
+// containing a path separator, "..", or a non-canonical form must
+// be rejected BEFORE filepath.Join + os.RemoveAll get a chance to
+// escape the Copilot home root.
+func TestProvider_DeleteSession_RejectsPathTraversal(t *testing.T) {
+	home := t.TempDir()
+	// A canary directory OUTSIDE the Copilot home that a successful
+	// traversal would delete. If the guard fails, this disappears.
+	canary := filepath.Join(filepath.Dir(home), "canary")
+	if err := os.MkdirAll(canary, 0o755); err != nil {
+		t.Fatalf("mkdir canary: %v", err)
+	}
+	p := &Provider{HomeOverride: home}
+
+	cases := []struct {
+		name string
+		id   string
+	}{
+		{"parent dir", ".."},
+		{"current dir", "."},
+		{"forward slash", "foo/bar"},
+		{"backslash", `foo\bar`},
+		{"escaping slash", "../canary"},
+		{"escaping backslash", `..\canary`},
+		{"deep escape", "../../etc/passwd"},
+		{"trailing slash", "foo/"},
+		{"leading slash", "/abs/path"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := p.DeleteSession(context.Background(), "copilot:"+tc.id)
+			if err == nil {
+				t.Fatalf("expected error for id %q, got nil", tc.id)
+			}
+			if !strings.Contains(err.Error(), "invalid") {
+				t.Errorf("err=%v, want 'invalid' in message", err)
+			}
+		})
+	}
+	// Canary must still exist after every rejection.
+	if _, err := os.Stat(canary); err != nil {
+		t.Fatalf("canary was unexpectedly removed: %v", err)
+	}
+}
+
+// TestQuoteForShell pins the POSIX single-quote escaping that
+// quoteForShell uses for paths embedded in RestartCommand. The
+// previous double-quote approach allowed `$`, backticks, and
+// `$(...)` to expand when pasted into a POSIX shell — a
+// command-injection vector when ProjectPath was attacker-controlled.
+// Single quotes inhibit ALL expansion so the snippet is safe to
+// paste even with hostile metacharacters.
+func TestQuoteForShell(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", `''`},
+		{"plain", "abc", "abc"},
+		{"absolute path no spaces", "/home/user/repo", "/home/user/repo"},
+		{"with space", "my repo", `'my repo'`},
+		{"with dollar sign", "$HOME/x", `'$HOME/x'`},
+		{"with backtick", "a`whoami`b", `'a` + "`whoami`" + `b'`},
+		{"with cmd subst", "x$(rm -rf /)y", `'x$(rm -rf /)y'`},
+		{"with semicolon", "a;rm -rf /;b", `'a;rm -rf /;b'`},
+		{"with pipe", "a|b", `'a|b'`},
+		{"with ampersand", "a&b", `'a&b'`},
+		{"with single quote", "it's", `'it'\''s'`},
+		{"with double quote", `say "hi"`, `'say "hi"'`},
+		{"with newline", "a\nb", "'a\nb'"},
+		{"with glob", "*.go", `'*.go'`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := quoteForShell(tc.in); got != tc.want {
+				t.Errorf("quoteForShell(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}

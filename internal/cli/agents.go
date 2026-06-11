@@ -31,6 +31,22 @@ var newAgentsService = func() *agents.Service {
 	return svc
 }
 
+// surfaceSnapshotWarnings writes any snap.Warnings to stderr with a
+// `agents: ` prefix. This is the CLI-side equivalent of the library
+// fold: `hydrateSessionExtras` no longer writes to stderr directly
+// (that corrupts the TUI's screen), so each CLI command that loads
+// a snapshot routes warnings to stderr explicitly here. No-op when
+// snap is nil or has no warnings. The TUI ignores this helper and
+// surfaces snap.Warnings through its status row instead.
+func surfaceSnapshotWarnings(snap *agents.Snapshot) {
+	if snap == nil || len(snap.Warnings) == 0 {
+		return
+	}
+	for _, w := range snap.Warnings {
+		fmt.Fprintln(os.Stderr, "agents: "+w)
+	}
+}
+
 // catalogAdapter bridges catalog.Fetcher to agents.RemoteCatalog. The
 // agents package defines the RemoteCatalog interface so it never needs
 // to import the catalog package (which would create a cycle since
@@ -170,8 +186,9 @@ var agentsRefreshCmd = &cobra.Command{
 		svc.Invalidate()
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 		defer cancel()
-		_, err := svc.LoadAll(ctx, agents.LoadOpts{Refresh: true})
+		snap, err := svc.LoadAll(ctx, agents.LoadOpts{Refresh: true})
 		if err == nil {
+			surfaceSnapshotWarnings(snap)
 			fmt.Fprintln(os.Stderr, "agents: cache refreshed")
 		}
 		return err
@@ -290,6 +307,7 @@ func runAgentsList(cmd *cobra.Command, _ []string, entityFilter agents.EntityTyp
 	if err != nil {
 		return fmt.Errorf("agents list: %w", err)
 	}
+	surfaceSnapshotWarnings(snap)
 
 	// CLI-provided --type wins when no per-entity wrapper supplied one.
 	if entityFilter == "" {
@@ -514,9 +532,11 @@ func runAgentsSearch(cmd *cobra.Command, query string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
 	svc := newAgentsService()
-	if _, err := svc.LoadAll(ctx, agents.LoadOpts{}); err != nil {
+	snap, err := svc.LoadAll(ctx, agents.LoadOpts{})
+	if err != nil {
 		return err
 	}
+	surfaceSnapshotWarnings(snap)
 	results := svc.Search(query, "")
 	format, err := agentsSearchFormatGetter()
 	if err != nil {
@@ -621,9 +641,11 @@ func inferLaunchProvider(ctx context.Context, svc *agents.Service, skill, sessio
 	}
 
 	// Otherwise scan the snapshot and count provider matches.
-	if _, err := svc.LoadAll(ctx, agents.LoadOpts{}); err != nil {
+	scanned, err := svc.LoadAll(ctx, agents.LoadOpts{})
+	if err != nil {
 		return "", "", fmt.Errorf("scan: %w", err)
 	}
+	surfaceSnapshotWarnings(scanned)
 	snap := svc.Snapshot()
 	if snap == nil {
 		return "", "", errors.New("no scan data available")
@@ -704,9 +726,11 @@ func runAgentsDoctor(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 	defer cancel()
 	svc := newAgentsService()
-	if _, err := svc.LoadAll(ctx, agents.LoadOpts{}); err != nil {
+	loaded, err := svc.LoadAll(ctx, agents.LoadOpts{})
+	if err != nil {
 		return err
 	}
+	surfaceSnapshotWarnings(loaded)
 	snap := svc.Snapshot()
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	defer func() { _ = w.Flush() }()
@@ -800,6 +824,7 @@ func agentsResumeSession(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		surfaceSnapshotWarnings(snap)
 		switch {
 		case last:
 			if len(snap.Sessions) == 0 {

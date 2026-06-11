@@ -183,11 +183,15 @@ func renderPluginTile(p agents.Plugin, width int, selected bool) string {
 		innerW = tileMinWidth - 4
 	}
 
-	version := p.Version
-	if version == "" {
-		version = "—"
+	// Render "v<version>" when known, plain "—" when unknown. The
+	// previous build concatenated "v" with the placeholder, so an
+	// unversioned plugin showed up as "v—" — easy to misread as a
+	// literal version prefix rather than a missing-value marker.
+	versionLabel := "—"
+	if p.Version != "" {
+		versionLabel = "v" + p.Version
 	}
-	subRow := padOrTruncTile(lipgloss.NewStyle().Foreground(cyberFGDim).Render("v"+version), innerW)
+	subRow := padOrTruncTile(lipgloss.NewStyle().Foreground(cyberFGDim).Render(versionLabel), innerW)
 
 	titleRow := entityTitleRow(agentEntityStateDot(state), false,
 		entityDisplayName(p.Name, p.DisplayName), agentsProviderTileChip(p.Provider), innerW, selected)

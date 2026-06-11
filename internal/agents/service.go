@@ -97,6 +97,12 @@ func (s *Service) LoadAll(ctx context.Context, opts LoadOpts) (*Snapshot, error)
 					snap.Sessions[i].Starred = false
 					snap.Sessions[i].Group = ""
 				}
+				// Wipe any warnings the cached snapshot may have
+				// carried from a previous load — Warnings reflect
+				// THIS load's hydration outcome, not the historical
+				// state, so an old "bookmarks corrupt" message
+				// won't linger after the file is fixed.
+				snap.Warnings = nil
 				hydrateSessionExtras(&snap)
 				s.mu.Lock()
 				s.snapshot = &snap
@@ -398,12 +404,16 @@ func (s *Service) ProviderFor(id ProviderID) Provider { return s.registry.Get(id
 // the bookmarks store) and the Group label (from the smart grouping
 // resolver, with user-defined cwd→group overrides).
 //
-// Best-effort with audible failures: a missing bookmarks or grouping
+// Best-effort with surfaced warnings: a missing bookmarks or grouping
 // file is not an error and silently leaves Starred / Group at their
-// zero values. A corrupt or unreadable file is logged to stderr (so a
-// "my stars aren't showing" / "my custom groups stopped working" issue
-// is debuggable at the source) but does not fail the call — the
-// snapshot still proceeds with the unaffected fields populated.
+// zero values. A corrupt or unreadable file is appended to
+// snap.Warnings (so a "my stars aren't showing" / "my custom groups
+// stopped working" issue is debuggable at the source) but does not
+// fail the call — the snapshot still proceeds with the unaffected
+// fields populated. Callers are responsible for surfacing the
+// warnings (CLI → stderr, TUI → status row); the library itself does
+// NOT write to stderr because that corrupts a running Bubbletea
+// screen.
 //
 // $HOME (or %USERPROFILE% on Windows) is resolved once here and
 // passed into Resolve so the "🏠 Home" special-case fires correctly.
@@ -420,11 +430,15 @@ func hydrateSessionExtras(snap *Snapshot) {
 		}
 	} else if err != nil {
 		// Bookmarks file is corrupt or unreadable — surface a hint
-		// to stderr so a "my stars aren't showing" issue is visible
-		// at the source rather than silently ignored. We still
-		// proceed with an empty starred set so the rest of the
-		// snapshot stays usable.
-		fmt.Fprintf(os.Stderr, "agents: bookmarks load failed (stars not hydrated): %v\n", err)
+		// via snap.Warnings so a "my stars aren't showing" issue is
+		// visible at the source rather than silently ignored. We
+		// still proceed with an empty starred set so the rest of
+		// the snapshot stays usable. We don't write to stderr here
+		// because hydrateSessionExtras runs from inside the
+		// sessions TUI's tea.Cmd; a Fprintf to stderr would land
+		// on top of the rendered screen and garble the layout.
+		snap.Warnings = append(snap.Warnings,
+			fmt.Sprintf("bookmarks load failed (stars not hydrated): %v", err))
 	}
 
 	mappings := map[string]string{}
@@ -432,11 +446,13 @@ func hydrateSessionExtras(snap *Snapshot) {
 		mappings = gm.All()
 	} else if err != nil {
 		// Grouping file is corrupt or unreadable — same approach as
-		// bookmarks: warn loudly to stderr so a "my custom groups
+		// bookmarks: warn via snap.Warnings so a "my custom groups
 		// stopped working" issue is debuggable, then fall back to
 		// the empty mapping set (resolver still produces a group
-		// via repo / cwd / keyword fallback).
-		fmt.Fprintf(os.Stderr, "agents: grouping mappings load failed (custom groups not applied): %v\n", err)
+		// via repo / cwd / keyword fallback). Same TUI rationale
+		// as above for not writing to stderr from library code.
+		snap.Warnings = append(snap.Warnings,
+			fmt.Sprintf("grouping mappings load failed (custom groups not applied): %v", err))
 	}
 
 	home := homeDir()

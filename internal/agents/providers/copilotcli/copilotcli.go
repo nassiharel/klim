@@ -570,21 +570,24 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 	return sessions, nil
 }
 
-// quoteForShell wraps `s` in double quotes when it contains a space
-// or other shell-significant character.
+// quoteForShell renders `s` so it can be pasted into a POSIX shell
+// without further interpretation. Uses single-quote escaping: wraps
+// the whole string in `'...'` and escapes any interior `'` as
+// `'\''` (close-quote, escaped-quote, re-open-quote). Inside single
+// quotes, nothing is expanded — no `$VAR`, no `$(...)`, no
+// backticks, no globs — so this is the safe choice for a copy/paste
+// snippet that must survive arbitrary metacharacters in ProjectPath.
 //
-// IMPORTANT — POSIX shells only, display use only:
+// IMPORTANT — POSIX shells only:
 //
-//   - The escape strategy (`\"` inside `"..."`) is POSIX-only.
-//     PowerShell uses `""` or a backtick to escape an embedded
-//     double quote, so a path containing a `"` will paste
-//     incorrectly into PowerShell. Users on Windows are expected
-//     to copy the cwd separately or use `Provider.BuildLaunch` for
-//     a no-shell exec.
-//   - This is NOT a safe shell-escape even on POSIX: `$`, backticks,
-//     `$(...)`, and command substitution all expand inside POSIX
-//     double-quoted strings, so a malicious or pathological
-//     ProjectPath could still hide an injection.
+//   - PowerShell uses `""` (doubled) or a backtick to escape an
+//     embedded single quote, NOT `'\''`. Users on Windows are
+//     expected to copy the cwd separately or use the dashboard's
+//     resume action (which goes through Provider.BuildLaunch for a
+//     no-shell exec, no quoting needed at all).
+//   - For non-POSIX shells the safer path is to display the cwd as
+//     a separate field; we keep the snippet to ease the common
+//     POSIX terminal case.
 //
 // The RestartCommand field is intended for copy-to-clipboard only;
 // the dashboard's resume action no longer pipes it through /bin/sh.
@@ -593,14 +596,28 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 // for a no-shell exec.
 func quoteForShell(s string) string {
 	if s == "" {
-		return `""`
+		return `''`
 	}
+	// Fast path: no shell-meaningful characters → no quoting needed.
+	// We still wrap if the string contains a single quote, since the
+	// caller pastes it into a sentence where unquoted whitespace
+	// matters.
+	safe := true
 	for _, r := range s {
-		if r == ' ' || r == '\t' || r == '"' || r == '$' || r == '`' {
-			return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+		if r == ' ' || r == '\t' || r == '\n' || r == '\'' || r == '"' ||
+			r == '$' || r == '`' || r == '\\' || r == '|' || r == '&' ||
+			r == ';' || r == '<' || r == '>' || r == '(' || r == ')' ||
+			r == '*' || r == '?' || r == '[' || r == ']' || r == '{' ||
+			r == '}' || r == '#' || r == '~' {
+			safe = false
+			break
 		}
 	}
-	return s
+	if safe {
+		return s
+	}
+	// Single-quote wrap. Interior `'` becomes `'\''`.
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // enrichFromEventsJSONL streams the full transcript to populate
@@ -927,6 +944,18 @@ func (p *Provider) DeleteSession(ctx context.Context, id string) error {
 	id = strings.TrimPrefix(id, "copilot:")
 	if id == "" {
 		return errors.New("delete: session id is required")
+	}
+	// Reject anything that isn't a plain directory name: path
+	// separators (`/`, `\`), drive letters, parent refs (`..`), or
+	// the current-dir ref (`.`) would let a crafted id escape the
+	// Copilot home root and let os.RemoveAll wipe an arbitrary
+	// directory. filepath.Base + Clean catches the common cases
+	// across both POSIX and Windows path semantics.
+	if id == "." || id == ".." ||
+		strings.ContainsAny(id, `/\`) ||
+		filepath.Base(id) != id ||
+		filepath.Clean(id) != id {
+		return fmt.Errorf("delete: invalid session id %q", id)
 	}
 	root := p.copilotHome()
 	var lastErr error

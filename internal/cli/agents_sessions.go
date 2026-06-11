@@ -114,6 +114,7 @@ func runAgentsSessionsList(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("agents sessions list: %w", err)
 	}
+	surfaceSnapshotWarnings(snap)
 
 	sessions := filterSessions(snap.Sessions, agentsSessionsListFlags.status,
 		agentsSessionsListFlags.project, agentsSessionsListFlags.starred,
@@ -436,6 +437,7 @@ func runAgentsSessionsView(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	surfaceSnapshotWarnings(snap)
 	session, ok := findSession(snap.Sessions, id)
 	if !ok {
 		return &UsageError{Err: fmt.Errorf("no session found matching %q", id)}
@@ -709,6 +711,7 @@ func runAgentsSessionsTail(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		surfaceSnapshotWarnings(snap)
 		s, ok := findSession(snap.Sessions, id)
 		if !ok {
 			return &UsageError{Err: fmt.Errorf("no session found matching %q", id)}
@@ -786,6 +789,7 @@ func runAgentsSessionsStats(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	surfaceSnapshotWarnings(snap)
 
 	sessions := filterSessions(snap.Sessions, "", "", false, agentsSessionsStatsSince, "", string(agentsListProvider), time.Now())
 	if lastSessionsFilterErr != nil {
@@ -984,6 +988,7 @@ func runAgentsSessionsFiles(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	surfaceSnapshotWarnings(snap)
 	sessions := filterSessions(snap.Sessions, "", "", false, agentsSessionsFilesSince, "", string(agentsListProvider), time.Now())
 	if lastSessionsFilterErr != nil {
 		return &UsageError{Err: lastSessionsFilterErr}
