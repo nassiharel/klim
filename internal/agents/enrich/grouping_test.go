@@ -2,6 +2,7 @@ package enrich
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -142,5 +143,56 @@ func TestResolveMappingDeterministic(t *testing.T) {
 		if got != first {
 			t.Fatalf("non-deterministic: call %d got %q, want %q", i, got, first)
 		}
+	}
+}
+
+// TestSamePath_CaseSensitivityMatchesPlatform pins the OS-conditional
+// behaviour of samePath. NTFS and the Windows shell APIs treat paths
+// as case-insensitive in practice, so the home-dir lookup must match
+// `C:\Users\Nas` (the cased form preserved by installed-plugins
+// registry / shell history) against `c:\users\nas` (the form some
+// %USERPROFILE% expansions return). POSIX semantics stay case-
+// sensitive — Linux/macOS HFS treat /Users/Nas and /Users/nas as
+// distinct entries.
+func TestSamePath_CaseSensitivityMatchesPlatform(t *testing.T) {
+	t.Parallel()
+	const aCased = "/Users/Nas/dev"
+	const aLower = "/users/nas/dev"
+
+	caseInsensitiveMatch := samePath(aCased, aLower)
+	if runtime.GOOS == "windows" {
+		if !caseInsensitiveMatch {
+			t.Errorf("samePath(%q, %q) on Windows should match (case-insensitive); got false", aCased, aLower)
+		}
+	} else {
+		if caseInsensitiveMatch {
+			t.Errorf("samePath(%q, %q) on POSIX should NOT match (case-sensitive); got true", aCased, aLower)
+		}
+	}
+
+	// Exact match always works regardless of platform.
+	if !samePath(aCased, aCased) {
+		t.Errorf("samePath(%q, %q) should match exactly", aCased, aCased)
+	}
+	// Distinct paths never match regardless of platform.
+	if samePath("/Users/Nas/dev", "/Users/Nas/work") {
+		t.Errorf("distinct paths should not match")
+	}
+}
+
+// TestResolveHomeMatchesWithDifferentCaseOnWindows is the end-to-end
+// regression for the "🏠 Home" grouping bug on Windows. When the
+// install-time cwd is stored as `C:\Users\Nas\...` (cased) and HOME
+// resolves to `c:\users\nas` (lower), the home-special-case must
+// still fire. POSIX users get the test as a no-op (no shadowed casing
+// behaviour to verify).
+func TestResolveHomeMatchesWithDifferentCaseOnWindows(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows-only: POSIX paths are case-sensitive by design")
+	}
+	got := Resolve(`C:\Users\Nas`, "", "", `c:\users\nas`, nil)
+	if got != "🏠 Home" {
+		t.Errorf("home special-case should fire across case variants on Windows; got %q, want %q", got, "🏠 Home")
 	}
 }

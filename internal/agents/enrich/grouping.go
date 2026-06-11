@@ -2,6 +2,7 @@ package enrich
 
 import (
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -122,7 +123,20 @@ func Resolve(cwd, repo, title, home string, mappings map[string]string) string {
 }
 
 // samePath compares two paths after cleaning. It does NOT resolve
-// symlinks or case-fold — that's the caller's responsibility.
+// symlinks.
+//
+// On Windows the comparison is case-insensitive — NTFS / Windows
+// shell APIs treat paths as case-insensitive in practice, so a cwd
+// like `C:\Users\Nas` (from the install registry, which preserves
+// the registered casing) must match `%USERPROFILE%` of `C:\Users\nas`
+// for the "🏠 Home" grouping special-case to fire reliably.
+// POSIX semantics stay case-sensitive — Linux / macOS HFS can have
+// distinct entries at `/Users/Nas` and `/Users/nas`.
 func samePath(a, b string) bool {
-	return filepath.Clean(a) == filepath.Clean(b)
+	a = filepath.Clean(a)
+	b = filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }

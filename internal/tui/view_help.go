@@ -97,8 +97,8 @@ func (m Model) renderHelpOverlay() string {
 				{"b", "bookmark"},
 				{"l", "launch"},
 				{"o", "open URL"},
-				{"v", "view transcript"},
-				{"d", "delete"},
+				{"v", "view transcript (sessions)"},
+				{"d", "delete (sessions / MCPs)"},
 				{"r", "refresh"},
 			},
 		}, section{

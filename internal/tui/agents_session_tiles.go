@@ -138,13 +138,24 @@ func renderTitleRow(s agents.Session, innerW int, selected bool) string {
 		titleStyle = titleStyle.Foreground(cyberPrimary)
 	}
 	title := tileDisplayTitle(s)
-	// Budget: innerW - dot(1) - space(1) - star(2) - space(1)
-	// - chip visible width - space-before-chip(1).
-	titleW := innerW - 1 - 1 - 2 - 1 - lipgloss.Width(chip) - 1
+	// Budget: innerW - dot(1) - space(1) - star(2) - space(1) -
+	// [space-before-chip(1) + chip width]. The chip group only counts
+	// when chip is non-empty — otherwise we'd steal a column and
+	// leave a trailing blank at end-of-line (same regression pattern
+	// as renderToolTitleRow). Sessions with an unknown Provider
+	// (chip == "") use the freed cell for title content.
+	chipBudget := 0
+	if chip != "" {
+		chipBudget = 1 + lipgloss.Width(chip)
+	}
+	titleW := innerW - 1 - 1 - 2 - 1 - chipBudget
 	if titleW < 6 {
 		titleW = 6
 	}
 	titleText := titleStyle.Render(padOrTruncTile(title, titleW))
+	if chip == "" {
+		return dot + " " + star + " " + titleText
+	}
 	return dot + " " + star + " " + titleText + " " + chip
 }
 

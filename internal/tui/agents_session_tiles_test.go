@@ -313,6 +313,50 @@ func TestBranchPill_EmptyBranchReturnsPlaceholder(t *testing.T) {
 	}
 }
 
+// TestRenderTitleRow_NoTrailingBlankWhenChipMissing is the
+// regression for the "session tile title row reserves trailing space
+// for the provider chip even when chip is empty" PR comment. Sessions
+// with an unknown Provider get providerChip == "" — pre-fix, the
+// title budget still subtracted the leading space + chip width AND
+// the rendered row ended with a trailing blank.
+//
+// We render two title rows at the same innerW — one with chip, one
+// without — and confirm the no-chip variant fits more title text.
+// Mirrors TestRenderToolTitleRow_NoTrailingBlankWhenChipMissing in
+// tools_tile_test.go.
+func TestRenderTitleRow_NoTrailingBlankWhenChipMissing(t *testing.T) {
+	t.Parallel()
+	const innerW = 40
+	const longTitle = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+	noChip := agents.Session{
+		Title:    longTitle,
+		Provider: agents.ProviderID("unknown"), // providerChip returns ""
+	}
+	withChip := agents.Session{
+		Title:    longTitle,
+		Provider: agents.ProviderClaudeCode,
+	}
+
+	noChipRow := stripANSIForTest(renderTitleRow(noChip, innerW, false))
+	withChipRow := stripANSIForTest(renderTitleRow(withChip, innerW, false))
+
+	// The no-chip row should fit at least one MORE 'A' than the
+	// with-chip row — the cell that used to be the trailing blank
+	// is now used for title content.
+	noChipAs := strings.Count(noChipRow, "A")
+	withChipAs := strings.Count(withChipRow, "A")
+	if noChipAs <= withChipAs {
+		t.Errorf("no-chip row should fit more title text than with-chip row;\nno chip:   %q (A×%d)\nwith chip: %q (A×%d)",
+			noChipRow, noChipAs, withChipRow, withChipAs)
+	}
+	// And the chip variant must still render its chip — guard
+	// against accidentally suppressing it.
+	if !strings.Contains(withChipRow, "Claude") {
+		t.Errorf("chip should still render for known provider: %q", withChipRow)
+	}
+}
+
 // stripANSIForTest removes ANSI escape sequences from a rendered
 // string for substring-level assertions. Test-only helper.
 func stripANSIForTest(s string) string {
