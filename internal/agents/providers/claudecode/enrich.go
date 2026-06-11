@@ -90,7 +90,6 @@ func enrichSessionFromJSONL(path string, now time.Time) jsonlScanResult {
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 
 	var events []enrich.TimedEvent
-	pendingTools := map[string]string{} // toolUseID → name, for matched completion
 
 	for scanner.Scan() {
 		var ev claudeEvent
@@ -148,12 +147,15 @@ func enrichSessionFromJSONL(path string, now time.Time) jsonlScanResult {
 				case "tool_use":
 					// Claude treats every assistant tool_use as a
 					// fresh start; the matching result arrives in a
-					// later user message of type tool_result.
+					// later user message of type tool_result. We
+					// don't try to correlate by id — the state
+					// machine only needs the call count, and the
+					// synthetic-completion loop below emits one
+					// completion per started tool except the last.
 					events = append(events, enrich.TimedEvent{
 						Event:     enrich.Event{Kind: enrich.KindToolStarted, Name: c.Name},
 						Timestamp: ts,
 					})
-					pendingTools[c.Name] = c.Name
 				}
 			}
 			if lastText != "" {

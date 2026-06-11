@@ -215,18 +215,18 @@ const (
 // a glanceable dashboard. All such fields use `omitempty` so JSON /
 // YAML output stays compact for providers that can't fill them.
 type Session struct {
-	ID             string        `yaml:"id"`
-	Name           string        `yaml:"name,omitempty"`
-	Provider       ProviderID    `yaml:"provider"`
-	ProjectPath    string        `yaml:"project_path,omitempty"`
-	Created        time.Time     `yaml:"created,omitempty"`       // first event (session.start)
-	LastModified   time.Time     `yaml:"last_modified,omitempty"` // last event / dir mtime
-	TurnCount      int           `yaml:"turn_count,omitempty"`
-	Title          string        `yaml:"title,omitempty"`
-	Type           string        `yaml:"type,omitempty"`   // e.g. "interactive", "background", "ado"
-	Status         SessionStatus `yaml:"status,omitempty"` // active | completed | stopped | ""
-	TranscriptPath string        `yaml:"transcript_path,omitempty"`
-	Source         Source        `yaml:"source"`
+	ID             string        `json:"id"                          yaml:"id"`
+	Name           string        `json:"name,omitempty"              yaml:"name,omitempty"`
+	Provider       ProviderID    `json:"provider"                    yaml:"provider"`
+	ProjectPath    string        `json:"project_path,omitempty"      yaml:"project_path,omitempty"`
+	Created        time.Time     `json:"created,omitempty"           yaml:"created,omitempty"`       // first event (session.start)
+	LastModified   time.Time     `json:"last_modified,omitempty"     yaml:"last_modified,omitempty"` // last event / dir mtime
+	TurnCount      int           `json:"turn_count,omitempty"        yaml:"turn_count,omitempty"`
+	Title          string        `json:"title,omitempty"             yaml:"title,omitempty"`
+	Type           string        `json:"type,omitempty"              yaml:"type,omitempty"`   // e.g. "interactive", "background", "ado"
+	Status         SessionStatus `json:"status,omitempty"            yaml:"status,omitempty"` // active | completed | stopped | ""
+	TranscriptPath string        `json:"transcript_path,omitempty"   yaml:"transcript_path,omitempty"`
+	Source         Source        `json:"source"                      yaml:"source"`
 
 	// ---------- Enrichment fields (optional) ----------
 
@@ -392,14 +392,13 @@ func (m Marketplace) MarshalJSON() ([]byte, error) {
 
 // MarshalJSON omits zero Created / LastModified on Sessions.
 //
-// New enrichment fields (LiveState, RecentActivity, ToolCounts, etc.)
-// carry json:"…,omitempty" tags directly, so the standard encoder
-// strips them (including nil maps and nil slices) before we ever
-// see them here — no defensive deletion needed for those. We only
-// override marshaling for time.Time because encoding/json's
-// omitempty does NOT recognise a zero time.Time as empty: without
-// this custom handler a Session with no Created would emit
-// `"Created": "0001-01-01T00:00:00Z"`.
+// All Session fields carry `json:"snake_case,omitempty"` tags, so
+// the standard encoder strips nil maps / nil slices / empty strings
+// before we ever see them here — no defensive deletion needed for
+// those. We only override marshaling for time.Time because
+// encoding/json's omitempty does NOT recognise a zero time.Time as
+// empty: without this custom handler a Session with no Created
+// would emit `"created": "0001-01-01T00:00:00Z"`.
 func (s Session) MarshalJSON() ([]byte, error) {
 	type alias Session
 	a := alias(s)
@@ -412,10 +411,10 @@ func (s Session) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	if s.Created.IsZero() {
-		delete(generic, "Created")
+		delete(generic, "created")
 	}
 	if s.LastModified.IsZero() {
-		delete(generic, "LastModified")
+		delete(generic, "last_modified")
 	}
 	return json.Marshal(generic)
 }

@@ -571,15 +571,23 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 }
 
 // quoteForShell wraps `s` in double quotes when it contains a space
-// or other shell-significant character. Keeps the rendered restart
-// command paste-safe across both POSIX shells and PowerShell.
+// or other shell-significant character.
 //
-// IMPORTANT — display only. This is NOT a safe shell-escape: $,
-// backticks, $(...), and command substitution all expand inside
-// double-quoted strings in POSIX shells, so a malicious or
-// pathological ProjectPath could still hide an injection. The
-// RestartCommand field is intended for copy-to-clipboard only; the
-// dashboard's resume action no longer pipes it through /bin/sh.
+// IMPORTANT — POSIX shells only, display use only:
+//
+//   - The escape strategy (`\"` inside `"..."`) is POSIX-only.
+//     PowerShell uses `""` or a backtick to escape an embedded
+//     double quote, so a path containing a `"` will paste
+//     incorrectly into PowerShell. Users on Windows are expected
+//     to copy the cwd separately or use `Provider.BuildLaunch` for
+//     a no-shell exec.
+//   - This is NOT a safe shell-escape even on POSIX: `$`, backticks,
+//     `$(...)`, and command substitution all expand inside POSIX
+//     double-quoted strings, so a malicious or pathological
+//     ProjectPath could still hide an injection.
+//
+// The RestartCommand field is intended for copy-to-clipboard only;
+// the dashboard's resume action no longer pipes it through /bin/sh.
 // If a future caller wants to actually execute this snippet, use
 // the provider's BuildLaunch instead — it returns (bin, args, cwd)
 // for a no-shell exec.
