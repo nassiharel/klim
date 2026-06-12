@@ -114,6 +114,50 @@ func TestProvider_BuildLaunch(t *testing.T) {
 	}
 }
 
+// TestProvider_Sessions_RestartCommandUsesEqualsResumeForm pins the
+// RestartCommand string form to use `--resume=<id>` (the equals
+// form documented in `copilot --help`). Earlier code emitted
+// `--resume <id>` (space-separated) which is NOT a documented form
+// for Copilot CLI 1.x; a user pasting the snippet into a shell
+// would hit "unknown argument" while BuildLaunch's exec-path resume
+// (which already uses `--resume=`) keeps working. The two surfaces
+// must agree.
+func TestProvider_Sessions_RestartCommandUsesEqualsResumeForm(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "copilot-home")
+	sid := "11111111-2222-3333-4444-555555555555"
+	dir := filepath.Join(home, "session-state", sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Two fixtures: one with cwd (RestartCommand prefixed by `cd …`)
+	// and one without (bare `copilot --resume=…`). Both must use the
+	// equals form.
+	events := `{"type":"session.start","data":{"sessionId":"` + sid + `","startTime":"2026-06-12T08:00:00.000Z","context":{"cwd":"/dev/foo"}},"id":"e1","timestamp":"2026-06-12T08:00:00.001Z","parentId":null}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	sessions, err := p.Sessions(context.Background())
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(sessions))
+	}
+	want := "--resume=" + sid
+	if !strings.Contains(sessions[0].RestartCommand, want) {
+		t.Errorf("RestartCommand = %q, want substring %q (equals form, matching BuildLaunch)",
+			sessions[0].RestartCommand, want)
+	}
+	if strings.Contains(sessions[0].RestartCommand, "--resume "+sid) {
+		t.Errorf("RestartCommand uses space-separated form %q which copilot --help does not document; "+
+			"the only documented surface is --resume[=value]",
+			sessions[0].RestartCommand)
+	}
+}
+
 func TestProvider_Sessions_RealLayout(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "copilot-home")

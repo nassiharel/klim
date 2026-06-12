@@ -526,16 +526,21 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 			s.Repository = filepath.Base(filepath.Clean(s.ProjectPath))
 		}
 
-		// Restart command (paste-ready).
+		// Restart command (paste-ready). Uses `--resume=<id>` (the
+		// equals form) to match `copilot --help`'s documented
+		// surface (`--resume[=value]`) and the exec path in
+		// [Provider.BuildLaunch]. The space-separated form is NOT
+		// documented and may be rejected by future Copilot CLI
+		// releases.
 		cli := bin
 		if cli == "" {
 			cli = "copilot"
 		}
 		idForResume := strings.TrimPrefix(s.ID, "copilot:")
 		if s.ProjectPath != "" {
-			s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume " + idForResume
+			s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume=" + idForResume
 		} else {
-			s.RestartCommand = cli + " --resume " + idForResume
+			s.RestartCommand = cli + " --resume=" + idForResume
 		}
 
 		sessions = append(sessions, s)
@@ -834,16 +839,27 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 // generic [enrich.EventKind] vocabulary. Returns KindOther for types
 // that don't influence the live state.
 //
-// The vocabulary covers two generations of Copilot CLI:
+// The switch covers two generations of Copilot CLI per category:
 //
-//   - 1.x (current): `tool.execution_start`, `tool.execution_complete`,
-//     `assistant.turn_start`, `assistant.turn_end`.
-//   - pre-1.0: `tool.start`, `tool.end`, `turn.start`.
+//   - tool execution start/complete — 1.x: `tool.execution_start` /
+//     `tool.execution_complete`; pre-1.0: `tool.start` / `tool.end`
+//     (and earlier `tool_use` / `tool_use.start` / `tool_use.end`).
+//   - turn boundaries — `user.message` is mapped to KindUserMessage
+//     (which drives the TurnCount derivation). Note that Copilot 1.x
+//     ALSO emits `assistant.turn_start` / `assistant.turn_end`, but
+//     they are deliberately NOT mapped: TurnCount counts user-initiated
+//     turns, and the user.message event already covers that — adding
+//     turn_start would double-count.
+//   - session lifecycle — `session.start`, `session.end` / `session.close`
+//     / `session.completed`, `session.stopped`.
+//   - ask / answer — `ask_user` / `user.ask` / `prompt.required` and
+//     the symmetric `user.answered` / `permission.{granted,denied}`.
+//   - subagent / MCP / messages — mapped both 1.x and legacy names.
 //
 // Falling out of sync with the producer is a silent failure — sessions
-// continue to be listed but every enrichment field stays empty,
-// which is what users perceive as a "blank Sessions tab". Keep this
-// table in sync when the producer ships new event names.
+// continue to be listed but every enrichment field stays empty, which
+// is what users perceive as a "blank Sessions tab". Keep this table
+// in sync when the producer ships new event names.
 func translateCopilotKind(t string) enrich.EventKind {
 	switch t {
 	case "tool.start", "tool.started", "tool_use", "tool_use.start",
