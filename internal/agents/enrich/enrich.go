@@ -68,6 +68,36 @@ const (
 	KindSessionStart   EventKind = "session.start"
 	KindSessionEnd     EventKind = "session.end"
 	KindSessionStopped EventKind = "session.stopped"
+
+	// KindSkillInvoked marks an explicit skill invocation. The Name
+	// field carries the skill identifier (e.g.
+	// "superpowers:systematic-debugging"). Distinct from KindToolStarted
+	// even though Claude's transcript represents it as a tool_use:
+	// the provider should classify Skill tool calls into this kind
+	// before emitting so the dashboard can count skills separately
+	// from anonymous tools.
+	KindSkillInvoked EventKind = "skill.invoked"
+
+	// KindSlashCommand marks a `/foo` style command invocation. The
+	// Name field carries the command name WITH leading slash (e.g.
+	// "/exit"). For Claude: parsed out of the `<command-name>/foo</command-name>`
+	// marker in user message content. For Copilot: from `command.execute`
+	// (schema-defined, not currently emitted by 1.0.61).
+	KindSlashCommand EventKind = "slash.command"
+
+	// KindHookFired marks a hook firing. The Name field carries
+	// the hook identifier (e.g. "SessionStart:startup" for Claude,
+	// "postToolUse" for Copilot). The semantics are per-provider —
+	// Claude bundles event+slot in the name; Copilot only has the
+	// event type. Don't try to normalise; surface what the producer
+	// emits.
+	KindHookFired EventKind = "hook.fired"
+
+	// KindMCPToolCall marks a per-tool MCP invocation. The Name
+	// field carries the canonical "server::tool" form. Distinct from
+	// KindMCPUsed (which only collects unique server names) so the
+	// dashboard can show per-tool histograms.
+	KindMCPToolCall EventKind = "mcp.tool.call"
 )
 
 // Event is a provider-neutral view of one entry in a session log.

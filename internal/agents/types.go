@@ -276,6 +276,64 @@ type Session struct {
 	// Starred is true when the session is in the bookmarks store.
 	// Hydrated by Service.LoadAll, not by providers.
 	Starred bool `json:"starred,omitempty" yaml:"starred,omitempty"`
+
+	// Invocations counts the named entities the session interacted
+	// with across the transcript, grouped by kind. Each sub-map is
+	// nil/empty when the provider's transcript carries no signal for
+	// that kind. Distinct from ToolCounts (which is anonymous tools
+	// only) and MCPServers (which is a server-name set, not per-tool).
+	Invocations Invocations `json:"invocations,omitempty" yaml:"invocations,omitempty"`
+}
+
+// Invocations groups per-kind invocation counters extracted from a
+// session's transcript. Each map is `name → count`; sub-maps that the
+// provider has no signal for stay nil (so JSON output stays compact).
+//
+// Honest-signal contract: providers MUST only populate from explicit
+// transcript events (e.g. Claude's `tool_use` with `name=="Skill"`,
+// Copilot's `hook.start` event). Inferred-from-tool-args usage
+// (e.g. counting reads of `**/SKILL.md` as "skill used") is a false
+// positive and is NOT permitted.
+type Invocations struct {
+	// Skills maps skill identifier → invocation count. For Claude
+	// Code: from the `Skill` tool's `input.skill` argument (e.g.
+	// "superpowers:systematic-debugging"). For Copilot CLI: from
+	// `skill.invoked.data.name` (schema-defined, not currently
+	// emitted by 1.0.61 producers).
+	Skills map[string]int `json:"skills,omitempty" yaml:"skills,omitempty"`
+	// Subagents maps sub-agent type → dispatch count. For Claude:
+	// from the `Agent`/`Task` tool's `input.subagent_type` argument
+	// (e.g. "Explore"). For Copilot: from `subagent.started.data.agentName`
+	// (schema-defined, not currently emitted).
+	Subagents map[string]int `json:"subagents,omitempty" yaml:"subagents,omitempty"`
+	// Hooks maps hook identifier → fire count. For Claude: the
+	// `attachment.hookName` field on `attachment.type==hook_*`
+	// records (e.g. "SessionStart:startup"). For Copilot: the
+	// `hook.start.data.hookType` field (e.g. "postToolUse").
+	Hooks map[string]int `json:"hooks,omitempty" yaml:"hooks,omitempty"`
+	// SlashCommands maps `/foo` style command name (with leading
+	// slash) → invocation count. For Claude: regex'd out of user
+	// message content `<command-name>/foo</command-name>` markers.
+	// For Copilot: `command.execute.data.commandName` (schema-defined,
+	// not currently emitted).
+	SlashCommands map[string]int `json:"slash_commands,omitempty" yaml:"slash_commands,omitempty"`
+	// MCPTools maps `<server>::<tool>` → invocation count. For
+	// Claude: tool_use whose `name` matches `mcp__<server>__<tool>`.
+	// For Copilot: `tool.execution_start` events with both
+	// `mcpServerName` and `mcpToolName` set (schema-defined, not
+	// currently emitted by 1.0.61 producers).
+	MCPTools map[string]int `json:"mcp_tools,omitempty" yaml:"mcp_tools,omitempty"`
+}
+
+// IsEmpty reports whether every sub-map is nil/empty. Used by the
+// JSON marshaller to drop the wrapper when nothing populated it;
+// `omitempty` alone can't do this on a struct value.
+func (iv Invocations) IsEmpty() bool {
+	return len(iv.Skills) == 0 &&
+		len(iv.Subagents) == 0 &&
+		len(iv.Hooks) == 0 &&
+		len(iv.SlashCommands) == 0 &&
+		len(iv.MCPTools) == 0
 }
 
 // PluginRef identifies a plugin to install. Either a marketplace-qualified
@@ -395,10 +453,14 @@ func (m Marketplace) MarshalJSON() ([]byte, error) {
 // All Session fields carry `json:"snake_case,omitempty"` tags, so
 // the standard encoder strips nil maps / nil slices / empty strings
 // before we ever see them here — no defensive deletion needed for
-// those. We only override marshaling for time.Time because
-// encoding/json's omitempty does NOT recognise a zero time.Time as
-// empty: without this custom handler a Session with no Created
-// would emit `"created": "0001-01-01T00:00:00Z"`.
+// those. We override marshaling for:
+//   - time.Time fields: encoding/json's omitempty does NOT recognise
+//     a zero time.Time as empty, so without this a Session with no
+//     Created would emit `"created": "0001-01-01T00:00:00Z"`.
+//   - Invocations: omitempty on a struct value never triggers (struct
+//     is not a "zero" kind for the encoder), so an empty Invocations
+//     wrapper would emit as `"invocations":{}`. Drop the key when
+//     [Invocations.IsEmpty].
 func (s Session) MarshalJSON() ([]byte, error) {
 	type alias Session
 	a := alias(s)
@@ -415,6 +477,9 @@ func (s Session) MarshalJSON() ([]byte, error) {
 	}
 	if s.LastModified.IsZero() {
 		delete(generic, "last_modified")
+	}
+	if s.Invocations.IsEmpty() {
+		delete(generic, "invocations")
 	}
 	return json.Marshal(generic)
 }

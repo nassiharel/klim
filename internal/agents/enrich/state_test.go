@@ -164,6 +164,89 @@ func TestDeriveState(t *testing.T) {
 	}
 }
 
+// TestDeriveState_InvocationsByKind pins that the per-kind
+// invocation maps populate from the new event kinds:
+// KindSkillInvoked, KindSlashCommand, KindHookFired, KindMCPToolCall,
+// and per-name KindSubagentStarted. These maps are independent of
+// the scalar counters (TurnCount, SubagentRuns) so existing callers
+// keep their semantics.
+func TestDeriveState_InvocationsByKind(t *testing.T) {
+	t.Parallel()
+	base := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	at := func(s int) time.Time { return base.Add(time.Duration(s) * time.Second) }
+
+	events := []TimedEvent{
+		{Event: Event{Kind: KindSkillInvoked, Name: "superpowers:tdd"}, Timestamp: at(0)},
+		{Event: Event{Kind: KindSkillInvoked, Name: "superpowers:tdd"}, Timestamp: at(1)},
+		{Event: Event{Kind: KindSkillInvoked, Name: "superpowers:brainstorming"}, Timestamp: at(2)},
+		{Event: Event{Kind: KindSlashCommand, Name: "/exit"}, Timestamp: at(3)},
+		{Event: Event{Kind: KindHookFired, Name: "SessionStart:startup"}, Timestamp: at(4)},
+		{Event: Event{Kind: KindHookFired, Name: "SessionStart:startup"}, Timestamp: at(5)},
+		{Event: Event{Kind: KindMCPToolCall, Name: "ado-tools::repo_pull_request"}, Timestamp: at(6)},
+		{Event: Event{Kind: KindSubagentStarted, Name: "Explore"}, Timestamp: at(7)},
+		{Event: Event{Kind: KindSubagentStarted, Name: "Explore"}, Timestamp: at(8)},
+		{Event: Event{Kind: KindSubagentStarted, Name: "general-purpose"}, Timestamp: at(9)},
+	}
+	got := DeriveState(events, at(10))
+
+	if got.Invocations.Skills["superpowers:tdd"] != 2 {
+		t.Errorf("Skills[tdd]=%d, want 2", got.Invocations.Skills["superpowers:tdd"])
+	}
+	if got.Invocations.Skills["superpowers:brainstorming"] != 1 {
+		t.Errorf("Skills[brainstorming]=%d, want 1", got.Invocations.Skills["superpowers:brainstorming"])
+	}
+	if got.Invocations.SlashCommands["/exit"] != 1 {
+		t.Errorf("SlashCommands[/exit]=%d, want 1", got.Invocations.SlashCommands["/exit"])
+	}
+	if got.Invocations.Hooks["SessionStart:startup"] != 2 {
+		t.Errorf("Hooks[SessionStart:startup]=%d, want 2", got.Invocations.Hooks["SessionStart:startup"])
+	}
+	if got.Invocations.MCPTools["ado-tools::repo_pull_request"] != 1 {
+		t.Errorf("MCPTools[ado-tools::repo_pull_request]=%d, want 1", got.Invocations.MCPTools["ado-tools::repo_pull_request"])
+	}
+	if got.Invocations.Subagents["Explore"] != 2 {
+		t.Errorf("Subagents[Explore]=%d, want 2", got.Invocations.Subagents["Explore"])
+	}
+	if got.Invocations.Subagents["general-purpose"] != 1 {
+		t.Errorf("Subagents[general-purpose]=%d, want 1", got.Invocations.Subagents["general-purpose"])
+	}
+
+	// The legacy SubagentRuns scalar must keep its existing semantic
+	// (total dispatches) so downstream code that reads it doesn't
+	// regress.
+	if got.SubagentRuns != 3 {
+		t.Errorf("SubagentRuns=%d, want 3 (sum of all dispatches)", got.SubagentRuns)
+	}
+}
+
+// TestDeriveState_InvocationsEmptyByDefault pins that an event
+// stream with no new-kind events leaves all Invocations sub-maps
+// nil — never an empty allocated map. The Session marshaller relies
+// on `len(m) == 0` to drop unpopulated sub-maps from JSON; an empty
+// allocated map would still get marshalled as `{}`.
+func TestDeriveState_InvocationsEmptyByDefault(t *testing.T) {
+	t.Parallel()
+	got := DeriveState([]TimedEvent{
+		{Event: Event{Kind: KindUserMessage}, Timestamp: time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)},
+	}, time.Date(2026, 6, 11, 12, 0, 1, 0, time.UTC))
+
+	if got.Invocations.Skills != nil {
+		t.Errorf("Skills should be nil with no skill events, got %v", got.Invocations.Skills)
+	}
+	if got.Invocations.Subagents != nil {
+		t.Errorf("Subagents should be nil with no subagent events, got %v", got.Invocations.Subagents)
+	}
+	if got.Invocations.Hooks != nil {
+		t.Errorf("Hooks should be nil with no hook events, got %v", got.Invocations.Hooks)
+	}
+	if got.Invocations.SlashCommands != nil {
+		t.Errorf("SlashCommands should be nil with no slash events, got %v", got.Invocations.SlashCommands)
+	}
+	if got.Invocations.MCPTools != nil {
+		t.Errorf("MCPTools should be nil with no MCP tool events, got %v", got.Invocations.MCPTools)
+	}
+}
+
 // TestTruncateOneLine covers whitespace collapsing and rune-aware
 // truncation. Multi-byte rune edge cases matter because terminal
 // widths are computed in runes, not bytes.

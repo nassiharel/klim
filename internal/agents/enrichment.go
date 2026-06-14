@@ -58,4 +58,27 @@ func ApplyEnrichment(s *Session, r enrich.Result) {
 	case enrich.KindSessionStopped:
 		s.Status = SessionStatusStopped
 	}
+
+	// Invocations: copy per-kind maps field-by-field. The enrich
+	// package mirrors agents.Invocations to avoid an import cycle;
+	// shape is identical so this is a straight 1:1 copy. We only
+	// overwrite sub-maps when the result actually has entries, so
+	// providers that pre-populated Invocations from a side channel
+	// (none today, but the contract matches Title / ProjectPath /
+	// TurnCount) don't lose their data on an empty enrich pass.
+	if len(r.Invocations.Skills) > 0 {
+		s.Invocations.Skills = r.Invocations.Skills
+	}
+	if len(r.Invocations.Subagents) > 0 {
+		s.Invocations.Subagents = r.Invocations.Subagents
+	}
+	if len(r.Invocations.Hooks) > 0 {
+		s.Invocations.Hooks = r.Invocations.Hooks
+	}
+	if len(r.Invocations.SlashCommands) > 0 {
+		s.Invocations.SlashCommands = r.Invocations.SlashCommands
+	}
+	if len(r.Invocations.MCPTools) > 0 {
+		s.Invocations.MCPTools = r.Invocations.MCPTools
+	}
 }

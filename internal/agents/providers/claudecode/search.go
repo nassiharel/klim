@@ -30,9 +30,10 @@ type claudeMessageEnvelope struct {
 }
 
 type claudeContentBlock struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-	Name string `json:"name"` // tool_use.name; only present for tool_use blocks
+	Type  string          `json:"type"`
+	Text  string          `json:"text"`
+	Name  string          `json:"name"`  // tool_use.name; only present for tool_use blocks
+	Input json.RawMessage `json:"input"` // tool_use.input; opaque payload, parsed lazily by callers that need specific fields like .skill / .subagent_type
 }
 
 // SessionTexts walks every `~/.claude/projects/<encoded>/*.jsonl` and

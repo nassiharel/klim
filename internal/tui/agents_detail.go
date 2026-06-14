@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -688,7 +689,67 @@ func renderSessionBody(s *agents.Session) string {
 	if s.TurnCount > 0 {
 		b.WriteString(fmt.Sprintf("    turns: %d\n", s.TurnCount))
 	}
+	if !s.Invocations.IsEmpty() {
+		fmt.Fprintf(&b, "  %s\n", header.Render("Invocations"))
+		// Render in a fixed order so the layout is stable across
+		// reloads. Each row uses a 10-char dim-style label to match
+		// the existing "    title: " indentation budget.
+		renderInvocationsRow(&b, "skills", s.Invocations.Skills)
+		renderInvocationsRow(&b, "sub-agents", s.Invocations.Subagents)
+		renderInvocationsRow(&b, "hooks", s.Invocations.Hooks)
+		renderInvocationsRow(&b, "slash cmds", s.Invocations.SlashCommands)
+		renderInvocationsRow(&b, "mcp tools", s.Invocations.MCPTools)
+	}
 	return b.String()
+}
+
+// renderInvocationsRow writes a single per-kind row of the
+// Invocations block. Skips the row entirely when the map is
+// empty (the block-level `IsEmpty` check guarantees at least
+// one row will render, so the header is never an orphan). Each
+// entry renders as `name ×N` (the ×N suffix is omitted when
+// count == 1 so the common case stays compact) and entries are
+// joined with a comma + space. The top-10 cap and `(+N more)`
+// ellipsis prevent runaway-name explosions from breaking the
+// detail-pane layout when a session ran the same skill 30 times.
+func renderInvocationsRow(b *strings.Builder, label string, counts map[string]int) {
+	if len(counts) == 0 {
+		return
+	}
+	// Sort by count desc, then by name asc for a deterministic
+	// rendering (stable across reloads, alphabetical tiebreak).
+	type kv struct {
+		name  string
+		count int
+	}
+	pairs := make([]kv, 0, len(counts))
+	for n, c := range counts {
+		pairs = append(pairs, kv{n, c})
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		if pairs[i].count != pairs[j].count {
+			return pairs[i].count > pairs[j].count
+		}
+		return pairs[i].name < pairs[j].name
+	})
+	const maxEntries = 10
+	overflow := 0
+	if len(pairs) > maxEntries {
+		overflow = len(pairs) - maxEntries
+		pairs = pairs[:maxEntries]
+	}
+	parts := make([]string, 0, len(pairs))
+	for _, p := range pairs {
+		if p.count == 1 {
+			parts = append(parts, p.name)
+		} else {
+			parts = append(parts, fmt.Sprintf("%s ×%d", p.name, p.count))
+		}
+	}
+	if overflow > 0 {
+		parts = append(parts, fmt.Sprintf("(+%d more)", overflow))
+	}
+	fmt.Fprintf(b, "    %-10s %s\n", label, strings.Join(parts, ", "))
 }
 
 func renderSkillBody(s *agents.Skill) string {

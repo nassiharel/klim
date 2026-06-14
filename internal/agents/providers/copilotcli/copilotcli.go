@@ -720,17 +720,49 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 				Tool     struct {
 					Name string `json:"name"`
 				} `json:"tool"`
-				MCP struct {
+				// MCPServerName / MCPToolName are the per-tool MCP
+				// fields documented in the 1.0.61 schema as part of
+				// tool.execution_start. They are NOT currently set
+				// by real 1.0.61 producers (verified empirically
+				// against ~/.copilot/session-state/<uuid>/events.jsonl)
+				// — wiring is in place so the dashboard lights up
+				// without a code change the day producers start
+				// emitting them.
+				MCPServerName string `json:"mcpServerName"`
+				MCPToolName   string `json:"mcpToolName"`
+				MCP           struct {
 					Server string `json:"server"`
 				} `json:"mcp"`
 				Subagent struct {
 					Name string `json:"name"`
 				} `json:"subagent"`
-				Message struct {
-					Text    string   `json:"text"`
-					Content string   `json:"content"`
-					Choices []string `json:"choices"`
-				} `json:"message"`
+				// AgentName is the 1.x flat shape for subagent.started's
+				// agent identifier. Schema-defined, not currently
+				// emitted; same disclaimer as MCPServerName above.
+				AgentName string `json:"agentName"`
+				// Name is the skill-identifier field on skill.invoked.
+				// Schema-defined, not currently emitted.
+				Name string `json:"name"`
+				// HookType is the hook-identifier field on
+				// hook.start / hook.end (e.g. "postToolUse"). This
+				// IS emitted by real 1.0.61 producers (verified).
+				HookType string `json:"hookType"`
+				// CommandName is the slash-command identifier on
+				// command.execute. Schema-defined, not currently
+				// emitted.
+				CommandName string `json:"commandName"`
+				// Message is polymorphic across event types: real
+				// 1.0.61 transcripts emit it as a STRING on
+				// `session.warning` events (the warning text)
+				// AND as an OBJECT on `ask_user` / `assistant.message`
+				// (with text / content / choices fields). Declaring
+				// it as a struct alone makes json.Decoder error on
+				// the first string-form line and `break` the parse
+				// loop — silently dropping every subsequent event.
+				// Keep it raw and decode lazily via [extractMessage*]
+				// helpers below. Same fix shape as
+				// claudecode.claudeMessage.Content.
+				Message json.RawMessage `json:"message"`
 			} `json:"data"`
 		}
 		if err := dec.Decode(&ev); err != nil {
@@ -788,20 +820,50 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 			case enrich.KindMCPUsed:
 				te.Name = ev.Data.MCP.Server
 			case enrich.KindSubagentStarted, enrich.KindSubagentCompleted:
-				te.Name = ev.Data.Subagent.Name
+				// Prefer the 1.x flat `agentName`; fall back to the
+				// nested `subagent.name` legacy shape.
+				te.Name = ev.Data.AgentName
+				if te.Name == "" {
+					te.Name = ev.Data.Subagent.Name
+				}
 			case enrich.KindAskUser, enrich.KindAskPermission:
-				te.Text = ev.Data.Message.Text
-				if te.Text == "" {
-					te.Text = ev.Data.Message.Content
-				}
-				te.Choices = ev.Data.Message.Choices
+				te.Text, te.Choices = extractMessageTextAndChoices(ev.Data.Message)
 			case enrich.KindAssistantMessage:
-				te.Text = ev.Data.Message.Text
-				if te.Text == "" {
-					te.Text = ev.Data.Message.Content
+				te.Text, _ = extractMessageTextAndChoices(ev.Data.Message)
+			case enrich.KindSkillInvoked:
+				te.Name = ev.Data.Name
+			case enrich.KindSlashCommand:
+				// Copilot's commandName is the bare name (no leading
+				// slash, per the schema's "Command name without
+				// leading /"); the dashboard's other category — Claude
+				// slash-commands — DOES include the slash. Normalise
+				// here so both providers feed `/foo` to the renderer.
+				if ev.Data.CommandName != "" {
+					te.Name = "/" + ev.Data.CommandName
 				}
+			case enrich.KindHookFired:
+				te.Name = ev.Data.HookType
 			}
 			events = append(events, te)
+
+			// MCP tool calls are not a separate event type in
+			// Copilot — they're regular tool.execution_start events
+			// with `mcpServerName` / `mcpToolName` populated. Emit
+			// an EXTRA KindMCPToolCall event so the per-tool MCP
+			// histogram populates without losing the existing
+			// per-tool ToolCounts populated by KindToolStarted above.
+			// Honest-signal caveat: real 1.0.61 producers don't set
+			// these fields today; this branch is dormant until they
+			// do.
+			if kind == enrich.KindToolStarted && ev.Data.MCPServerName != "" && ev.Data.MCPToolName != "" {
+				events = append(events, enrich.TimedEvent{
+					Event: enrich.Event{
+						Kind: enrich.KindMCPToolCall,
+						Name: ev.Data.MCPServerName + "::" + ev.Data.MCPToolName,
+					},
+					Timestamp: ts,
+				})
+			}
 		}
 	}
 
@@ -833,6 +895,60 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 		result := enrich.DeriveState(events, now)
 		agents.ApplyEnrichment(s, result)
 	}
+}
+
+// extractMessageTextAndChoices reads the polymorphic
+// `data.message` field on a Copilot transcript event.
+//
+// Real 1.0.61 producers emit `data.message` in two shapes:
+//
+//   - String: `"message":"Failed to connect to MCP server …"`
+//     (used by `session.warning` and similar telemetry events).
+//   - Object: `"message":{"text":"…","content":"…","choices":[…]}`
+//     (used by `ask_user` / `ask_permission` / `assistant.message`).
+//
+// Declaring `Data.Message` as the object form alone makes
+// json.Decoder error on the first string-form line and `break` the
+// parse loop — silently dropping every subsequent event in the
+// file (verified empirically: a real transcript with 90 events
+// and 16 `hook.start` records produced 1 parsed event and 0 hooks
+// before this helper was added).
+//
+// Returns (text, choices). Both are empty when the raw payload
+// is empty, the object form has no relevant fields, or the
+// string form is empty.
+func extractMessageTextAndChoices(raw json.RawMessage) (string, []string) {
+	if len(raw) == 0 {
+		return "", nil
+	}
+	switch raw[0] {
+	case '"':
+		// String form. Decode into a Go string; the choices
+		// field has no analogue in this shape.
+		var s string
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return "", nil
+		}
+		return s, nil
+	case '{':
+		// Object form. Same field set as the original struct,
+		// kept private here so callers don't have to know about
+		// the polymorphism.
+		var obj struct {
+			Text    string   `json:"text"`
+			Content string   `json:"content"`
+			Choices []string `json:"choices"`
+		}
+		if err := json.Unmarshal(raw, &obj); err != nil {
+			return "", nil
+		}
+		text := obj.Text
+		if text == "" {
+			text = obj.Content
+		}
+		return text, obj.Choices
+	}
+	return "", nil
 }
 
 // translateCopilotKind maps a Copilot CLI event type string to the
@@ -890,6 +1006,21 @@ func translateCopilotKind(t string) enrich.EventKind {
 		return enrich.KindSessionEnd
 	case "session.stopped":
 		return enrich.KindSessionStopped
+	// The following three are schema-defined in Copilot CLI 1.0.61
+	// but are NOT currently emitted by real producers (verified
+	// empirically against live transcripts under
+	// ~/.copilot/session-state/ before this code was written).
+	// Wiring is in place so the dashboard's per-invocation block
+	// lights up the day producers start emitting them.
+	case "skill.invoked":
+		return enrich.KindSkillInvoked
+	case "command.execute":
+		return enrich.KindSlashCommand
+	case "hook.start":
+		// hook.start IS emitted by real producers; see the
+		// schema-only disclaimer above for skill.invoked and
+		// command.execute.
+		return enrich.KindHookFired
 	}
 	return enrich.KindOther
 }
