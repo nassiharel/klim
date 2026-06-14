@@ -28,12 +28,26 @@ import (
 // out short, and the session Title is wrong (because the first user
 // message is missed). Decoding manually keeps both shapes.
 type claudeEvent struct {
-	Type      string        `json:"type"`
-	Timestamp string        `json:"timestamp"`
-	SessionID string        `json:"sessionId"`
-	Cwd       string        `json:"cwd"`
-	GitBranch string        `json:"gitBranch"`
-	Message   claudeMessage `json:"message"`
+	Type       string           `json:"type"`
+	Timestamp  string           `json:"timestamp"`
+	SessionID  string           `json:"sessionId"`
+	Cwd        string           `json:"cwd"`
+	GitBranch  string           `json:"gitBranch"`
+	Message    claudeMessage    `json:"message"`
+	Attachment claudeAttachment `json:"attachment"`
+}
+
+// claudeAttachment is the nested payload Claude uses for hook
+// records (top-level `type=="attachment"`). Only the fields we need
+// for invocation attribution are declared; the bulky stdout/stderr
+// blobs and tool-result content are ignored.
+//
+// `hookName` already encodes event+slot (e.g. "SessionStart:startup"),
+// so the enricher uses it verbatim. Combining with `hookEvent` would
+// produce duplicative names like "SessionStart:startup:SessionStart".
+type claudeAttachment struct {
+	Type     string `json:"type"`     // "hook_success" | "hook_additional_context" | …
+	HookName string `json:"hookName"` // e.g. "SessionStart:startup"
 }
 
 // claudeMessage carries the polymorphic content field. See
@@ -132,6 +146,22 @@ func enrichSessionFromJSONL(path string, now time.Time) jsonlScanResult {
 					out.FirstUserMsg = enrich.TruncateOneLine(text, 80)
 				}
 			}
+			// Slash-command extraction: only the STRING form of
+			// user content carries the `<command-name>/foo</command-name>`
+			// marker that represents an actual user-initiated
+			// slash command. The same characters can appear inside
+			// the text of a tool_result block (e.g. a sub-agent
+			// report quoting the marker shape) — those are array-
+			// form content and MUST NOT count, or every transcript
+			// that discusses the marker would falsely show "used".
+			// Verified empirically against real .claude transcripts
+			// before this code was written.
+			if cmd := extractSlashCommandFromStringContent(ev.Message.Content); cmd != "" {
+				events = append(events, enrich.TimedEvent{
+					Event:     enrich.Event{Kind: enrich.KindSlashCommand, Name: cmd},
+					Timestamp: ts,
+				})
+			}
 		case "assistant":
 			// Collect text + tool_use children. Assistant messages
 			// only use the array form in practice, but the helper
@@ -145,17 +175,75 @@ func enrichSessionFromJSONL(path string, now time.Time) jsonlScanResult {
 						lastText = c.Text
 					}
 				case "tool_use":
-					// Claude treats every assistant tool_use as a
-					// fresh start; the matching result arrives in a
-					// later user message of type tool_result. We
-					// don't try to correlate by id — the state
-					// machine only needs the call count, and the
-					// synthetic-completion loop below emits one
-					// completion per started tool except the last.
-					events = append(events, enrich.TimedEvent{
-						Event:     enrich.Event{Kind: enrich.KindToolStarted, Name: c.Name},
-						Timestamp: ts,
-					})
+					// Classify tool_use into one of the four
+					// invocation kinds Claude expresses through
+					// the tool surface: explicit Skill calls,
+					// Agent/Task sub-agent dispatches, MCP tool
+					// invocations (name pattern mcp__server__tool),
+					// or a plain anonymous tool that the existing
+					// state machine already counts via ToolCounts.
+					// Verified empirically against real Claude
+					// transcripts at C:/Users/nassiharel/.claude/projects/
+					// before this code was written.
+					switch c.Name {
+					case "Skill":
+						// Dual-emit: KindToolStarted preserves the
+						// pre-Invocations dashboard aggregation
+						// (sessionstui totalTools, CLI per-session
+						// tool histogram), and KindSkillInvoked
+						// powers the new per-skill row. The
+						// Invocations feature is ADDITIONAL signal
+						// on top of ToolCounts, not a replacement.
+						emit := []enrich.TimedEvent{{
+							Event:     enrich.Event{Kind: enrich.KindToolStarted, Name: c.Name},
+							Timestamp: ts,
+						}}
+						if skill := extractToolInputString(c.Input, "skill"); skill != "" {
+							emit = append(emit, enrich.TimedEvent{
+								Event:     enrich.Event{Kind: enrich.KindSkillInvoked, Name: skill},
+								Timestamp: ts,
+							})
+						}
+						events = append(events, emit...)
+					case "Agent", "Task":
+						// Same dual-emit rationale as Skill above.
+						emit := []enrich.TimedEvent{{
+							Event:     enrich.Event{Kind: enrich.KindToolStarted, Name: c.Name},
+							Timestamp: ts,
+						}}
+						if sub := extractToolInputString(c.Input, "subagent_type"); sub != "" {
+							emit = append(emit, enrich.TimedEvent{
+								Event:     enrich.Event{Kind: enrich.KindSubagentStarted, Name: sub},
+								Timestamp: ts,
+							})
+						}
+						events = append(events, emit...)
+					default:
+						if server, tool, ok := splitMCPToolName(c.Name); ok {
+							// MCP tool calls ALSO count as
+							// regular tool calls — the existing
+							// dashboard already shows them in
+							// ToolCounts as "mcp__foo__bar". Emit
+							// both in one append so the per-tool
+							// histograms in MCP and Tools rows
+							// both work.
+							events = append(events,
+								enrich.TimedEvent{
+									Event:     enrich.Event{Kind: enrich.KindMCPToolCall, Name: server + "::" + tool},
+									Timestamp: ts,
+								},
+								enrich.TimedEvent{
+									Event:     enrich.Event{Kind: enrich.KindToolStarted, Name: c.Name},
+									Timestamp: ts,
+								},
+							)
+						} else {
+							events = append(events, enrich.TimedEvent{
+								Event:     enrich.Event{Kind: enrich.KindToolStarted, Name: c.Name},
+								Timestamp: ts,
+							})
+						}
+					}
 				}
 			}
 			if lastText != "" {
@@ -164,9 +252,28 @@ func enrichSessionFromJSONL(path string, now time.Time) jsonlScanResult {
 					Timestamp: ts,
 				})
 			}
+		case "attachment":
+			// Hook records live at the top level as
+			// type=="attachment" with the hook fields nested under
+			// `attachment`. Any attachment whose nested type
+			// starts with `hook_` carries a hook firing; this
+			// covers today's `hook_success` / `hook_additional_context`
+			// and any future `hook_failure` / `hook_blocked` /
+			// similar without code changes. Other attachment types
+			// (skill_listing, task_reminder, command_permissions,
+			// file-history-snapshot, …) are ignored because they
+			// represent passive session state, not an invocation.
+			// Verified empirically against real transcripts.
+			if ev.Attachment.HookName != "" &&
+				strings.HasPrefix(ev.Attachment.Type, "hook_") {
+				events = append(events, enrich.TimedEvent{
+					Event:     enrich.Event{Kind: enrich.KindHookFired, Name: ev.Attachment.HookName},
+					Timestamp: ts,
+				})
+			}
 		default:
-			// Skip queue-operation, hook_success, etc. They don't
-			// move the state machine.
+			// Skip queue-operation, etc. They don't move the
+			// state machine.
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -275,6 +382,98 @@ func looksLikeIDEAttachment(s string) bool {
 	return strings.HasPrefix(t, "<ide_") ||
 		strings.HasPrefix(t, "<system-reminder>") ||
 		strings.HasPrefix(t, "<command-")
+}
+
+// slashCommandOpen / slashCommandClose are the literal marker tags
+// Claude wraps slash-command invocations in at the START of a
+// string-form user message: `<command-name>/foo</command-name>`.
+// Real transcripts always place the marker at offset 0 of the
+// content string (verified empirically against on-disk transcripts);
+// mid-text occurrences are quotations and MUST NOT be counted.
+const (
+	slashCommandOpen  = "<command-name>/"
+	slashCommandClose = "</command-name>"
+)
+
+// extractSlashCommandFromStringContent returns the slash-command name
+// (e.g. "/exit") from a user message whose `content` is the STRING
+// form STARTING WITH the `<command-name>/` marker. Returns "" when
+// either:
+//
+//   - the content is the array form (a tool_result whose text payload
+//     happens to QUOTE the marker shape is NOT a real slash-command
+//     invocation; counting it would surface every transcript that
+//     documents the format as having used the command);
+//   - the marker exists but doesn't begin at offset 0 (mid-text
+//     quote, e.g. "what does <command-name>/inject</command-name>
+//     do?" — same false-positive class as the array-form quote,
+//     pinned by TestEnrichSessionFromJSONL_SlashCommandFalsePositiveFromQuotedText).
+//
+// Honest-signal contract: this is the only path that may emit
+// KindSlashCommand for the claudecode provider.
+func extractSlashCommandFromStringContent(raw json.RawMessage) string {
+	if len(raw) == 0 || raw[0] != '"' {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return ""
+	}
+	if !strings.HasPrefix(s, slashCommandOpen) {
+		return ""
+	}
+	rest := s[len(slashCommandOpen)-1:] // keep the leading '/'
+	end := strings.Index(rest, slashCommandClose)
+	if end <= 1 {
+		// No close tag, or only the '/' before the close tag.
+		return ""
+	}
+	return rest[:end]
+}
+
+// extractToolInputString returns the string value of `key` from a
+// tool_use's `input` payload. Returns "" when the key is missing, not
+// a string, or the payload doesn't decode. Used to pull `skill` out of
+// a Skill tool_use and `subagent_type` out of an Agent/Task tool_use
+// without binding a separate struct per tool.
+func extractToolInputString(raw json.RawMessage, key string) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return ""
+	}
+	v, ok := m[key]
+	if !ok {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(v, &s); err != nil {
+		return ""
+	}
+	return s
+}
+
+// splitMCPToolName splits a Claude MCP tool name of the form
+// `mcp__<server>__<tool>` into its server and tool parts. The tool
+// portion is allowed to contain further `__` sequences and is
+// returned as-is (e.g. `mcp__ado-tools__repo_pull_request_thread_write`
+// → "ado-tools", "repo_pull_request_thread_write"). Returns
+// `("", "", false)` for any name that doesn't match the expected
+// prefix structure. Verified empirically against real transcripts.
+func splitMCPToolName(name string) (server, tool string, ok bool) {
+	const prefix = "mcp__"
+	if !strings.HasPrefix(name, prefix) {
+		return "", "", false
+	}
+	rest := name[len(prefix):]
+	idx := strings.Index(rest, "__")
+	if idx <= 0 || idx == len(rest)-2 {
+		// No tool suffix, or empty server / empty tool.
+		return "", "", false
+	}
+	return rest[:idx], rest[idx+2:], true
 }
 
 // latestTranscript returns the path to the most recently modified

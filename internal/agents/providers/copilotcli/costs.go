@@ -35,26 +35,19 @@ type copilotEventLine struct {
 	} `json:"data"`
 }
 
-// TokenSamples scans ~/.copilot/sessions/<id>/events.jsonl files and
-// emits per-event samples wherever a usage block is present.
+// TokenSamples walks every Copilot session directory (see
+// [Provider.sessionDirs] for the on-disk layouts honored) and emits
+// per-event samples wherever a usage block is present.
 //
 // The Copilot CLI event format is reasonably stable for the
 // `model.response` / `model.usage` event types, but we don't filter
 // by type — any line with usage tokens counts. Missing files /
 // missing usage are tolerated silently.
 func (p *Provider) TokenSamples(ctx context.Context) ([]costs.TokenSample, error) {
-	root := filepath.Join(p.copilotHome(), "sessions")
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil, nil
-	}
 	var out []costs.TokenSample
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		path := filepath.Join(root, e.Name(), "events.jsonl")
-		samples, err := parseCopilotTranscript(path, e.Name(), p.ID())
+	for _, d := range p.sessionDirs() {
+		path := filepath.Join(d.Path, "events.jsonl")
+		samples, err := parseCopilotTranscript(path, d.ID, p.ID())
 		if err == nil {
 			out = append(out, samples...)
 		}

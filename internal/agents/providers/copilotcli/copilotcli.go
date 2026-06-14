@@ -505,15 +505,89 @@ func redactHeaders(in map[string]string) map[string]string {
 // MCP servers, branch, restart command) by [enrichFromEventsJSONL]
 // running our generic state machine over the event log.
 func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
+	now := time.Now()
+	bin := p.binary()
+	var sessions []agents.Session
+	for _, d := range p.sessionDirs() {
+		s := agents.Session{
+			ID:             "copilot:" + d.ID,
+			Provider:       p.ID(),
+			TranscriptPath: d.Path,
+			Source:         agents.SourceLocalCopilot,
+		}
+		if fi, err := os.Stat(d.Path); err == nil {
+			s.LastModified = fi.ModTime()
+		}
+		enrichFromEventsJSONL(filepath.Join(d.Path, "events.jsonl"), &s, now)
+
+		// Repository fallback — derive from cwd when the
+		// transcript didn't carry an explicit repository tag.
+		if s.Repository == "" && s.ProjectPath != "" {
+			s.Repository = filepath.Base(filepath.Clean(s.ProjectPath))
+		}
+
+		// Restart command (paste-ready). Uses `--resume=<id>` (the
+		// equals form) to match `copilot --help`'s documented
+		// surface (`--resume[=value]`) and the exec path in
+		// [Provider.BuildLaunch]. The space-separated form is NOT
+		// documented and may be rejected by future Copilot CLI
+		// releases.
+		cli := bin
+		if cli == "" {
+			cli = "copilot"
+		}
+		idForResume := strings.TrimPrefix(s.ID, "copilot:")
+		if s.ProjectPath != "" {
+			s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume=" + idForResume
+		} else {
+			s.RestartCommand = cli + " --resume=" + idForResume
+		}
+
+		sessions = append(sessions, s)
+	}
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].LastModified.After(sessions[j].LastModified)
+	})
+	if len(sessions) > 100 {
+		sessions = sessions[:100]
+	}
+	return sessions, nil
+}
+
+// sessionDir is a discovered Copilot session directory, returned by
+// [Provider.sessionDirs]. Callers iterate over the slice to read each
+// session's events.jsonl (or any other per-session file) without
+// having to re-implement the layout-fallback / dedup logic.
+type sessionDir struct {
+	// ID is the bare session id (the directory name; no "copilot:"
+	// prefix). Use this when building agents.Session.ID via
+	// `"copilot:" + d.ID`.
+	ID string
+	// Path is the absolute path to the session directory.
+	Path string
+}
+
+// sessionDirs walks Copilot's per-session storage layouts (1.x
+// `session-state/`, with pre-1.0 `sessions/` and `state/` fallbacks)
+// and returns one entry per unique session id. A session that exists
+// in more than one layout — e.g. left over from an upgrade — is
+// reported once, taking the FIRST candidate's directory; this matches
+// the order [Provider.Sessions] uses so callers see the same paths
+// the listing surfaces. Missing root directories are silently
+// skipped — they're the common case on hosts that have only ever
+// run one Copilot generation.
+//
+// Callers across this package (Sessions, SessionTexts, TokenSamples)
+// share this helper so a future layout change has exactly one place
+// to update.
+func (p *Provider) sessionDirs() []sessionDir {
 	root := p.copilotHome()
 	candidates := []string{
 		filepath.Join(root, "session-state"),
 		filepath.Join(root, "sessions"),
 		filepath.Join(root, "state"),
 	}
-	now := time.Now()
-	bin := p.binary()
-	var sessions []agents.Session
+	var out []sessionDir
 	seen := make(map[string]bool)
 	for _, c := range candidates {
 		entries, err := os.ReadDir(c)
@@ -528,46 +602,10 @@ func (p *Provider) Sessions(ctx context.Context) ([]agents.Session, error) {
 				continue
 			}
 			seen[e.Name()] = true
-			dir := filepath.Join(c, e.Name())
-			s := agents.Session{
-				ID:             "copilot:" + e.Name(),
-				Provider:       p.ID(),
-				TranscriptPath: dir,
-				Source:         agents.SourceLocalCopilot,
-			}
-			if fi, err := e.Info(); err == nil {
-				s.LastModified = fi.ModTime()
-			}
-			enrichFromEventsJSONL(filepath.Join(dir, "events.jsonl"), &s, now)
-
-			// Repository fallback — derive from cwd when the
-			// transcript didn't carry an explicit repository tag.
-			if s.Repository == "" && s.ProjectPath != "" {
-				s.Repository = filepath.Base(filepath.Clean(s.ProjectPath))
-			}
-
-			// Restart command (paste-ready).
-			cli := bin
-			if cli == "" {
-				cli = "copilot"
-			}
-			idForResume := strings.TrimPrefix(s.ID, "copilot:")
-			if s.ProjectPath != "" {
-				s.RestartCommand = "cd " + quoteForShell(s.ProjectPath) + " && " + cli + " --resume " + idForResume
-			} else {
-				s.RestartCommand = cli + " --resume " + idForResume
-			}
-
-			sessions = append(sessions, s)
+			out = append(out, sessionDir{ID: e.Name(), Path: filepath.Join(c, e.Name())})
 		}
 	}
-	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].LastModified.After(sessions[j].LastModified)
-	})
-	if len(sessions) > 100 {
-		sessions = sessions[:100]
-	}
-	return sessions, nil
+	return out
 }
 
 // quoteForShell renders `s` so it can be pasted into a POSIX shell
@@ -671,21 +709,60 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 					Cwd        string `json:"cwd"`
 					Repository string `json:"repository"`
 					HostType   string `json:"hostType"`
+					Branch     string `json:"branch"`
 				} `json:"context"`
-				Tool struct {
+				// ToolName is the Copilot CLI 1.x shape:
+				// tool.execution_start / tool.execution_complete
+				// emit `data.toolName` as a flat string. The legacy
+				// nested `data.tool.name` shape is kept for pre-1.0
+				// compatibility — whichever is non-empty wins.
+				ToolName string `json:"toolName"`
+				Tool     struct {
 					Name string `json:"name"`
 				} `json:"tool"`
-				MCP struct {
+				// MCPServerName / MCPToolName are the per-tool MCP
+				// fields documented in the 1.0.61 schema as part of
+				// tool.execution_start. They are NOT currently set
+				// by real 1.0.61 producers (verified empirically
+				// against ~/.copilot/session-state/<uuid>/events.jsonl)
+				// — wiring is in place so the dashboard lights up
+				// without a code change the day producers start
+				// emitting them.
+				MCPServerName string `json:"mcpServerName"`
+				MCPToolName   string `json:"mcpToolName"`
+				MCP           struct {
 					Server string `json:"server"`
 				} `json:"mcp"`
 				Subagent struct {
 					Name string `json:"name"`
 				} `json:"subagent"`
-				Message struct {
-					Text    string   `json:"text"`
-					Content string   `json:"content"`
-					Choices []string `json:"choices"`
-				} `json:"message"`
+				// AgentName is the 1.x flat shape for subagent.started's
+				// agent identifier. Schema-defined, not currently
+				// emitted; same disclaimer as MCPServerName above.
+				AgentName string `json:"agentName"`
+				// Name is the skill-identifier field on skill.invoked.
+				// Schema-defined, not currently emitted.
+				Name string `json:"name"`
+				// HookType is the hook-identifier field on
+				// hook.start / hook.end (e.g. "postToolUse"). This
+				// IS emitted by real 1.0.61 producers (verified).
+				HookType string `json:"hookType"`
+				// CommandName is the slash-command identifier on
+				// command.execute. Schema-defined, not currently
+				// emitted.
+				CommandName string `json:"commandName"`
+				// Message is polymorphic across event types: real
+				// 1.0.61 transcripts emit it as a STRING on
+				// `session.warning` events (the warning text)
+				// AND as an OBJECT on `ask_user` / `assistant.message`
+				// (with text / content / choices fields). Declaring
+				// it as a struct alone makes json.Decoder error on
+				// the first string-form line and `break` the parse
+				// loop — silently dropping every subsequent event.
+				// Keep it raw and decode lazily via [extractMessage*]
+				// helpers below. Same fix shape as
+				// claudecode.claudeMessage.Content.
+				Message json.RawMessage `json:"message"`
 			} `json:"data"`
 		}
 		if err := dec.Decode(&ev); err != nil {
@@ -717,6 +794,9 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 		if ev.Data.Context.HostType != "" && s.Type == "" {
 			s.Type = ev.Data.Context.HostType
 		}
+		if ev.Data.Context.Branch != "" && s.Branch == "" {
+			s.Branch = ev.Data.Context.Branch
+		}
 		switch ev.Type {
 		case "turn.start", "user.message":
 			turns++
@@ -730,24 +810,60 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 			}
 			switch kind {
 			case enrich.KindToolStarted, enrich.KindToolCompleted:
-				te.Name = ev.Data.Tool.Name
+				// Copilot CLI 1.x emits `data.toolName` (flat
+				// string); older builds emit nested
+				// `data.tool.name`. Pick whichever is present.
+				te.Name = ev.Data.ToolName
+				if te.Name == "" {
+					te.Name = ev.Data.Tool.Name
+				}
 			case enrich.KindMCPUsed:
 				te.Name = ev.Data.MCP.Server
 			case enrich.KindSubagentStarted, enrich.KindSubagentCompleted:
-				te.Name = ev.Data.Subagent.Name
+				// Prefer the 1.x flat `agentName`; fall back to the
+				// nested `subagent.name` legacy shape.
+				te.Name = ev.Data.AgentName
+				if te.Name == "" {
+					te.Name = ev.Data.Subagent.Name
+				}
 			case enrich.KindAskUser, enrich.KindAskPermission:
-				te.Text = ev.Data.Message.Text
-				if te.Text == "" {
-					te.Text = ev.Data.Message.Content
-				}
-				te.Choices = ev.Data.Message.Choices
+				te.Text, te.Choices = extractMessageTextAndChoices(ev.Data.Message)
 			case enrich.KindAssistantMessage:
-				te.Text = ev.Data.Message.Text
-				if te.Text == "" {
-					te.Text = ev.Data.Message.Content
+				te.Text, _ = extractMessageTextAndChoices(ev.Data.Message)
+			case enrich.KindSkillInvoked:
+				te.Name = ev.Data.Name
+			case enrich.KindSlashCommand:
+				// Copilot's commandName is the bare name (no leading
+				// slash, per the schema's "Command name without
+				// leading /"); the dashboard's other category — Claude
+				// slash-commands — DOES include the slash. Normalise
+				// here so both providers feed `/foo` to the renderer.
+				if ev.Data.CommandName != "" {
+					te.Name = "/" + ev.Data.CommandName
 				}
+			case enrich.KindHookFired:
+				te.Name = ev.Data.HookType
 			}
 			events = append(events, te)
+
+			// MCP tool calls are not a separate event type in
+			// Copilot — they're regular tool.execution_start events
+			// with `mcpServerName` / `mcpToolName` populated. Emit
+			// an EXTRA KindMCPToolCall event so the per-tool MCP
+			// histogram populates without losing the existing
+			// per-tool ToolCounts populated by KindToolStarted above.
+			// Honest-signal caveat: real 1.0.61 producers don't set
+			// these fields today; this branch is dormant until they
+			// do.
+			if kind == enrich.KindToolStarted && ev.Data.MCPServerName != "" && ev.Data.MCPToolName != "" {
+				events = append(events, enrich.TimedEvent{
+					Event: enrich.Event{
+						Kind: enrich.KindMCPToolCall,
+						Name: ev.Data.MCPServerName + "::" + ev.Data.MCPToolName,
+					},
+					Timestamp: ts,
+				})
+			}
 		}
 	}
 
@@ -781,14 +897,92 @@ func enrichFromEventsJSONL(path string, s *agents.Session, now time.Time) {
 	}
 }
 
+// extractMessageTextAndChoices reads the polymorphic
+// `data.message` field on a Copilot transcript event.
+//
+// Real 1.0.61 producers emit `data.message` in two shapes:
+//
+//   - String: `"message":"Failed to connect to MCP server …"`
+//     (used by `session.warning` and similar telemetry events).
+//   - Object: `"message":{"text":"…","content":"…","choices":[…]}`
+//     (used by `ask_user` / `ask_permission` / `assistant.message`).
+//
+// Declaring `Data.Message` as the object form alone makes
+// json.Decoder error on the first string-form line and `break` the
+// parse loop — silently dropping every subsequent event in the
+// file (verified empirically: a real transcript with 90 events
+// and 16 `hook.start` records produced 1 parsed event and 0 hooks
+// before this helper was added).
+//
+// Returns (text, choices). Both are empty when the raw payload
+// is empty, the object form has no relevant fields, or the
+// string form is empty.
+func extractMessageTextAndChoices(raw json.RawMessage) (string, []string) {
+	if len(raw) == 0 {
+		return "", nil
+	}
+	switch raw[0] {
+	case '"':
+		// String form. Decode into a Go string; the choices
+		// field has no analogue in this shape.
+		var s string
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return "", nil
+		}
+		return s, nil
+	case '{':
+		// Object form. Same field set as the original struct,
+		// kept private here so callers don't have to know about
+		// the polymorphism.
+		var obj struct {
+			Text    string   `json:"text"`
+			Content string   `json:"content"`
+			Choices []string `json:"choices"`
+		}
+		if err := json.Unmarshal(raw, &obj); err != nil {
+			return "", nil
+		}
+		text := obj.Text
+		if text == "" {
+			text = obj.Content
+		}
+		return text, obj.Choices
+	}
+	return "", nil
+}
+
 // translateCopilotKind maps a Copilot CLI event type string to the
 // generic [enrich.EventKind] vocabulary. Returns KindOther for types
 // that don't influence the live state.
+//
+// The switch covers two generations of Copilot CLI per category:
+//
+//   - tool execution start/complete — 1.x: `tool.execution_start` /
+//     `tool.execution_complete`; pre-1.0: `tool.start` / `tool.end`
+//     (and earlier `tool_use` / `tool_use.start` / `tool_use.end`).
+//   - turn boundaries — `user.message` is mapped to KindUserMessage
+//     (which drives the TurnCount derivation). Note that Copilot 1.x
+//     ALSO emits `assistant.turn_start` / `assistant.turn_end`, but
+//     they are deliberately NOT mapped: TurnCount counts user-initiated
+//     turns, and the user.message event already covers that — adding
+//     turn_start would double-count.
+//   - session lifecycle — `session.start`, `session.end` / `session.close`
+//     / `session.completed`, `session.stopped`.
+//   - ask / answer — `ask_user` / `user.ask` / `prompt.required` and
+//     the symmetric `user.answered` / `permission.{granted,denied}`.
+//   - subagent / MCP / messages — mapped both 1.x and legacy names.
+//
+// Falling out of sync with the producer is a silent failure — sessions
+// continue to be listed but every enrichment field stays empty, which
+// is what users perceive as a "blank Sessions tab". Keep this table
+// in sync when the producer ships new event names.
 func translateCopilotKind(t string) enrich.EventKind {
 	switch t {
-	case "tool.start", "tool.started", "tool_use", "tool_use.start":
+	case "tool.start", "tool.started", "tool_use", "tool_use.start",
+		"tool.execution_start":
 		return enrich.KindToolStarted
-	case "tool.end", "tool.completed", "tool.complete", "tool_use.end":
+	case "tool.end", "tool.completed", "tool.complete", "tool_use.end",
+		"tool.execution_complete":
 		return enrich.KindToolCompleted
 	case "ask_user", "user.ask", "prompt.required":
 		return enrich.KindAskUser
@@ -812,6 +1006,21 @@ func translateCopilotKind(t string) enrich.EventKind {
 		return enrich.KindSessionEnd
 	case "session.stopped":
 		return enrich.KindSessionStopped
+	// The following three are schema-defined in Copilot CLI 1.0.61
+	// but are NOT currently emitted by real producers (verified
+	// empirically against live transcripts under
+	// ~/.copilot/session-state/ before this code was written).
+	// Wiring is in place so the dashboard's per-invocation block
+	// lights up the day producers start emitting them.
+	case "skill.invoked":
+		return enrich.KindSkillInvoked
+	case "command.execute":
+		return enrich.KindSlashCommand
+	case "hook.start":
+		// hook.start IS emitted by real producers; see the
+		// schema-only disclaimer above for skill.invoked and
+		// command.execute.
+		return enrich.KindHookFired
 	}
 	return enrich.KindOther
 }

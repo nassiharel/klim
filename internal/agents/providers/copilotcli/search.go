@@ -31,21 +31,15 @@ type copilotMessageEvent struct {
 	} `json:"data"`
 }
 
-// SessionTexts walks ~/.copilot/sessions/<id>/events.jsonl and returns
-// one SessionText per session directory.
+// SessionTexts walks every Copilot session directory (see
+// [Provider.sessionDirs] for the on-disk layouts honored) and returns
+// one SessionText per session whose events.jsonl contains at least one
+// extractable message.
 func (p *Provider) SessionTexts(ctx context.Context) ([]search.SessionText, error) {
-	root := filepath.Join(p.copilotHome(), "sessions")
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil, nil
-	}
 	var out []search.SessionText
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		path := filepath.Join(root, e.Name(), "events.jsonl")
-		if st, ok := parseCopilotSessionText(path, e.Name()); ok {
+	for _, d := range p.sessionDirs() {
+		path := filepath.Join(d.Path, "events.jsonl")
+		if st, ok := parseCopilotSessionText(path, d.ID); ok {
 			out = append(out, st)
 		}
 	}

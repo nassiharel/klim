@@ -321,3 +321,52 @@ func TestSessionMarshalJSON_UsesSnakeCaseKeys(t *testing.T) {
 		}
 	}
 }
+
+// TestSessionMarshalJSON_OmitsEmptyInvocations pins that a Session
+// with no Invocations does NOT emit an "invocations":{} or any of
+// the sub-map keys. The default JSON encoder doesn't treat a zero
+// struct value as empty, so MarshalJSON has to drop it explicitly.
+func TestSessionMarshalJSON_OmitsEmptyInvocations(t *testing.T) {
+	s := Session{ID: "s1", Provider: ProviderClaudeCode, Source: SourceLocalClaude}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	out := string(raw)
+	for _, banned := range []string{`"invocations"`, `"skills"`, `"subagents"`, `"hooks"`, `"slash_commands"`, `"mcp_tools"`} {
+		if strings.Contains(out, banned) {
+			t.Errorf("empty Invocations should be omitted; saw %q in %s", banned, out)
+		}
+	}
+}
+
+// TestSessionMarshalJSON_KeepsPopulatedInvocations pins the inverse:
+// when at least one Invocations sub-map has entries, the block is
+// emitted with snake_case keys and only the populated sub-maps.
+func TestSessionMarshalJSON_KeepsPopulatedInvocations(t *testing.T) {
+	s := Session{
+		ID:       "s1",
+		Provider: ProviderClaudeCode,
+		Source:   SourceLocalClaude,
+		Invocations: Invocations{
+			Skills: map[string]int{"superpowers:tdd": 1},
+			Hooks:  map[string]int{"SessionStart:startup": 2},
+		},
+	}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	out := string(raw)
+	for _, want := range []string{`"invocations":`, `"skills":`, `"superpowers:tdd"`, `"hooks":`, `"SessionStart:startup"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in output; got %s", want, out)
+		}
+	}
+	// Unpopulated sub-maps must still be omitted.
+	for _, banned := range []string{`"subagents":`, `"slash_commands":`, `"mcp_tools":`} {
+		if strings.Contains(out, banned) {
+			t.Errorf("unpopulated sub-map %q leaked; got %s", banned, out)
+		}
+	}
+}

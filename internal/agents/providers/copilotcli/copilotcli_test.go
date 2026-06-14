@@ -114,6 +114,50 @@ func TestProvider_BuildLaunch(t *testing.T) {
 	}
 }
 
+// TestProvider_Sessions_RestartCommandUsesEqualsResumeForm pins the
+// RestartCommand string form to use `--resume=<id>` (the equals
+// form documented in `copilot --help`). Earlier code emitted
+// `--resume <id>` (space-separated) which is NOT a documented form
+// for Copilot CLI 1.x; a user pasting the snippet into a shell
+// would hit "unknown argument" while BuildLaunch's exec-path resume
+// (which already uses `--resume=`) keeps working. The two surfaces
+// must agree.
+func TestProvider_Sessions_RestartCommandUsesEqualsResumeForm(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "copilot-home")
+	sid := "11111111-2222-3333-4444-555555555555"
+	dir := filepath.Join(home, "session-state", sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Two fixtures: one with cwd (RestartCommand prefixed by `cd …`)
+	// and one without (bare `copilot --resume=…`). Both must use the
+	// equals form.
+	events := `{"type":"session.start","data":{"sessionId":"` + sid + `","startTime":"2026-06-12T08:00:00.000Z","context":{"cwd":"/dev/foo"}},"id":"e1","timestamp":"2026-06-12T08:00:00.001Z","parentId":null}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	sessions, err := p.Sessions(context.Background())
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(sessions))
+	}
+	want := "--resume=" + sid
+	if !strings.Contains(sessions[0].RestartCommand, want) {
+		t.Errorf("RestartCommand = %q, want substring %q (equals form, matching BuildLaunch)",
+			sessions[0].RestartCommand, want)
+	}
+	if strings.Contains(sessions[0].RestartCommand, "--resume "+sid) {
+		t.Errorf("RestartCommand uses space-separated form %q which copilot --help does not document; "+
+			"the only documented surface is --resume[=value]",
+			sessions[0].RestartCommand)
+	}
+}
+
 func TestProvider_Sessions_RealLayout(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "copilot-home")
@@ -150,6 +194,238 @@ func TestProvider_Sessions_RealLayout(t *testing.T) {
 	}
 	if s.LastModified.IsZero() {
 		t.Error("LastModified should be set from session.start startTime")
+	}
+}
+
+// TestProvider_Sessions_CopilotCLI_1_0_61 covers the event-type
+// vocabulary actually emitted by Copilot CLI 1.0.x: tool events use
+// `tool.execution_start` / `tool.execution_complete` (NOT `tool.start`),
+// per-turn boundaries use `assistant.turn_start` / `assistant.turn_end`
+// (NOT `turn.start`), tool name lives at `data.toolName` (NOT
+// `data.tool.name`), and the session-context block carries a `branch`
+// field. Earlier vocabulary checks left ToolCounts / Branch / TurnCount
+// empty, which surfaced as a uniformly-empty Sessions sub-tab in the
+// TUI even though the directories were being discovered.
+func TestProvider_Sessions_CopilotCLI_1_0_61(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "copilot-home")
+	sid := "0ad57e31-6530-43c3-bf9c-afdc40385c93"
+	dir := filepath.Join(home, "session-state", sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Real-shape snippet captured from a Copilot CLI 1.0.61 transcript.
+	// Two assistant turns; the first turn invokes two tools (one
+	// completes, one is left pending so LiveState should be "working"
+	// when `now` is close to the last event timestamp).
+	events := `{"type":"session.start","data":{"sessionId":"` + sid + `","version":1,"producer":"copilot-agent","copilotVersion":"1.0.61","startTime":"2026-06-11T15:29:59.225Z","context":{"cwd":"C:\\dev\\Foo","gitRoot":"C:\\dev\\Foo","branch":"nassiharel/feature-x","repository":"DefaultCollection/Org/Foo","hostType":"ado"}},"id":"e1","timestamp":"2026-06-11T15:30:00.102Z","parentId":null}
+{"type":"user.message","data":{"sessionId":"` + sid + `","text":"hi"},"id":"e2","timestamp":"2026-06-11T15:30:05.000Z","parentId":"e1"}
+{"type":"assistant.turn_start","data":{"sessionId":"` + sid + `","turnId":"0"},"id":"e3","timestamp":"2026-06-11T15:30:06.000Z","parentId":"e2"}
+{"type":"tool.execution_start","data":{"toolCallId":"tc-1","toolName":"glob","arguments":{"pattern":"**/AGENTS.md"},"turnId":"0"},"id":"e4","timestamp":"2026-06-11T15:30:07.000Z","parentId":"e3"}
+{"type":"tool.execution_start","data":{"toolCallId":"tc-2","toolName":"glob","arguments":{"pattern":"*.md"},"turnId":"0"},"id":"e5","timestamp":"2026-06-11T15:30:07.100Z","parentId":"e4"}
+{"type":"tool.execution_complete","data":{"toolCallId":"tc-1","toolName":"glob","turnId":"0"},"id":"e6","timestamp":"2026-06-11T15:30:08.000Z","parentId":"e5"}
+`
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	sessions, err := p.Sessions(context.Background())
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(sessions))
+	}
+	s := sessions[0]
+
+	// Branch (from data.context.branch) drives the branch pill in
+	// the tile renderer. Empty here was the most visible "looks
+	// empty" symptom.
+	if s.Branch != "nassiharel/feature-x" {
+		t.Errorf("Branch = %q, want nassiharel/feature-x", s.Branch)
+	}
+
+	// ToolCounts populates the 🔌 chip and the Stats tab bar chart.
+	if got := s.ToolCounts["glob"]; got != 2 {
+		t.Errorf("ToolCounts[glob] = %d, want 2 (got map = %+v)", got, s.ToolCounts)
+	}
+
+	// One user.message → TurnCount should be 1 (turn.start aliases
+	// are also counted but assistant.turn_start should NOT double-
+	// count, since that would diverge from Claude's per-user-prompt
+	// semantics).
+	if s.TurnCount != 1 {
+		t.Errorf("TurnCount = %d, want 1", s.TurnCount)
+	}
+
+	// One tool started but never completed → pendingTools > 0 →
+	// StateWorking (when within the stale threshold). The stale
+	// threshold is 60s; the last event in the fixture is at
+	// 15:30:08, so checking against StateWorking OR StateIdle keeps
+	// this test independent of wall clock. The important assertion
+	// is that LiveState is NOT empty.
+	if s.LiveState == "" {
+		t.Errorf("LiveState empty; expected derived state from translated tool events")
+	}
+}
+
+// TestProvider_Sessions_PolymorphicDataMessage pins the
+// regression discovered during PR #94's invocation-extraction
+// work: real Copilot 1.0.61 transcripts emit `data.message` as
+// EITHER a string (on `session.warning` events) OR an object
+// (on `ask_user` / `assistant.message` events). The original
+// inline event struct declared `data.message` as an object only;
+// the json.Decoder errored out on the first string-form line and
+// `break`d the parse loop, silently dropping every subsequent
+// event in the file. The visible symptom was empty ToolCounts /
+// empty Invocations on every real Copilot session even though the
+// translator vocabulary was correct.
+//
+// Fixture: a one-event-per-line transcript where event #2 carries
+// the string-form data.message (mirrors a real session.warning),
+// event #3 carries an object-form data.message (mirrors an
+// ask_user prompt), and event #4 is a hook.start whose presence
+// proves the parser kept walking past the polymorphic line.
+func TestProvider_Sessions_PolymorphicDataMessage(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "copilot-home")
+	sid := "polymorphic-message"
+	dir := filepath.Join(home, "session-state", sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	events := `{"type":"session.start","data":{"sessionId":"` + sid + `","startTime":"2026-06-11T15:00:00Z"},"id":"e1","timestamp":"2026-06-11T15:00:00Z","parentId":null}
+{"type":"session.warning","data":{"warningType":"mcp","message":"Failed to connect to MCP server \"enghub\"."},"id":"e2","timestamp":"2026-06-11T15:00:01Z","parentId":"e1"}
+{"type":"ask_user","data":{"message":{"text":"approve?","choices":["yes","no"]}},"id":"e3","timestamp":"2026-06-11T15:00:02Z","parentId":"e2"}
+{"type":"hook.start","data":{"hookType":"postToolUse"},"id":"e4","timestamp":"2026-06-11T15:00:03Z","parentId":"e3"}
+`
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	sessions, err := p.Sessions(context.Background())
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(sessions))
+	}
+	s := sessions[0]
+	if s.Invocations.Hooks["postToolUse"] != 1 {
+		t.Errorf("Hooks[postToolUse]=%d, want 1 — the hook.start on line 4 was dropped because "+
+			"the parser errored on line 2's string-form data.message (got Hooks = %+v)",
+			s.Invocations.Hooks["postToolUse"], s.Invocations.Hooks)
+	}
+}
+
+// per-session Invocations population for the ONE Copilot 1.0.61
+// signal that is actually emitted by current real producers:
+// `hook.start` events. The fixture is a minimal slice mirroring
+// the real on-disk shape at
+// C:/Users/nassiharel/.copilot/session-state/<uuid>/events.jsonl
+// (verified before this code was written — see the plan file's
+// "verified signal inventory" table).
+func TestProvider_Sessions_Invocations_RealHookSignal(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "copilot-home")
+	sid := "real-hook"
+	dir := filepath.Join(home, "session-state", sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Real-shape hook.start records from a 1.0.61 transcript.
+	events := `{"type":"session.start","data":{"sessionId":"` + sid + `","startTime":"2026-06-11T15:29:59.225Z","context":{"cwd":"C:\\dev\\Foo"}},"id":"e1","timestamp":"2026-06-11T15:30:00.102Z","parentId":null}
+{"type":"hook.start","data":{"hookInvocationId":"h1","hookType":"postToolUse","input":{"toolName":"glob"}},"id":"e2","timestamp":"2026-06-11T15:30:01.000Z","parentId":"e1"}
+{"type":"hook.start","data":{"hookInvocationId":"h2","hookType":"postToolUse","input":{"toolName":"read"}},"id":"e3","timestamp":"2026-06-11T15:30:02.000Z","parentId":"e2"}
+{"type":"hook.start","data":{"hookInvocationId":"h3","hookType":"preToolUse","input":{"toolName":"bash"}},"id":"e4","timestamp":"2026-06-11T15:30:03.000Z","parentId":"e3"}
+`
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	sessions, err := p.Sessions(context.Background())
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(sessions))
+	}
+	s := sessions[0]
+	if s.Invocations.Hooks["postToolUse"] != 2 {
+		t.Errorf("Hooks[postToolUse]=%d, want 2 (got map = %+v)", s.Invocations.Hooks["postToolUse"], s.Invocations.Hooks)
+	}
+	if s.Invocations.Hooks["preToolUse"] != 1 {
+		t.Errorf("Hooks[preToolUse]=%d, want 1", s.Invocations.Hooks["preToolUse"])
+	}
+	// The other invocation kinds are schema-defined for Copilot but
+	// not emitted by 1.0.61 producers (verified against the live
+	// transcripts under ~/.copilot/session-state/ before this code
+	// was written). Assert they stay nil so a future producer change
+	// that starts emitting them is caught by the schema-only unit
+	// tests in `enrich` rather than silently overwriting this nil.
+	if s.Invocations.Skills != nil {
+		t.Errorf("Skills should be nil for current Copilot transcripts; got %v", s.Invocations.Skills)
+	}
+	if s.Invocations.SlashCommands != nil {
+		t.Errorf("SlashCommands should be nil for current Copilot transcripts; got %v", s.Invocations.SlashCommands)
+	}
+}
+
+// TestProvider_Sessions_Invocations_SchemaOnlyEvents pins the
+// translator wiring for events that the Copilot 1.0.61 schema
+// defines but real producers don't yet emit (skill.invoked,
+// command.execute, subagent.started with agentName, tool.execution_start
+// with mcpServerName/mcpToolName). When the producer eventually
+// emits them, no code change should be required — the day-0
+// behaviour must be that the dashboard lights up.
+func TestProvider_Sessions_Invocations_SchemaOnlyEvents(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "copilot-home")
+	sid := "schema-only"
+	dir := filepath.Join(home, "session-state", sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Each line below uses field names from the
+	// `session-events.schema.json` shipped with Copilot CLI 1.0.61
+	// at C:/Users/nassiharel/.copilot/pkg/win32-x64/1.0.61/schemas/.
+	events := `{"type":"session.start","data":{"sessionId":"` + sid + `","startTime":"2026-06-11T15:29:59Z"},"id":"e1","timestamp":"2026-06-11T15:30:00Z","parentId":null}
+{"type":"skill.invoked","data":{"name":"my-skill","trigger":"user-invoked","source":"plugin"},"id":"e2","timestamp":"2026-06-11T15:30:01Z","parentId":"e1"}
+{"type":"command.execute","data":{"commandName":"deploy","command":"/deploy prod"},"id":"e3","timestamp":"2026-06-11T15:30:02Z","parentId":"e2"}
+{"type":"subagent.started","data":{"agentName":"explore","toolCallId":"tc-1"},"id":"e4","timestamp":"2026-06-11T15:30:03Z","parentId":"e3"}
+{"type":"tool.execution_start","data":{"toolCallId":"tc-2","toolName":"mcp_tool","mcpServerName":"ado-tools","mcpToolName":"repo_pull_request","turnId":"0"},"id":"e5","timestamp":"2026-06-11T15:30:04Z","parentId":"e4"}
+`
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	sessions, err := p.Sessions(context.Background())
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(sessions))
+	}
+	s := sessions[0]
+	if s.Invocations.Skills["my-skill"] != 1 {
+		t.Errorf("Skills[my-skill]=%d, want 1 (got map = %+v)", s.Invocations.Skills["my-skill"], s.Invocations.Skills)
+	}
+	// Copilot's schema names commandName WITHOUT the leading slash
+	// ("Command name without leading /"); the provider normalises to
+	// the with-slash form so both providers feed `/foo` to the
+	// renderer.
+	if s.Invocations.SlashCommands["/deploy"] != 1 {
+		t.Errorf("SlashCommands[/deploy]=%d, want 1 (got map = %+v)", s.Invocations.SlashCommands["/deploy"], s.Invocations.SlashCommands)
+	}
+	if s.Invocations.Subagents["explore"] != 1 {
+		t.Errorf("Subagents[explore]=%d, want 1 (got map = %+v)", s.Invocations.Subagents["explore"], s.Invocations.Subagents)
+	}
+	if s.Invocations.MCPTools["ado-tools::repo_pull_request"] != 1 {
+		t.Errorf("MCPTools[ado-tools::repo_pull_request]=%d, want 1 (got map = %+v)", s.Invocations.MCPTools["ado-tools::repo_pull_request"], s.Invocations.MCPTools)
 	}
 }
 

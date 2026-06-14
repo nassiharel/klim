@@ -58,3 +58,33 @@ func TestTokenSamples_MissingSessionsDir(t *testing.T) {
 		t.Errorf("expected zero, got %d", len(samples))
 	}
 }
+
+// TestTokenSamples_SessionStateLayout pins the 1.x on-disk layout
+// (session-state/<uuid>/events.jsonl). The original implementation
+// walked sessions/ — a pre-1.0 path that no current install populates —
+// so cost accounting silently returned zero samples for every Copilot
+// user.
+func TestTokenSamples_SessionStateLayout(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "session-state", "abc-1.x")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	events := `{"type":"session.start","timestamp":"2026-06-11T15:00:00Z","data":{"sessionId":"abc-1.x","title":"klim build"}}
+{"type":"model.response","timestamp":"2026-06-11T15:00:01Z","data":{"sessionId":"abc-1.x","model":"gpt-5.4","usage":{"inputTokens":200,"outputTokens":40}}}
+`
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(events), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	p := &Provider{HomeOverride: home}
+	samples, err := p.TokenSamples(context.Background())
+	if err != nil {
+		t.Fatalf("TokenSamples: %v", err)
+	}
+	if len(samples) != 1 {
+		t.Fatalf("expected 1 sample under session-state/, got %d", len(samples))
+	}
+	if samples[0].Input != 200 || samples[0].Output != 40 {
+		t.Errorf("got input/output %d/%d, want 200/40", samples[0].Input, samples[0].Output)
+	}
+}

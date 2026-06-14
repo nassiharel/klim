@@ -42,6 +42,32 @@ type Result struct {
 	// terminal marker (session.end / session.stopped). Empty
 	// otherwise. Callers use it to set the persisted Status.
 	TerminalKind EventKind
+
+	// Invocations groups the per-kind name → count maps populated
+	// from KindSkillInvoked / KindSlashCommand / KindHookFired /
+	// KindMCPToolCall / KindSubagentStarted events. Each sub-map
+	// stays nil unless the corresponding event was seen — the
+	// downstream marshaller treats `nil` and "empty map" identically,
+	// but keeping the slot nil keeps allocations minimal for the
+	// common no-skill-no-hook case.
+	//
+	// Parallel to agents.Invocations; the agents package's
+	// ApplyEnrichment copies field-by-field to avoid an import cycle.
+	Invocations Invocations
+}
+
+// Invocations is the enrich-package mirror of agents.Invocations.
+// Defined here so DeriveState has somewhere to put per-kind maps
+// without importing the agents package (which would create a cycle).
+// See agents.Invocations for the per-field documentation; this
+// struct's field set is intentionally identical so the bridge in
+// agents.ApplyEnrichment is a simple field-for-field copy.
+type Invocations struct {
+	Skills        map[string]int
+	Subagents     map[string]int
+	Hooks         map[string]int
+	SlashCommands map[string]int
+	MCPTools      map[string]int
 }
 
 // TimedEvent pairs an Event with its timestamp. Providers stream
@@ -115,6 +141,12 @@ func DeriveState(events []TimedEvent, now time.Time) Result {
 		case KindSubagentStarted:
 			r.SubagentRuns++
 			subagentsRunning++
+			if ev.Name != "" {
+				if r.Invocations.Subagents == nil {
+					r.Invocations.Subagents = map[string]int{}
+				}
+				r.Invocations.Subagents[ev.Name]++
+			}
 		case KindSubagentCompleted:
 			if subagentsRunning > 0 {
 				subagentsRunning--
@@ -134,6 +166,34 @@ func DeriveState(events []TimedEvent, now time.Time) Result {
 			r.TerminalKind = KindSessionEnd
 		case KindSessionStopped:
 			r.TerminalKind = KindSessionStopped
+		case KindSkillInvoked:
+			if ev.Name != "" {
+				if r.Invocations.Skills == nil {
+					r.Invocations.Skills = map[string]int{}
+				}
+				r.Invocations.Skills[ev.Name]++
+			}
+		case KindSlashCommand:
+			if ev.Name != "" {
+				if r.Invocations.SlashCommands == nil {
+					r.Invocations.SlashCommands = map[string]int{}
+				}
+				r.Invocations.SlashCommands[ev.Name]++
+			}
+		case KindHookFired:
+			if ev.Name != "" {
+				if r.Invocations.Hooks == nil {
+					r.Invocations.Hooks = map[string]int{}
+				}
+				r.Invocations.Hooks[ev.Name]++
+			}
+		case KindMCPToolCall:
+			if ev.Name != "" {
+				if r.Invocations.MCPTools == nil {
+					r.Invocations.MCPTools = map[string]int{}
+				}
+				r.Invocations.MCPTools[ev.Name]++
+			}
 		}
 	}
 
