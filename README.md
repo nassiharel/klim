@@ -41,10 +41,10 @@ go install github.com/nassiharel/klim/cmd/klim@latest  # any Go 1.25+
 ```
 
 <details>
-<summary>More install options (bootstrap, deb, rpm, pinned versions)</summary>
+<summary>More install options</summary>
 
 ```bash
-# Bootstrap (no package manager required)
+# Script
 curl -fsSL https://raw.githubusercontent.com/nassiharel/klim/main/install.sh | bash   # macOS / Linux
 irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex          # Windows
 
@@ -57,7 +57,7 @@ brew install nassiharel/tap/klim@0.1.2
 go install github.com/nassiharel/klim/cmd/klim@v0.1.2
 ```
 
-Every release ships with a CycloneDX SBOM and `checksums.txt` — see [Releases](https://github.com/nassiharel/klim/releases/latest).
+see [Releases](https://github.com/nassiharel/klim/releases/latest).
 </details>
 
 ## Quick start
@@ -69,22 +69,18 @@ klim                                  # interactive TUI
 klim check --output json              # validate this project's .klim.yaml
 klim install --pack go-developer      # install a curated bundle
 klim diff teammate.yaml               # compare environments
-klim security audit --sbom            # audit + emit CycloneDX SBOM
 ```
 
 ## What it does
 
-### 🗺️ Plan, apply, rollback
-Terraform-style workflow for the tools on your laptop. `klim plan` previews changes with a confidence score; `klim apply` auto-checkpoints and runs post-apply checks (binary probes, PATH consistency, manager integrity); `klim rollback <name>` puts everything back when an upgrade misbehaves.
+### 📦 One command. Every OS.
+`klim install --pack go-developer` and your whole toolchain — **162 tools, 24 curated packs** — lands on macOS, Linux, and Windows. klim picks the right native manager per platform, so the same pack ID just works everywhere.
 
-### 📦 Discover & standardize
-A live marketplace of **162 tools and 24 curated packs**. `klim init` reads your `package.json`, `go.mod`, `Dockerfile`, CI workflows, Helm, Terraform, and Bicep — then writes a `.klim.yaml` that locks the toolchain. `klim check` validates it locally and in CI, and `klim generate github-action` emits the workflow for you.
+### 🧬 Standardize with one YAML
+`klim init` reads your `package.json`, `go.mod`, `Dockerfile`, CI workflows, Helm, Terraform, then writes a `.klim.yaml` that pins the toolchain. `klim check` validates it locally and in CI.
 
-### 🛡️ Audit & secure
-`klim security audit --sbom` runs OSV.dev vulnerability lookup, license inventory, and CycloneDX SBOM export. `klim health` visualizes your PATH (active vs shadowed) and backs it up before any fix. `klim score` grades your environment 0–100 across health, freshness, audit, compliance, and managed sources.
-
-### 🤖 Built for agents
-Every command supports `--output {text,json,yaml}` with stable, documented exit codes. A dedicated `klim agents` surface manages Claude Code and GitHub Copilot CLI plugins, skills, MCPs, and sessions. No prompt drift. No improvised `curl | bash`.
+### 🤖 Manage your agents
+`klim agents` unifies **Claude Code** and **GitHub Copilot CLI** into one searchable inventory of plugins, skills, MCP servers, marketplaces, and live sessions.
 
 ## Learn more
 
