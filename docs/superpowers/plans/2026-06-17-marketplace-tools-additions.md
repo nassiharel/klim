@@ -126,9 +126,9 @@ After edits, the Domain block should read:
 - [ ] **Step 1.3: Add 3 new Function tags (alphabetical within section)**
 
 Under `# --- Function ---`, insert:
-- `migrations` (after `media`)
-- `password-manager` (after `package-manager`)
-- `sbom` (after `scanner`)
+- `migrations` (between `media` and `package-manager`)
+- `password-manager` (between `package-manager` and `process-monitoring`)
+- `sbom` (between `remote-shell` and `scanner`)
 
 After edits, ensure these new entries sit in correct alphabetical position relative to the existing entries. (Verify with `grep -n "  - " marketplace/tags.yaml` after the edit.)
 
