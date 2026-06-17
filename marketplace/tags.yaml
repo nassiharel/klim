@@ -78,8 +78,8 @@ tags:
   - process-monitoring
   - provisioning
   - remote-shell
-  - scanner
   - sbom
+  - scanner
   - search
   - secrets
   - static-analysis
