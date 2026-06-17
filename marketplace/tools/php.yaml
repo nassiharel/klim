@@ -1,0 +1,14 @@
+name: php
+display_name: PHP
+category: Language
+tags:
+    - cli
+binary_names:
+    - php
+packages:
+    winget: PHP.PHP
+    scoop: php
+    choco: php
+    brew: php
+    apt: php
+github: php/php-src

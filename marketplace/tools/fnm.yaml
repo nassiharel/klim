@@ -1,0 +1,16 @@
+name: fnm
+display_name: fnm
+category: PkgMgr
+tags:
+    - javascript
+    - version-manager
+    - cross-platform
+binary_names:
+    - fnm
+packages:
+    winget: Schniz.fnm
+    scoop: fnm
+    choco: fnm
+    brew: fnm
+    apt: fnm
+github: Schniz/fnm

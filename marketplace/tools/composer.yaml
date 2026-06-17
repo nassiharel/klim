@@ -1,0 +1,14 @@
+name: composer
+display_name: Composer
+category: PkgMgr
+tags:
+    - package-manager
+binary_names:
+    - composer
+packages:
+    winget: Composer.Composer
+    scoop: composer
+    choco: composer
+    brew: composer
+    apt: composer
+github: composer/composer

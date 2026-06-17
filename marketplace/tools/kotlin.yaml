@@ -1,0 +1,15 @@
+name: kotlin
+display_name: Kotlin
+category: Language
+tags:
+    - jvm
+    - cli
+binary_names:
+    - kotlin
+    - kotlinc
+packages:
+    scoop: kotlin
+    choco: kotlin
+    brew: kotlin
+    snap: kotlin
+github: JetBrains/kotlin
