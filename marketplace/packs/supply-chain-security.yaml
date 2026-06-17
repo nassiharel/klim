@@ -1,0 +1,11 @@
+name: supply-chain-security
+display_name: Supply Chain Security
+description: SBOM generation, vulnerability scanning, image signing, and container hardening.
+tools:
+    - syft
+    - osv-scanner
+    - cosign
+    - trivy
+    - grype
+    - dockle
+    - crane

@@ -1,0 +1,11 @@
+name: edge-platforms
+display_name: Edge Platforms
+description: CLIs for modern edge / PaaS providers (Fly, Vercel, Netlify, Cloudflare, Supabase, DigitalOcean).
+tools:
+    - flyctl
+    - vercel
+    - netlify
+    - wrangler
+    - cloudflared
+    - supabase
+    - doctl
