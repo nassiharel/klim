@@ -1,0 +1,12 @@
+name: pyenv
+display_name: pyenv
+category: PkgMgr
+tags:
+    - python
+    - version-manager
+binary_names:
+    - pyenv
+packages:
+    brew: pyenv
+    apt: pyenv
+github: pyenv/pyenv

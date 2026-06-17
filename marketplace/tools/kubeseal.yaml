@@ -1,0 +1,12 @@
+name: kubeseal
+display_name: Sealed Secrets (kubeseal)
+category: Containers
+tags:
+    - kubernetes
+    - secrets
+    - encryption
+binary_names:
+    - kubeseal
+packages:
+    brew: kubeseal
+github: bitnami-labs/sealed-secrets

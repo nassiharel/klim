@@ -1,0 +1,13 @@
+name: buf
+display_name: Buf
+category: CLI
+tags:
+    - protobuf
+    - api
+    - linter
+binary_names:
+    - buf
+packages:
+    brew: bufbuild/buf/buf
+    scoop: buf
+github: bufbuild/buf

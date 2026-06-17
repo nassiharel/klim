@@ -1,0 +1,12 @@
+name: goose
+display_name: goose (AI agent)
+category: AI
+tags:
+    - ai
+    - coding-assistant
+    - cli
+binary_names:
+    - goose
+packages:
+    brew: block-goose-cli
+github: block/goose

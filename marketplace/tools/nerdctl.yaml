@@ -1,0 +1,12 @@
+name: nerdctl
+display_name: nerdctl
+category: Containers
+tags:
+    - container
+    - docker
+binary_names:
+    - nerdctl
+packages:
+    brew: nerdctl
+    scoop: nerdctl
+github: containerd/nerdctl

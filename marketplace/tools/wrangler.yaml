@@ -1,0 +1,12 @@
+name: wrangler
+display_name: Cloudflare Wrangler
+category: Cloud
+tags:
+    - edge
+    - serverless
+    - cloud
+binary_names:
+    - wrangler
+packages:
+    npm: wrangler
+github: cloudflare/workers-sdk

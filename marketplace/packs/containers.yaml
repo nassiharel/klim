@@ -5,3 +5,6 @@ tools:
     - docker
     - docker-compose
     - lazydocker
+    - podman
+    - nerdctl
+    - buildah

@@ -1,0 +1,12 @@
+name: argo
+display_name: Argo Workflows CLI
+category: Containers
+tags:
+    - kubernetes
+    - gitops
+    - automation
+binary_names:
+    - argo
+packages:
+    brew: argo
+github: argoproj/argo-workflows

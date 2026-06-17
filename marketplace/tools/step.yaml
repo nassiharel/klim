@@ -1,0 +1,14 @@
+name: step
+display_name: Smallstep CLI
+category: Security
+tags:
+    - security
+    - auth
+    - encryption
+binary_names:
+    - step
+packages:
+    winget: Smallstep.step
+    scoop: step
+    brew: step
+github: smallstep/cli

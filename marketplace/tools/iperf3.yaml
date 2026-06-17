@@ -1,0 +1,14 @@
+name: iperf3
+display_name: iperf3
+category: Network
+tags:
+    - networking
+    - benchmarking
+binary_names:
+    - iperf3
+packages:
+    scoop: iperf3
+    choco: iperf3
+    brew: iperf3
+    apt: iperf3
+github: esnet/iperf

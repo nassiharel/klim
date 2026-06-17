@@ -1,0 +1,13 @@
+name: bazel
+display_name: Bazel
+category: CLI
+tags:
+    - build-system
+    - google
+binary_names:
+    - bazel
+packages:
+    scoop: bazel
+    choco: bazel
+    brew: bazel
+github: bazelbuild/bazel

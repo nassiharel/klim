@@ -4,3 +4,6 @@ description: Tools for Python development.
 tools:
     - python
     - uv
+    - poetry
+    - pipx
+    - pyenv

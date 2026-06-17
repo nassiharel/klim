@@ -1,0 +1,13 @@
+name: flyway
+display_name: Flyway
+category: Database
+tags:
+    - database
+    - migrations
+    - jvm
+binary_names:
+    - flyway
+packages:
+    brew: flyway
+    scoop: flyway
+github: flyway/flyway

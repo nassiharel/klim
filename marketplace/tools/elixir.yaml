@@ -1,0 +1,14 @@
+name: elixir
+display_name: Elixir
+category: Language
+tags:
+    - cli
+binary_names:
+    - elixir
+packages:
+    winget: Elixir.Elixir
+    scoop: elixir
+    choco: elixir
+    brew: elixir
+    apt: elixir
+github: elixir-lang/elixir

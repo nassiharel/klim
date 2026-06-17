@@ -1,0 +1,16 @@
+name: lua
+display_name: Lua
+category: Language
+tags:
+    - lua
+    - cli
+binary_names:
+    - lua
+    - lua5.4
+packages:
+    winget: DEVCOM.Lua
+    scoop: lua
+    choco: lua
+    brew: lua
+    apt: lua5.4
+github: lua/lua

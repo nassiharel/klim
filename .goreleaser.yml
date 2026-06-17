@@ -51,7 +51,7 @@ nfpms:
     homepage: https://github.com/nassiharel/klim
     maintainer: nassiharel
     description: >-
-      Deterministic developer toolchains across local machines, teams, CI, and agents.
+      Ultimate dev tools manager
     license: MIT
     formats:
       - deb
@@ -65,7 +65,7 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/nassiharel/klim
     description: >-
-      Productivity booster for dev tools — discover, standardise, automate, audit toolchains.
+      Ultimate dev tools manager
     license: MIT
 
 # Scoop bucket: Windows users add the bucket once and `scoop install klim`
@@ -80,7 +80,7 @@ scoops:
     directory: bucket
     homepage: https://github.com/nassiharel/klim
     description: >-
-      Productivity booster for dev tools — discover, standardise, automate, audit toolchains.
+      Ultimate dev tools manager
     license: MIT
 
 # winget-pkgs PR: GoReleaser pushes a feature branch to the personal
@@ -95,13 +95,11 @@ winget:
     package_identifier: nassiharel.klim
     homepage: https://github.com/nassiharel/klim
     short_description: >-
-      Productivity booster for dev tools — discover, standardise, automate, audit toolchains.
+      Ultimate dev tools manager
     description: |
-      klim is a productivity booster for dev tools: a deterministic, cross-platform
+      klim is a productivity booster for dev tools: a cross-platform
       layer for discovering, standardising, securing, and automating the tools every
-      project depends on. It keeps native package managers in charge of installation
-      while giving humans, teams, CI, and AI agents the same portable environment
-      contracts and predictable operations.
+      project depends on.
     license: MIT
     license_url: https://github.com/nassiharel/klim/blob/main/LICENSE
     copyright: Copyright (c) 2026 Nassi Harel
@@ -162,12 +160,6 @@ release:
     name: klim
   prerelease: auto
   name_template: "v{{ .Version }}"
-  # Make a re-run of the workflow on the same tag idempotent: if the
-  # release already exists with assets from a previous (possibly
-  # partially-failed) run, overwrite them instead of erroring with
-  # `422 already_exists`. Saw this on v0.1.2 when the first run
-  # uploaded everything but failed on the winget PR step, then the
-  # re-run blew up at asset upload before it could retry winget.
   replace_existing_artifacts: true
   footer: |
     ## Install

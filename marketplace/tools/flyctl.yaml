@@ -1,0 +1,14 @@
+name: flyctl
+display_name: flyctl
+category: Cloud
+tags:
+    - cloud
+    - paas
+    - edge
+binary_names:
+    - fly
+    - flyctl
+packages:
+    brew: flyctl
+    scoop: flyctl
+github: superfly/flyctl

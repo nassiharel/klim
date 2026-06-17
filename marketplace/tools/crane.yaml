@@ -1,0 +1,12 @@
+name: crane
+display_name: crane
+category: Security
+tags:
+    - container
+    - security
+    - google
+binary_names:
+    - crane
+packages:
+    brew: crane
+github: google/go-containerregistry

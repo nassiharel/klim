@@ -1,0 +1,15 @@
+name: tfsec
+display_name: tfsec
+category: Security
+tags:
+    - security
+    - scanner
+    - terraform
+    - static-analysis
+binary_names:
+    - tfsec
+packages:
+    brew: tfsec
+    scoop: tfsec
+    choco: tfsec
+github: aquasecurity/tfsec

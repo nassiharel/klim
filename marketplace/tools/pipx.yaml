@@ -1,0 +1,13 @@
+name: pipx
+display_name: pipx
+category: PkgMgr
+tags:
+    - python
+    - package-manager
+binary_names:
+    - pipx
+packages:
+    scoop: pipx
+    brew: pipx
+    apt: pipx
+github: pypa/pipx

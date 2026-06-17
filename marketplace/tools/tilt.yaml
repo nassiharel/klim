@@ -1,0 +1,13 @@
+name: tilt
+display_name: Tilt
+category: Containers
+tags:
+    - kubernetes
+    - dev-workflow
+    - local-cluster
+binary_names:
+    - tilt
+packages:
+    brew: tilt
+    scoop: tilt
+github: tilt-dev/tilt

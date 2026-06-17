@@ -1,0 +1,15 @@
+name: miller
+display_name: Miller (mlr)
+category: CLI
+tags:
+    - data-processing
+    - cli
+binary_names:
+    - mlr
+packages:
+    winget: johnkerl.miller
+    scoop: miller
+    choco: miller
+    brew: miller
+    apt: miller
+github: johnkerl/miller

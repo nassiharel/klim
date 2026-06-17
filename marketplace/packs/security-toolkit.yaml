@@ -9,3 +9,10 @@ tools:
     - age
     - nmap
     - mkcert
+    - syft
+    - osv-scanner
+    - checkov
+    - tfsec
+    - nuclei
+    - step
+    - dockle

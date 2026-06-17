@@ -1,0 +1,14 @@
+name: boundary
+display_name: Boundary
+category: Security
+tags:
+    - hashicorp
+    - security
+    - auth
+binary_names:
+    - boundary
+packages:
+    winget: HashiCorp.Boundary
+    brew: boundary
+    apt: boundary
+github: hashicorp/boundary

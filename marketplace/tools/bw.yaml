@@ -1,0 +1,16 @@
+name: bw
+display_name: Bitwarden CLI
+category: Security
+tags:
+    - security
+    - password-manager
+    - secrets
+binary_names:
+    - bw
+packages:
+    scoop: bitwarden-cli
+    choco: bitwarden-cli
+    brew: bitwarden-cli
+    npm: "@bitwarden/cli"
+    snap: bw
+github: bitwarden/clients

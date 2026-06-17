@@ -1,0 +1,13 @@
+name: netlify
+display_name: Netlify CLI
+category: Cloud
+tags:
+    - paas
+    - edge
+    - serverless
+binary_names:
+    - netlify
+packages:
+    npm: netlify-cli
+    brew: netlify-cli
+github: netlify/cli

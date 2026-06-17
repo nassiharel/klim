@@ -1,0 +1,14 @@
+name: railway
+display_name: Railway CLI
+category: Cloud
+tags:
+    - paas
+    - cloud
+    - cli
+binary_names:
+    - railway
+packages:
+    scoop: railway
+    brew: railway
+    npm: "@railway/cli"
+github: railwayapp/cli

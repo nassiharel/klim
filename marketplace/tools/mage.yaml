@@ -1,0 +1,12 @@
+name: mage
+display_name: Mage
+category: CLI
+tags:
+    - build-system
+    - golang
+binary_names:
+    - mage
+packages:
+    brew: mage
+    scoop: mage
+github: magefile/mage

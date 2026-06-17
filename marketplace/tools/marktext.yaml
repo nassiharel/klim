@@ -1,0 +1,14 @@
+name: marktext
+display_name: MarkText
+category: Editor
+tags:
+    - gui
+    - docs
+    - cross-platform
+binary_names:
+    - marktext
+packages:
+    winget: marktext.marktext
+    choco: marktext
+    brew: marktext
+github: marktext/marktext

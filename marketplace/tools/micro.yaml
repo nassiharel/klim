@@ -1,0 +1,15 @@
+name: micro
+display_name: micro
+category: Editor
+tags:
+    - ide
+    - tui
+binary_names:
+    - micro
+packages:
+    winget: zyedidia.micro
+    scoop: micro
+    choco: micro
+    brew: micro
+    snap: micro
+github: zyedidia/micro

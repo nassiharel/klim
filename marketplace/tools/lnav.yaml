@@ -1,0 +1,14 @@
+name: lnav
+display_name: lnav
+category: CLI
+tags:
+    - log-viewer
+    - tui
+    - cli
+binary_names:
+    - lnav
+packages:
+    brew: lnav
+    snap: lnav
+    apt: lnav
+github: tstack/lnav

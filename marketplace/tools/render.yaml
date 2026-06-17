@@ -1,0 +1,11 @@
+name: render
+display_name: Render CLI
+category: Cloud
+tags:
+    - paas
+    - cloud
+binary_names:
+    - render
+packages:
+    brew: render
+github: render-oss/cli

@@ -9,3 +9,6 @@ tools:
     - just
     - pre-commit
     - watchexec
+    - croc
+    - yt-dlp
+    - make

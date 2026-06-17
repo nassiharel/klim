@@ -1,0 +1,12 @@
+name: buildah
+display_name: Buildah
+category: Containers
+tags:
+    - container
+    - image-builder
+binary_names:
+    - buildah
+packages:
+    brew: buildah
+    apt: buildah
+github: containers/buildah

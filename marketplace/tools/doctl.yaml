@@ -1,0 +1,14 @@
+name: doctl
+display_name: doctl
+category: Cloud
+tags:
+    - cloud
+    - cli
+binary_names:
+    - doctl
+packages:
+    winget: DigitalOcean.doctl
+    scoop: doctl
+    brew: doctl
+    snap: doctl
+github: digitalocean/doctl

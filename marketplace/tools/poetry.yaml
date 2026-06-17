@@ -1,0 +1,11 @@
+name: poetry
+display_name: Poetry
+category: PkgMgr
+tags:
+    - python
+    - package-manager
+binary_names:
+    - poetry
+packages:
+    brew: poetry
+github: python-poetry/poetry

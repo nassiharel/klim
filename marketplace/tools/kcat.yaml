@@ -1,0 +1,13 @@
+name: kcat
+display_name: kcat (Kafka)
+category: Database
+tags:
+    - messaging
+    - cli
+binary_names:
+    - kcat
+    - kafkacat
+packages:
+    brew: kcat
+    apt: kafkacat
+github: edenhill/kcat

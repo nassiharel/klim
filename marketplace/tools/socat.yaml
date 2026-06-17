@@ -1,0 +1,12 @@
+name: socat
+display_name: socat
+category: Network
+tags:
+    - networking
+    - cli
+binary_names:
+    - socat
+packages:
+    brew: socat
+    apt: socat
+github: craSH/socat

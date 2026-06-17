@@ -1,0 +1,11 @@
+name: nvm
+display_name: nvm
+category: PkgMgr
+tags:
+    - javascript
+    - version-manager
+binary_names:
+    - nvm
+packages:
+    brew: nvm
+github: nvm-sh/nvm

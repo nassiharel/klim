@@ -1,0 +1,14 @@
+name: fx
+display_name: fx
+category: CLI
+tags:
+    - data-processing
+    - tui
+    - cli
+binary_names:
+    - fx
+packages:
+    scoop: fx
+    brew: fx
+    npm: fx
+github: antonmedv/fx
