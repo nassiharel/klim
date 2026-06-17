@@ -1,0 +1,14 @@
+name: cloudflared
+display_name: cloudflared
+category: Network
+tags:
+    - networking
+    - tunneling
+    - edge
+binary_names:
+    - cloudflared
+packages:
+    winget: Cloudflare.cloudflared
+    brew: cloudflared
+    apt: cloudflared
+github: cloudflare/cloudflared

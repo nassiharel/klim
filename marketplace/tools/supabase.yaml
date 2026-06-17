@@ -1,0 +1,15 @@
+name: supabase
+display_name: Supabase CLI
+category: Cloud
+tags:
+    - cloud
+    - database
+    - paas
+binary_names:
+    - supabase
+packages:
+    winget: Supabase.cli
+    scoop: supabase
+    brew: supabase
+    npm: supabase
+github: supabase/cli

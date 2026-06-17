@@ -1,0 +1,13 @@
+name: stripe
+display_name: Stripe CLI
+category: CLI
+tags:
+    - api
+    - cli
+binary_names:
+    - stripe
+packages:
+    scoop: stripe
+    brew: stripe
+    apt: stripe
+github: stripe/stripe-cli

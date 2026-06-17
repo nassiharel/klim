@@ -1,0 +1,12 @@
+name: vercel
+display_name: Vercel CLI
+category: Cloud
+tags:
+    - paas
+    - edge
+    - serverless
+binary_names:
+    - vercel
+packages:
+    npm: vercel
+github: vercel/vercel
