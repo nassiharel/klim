@@ -61,7 +61,7 @@ of new tags. It does **not** change any existing tool definitions, the schema, o
 
 ## New tools (by section)
 
-### Section 1 — AI & Editors (9)
+### Section 1 — AI & Editors (10)
 
 | File | category | display_name | notes |
 |---|---|---|---|
@@ -75,6 +75,7 @@ of new tags. It does **not** change any existing tool definitions, the schema, o
 | `vim.yaml` | Editor | Vim | github: `vim/vim`. universal. |
 | `emacs.yaml` | Editor | GNU Emacs | github: `emacs-mirror/emacs`. universal. |
 | `micro.yaml` | Editor | micro | github: `zyedidia/micro`. universal. |
+| `marktext.yaml` | Editor | MarkText | Markdown editor (GUI). github: `marktext/marktext`. winget: `marktext.marktext`, choco: `marktext`, brew (cask): `marktext`. Tags: `gui`, `docs`, `cross-platform`. |
 
 ### Section 2 — Cloud / Edge platforms (10)
 
@@ -177,7 +178,7 @@ of new tags. It does **not** change any existing tool definitions, the schema, o
 | `yt-dlp.yaml` | Media | yt-dlp | github: `yt-dlp/yt-dlp`. brew/scoop/winget. |
 | `croc.yaml` | CLI | croc | file transfer. github: `schollz/croc`. brew/scoop. |
 
-**Section 8 total:** 8. With sections 1–7 (9+10+10+10+10+10+8) = **85 tools**. Slightly over budget;
+**Section 8 total:** 8. With sections 1–7 (10+10+10+10+10+10+8) = **86 tools**. Slightly over budget;
 acceptable.
 
 ---
@@ -294,6 +295,7 @@ marketplace/
 │   ├── lua.yaml               # NEW
 │   ├── mage.yaml              # NEW
 │   ├── make.yaml              # NEW
+│   ├── marktext.yaml          # NEW
 │   ├── micro.yaml             # NEW
 │   ├── miller.yaml            # NEW
 │   ├── nerdctl.yaml           # NEW
