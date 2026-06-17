@@ -1,0 +1,17 @@
+name: emacs
+display_name: GNU Emacs
+category: Editor
+tags:
+    - ide
+    - tui
+    - gui
+binary_names:
+    - emacs
+packages:
+    winget: GNU.Emacs
+    scoop: emacs
+    choco: emacs
+    brew: emacs
+    apt: emacs
+    snap: emacs
+github: emacs-mirror/emacs

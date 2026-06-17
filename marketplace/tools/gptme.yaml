@@ -1,0 +1,11 @@
+name: gptme
+display_name: gptme
+category: AI
+tags:
+    - ai
+    - cli
+binary_names:
+    - gptme
+packages:
+    brew: gptme
+github: gptme/gptme

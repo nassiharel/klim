@@ -1,0 +1,12 @@
+name: cursor-agent
+display_name: Cursor Agent
+category: AI
+tags:
+    - ai
+    - coding-assistant
+    - cli
+binary_names:
+    - cursor-agent
+packages:
+    brew: cursor-agent
+github: cursor/cursor

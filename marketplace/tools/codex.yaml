@@ -1,0 +1,13 @@
+name: codex
+display_name: OpenAI Codex CLI
+category: AI
+tags:
+    - ai
+    - coding-assistant
+    - cli
+binary_names:
+    - codex
+packages:
+    npm: "@openai/codex"
+    brew: codex
+github: openai/codex

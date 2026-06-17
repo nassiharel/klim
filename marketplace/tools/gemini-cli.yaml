@@ -1,0 +1,13 @@
+name: gemini-cli
+display_name: Gemini CLI
+category: AI
+tags:
+    - ai
+    - cli
+    - google
+binary_names:
+    - gemini
+packages:
+    npm: "@google/gemini-cli"
+    brew: gemini-cli
+github: google-gemini/gemini-cli

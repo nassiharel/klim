@@ -1,0 +1,13 @@
+name: zed
+display_name: Zed
+category: Editor
+tags:
+    - ide
+    - gui
+    - rust
+binary_names:
+    - zed
+packages:
+    brew: zed
+    scoop: zed
+github: zed-industries/zed

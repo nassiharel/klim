@@ -1,0 +1,12 @@
+name: cursor
+display_name: Cursor
+category: Editor
+tags:
+    - ide
+    - gui
+    - ai
+binary_names:
+    - cursor
+packages:
+    winget: Anysphere.Cursor
+    brew: cursor

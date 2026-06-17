@@ -1,0 +1,15 @@
+name: vim
+display_name: Vim
+category: Editor
+tags:
+    - ide
+    - tui
+binary_names:
+    - vim
+packages:
+    winget: vim.vim
+    scoop: vim
+    choco: vim
+    brew: vim
+    apt: vim
+github: vim/vim
