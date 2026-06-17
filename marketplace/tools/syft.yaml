@@ -1,0 +1,14 @@
+name: syft
+display_name: Syft
+category: Security
+tags:
+    - security
+    - scanner
+    - sbom
+    - container
+binary_names:
+    - syft
+packages:
+    brew: syft
+    scoop: syft
+github: anchore/syft

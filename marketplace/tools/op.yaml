@@ -1,0 +1,13 @@
+name: op
+display_name: 1Password CLI
+category: Security
+tags:
+    - security
+    - password-manager
+    - secrets
+binary_names:
+    - op
+packages:
+    winget: AgileBits.1Password.CLI
+    scoop: 1password-cli
+    brew: 1password-cli

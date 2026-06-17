@@ -1,0 +1,13 @@
+name: checkov
+display_name: Checkov
+category: Security
+tags:
+    - security
+    - scanner
+    - static-analysis
+    - terraform
+binary_names:
+    - checkov
+packages:
+    brew: checkov
+github: bridgecrewio/checkov

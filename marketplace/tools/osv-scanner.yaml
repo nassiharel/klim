@@ -1,0 +1,13 @@
+name: osv-scanner
+display_name: OSV-Scanner
+category: Security
+tags:
+    - security
+    - scanner
+    - google
+binary_names:
+    - osv-scanner
+packages:
+    brew: osv-scanner
+    scoop: osv-scanner
+github: google/osv-scanner

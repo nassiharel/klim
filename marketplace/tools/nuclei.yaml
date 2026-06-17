@@ -1,0 +1,11 @@
+name: nuclei
+display_name: Nuclei
+category: Security
+tags:
+    - security
+    - scanner
+binary_names:
+    - nuclei
+packages:
+    brew: nuclei
+github: projectdiscovery/nuclei

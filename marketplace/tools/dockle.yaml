@@ -1,0 +1,13 @@
+name: dockle
+display_name: Dockle
+category: Security
+tags:
+    - security
+    - scanner
+    - container
+binary_names:
+    - dockle
+packages:
+    brew: dockle
+    scoop: dockle
+github: goodwithtech/dockle
