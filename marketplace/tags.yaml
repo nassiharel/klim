@@ -15,12 +15,17 @@ tags:
   - container
   - database
   - docker
+  - edge
   - git
   - gitops
   - kubernetes
+  - messaging
   - networking
   - observability
+  - paas
+  - protobuf
   - security
+  - serverless
   - service-mesh
   - terraform
   - vcs
@@ -67,11 +72,14 @@ tags:
   - local-cluster
   - log-viewer
   - media
+  - migrations
   - package-manager
+  - password-manager
   - process-monitoring
   - provisioning
   - remote-shell
   - scanner
+  - sbom
   - search
   - secrets
   - static-analysis
