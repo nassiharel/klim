@@ -1,0 +1,12 @@
+name: tcpdump
+display_name: tcpdump
+category: Network
+tags:
+    - networking
+    - cli
+binary_names:
+    - tcpdump
+packages:
+    brew: tcpdump
+    apt: tcpdump
+github: the-tcpdump-group/tcpdump

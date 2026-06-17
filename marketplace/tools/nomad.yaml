@@ -1,0 +1,14 @@
+name: nomad
+display_name: Nomad
+category: IaC
+tags:
+    - hashicorp
+    - container
+    - automation
+binary_names:
+    - nomad
+packages:
+    winget: HashiCorp.Nomad
+    brew: nomad
+    apt: nomad
+github: hashicorp/nomad

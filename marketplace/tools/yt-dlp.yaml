@@ -1,0 +1,14 @@
+name: yt-dlp
+display_name: yt-dlp
+category: Media
+tags:
+    - media
+    - cli
+binary_names:
+    - yt-dlp
+packages:
+    winget: yt-dlp.yt-dlp
+    scoop: yt-dlp
+    choco: yt-dlp
+    brew: yt-dlp
+github: yt-dlp/yt-dlp

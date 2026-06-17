@@ -1,0 +1,14 @@
+name: croc
+display_name: croc
+category: CLI
+tags:
+    - file-transfer
+    - cli
+binary_names:
+    - croc
+packages:
+    winget: schollz.croc
+    scoop: croc
+    choco: croc
+    brew: croc
+github: schollz/croc

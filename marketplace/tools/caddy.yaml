@@ -1,0 +1,15 @@
+name: caddy
+display_name: Caddy
+category: Network
+tags:
+    - networking
+    - http-client
+binary_names:
+    - caddy
+packages:
+    winget: CaddyServer.Caddy
+    scoop: caddy
+    choco: caddy
+    brew: caddy
+    apt: caddy
+github: caddyserver/caddy
