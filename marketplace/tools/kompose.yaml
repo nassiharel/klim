@@ -1,0 +1,15 @@
+name: kompose
+display_name: Kompose
+category: Containers
+tags:
+    - kubernetes
+    - docker
+    - configuration-management
+binary_names:
+    - kompose
+packages:
+    brew: kompose
+    scoop: kompose
+    choco: kubernetes-kompose
+    apt: kompose
+github: kubernetes/kompose

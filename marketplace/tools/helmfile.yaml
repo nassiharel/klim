@@ -1,0 +1,12 @@
+name: helmfile
+display_name: Helmfile
+category: Containers
+tags:
+    - kubernetes
+    - configuration-management
+binary_names:
+    - helmfile
+packages:
+    brew: helmfile
+    scoop: helmfile
+github: helmfile/helmfile

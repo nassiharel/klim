@@ -1,0 +1,15 @@
+name: podman
+display_name: Podman
+category: Containers
+tags:
+    - container
+    - docker
+binary_names:
+    - podman
+packages:
+    winget: RedHat.Podman
+    scoop: podman
+    choco: podman-cli
+    brew: podman
+    apt: podman
+github: containers/podman

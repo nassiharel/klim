@@ -1,0 +1,11 @@
+name: kn
+display_name: Knative Client
+category: Containers
+tags:
+    - kubernetes
+    - serverless
+binary_names:
+    - kn
+packages:
+    brew: knative-client
+github: knative/client

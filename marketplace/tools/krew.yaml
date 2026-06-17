@@ -1,0 +1,12 @@
+name: krew
+display_name: krew
+category: Containers
+tags:
+    - kubernetes
+    - package-manager
+binary_names:
+    - kubectl-krew
+packages:
+    brew: krew
+    scoop: krew
+github: kubernetes-sigs/krew
