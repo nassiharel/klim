@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add 86 new tool YAMLs, 8 new tags, 9 pack updates, and 3 new packs to klim's marketplace, fully validated by `make marketplace-validate`.
+**Goal:** Add 77 new tool YAMLs, 8 new tags, 9 pack updates, and 3 new packs to klim's marketplace, fully validated by `make marketplace-validate`.
 
 **Architecture:** Each tool is a self-contained YAML file in `marketplace/tools/`. Packs reference tools by name. New tags MUST exist in `marketplace/tags.yaml` BEFORE any tool references them, otherwise the validator rejects the tool. This dictates ordering: tags first, then tools, then pack updates.
 
@@ -36,7 +36,7 @@ YAML style (match existing files, e.g. `bat.yaml`):
 
 ## File Structure
 
-**New files (86 tools + 3 packs):**
+**New files (77 tools + 3 packs):**
 ```
 marketplace/tools/
   argo.yaml, atlas.yaml, bazel.yaml, boundary.yaml, buf.yaml, buildah.yaml,
@@ -1916,7 +1916,7 @@ Run:
 ls marketplace/tools | wc -l
 ls marketplace/packs | wc -l
 ```
-Expected: 239 tools (153 existing + 86 new), 27 packs (24 existing + 3 new).
+Expected: 239 tools (162 existing + 77 new), 27 packs (24 existing + 3 new).
 
 If counts are off, list the new tools you committed and reconcile against the spec section tables.
 
