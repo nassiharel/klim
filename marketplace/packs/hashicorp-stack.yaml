@@ -7,3 +7,5 @@ tools:
     - consul
     - packer
     - vagrant
+    - nomad
+    - boundary

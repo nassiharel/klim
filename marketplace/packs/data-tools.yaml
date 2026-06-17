@@ -6,3 +6,8 @@ tools:
     - yq
     - sqlite3
     - duckdb
+    - miller
+    - fx
+    - gron
+    - lnav
+    - kcat

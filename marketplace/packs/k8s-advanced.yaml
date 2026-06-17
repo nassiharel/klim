@@ -12,3 +12,8 @@ tools:
     - kustomize
     - argocd
     - flux
+    - helmfile
+    - kubeseal
+    - krew
+    - kompose
+    - kn

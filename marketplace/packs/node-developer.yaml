@@ -6,3 +6,6 @@ tools:
     - deno
     - bun
     - npm
+    - fnm
+    - turbo
+    - nx

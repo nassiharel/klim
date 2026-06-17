@@ -6,3 +6,8 @@ tools:
     - copilot
     - aider
     - ollama
+    - gemini-cli
+    - goose
+    - cursor-agent
+    - gptme
+    - codex
