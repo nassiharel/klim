@@ -1,0 +1,14 @@
+name: earthly
+display_name: Earthly
+category: CLI
+tags:
+    - build-system
+    - container
+    - automation
+binary_names:
+    - earthly
+packages:
+    brew: earthly/earthly/earthly
+    scoop: earthly
+    apt: earthly
+github: earthly/earthly

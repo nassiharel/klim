@@ -1,0 +1,14 @@
+name: make
+display_name: GNU Make
+category: CLI
+tags:
+    - build-system
+    - automation
+binary_names:
+    - make
+packages:
+    winget: GnuWin32.Make
+    choco: make
+    brew: make
+    apt: make
+github: mirror/make

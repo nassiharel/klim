@@ -1,0 +1,13 @@
+name: turbo
+display_name: Turborepo
+category: CLI
+tags:
+    - build-system
+    - javascript
+    - typescript
+binary_names:
+    - turbo
+packages:
+    npm: turbo
+    brew: turbo
+github: vercel/turborepo

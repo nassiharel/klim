@@ -1,0 +1,15 @@
+name: goreleaser
+display_name: GoReleaser
+category: CLI
+tags:
+    - build-system
+    - golang
+    - automation
+    - continuous-delivery
+binary_names:
+    - goreleaser
+packages:
+    brew: goreleaser/tap/goreleaser
+    scoop: goreleaser
+    apt: goreleaser
+github: goreleaser/goreleaser

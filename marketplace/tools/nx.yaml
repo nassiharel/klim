@@ -1,0 +1,12 @@
+name: nx
+display_name: Nx
+category: CLI
+tags:
+    - build-system
+    - javascript
+    - typescript
+binary_names:
+    - nx
+packages:
+    npm: nx
+github: nrwl/nx
