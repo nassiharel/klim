@@ -178,8 +178,8 @@ of new tags. It does **not** change any existing tool definitions, the schema, o
 | `yt-dlp.yaml` | Media | yt-dlp | github: `yt-dlp/yt-dlp`. brew/scoop/winget. |
 | `croc.yaml` | CLI | croc | file transfer. github: `schollz/croc`. brew/scoop. |
 
-**Section 8 total:** 8. With sections 1–7 (10+10+10+10+10+10+8) = **86 tools**. Slightly over budget;
-acceptable.
+**Section 8 total:** 8. With sections 1–7 (11+10+10+10+10+10+8) = **77 tools** total (Section 1 is 11
+after adding marktext). Slightly over the "~75 tools" budget; acceptable.
 
 ---
 
