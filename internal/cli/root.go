@@ -19,10 +19,9 @@ var verboseFlag bool
 
 var rootCmd = &cobra.Command{
 	Use:   "klim",
-	Short: "Productivity booster for dev tools, teams, CI, and agents",
-	Long: `klim maps the developer tools your projects depend on, turns them
-into portable environment contracts, and automates install, audit, diff,
-upgrade, and restore workflows through native package managers.
+	Short: "productivity booster",
+	Long: `klim is a productivity booster for dev tools: a cross-platform
+layer for discovering, standardising, securing, and automating the tools every project depends on.
 
 Run without arguments to launch the interactive TUI, or use subcommands
 for non-interactive operation.`,
