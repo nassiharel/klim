@@ -1,0 +1,13 @@
+name: goose-migrate
+display_name: goose (DB migrations)
+category: Database
+tags:
+    - database
+    - migrations
+    - golang
+binary_names:
+    - goose
+packages:
+    brew: goose
+    scoop: goose
+github: pressly/goose

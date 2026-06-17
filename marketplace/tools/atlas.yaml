@@ -1,0 +1,11 @@
+name: atlas
+display_name: Atlas (Ariga)
+category: Database
+tags:
+    - database
+    - migrations
+binary_names:
+    - atlas
+packages:
+    brew: ariga/tap/atlas
+github: ariga/atlas

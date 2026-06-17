@@ -1,0 +1,12 @@
+name: dbmate
+display_name: dbmate
+category: Database
+tags:
+    - database
+    - migrations
+binary_names:
+    - dbmate
+packages:
+    brew: dbmate
+    scoop: dbmate
+github: amacneil/dbmate

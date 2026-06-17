@@ -1,0 +1,12 @@
+name: gron
+display_name: gron
+category: CLI
+tags:
+    - data-processing
+    - cli
+binary_names:
+    - gron
+packages:
+    brew: gron
+    scoop: gron
+github: tomnomnom/gron

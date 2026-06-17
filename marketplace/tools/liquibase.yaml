@@ -1,0 +1,14 @@
+name: liquibase
+display_name: Liquibase
+category: Database
+tags:
+    - database
+    - migrations
+    - jvm
+binary_names:
+    - liquibase
+packages:
+    winget: Liquibase.Liquibase
+    brew: liquibase
+    scoop: liquibase
+github: liquibase/liquibase
