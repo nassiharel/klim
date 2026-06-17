@@ -3,7 +3,6 @@ display_name: Database Migrations
 description: Schema migration and versioning tools across SQL databases.
 tools:
     - atlas
-    - goose-migrate
     - dbmate
     - flyway
     - liquibase

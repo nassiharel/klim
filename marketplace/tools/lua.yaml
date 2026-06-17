@@ -6,6 +6,7 @@ tags:
     - cli
 binary_names:
     - lua
+    - lua5.4
 packages:
     winget: DEVCOM.Lua
     scoop: lua

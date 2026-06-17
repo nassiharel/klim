@@ -6,6 +6,7 @@ tags:
     - cli
 binary_names:
     - kcat
+    - kafkacat
 packages:
     brew: kcat
     apt: kafkacat
