@@ -8,7 +8,7 @@ import (
 // formatStars, formatGitHubDate and githubRepoURL are thin aliases for
 // the canonical implementations in internal/githubfmt. They exist so
 // the existing TUI call sites and tests don't churn — and so the CLI's
-// `klim info` shares the same formatting contract. See
+// `klim tool info` shares the same formatting contract. See
 // internal/githubfmt/githubfmt_test.go for the behavioral tests.
 
 func formatStars(n int) string          { return githubfmt.FormatStars(n) }

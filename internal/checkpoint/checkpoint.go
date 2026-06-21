@@ -3,7 +3,7 @@
 // declarative record (tools + versions + sources, plus the captured
 // $PATH) — not a binary backup — so rollback is just a plan that
 // drives the user back to the saved versions through the same PM
-// commands `klim install` / `klim upgrade` already use.
+// commands `klim tool install` / `klim tool upgrade` already use.
 //
 // Storage layout:
 //
@@ -103,8 +103,8 @@ func Save(c Checkpoint) (string, error) {
 	if err := fileutil.EnsureDir(target); err != nil {
 		return "", err
 	}
-	header := "# klim checkpoint — captured by `klim checkpoint " + c.Name + "`.\n" +
-		"# Roll back to it with: klim rollback " + c.Name + "\n"
+	header := "# klim checkpoint — captured by `klim plan checkpoint " + c.Name + "`.\n" +
+		"# Roll back to it with: klim plan rollback " + c.Name + "\n"
 	if err := fileutil.WriteYAML(target, &c, header); err != nil {
 		return "", err
 	}

@@ -38,10 +38,10 @@ Badges:
   klim fresh   percent of installed tools up to date
 
 Examples:
-  klim badge
-  klim badge --score --audit
-  klim badge --output json
-  klim badge --output yaml > badges.yaml`,
+  klim share badge
+  klim share badge --score --audit
+  klim share badge --output json
+  klim share badge --output yaml > badges.yaml`,
 	Args: cobra.NoArgs,
 	RunE: runBadge,
 }
@@ -89,7 +89,7 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 	wantFresh := needsBadge(ids, "fresh")
 	wantStructured := out == OutputJSON || out == OutputYAML
 	// Structured output always carries the full score block, so a
-	// `klim badge --tools --output yaml` still needs the score path.
+	// `klim share badge --tools --output yaml` still needs the score path.
 	needScorePipeline := wantScore || wantStructured
 	// audit.Analyze surfaces "No Version" / "Outdated" findings,
 	// which depend on a tool's resolved Latest field. Without
@@ -111,7 +111,7 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 		// the cheap ScanOnly fast lane below.
 		tools, _, _, err = svc.LoadAndResolveCached(cmd.Context(), badgeRefreshFlag)
 	} else {
-		// `klim badge --tools` (text only) only needs the
+		// `klim share badge --tools` (text only) only needs the
 		// installed-or-not state — ScanOnly skips per-tool
 		// version resolution which is the expensive bit on a
 		// cold cache.
@@ -119,7 +119,7 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 	}
 	if err != nil {
 		sp.Fail(err.Error())
-		return fmt.Errorf("klim badge: %w", err)
+		return fmt.Errorf("klim share badge: %w", err)
 	}
 	sp.Stop()
 
@@ -131,7 +131,7 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 	switch {
 	case needScorePipeline:
 		// Full pipeline: doctor + compliance + audit + score.Compute.
-		// Shared with `klim score` via computeScoreReport.
+		// Shared with `klim security score` via computeScoreReport.
 		result, auditWarns, auditInfos = computeScoreReport(cmd, tools)
 	case wantAudit:
 		// Audit badge only: skip doctor and compliance entirely,
@@ -149,8 +149,8 @@ func runBadge(cmd *cobra.Command, _ []string) error {
 		ScorePoints: result.Total,
 		ScoreMax:    result.MaxTotal,
 		ScoreGrade:  result.Grade,
-		// Use score.BadgeColor so `klim badge --score` and
-		// `klim score --badge` always agree on colour for the
+		// Use score.BadgeColor so `klim share badge --score` and
+		// `klim security score --badge` always agree on colour for the
 		// same input. Passing nothing here would fall back to the
 		// package's local table, which can drift.
 		ScoreColor:   score.BadgeColor(pct),

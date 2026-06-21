@@ -37,13 +37,13 @@ Flags:
   --output text|json|yaml   Output format (default: text)
 
 Examples:
-  klim list                          # all installed tools
-  klim list --category Cloud         # only Cloud tools
-  klim list --source brew            # only Homebrew-installed tools
-  klim list --category IaC --source brew  # combine filters
-  klim list --categories             # list available categories
-  klim list --refresh                # bypass cache and rescan
-  klim list --output json            # machine-readable output`,
+  klim tool list                          # all installed tools
+  klim tool list --category Cloud         # only Cloud tools
+  klim tool list --source brew            # only Homebrew-installed tools
+  klim tool list --category IaC --source brew  # combine filters
+  klim tool list --categories             # list available categories
+  klim tool list --refresh                # bypass cache and rescan
+  klim tool list --output json            # machine-readable output`,
 	RunE: runList,
 }
 
@@ -206,7 +206,7 @@ func printCategories(tools []registry.Tool) {
 
 // or() and the local helper have been replaced by stdlib cmp.Or.
 
-// listJSONTool is the JSON shape for `klim list --output json`.
+// listJSONTool is the JSON shape for `klim tool list --output json`.
 type listJSONTool struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name,omitempty"`

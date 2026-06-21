@@ -1786,9 +1786,9 @@ func (m *Model) renderAgentsView() string {
 	if len(rows) == 0 {
 		switch st.subTab {
 		case agentsSubMarketplaces:
-			b.WriteString("  no marketplaces detected — `klim agents marketplaces add <url>`\n")
+			b.WriteString("  no marketplaces detected — `klim agent marketplace add <url>`\n")
 		case agentsSubPlugins:
-			b.WriteString("  no plugins installed — `klim agents plugins install <ref>`\n")
+			b.WriteString("  no plugins installed — `klim agent plugin install <ref>`\n")
 		case agentsSubSkills:
 			b.WriteString("  no skills found in ~/.claude/skills or ~/.copilot/skills\n")
 		case agentsSubMCPs:

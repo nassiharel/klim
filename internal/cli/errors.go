@@ -45,7 +45,7 @@ func (e *PartialFailureError) Error() string {
 
 // PendingChangesError signals a non-failure outcome that should still
 // map to ExitPartialFailure (exit 3). The canonical use case is
-// `klim plan --detailed-exitcode` — there's no failure, but the diff
+// `klim plan show --detailed-exitcode` — there's no failure, but the diff
 // is non-empty and the CI caller asked us to gate on that. Keeping
 // this distinct from PartialFailureError avoids the misleading
 // "0 succeeded, N failed" framing for an outcome that's really

@@ -1106,12 +1106,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case applyFinishedMsg:
-		// klim apply returned control. Status banner + trigger a
+		// klim plan apply returned control. Status banner + trigger a
 		// rescan so the plan list reflects the new state.
 		if msg.err != nil {
-			m.planStatus = "✗ klim apply failed: " + msg.err.Error()
+			m.planStatus = "✗ klim plan apply failed: " + msg.err.Error()
 		} else {
-			m.planStatus = "✓ klim apply succeeded — rebuilding plan"
+			m.planStatus = "✓ klim plan apply succeeded — rebuilding plan"
 		}
 		// Trigger a fresh scan + rebuild the plan once tools refresh.
 		return m, tea.Batch(m.startScan(), buildPlanCmd(m.tools))

@@ -18,7 +18,7 @@ const (
 
 // initColorHelp installs a colorized help template on rootCmd. Subcommands
 // continue to use Cobra's default help so that piped/captured output (e.g.
-// `klim list --help | less`) is unaffected by color codes.
+// `klim tool list --help | less`) is unaffected by color codes.
 func initColorHelp() {
 	defaultHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {

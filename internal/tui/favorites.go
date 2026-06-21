@@ -283,7 +283,7 @@ func (m Model) renderFavShareToken() string {
 	}
 	b.WriteString("\n")
 	b.WriteString("  " + dimVersion.Render("Recipients can import with:") + "\n")
-	b.WriteString("  klim open <token>\n")
+	b.WriteString("  klim share link open <token>\n")
 
 	return b.String()
 }

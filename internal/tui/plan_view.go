@@ -22,10 +22,10 @@ import (
 //
 //   1. From any tab the user presses `P` to open the Plan modal.
 //      It renders a plan over the current tool slice through the
-//      same plan.Build + plan.RenderText that powers `klim plan`.
+//      same plan.Build + plan.RenderText that powers `klim plan show`.
 //   2. Inside the modal:
 //        a   open Apply confirmation; on confirm, shell out to
-//            `klim apply` via tea.ExecProcess to inherit the full
+//            `klim plan apply` via tea.ExecProcess to inherit the full
 //            safety wrapper (auto-checkpoint + postcheck).
 //        c   capture a named checkpoint (prompts for the name).
 //        b   open the checkpoint browser.
@@ -55,7 +55,7 @@ type checkpointsLoadedMsg struct {
 	err  error
 }
 
-// applyFinishedMsg fires after `klim apply` returns control.
+// applyFinishedMsg fires after `klim plan apply` returns control.
 type applyFinishedMsg struct {
 	err error
 }
@@ -83,7 +83,7 @@ func buildPlanCmd(tools []registry.Tool) tea.Cmd {
 }
 
 // buildRollbackPlanCmd computes the restore plan against a saved
-// checkpoint. Mirrors the CLI's `klim rollback <name>` logic.
+// checkpoint. Mirrors the CLI's `klim plan rollback <name>` logic.
 func buildRollbackPlanCmd(name string, tools []registry.Tool) tea.Cmd {
 	return func() tea.Msg {
 		cp, err := checkpoint.Load(name)
@@ -139,7 +139,7 @@ func deleteCheckpointCmd(name string) tea.Cmd {
 	}
 }
 
-// runKlimApplyCmd shells out to `klim apply` so the user gets the
+// runKlimApplyCmd shells out to `klim plan apply` so the user gets the
 // full safety wrapper (auto-checkpoint + postcheck + regression
 // detection). We avoid re-implementing that pipeline inside the TUI
 // because the cross-platform branches and the postcheck regression
@@ -190,7 +190,7 @@ func (m Model) renderPlanView() string {
 
 	if m.applyConfirm {
 		b.WriteString(planAccent.Render("Apply this plan?") + "\n")
-		b.WriteString(planDim.Render("klim apply will: (1) capture pre-apply-<UTC> checkpoint, (2) upgrade, (3) postcheck.") + "\n\n")
+		b.WriteString(planDim.Render("klim plan apply will: (1) capture pre-apply-<UTC> checkpoint, (2) upgrade, (3) postcheck.") + "\n\n")
 		b.WriteString(planDim.Render("y to confirm · n / Esc to cancel") + "\n")
 		return wrapModal(b.String(), width, m)
 	}
@@ -219,9 +219,9 @@ func (m Model) renderPlanView() string {
 	b.WriteString("\n" + planDim.Render("Actions") + "\n")
 	if m.planMode == "rollback" {
 		b.WriteString(planDim.Render("  Rollback execution is CLI-only — copy the suggested commands or run") + "\n")
-		b.WriteString(planDim.Render("  `klim rollback "+m.planRollbackTarget+"` in your shell to see them.") + "\n")
+		b.WriteString(planDim.Render("  `klim plan rollback "+m.planRollbackTarget+"` in your shell to see them.") + "\n")
 	} else {
-		b.WriteString("  " + planAccent.Render("a") + planDim.Render("  Apply (runs klim apply with checkpoint + postcheck)") + "\n")
+		b.WriteString("  " + planAccent.Render("a") + planDim.Render("  Apply (runs klim plan apply with checkpoint + postcheck)") + "\n")
 	}
 	b.WriteString("  " + planAccent.Render("c") + planDim.Render("  Capture a named checkpoint") + "\n")
 	b.WriteString("  " + planAccent.Render("b") + planDim.Render("  Browse / restore from a saved checkpoint") + "\n")
@@ -348,7 +348,7 @@ func (m Model) handleKeyPlanView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, buildPlanCmd(m.tools)
 	case "a":
 		if m.planMode == "rollback" {
-			m.planStatus = "Rollback execution is CLI-only. Run `klim rollback " + m.planRollbackTarget + "`."
+			m.planStatus = "Rollback execution is CLI-only. Run `klim plan rollback " + m.planRollbackTarget + "`."
 			return m, nil
 		}
 		if m.planResult == nil || len(m.planResult.Changes) == 0 {
@@ -376,7 +376,7 @@ func (m Model) handleKeyApplyConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y":
 		m.applyConfirm = false
-		m.planStatus = "Running klim apply…"
+		m.planStatus = "Running klim plan apply…"
 		return m, runKlimApplyCmd()
 	case "n", "N", "esc":
 		m.applyConfirm = false

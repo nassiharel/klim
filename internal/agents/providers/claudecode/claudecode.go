@@ -442,7 +442,7 @@ func (p *Provider) pluginsFromInstalledRegistry(
 
 		// Synthesize a minimal manifest when neither the install dir
 		// nor any marketplace clone has one. Without this fallback the
-		// row would silently disappear from `klim agents plugins list`
+		// row would silently disappear from `klim agent plugin list`
 		// — the opposite of useful for a user trying to inspect what
 		// Claude has installed.
 		if m == nil {

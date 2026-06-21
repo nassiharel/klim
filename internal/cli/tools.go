@@ -8,9 +8,9 @@ import (
 	"github.com/nassiharel/klim/internal/catalog"
 )
 
-var toolsCmd = &cobra.Command{
-	Use:   "tools",
-	Short: "Manage the tool catalog",
+var catalogCmd = &cobra.Command{
+	Use:   "catalog",
+	Short: "Inspect and manage the tool catalog",
 	Long: `Inspect and manage the cached tool catalog (marketplace.yaml).
 
 The catalog is fetched from the marketplace branch on first use and cached
@@ -26,16 +26,16 @@ var toolsPathCmd = &cobra.Command{
 
 Useful for piping into other tools or for inspection:
 
-  klim tools path
-  cat "$(klim tools path)"
-  klim tools path --output json    # {"cache_path": "..."}`,
-	Args: requireArgs(0, "klim tools path"),
+  klim tool catalog path
+  cat "$(klim tool catalog path)"
+  klim tool catalog path --output json    # {"cache_path": "..."}`,
+	Args: requireArgs(0, "klim tool catalog path"),
 	RunE: runToolsPath,
 }
 
 func init() {
 	toolsPathOutputFmt = addOutputFlag(toolsPathCmd, OutputText, OutputJSON, OutputYAML)
-	toolsCmd.AddCommand(toolsPathCmd)
+	catalogCmd.AddCommand(toolsPathCmd)
 }
 
 type toolsPathReport struct {

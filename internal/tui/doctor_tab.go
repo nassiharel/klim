@@ -147,7 +147,7 @@ func (m Model) renderAuditView() string {
 }
 
 // renderReferencesSection renders the "References" section in tool detail view,
-// showing where a tool is referenced (projects, packs) — the TUI equivalent of `klim why`.
+// showing where a tool is referenced (projects, packs) — the TUI equivalent of `klim tool why`.
 func (m Model) renderReferencesSection(tool registry.Tool) string {
 	var refs []string
 

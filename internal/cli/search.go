@@ -24,11 +24,11 @@ Results are ranked by relevance and GitHub stars, with platform badges
 showing which package managers support each tool.
 
 Examples:
-  klim search json                   # find JSON tools
-  klim search "kubernetes dashboard" # multi-word search
-  klim search cloud --category Cloud # filter by category
-  klim search json --output json     # machine-readable results`,
-	Args: requireMinArgs(1, "klim search <query>"),
+  klim tool search json                   # find JSON tools
+  klim tool search "kubernetes dashboard" # multi-word search
+  klim tool search cloud --category Cloud # filter by category
+  klim tool search json --output json     # machine-readable results`,
+	Args: requireMinArgs(1, "klim tool search <query>"),
 	RunE: runSearch,
 }
 

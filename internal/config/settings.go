@@ -256,10 +256,10 @@ func AllSettings() []Setting {
 			GetBool: func(c *Config) bool { return c.UI.SidebarRight },
 			SetBool: func(c *Config, v bool) { c.UI.SidebarRight = v },
 		},
-		// --- Defaults (consumed by klim install / upgrade / remove) ---
+		// --- Defaults (consumed by klim tool install / upgrade / remove) ---
 		{
 			Section: "Defaults", Label: "Preferred Source", Key: "defaults_preferred_source", Type: SettingChoice,
-			Help:      "Package manager that klim install / upgrade / remove prefers when available. Empty = OS-priority fallback.",
+			Help:      "Package manager that klim tool install / upgrade / remove prefers when available. Empty = OS-priority fallback.",
 			Choices:   []string{"", "winget", "choco", "scoop", "brew", "apt", "snap", "npm"},
 			GetString: func(c *Config) string { return c.Defaults.PreferredSource },
 			SetString: func(c *Config, v string) { c.Defaults.PreferredSource = v },

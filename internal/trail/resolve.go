@@ -53,7 +53,7 @@ func resolveSpec(lf *logFile, refSpec string) (*Entry, error) {
 		return nil, errors.New("trail: empty ref")
 	}
 	if len(lf.Entries) == 0 {
-		return nil, errors.New("trail: no entries (run `klim trail capture` to create one)")
+		return nil, errors.New("trail: no entries (run `klim env trail capture` to create one)")
 	}
 
 	// HEAD / HEAD~N / latest.

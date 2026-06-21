@@ -17,7 +17,7 @@ var (
 	checkpointOutput          func() (OutputFormat, error)
 )
 
-// checkpointCmd is the parent: `klim checkpoint <name>` captures a
+// checkpointCmd is the parent: `klim plan checkpoint <name>` captures a
 // snapshot, while `list / show / delete` manage them. Mirrors the
 // terraform-style "named workspace state" model so users have an
 // intuitive home for the verbs.
@@ -25,19 +25,18 @@ var checkpointCmd = &cobra.Command{
 	Use:   "checkpoint",
 	Short: "Save / list / show / delete named toolchain snapshots",
 	Long: `Capture the currently installed tool versions (and PATH) under a
-named checkpoint so a future ` + "`klim rollback <name>`" + ` can restore them.
+named checkpoint so a future ` + "`klim plan rollback <name>`" + ` can restore them.
 
 Usage:
-  klim checkpoint <name>             Capture a new checkpoint.
-  klim checkpoint list               List every checkpoint.
-  klim checkpoint show <name>        Print a checkpoint's tools/versions.
-  klim checkpoint delete <name>      Remove a checkpoint.
+  klim plan checkpoint <name>             Capture a new checkpoint.
+  klim plan checkpoint list               List every checkpoint.
+  klim plan checkpoint show <name>        Print a checkpoint's tools/versions.
+  klim plan checkpoint delete <name>      Remove a checkpoint.
 
 Checkpoints are stored under ~/.klim/checkpoints/<name>.yaml as
 human-readable YAML — you can review them with any text editor.`,
-	GroupID: "tools",
-	Args:    cobra.MaximumNArgs(1),
-	RunE:    runCheckpointCapture,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runCheckpointCapture,
 }
 
 var checkpointListCmd = &cobra.Command{
@@ -68,8 +67,6 @@ func init() {
 	checkpointCmd.AddCommand(checkpointListCmd)
 	checkpointCmd.AddCommand(checkpointShowCmd)
 	checkpointCmd.AddCommand(checkpointDeleteCmd)
-
-	rootCmd.AddCommand(checkpointCmd)
 }
 
 func runCheckpointCapture(cmd *cobra.Command, args []string) error {
@@ -110,7 +107,7 @@ func runCheckpointCapture(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "\n✓ Captured checkpoint %q with %d tool(s)\n", cp.Name, len(cp.Tools))
 	fmt.Fprintf(os.Stderr, "  Saved to %s\n", path)
-	fmt.Fprintf(os.Stderr, "  Roll back any time with: klim rollback %s\n", cp.Name)
+	fmt.Fprintf(os.Stderr, "  Roll back any time with: klim plan rollback %s\n", cp.Name)
 	return nil
 }
 
@@ -130,7 +127,7 @@ func runCheckpointList(cmd *cobra.Command, _ []string) error {
 	}
 	if len(list) == 0 {
 		fmt.Fprintln(os.Stderr, "No checkpoints saved. Capture one with:")
-		fmt.Fprintln(os.Stderr, "  klim checkpoint <name>")
+		fmt.Fprintln(os.Stderr, "  klim plan checkpoint <name>")
 		return nil
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)

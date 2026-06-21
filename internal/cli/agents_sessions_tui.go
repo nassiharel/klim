@@ -11,7 +11,7 @@ import (
 )
 
 // init wires the sessionstui package into the CLI dispatch. Done in
-// init so the bare `klim agents sessions` command and `--watch` flag
+// init so the bare `klim agent session` command and `--watch` flag
 // can hand off to bubbletea without agents_sessions.go importing the
 // TUI package directly (which would couple the CLI test surface to
 // terminal-only types).

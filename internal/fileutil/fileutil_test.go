@@ -72,7 +72,7 @@ func TestAtomicWriteOverwrite(t *testing.T) {
 // symlink updates the target file rather than replacing the symlink
 // with a regular file. Repos that keep .klim.yaml as a symlink to a
 // shared template would otherwise lose their setup on the first
-// `klim init --force`.
+// `klim project init --force`.
 func TestAtomicWritePreservesSymlink(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "real.txt")
@@ -224,7 +224,7 @@ func TestAtomicWriteSymlinkCycleDetected(t *testing.T) {
 // TestAtomicWritePreservesExistingMode guards against permission
 // regression on overwrite. A user who manually `chmod 600`s a sensitive
 // .klim.yaml must not have it broadened to 0644 by a subsequent
-// `klim init --force`.
+// `klim project init --force`.
 func TestAtomicWritePreservesExistingMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// Windows file mode bits don't map to POSIX perms in a way

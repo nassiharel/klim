@@ -97,7 +97,7 @@ func (m Model) renderBackupView() string {
 		}
 
 		b.WriteString("\n")
-		b.WriteString("  " + dimVersion.Render("Recipients can install with:") + "  " + detailCmdStyle.Render("klim open <token>") + "\n")
+		b.WriteString("  " + dimVersion.Render("Recipients can install with:") + "  " + detailCmdStyle.Render("klim share link open <token>") + "\n")
 
 		// Pad remaining space.
 		visibleRows := m.height - 13 - m.footerHeight()

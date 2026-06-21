@@ -8,7 +8,7 @@
 </section>
 
 {{if not $d.HasFile}}
-  <p class="empty">No <code>.klim.yaml</code> found in this project. Run <code>klim init</code> there to create one.</p>
+  <p class="empty">No <code>.klim.yaml</code> found in this project. Run <code>klim project init</code> there to create one.</p>
 {{else if $d.ParseErr}}
   <section class="card">
     <h2>Parse error</h2>

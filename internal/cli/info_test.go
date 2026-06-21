@@ -15,7 +15,7 @@ import (
 func TestNotFoundError_IsUsageError(t *testing.T) {
 	// A typo on the tool name is malformed user input, so it must
 	// surface as a UsageError so Run() maps it to exit code 2.
-	// Otherwise scripts can't tell `klim info kubctl` (typo) apart
+	// Otherwise scripts can't tell `klim tool info kubctl` (typo) apart
 	// from a genuine runtime failure (exit 1).
 	for _, suggestion := range []string{"", "kubectl"} {
 		err := notFoundError("kubctl", suggestion)
@@ -75,13 +75,13 @@ func TestFormatInfoRef_PreservesConstraint(t *testing.T) {
 }
 
 // TestBuildInfoReport_JSONContract locks the documented JSON shape of
-// `klim info <tool> --output json`. Specifically:
+// `klim tool info <tool> --output json`. Specifically:
 //   - empty arrays must serialize as [] (not null) for tags/instances/
 //     packages/references/related_tools/warnings
 //   - GitHub block is populated when GitHubInfo is present
 //   - non-empty packages list is preserved in canonical order (winget,
 //     choco, scoop, brew, apt, snap, npm) — drift here would change
-//     `klim info --output json | jq` consumers' assumptions
+//     `klim tool info --output json | jq` consumers' assumptions
 func TestBuildInfoReport_JSONContract(t *testing.T) {
 	chdirTemp(t)
 	redirectConfig(t)

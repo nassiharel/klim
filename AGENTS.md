@@ -36,14 +36,14 @@ internal/
                  installplan.go  Install-plan resolution (legacy, used by import / open)
                  action.go       Action enum + buildActionPlan + plan resolution shared by install/upgrade/remove
                  action_run.go   Shared runAction body (text + JSON output paths) for install/upgrade/remove
-                 install.go      `klim install [tool...] [--pack ...]`
-                 upgrade.go      `klim upgrade [tool...] [--pack ...]`
-                 remove.go       `klim remove  [tool...] [--pack ...]` with klim self-protection
-                 plan.go         `klim plan` — Terraform-plan-style preview with confidence scoring
-                 apply.go        `klim apply` — plan + auto-checkpoint + postcheck-wrapped upgrade
-                 checkpoint.go   `klim checkpoint <name> | list | show | delete`
-                 rollback.go     `klim rollback <name>` — produces a restore plan
-                 health.go (doctor.go) `klim health` umbrella with `klim health path` subcommand
+                 install.go      `klim tool install [tool...] [--pack ...]`
+                 upgrade.go      `klim tool upgrade [tool...] [--pack ...]`
+                 remove.go       `klim tool remove  [tool...] [--pack ...]` with klim self-protection
+                 plan.go         `klim plan show` — Terraform-plan-style preview with confidence scoring
+                 apply.go        `klim plan apply` — plan + auto-checkpoint + postcheck-wrapped upgrade
+                 checkpoint.go   `klim plan checkpoint <name> | list | show | delete`
+                 rollback.go     `klim plan rollback <name>` — produces a restore plan
+                 health.go (doctor.go) `klim doctor` umbrella with `klim doctor path` subcommand
   config/      config.yaml: logging, marketplace URL, performance, UI prefs
   custompacks/ User-created pack definitions → ~/.klim/marketplace/custom-packs.yaml
   detector/    Fallback version detection (Go buildinfo, Windows PE resources)
@@ -54,11 +54,11 @@ internal/
   logging/     slog structured logging + lumberjack file rotation
   manifest/    YAML schema for export/import manifests + FromRegistryTool converter
   pathbackup/  Captures $PATH (+ Windows User PATH from registry) before any Health-tab fix touches it → ~/.klim/backups/path/path-<UTC>.yaml; generates platform-specific restore commands
-  pathconflict/ Read-only analyzer powering `klim health path` and the TUI Health → PATH view; produces Report{ByTool, ByDir} with version-conflict + privilege-risk flags. Reads $PATH and does best-effort os.Stat on entries; no scanning, no version resolution.
+  pathconflict/ Read-only analyzer powering `klim doctor path` and the TUI Health → PATH view; produces Report{ByTool, ByDir} with version-conflict + privilege-risk flags. Reads $PATH and does best-effort os.Stat on entries; no scanning, no version resolution.
   paths/       Single source of truth for all ~/.klim/* paths (BackupsDir, PathBackupsDir, CheckpointsDir, …)
   pkgmgr/      Package manager queries (installed + latest versions)
-  plan/        `klim plan` engine: Build/Render/AnalyseRisks/computeConfidence. Confidence factors include semver delta, tool-specific fragility, plugin ecosystem detection, foundational-runtime size.
-  postcheck/   `klim apply` validation pass: parallel binary probes with worker pool, shell resolution, PATH consistency, manager integrity. Regression detection against a before-snapshot so pre-existing issues don't trip auto-rollback.
+  plan/        `klim plan show` engine: Build/Render/AnalyseRisks/computeConfidence. Confidence factors include semver delta, tool-specific fragility, plugin ecosystem detection, foundational-runtime size.
+  postcheck/   `klim plan apply` validation pass: parallel binary probes with worker pool, shell resolution, PATH consistency, manager integrity. Regression detection against a before-snapshot so pre-existing issues don't trip auto-rollback.
   registry/    Tool, Instance, PackageIDs, Pack structs; version comparison; SortByName, ToolMap, InstalledSet helpers
   scancache/   Per-host scan cache: installed/not, paths, versions → ~/.klim/cache/scan-cache.yaml
   score/       0-100 environment score (Tools up to date, Doctor health, Audit clean, Compliance, Managed sources) — shown as "My Score" in the My Profile tab with the full per-category breakdown
@@ -71,7 +71,7 @@ internal/
                  health_tab.go (Health Issues + PATH views), health_fix_modal.go (interactive
                  fix wizard with PATH backups + restore), health_refresh_cmd.go (fast
                  path-only refresh after a PATH fix), plan_view.go (Plan modal opened with
-                 `P` from any tab — preview pending changes, apply through `klim apply`,
+                 `P` from any tab — preview pending changes, apply through `klim plan apply`,
                  capture / restore checkpoints).
 ```
 
@@ -100,7 +100,7 @@ Number keys 1-9 + 0 jump straight to a parent tab. Tab/Shift-Tab and Left/Right 
 | Marketplace| 2 | Tools, Packs, For You, Onboard | Browse catalog, curated packs, recommendations, role-based onboarding. |
 | Project    | 3 | — | Per-project tool checks. |
 | Dashboard  | 4 | — | Aggregate stats, gauges, category/tag/platform breakdowns. (The Environment Score has moved to **My Profile → My Score**.) |
-| **Agents** | **5** | Marketplaces, Plugins, Skills, MCPs, Sessions | Browse and manage the agent ecosystem across Claude Code and GitHub Copilot CLI. `/` scoped search, `l` launch session, `r` refresh, `enter` detail. See `klim agents …` for the matching CLI surface. |
+| **Agents** | **5** | Marketplaces, Plugins, Skills, MCPs, Sessions | Browse and manage the agent ecosystem across Claude Code and GitHub Copilot CLI. `/` scoped search, `l` launch session, `r` refresh, `enter` detail. See `klim agent …` for the matching CLI surface. |
 | My Profile | 6 | Env Profile | Generate / inspect / compare / apply env profile, plus the **My Score** breakdown (overall environment grade with per-category points: Tools up to date, Doctor health, Audit clean, Compliance, Managed sources). |
 | Health     | 7 | Issues, PATH | Environment diagnostics (PATH problems, multi-installs, missing PMs, stale cache) and a visual PATH conflict explorer (Active vs Shadowed, By tool / By PATH dir, `t` to switch view, `u` to uninstall a shadowed copy through its PM). |
 | Security   | 8 | Audit, Compliance | Vulnerability scans and compliance policies. |
@@ -191,7 +191,7 @@ go test -tags=integration -timeout=40m ./internal/marketplace/livecheck/...
 - **`marketplace/` is the single source of truth.** No tool definitions in Go code. Individual YAML files are assembled into `marketplace.yaml` by CI.
 - **Never edit root `marketplace.yaml` directly** — it's auto-generated. Edit files in `marketplace/tools/` and `marketplace/packs/` instead.
 - **Catalog is fetched at runtime**, not embedded. No network + no cache = catalog failure.
-- **Scan cache (`~/.klim/cache/scan-cache.yaml`) is user-controlled.** Written after every successful scan; loaded on startup to skip PATH scan + version resolution. Only installed tools are persisted (a missing entry means "not installed"). Invalidated by TUI `r` key or CLI `--refresh` flag. In the TUI, mutating actions (install/upgrade/remove) trigger `startScan` which rescans and rewrites the cache. In the CLI, `klim import` calls `svc.InvalidateScanCache()` after install attempts so later `klim list` / `klim export` runs rescan automatically.
+- **Scan cache (`~/.klim/cache/scan-cache.yaml`) is user-controlled.** Written after every successful scan; loaded on startup to skip PATH scan + version resolution. Only installed tools are persisted (a missing entry means "not installed"). Invalidated by TUI `r` key or CLI `--refresh` flag. In the TUI, mutating actions (install/upgrade/remove) trigger `startScan` which rescans and rewrites the cache. In the CLI, `klim share import` calls `svc.InvalidateScanCache()` after install attempts so later `klim tool list` / `klim share export` runs rescan automatically.
 - **`config.yaml` is optional.** `config.Load()` returns defaults if missing; writes defaults on first run.
 - **Version comparison stops at first non-numeric segment.** `"2.53.0.windows.1"` → `[2, 53, 0]`.
 - **`VersionsMatch` handles PE padding** (`1400` ≈ `14`), `CompareVersions` does not.

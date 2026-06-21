@@ -411,7 +411,7 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 		}
 
 		m := manifest.Manifest{
-			GeneratedBy: "klim export",
+			GeneratedBy: "klim share export",
 			OS:          runtime.GOOS,
 			Arch:        runtime.GOARCH,
 			Tools:       exported,
@@ -432,7 +432,7 @@ func exportToolsCmd(tools []registry.Tool) tea.Cmd {
 		if _, err := os.Stat(filename); err == nil {
 			filename = filepath.Join(bdir, fmt.Sprintf("klim-export-%s.yaml", time.Now().Format("2006-01-02-150405")))
 		}
-		header := "# klim — Installed Tools Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   klim import my-tools.yaml\n#\n\n"
+		header := "# klim — Installed Tools Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   klim share import my-tools.yaml\n#\n\n"
 
 		if err := fileutil.AtomicWrite(filename, []byte(header+string(data)), 0o644); err != nil {
 			return exportFinishedMsg{err: err}
@@ -755,7 +755,7 @@ func exportFavoritesCmd(tools []registry.Tool, favNames map[string]bool) tea.Cmd
 		if _, err := os.Stat(filename); err == nil {
 			filename = filepath.Join(bdir, fmt.Sprintf("klim-favorites-%s.yaml", time.Now().Format("2006-01-02-150405")))
 		}
-		header := "# klim — Favorites Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   klim import favorites.yaml\n#\n\n"
+		header := "# klim — Favorites Manifest\n# Generated on " + runtime.GOOS + "/" + runtime.GOARCH + "\n#\n# Reinstall on a new machine:\n#   klim share import favorites.yaml\n#\n\n"
 
 		if err := fileutil.AtomicWrite(filename, []byte(header+string(data)), 0o644); err != nil {
 			return exportFinishedMsg{err: err}

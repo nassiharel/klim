@@ -8,7 +8,7 @@ import (
 )
 
 // TestFilterSessions exercises the pure filter pipeline used by
-// `klim agents sessions list` (and reused by stats / files via the
+// `klim agent session list` (and reused by stats / files via the
 // same package-level entry point).
 //
 // Not t.Parallel — filterSessions writes to lastSessionsFilterErr.

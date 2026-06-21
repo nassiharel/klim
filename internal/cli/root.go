@@ -72,95 +72,95 @@ func init() {
 		initColorHelp()
 	}
 
-	// Command groups for organized help output.
+	// Command groups for organized help output. These are display-only
+	// sections shown by the colorized root help (see help.go); the actual
+	// command nesting is wired below.
 	rootCmd.AddGroup(
-		&cobra.Group{ID: "core", Title: "Core Commands:"},
-		&cobra.Group{ID: "project", Title: "Project Commands:"},
-		&cobra.Group{ID: "tools", Title: "Tool Discovery & Management:"},
-		&cobra.Group{ID: "data", Title: "Backup & Sharing:"},
-		&cobra.Group{ID: "health", Title: "Health & Security:"},
-		&cobra.Group{ID: "shell", Title: "Shell Integration:"},
-		&cobra.Group{ID: "config", Title: "Configuration:"},
+		&cobra.Group{ID: "tools", Title: "Tools & Projects:"},
+		&cobra.Group{ID: "state", Title: "State & Environment:"},
+		&cobra.Group{ID: "health", Title: "Security & Diagnostics:"},
+		&cobra.Group{ID: "system", Title: "System:"},
 	)
 
-	// Core commands.
-	listCmd.GroupID = "core"
-	rootCmd.AddCommand(listCmd)
-	versionCmd.GroupID = "core"
-	rootCmd.AddCommand(versionCmd)
-	updateCmd.GroupID = "core"
-	rootCmd.AddCommand(updateCmd)
+	// ----- Tools & Projects -----
 
-	// Project commands.
-	initCmd.GroupID = "project"
-	rootCmd.AddCommand(initCmd)
-	checkCmd.GroupID = "project"
-	rootCmd.AddCommand(checkCmd)
-	generateCmd.GroupID = "project"
-	rootCmd.AddCommand(generateCmd)
+	// tool: discover, install, inspect, and manage developer tools.
+	toolCmd.GroupID = "tools"
+	toolCmd.AddCommand(
+		searchCmd,
+		installCmd,
+		upgradeCmd,
+		removeCmd,
+		infoCmd,
+		whyCmd,
+		graphCmd,
+		listCmd,
+		tryCmd,
+		onboardCmd,
+		watchCmd,
+		catalogCmd,
+	)
+	rootCmd.AddCommand(toolCmd)
 
-	// Tool discovery & management. install/upgrade/remove already set
-	// their own GroupID in the command definition — no override here,
-	// to keep one source of truth per command.
-	searchCmd.GroupID = "tools"
-	rootCmd.AddCommand(searchCmd)
-	onboardCmd.GroupID = "tools"
-	rootCmd.AddCommand(onboardCmd)
-	whyCmd.GroupID = "tools"
-	rootCmd.AddCommand(whyCmd)
-	infoCmd.GroupID = "tools"
-	rootCmd.AddCommand(infoCmd)
-	graphCmd.GroupID = "tools"
-	rootCmd.AddCommand(graphCmd)
-	badgeCmd.GroupID = "data"
-	rootCmd.AddCommand(badgeCmd)
-	rootCmd.AddCommand(installCmd)
-	rootCmd.AddCommand(upgradeCmd)
-	rootCmd.AddCommand(removeCmd)
-	tryCmd.GroupID = "tools"
-	rootCmd.AddCommand(tryCmd)
-	watchCmd.GroupID = "tools"
-	rootCmd.AddCommand(watchCmd)
-	diffCmd.GroupID = "tools"
-	rootCmd.AddCommand(diffCmd)
-	toolsCmd.GroupID = "tools"
-	rootCmd.AddCommand(toolsCmd)
+	// project: the .klim.yaml contract lifecycle.
+	projectCmd.GroupID = "tools"
+	projectCmd.AddCommand(initCmd, checkCmd, generateCmd)
+	rootCmd.AddCommand(projectCmd)
 
-	// Backup & sharing.
-	exportCmd.GroupID = "data"
-	rootCmd.AddCommand(exportCmd)
-	importCmd.GroupID = "data"
-	rootCmd.AddCommand(importCmd)
-	shareCmd.GroupID = "data"
-	rootCmd.AddCommand(shareCmd)
-	envCmd.GroupID = "data"
+	// plan: the declarative preview → apply → rollback workflow.
+	planCmd.GroupID = "tools"
+	planCmd.AddCommand(planShowCmd, applyCmd, diffCmd, rollbackCmd, checkpointCmd)
+	rootCmd.AddCommand(planCmd)
+
+	// agent: the agent-tooling ecosystem (its own subtree, wired in agents.go).
+	agentsCmd.GroupID = "tools"
+	rootCmd.AddCommand(agentsCmd)
+
+	// ----- State & Environment -----
+
+	// env: environment fingerprints and history (trail wired in env.go/root below).
+	envCmd.GroupID = "state"
+	envCmd.AddCommand(trailCmd)
 	rootCmd.AddCommand(envCmd)
-	trailCmd.GroupID = "data"
-	rootCmd.AddCommand(trailCmd)
 
-	// Health & security.
+	// share: move a toolchain between machines and people.
+	shareCmd.GroupID = "state"
+	shareCmd.AddCommand(exportCmd, importCmd, shareLinkCmd, badgeCmd)
+	rootCmd.AddCommand(shareCmd)
+
+	// ----- Security & Diagnostics -----
+
+	// security: audit, vulnerabilities, compliance, score.
 	securityCmd.GroupID = "health"
+	securityCmd.AddCommand(scoreCmd)
 	rootCmd.AddCommand(securityCmd)
-	scoreCmd.GroupID = "health"
-	rootCmd.AddCommand(scoreCmd)
-	// Environment health (PATH, multi-installs, missing PMs, cache).
-	// Uses the doctorCmd value defined in doctor.go — kept under that
-	// name internally because the existing function/variable names are
-	// "doctor" everywhere. The user-facing Cobra Use string is "health".
+
+	// doctor: environment health diagnostics and PATH repair.
+	// Uses the doctorCmd value defined in doctor.go; its `path` and
+	// `path-backups` subcommands self-attach in health_path.go /
+	// health_backups.go.
+	doctorCmd.GroupID = "health"
 	rootCmd.AddCommand(doctorCmd)
 
-	// Shell integration.
-	shellCmd.GroupID = "shell"
-	rootCmd.AddCommand(shellCmd)
-	proxyCmd.GroupID = "shell"
-	rootCmd.AddCommand(proxyCmd)
+	// ----- System -----
 
-	// Configuration.
-	configCmd.GroupID = "config"
+	// shell: shell integration (completion/hook wired in shell.go) + proxy shims.
+	shellCmd.GroupID = "system"
+	shellCmd.AddCommand(proxyCmd)
+	rootCmd.AddCommand(shellCmd)
+
+	// config: klim configuration.
+	configCmd.GroupID = "system"
 	rootCmd.AddCommand(configCmd)
 
-	// Browser UI.
-	browserCmd.GroupID = "core"
+	// Manage the klim binary itself. These stay top-level (no group
+	// wrapper): they're distinct enough from the tool verbs — note
+	// `update` (the klim binary) vs `tool upgrade` (installed tools).
+	updateCmd.GroupID = "system"
+	rootCmd.AddCommand(updateCmd)
+	versionCmd.GroupID = "system"
+	rootCmd.AddCommand(versionCmd)
+	browserCmd.GroupID = "system"
 	rootCmd.AddCommand(browserCmd)
 }
 

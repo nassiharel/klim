@@ -39,7 +39,7 @@ type LookupOptions struct {
 
 // ReadCache loads the most recent persisted Report for sourceKey
 // without ever hitting the network. Returns (nil, false) when no
-// cache exists or it can't be parsed. Used by surfaces (klim info,
+// cache exists or it can't be parsed. Used by surfaces (klim tool info,
 // TUI tool detail, web tool page) that want to show vuln data when
 // it's already there but not pay the latency of a fresh fetch.
 func ReadCache(sourceKey string) (*Report, bool) {

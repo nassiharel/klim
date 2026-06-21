@@ -156,7 +156,7 @@ func (s *Server) downloadSavedBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 // downloadExport returns the manifest as a YAML attachment so the user
-// can `klim import` it elsewhere. It mirrors `klim export` output —
+// can `klim share import` it elsewhere. It mirrors `klim share export` output —
 // the same struct shape, the same field set, and a trailing newline.
 func (s *Server) downloadExport(w http.ResponseWriter, r *http.Request) {
 	tools, _, err := s.loader.LoadInstalled(r.Context())
@@ -177,7 +177,7 @@ func (s *Server) downloadExport(w http.ResponseWriter, r *http.Request) {
 
 // buildManifestTools maps a registry slice through manifest's
 // FromRegistryTool, dropping non-installed entries. Same rule
-// `klim export` uses — backups are about the user's actual current
+// `klim share export` uses — backups are about the user's actual current
 // toolchain, not the catalog.
 func buildManifestTools(tools []registry.Tool) []manifest.Tool {
 	out := make([]manifest.Tool, 0, len(tools))

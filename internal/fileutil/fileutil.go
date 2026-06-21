@@ -53,7 +53,7 @@ import (
 // detected, resolveLinkTarget returns an error *before* any temp
 // file is created and AtomicWrite never attempts the rename.
 //
-// `klim init` deliberately does NOT use AtomicWrite — see
+// `klim project init` deliberately does NOT use AtomicWrite — see
 // internal/teamfile.Write for the rationale (inode/ACL/xattr
 // preservation outweighs crash-atomicity for a single-writer,
 // interactive command).

@@ -496,7 +496,7 @@ func ValidateOp(op string) error {
 }
 
 // invalidLabelReason rejects labels that would corrupt the human-readable
-// `klim trail log` table or `klim trail show` output: tabs and newlines
+// `klim env trail log` table or `klim env trail show` output: tabs and newlines
 // would split columns / inject extra lines, and other control runes can
 // produce malformed terminal output. Returning a non-empty string ⇒
 // reject; empty ⇒ label is structurally OK (further checks may apply).
@@ -550,7 +550,7 @@ type LabelInUseError struct {
 }
 
 func (e *LabelInUseError) Error() string {
-	return fmt.Sprintf("trail: label %q is already used by entry @%d (use `klim trail capture` without --label, or pick a different name)",
+	return fmt.Sprintf("trail: label %q is already used by entry @%d (use `klim env trail capture` without --label, or pick a different name)",
 		e.Label, e.Index)
 }
 
@@ -625,7 +625,7 @@ func Capture(op, label string, tools []registry.Tool) (*Entry, error) {
 	// the entry will actually be appended.
 	summary, err := summarize(r, lf, &snap)
 	if err != nil {
-		return nil, fmt.Errorf("trail: previous entry's snapshot is unreadable, cannot extend trail: %w (resolve the corruption or run `klim trail prune` to recover)", err)
+		return nil, fmt.Errorf("trail: previous entry's snapshot is unreadable, cannot extend trail: %w (resolve the corruption or run `klim env trail prune` to recover)", err)
 	}
 
 	nextIdx := 0
@@ -750,7 +750,7 @@ func Log(opts LogOptions) ([]Entry, error) {
 //
 // The ref resolution and object read happen under a single trail lock so a
 // concurrent `prune` cannot remove the just-resolved entry's object file
-// between Resolve and readObject — otherwise `klim trail show <ref>` could
+// between Resolve and readObject — otherwise `klim env trail show <ref>` could
 // fail with a missing-object error even though the ref was valid when the
 // command started.
 func Show(refSpec string) (*Snapshot, *Entry, error) {

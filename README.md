@@ -66,29 +66,29 @@ see [Releases](https://github.com/nassiharel/klim/releases/latest).
 From zero to a fully set-up machine:
 
 ```bash
-klim onboard                          # pick your role → klim installs the recommended tools
-klim install ripgrep fzf gh           # or install individual tools by name
-klim search kubernetes                # browse 238 tools across every platform
+klim tool onboard                     # pick your role → klim installs the recommended tools
+klim tool install ripgrep fzf gh      # or install individual tools by name
+klim tool search kubernetes           # browse 238 tools across every platform
 klim                                  # interactive TUI for everything else
 ```
 
 ## What it does
 
 ### 📦 One command. Every OS.
-`klim install --pack go-developer` and your whole toolchain — **238 tools, 27 curated packs** — lands on macOS, Linux, and Windows. klim picks the right native manager per platform (brew, winget, scoop, apt, choco, snap, npm), so the same pack ID just works everywhere. No new runtime, no lock-in — just the package managers you already trust.
+`klim tool install --pack go-developer` and your whole toolchain — **238 tools, 27 curated packs** — lands on macOS, Linux, and Windows. klim picks the right native manager per platform (brew, winget, scoop, apt, choco, snap, npm), so the same pack ID just works everywhere. No new runtime, no lock-in — just the package managers you already trust.
 
 ## Grows with you
 
 Once your machine is set up, the same binary keeps it reproducible and healthy:
 
 ### 🧬 Standardize with one YAML
-`klim init` reads your `package.json`, `go.mod`, `Dockerfile`, CI workflows, Helm, Terraform, then writes a `.klim.yaml` that pins the toolchain. `klim check` validates it locally and in CI, and `klim diff teammate.yaml` shows exactly what differs between two machines.
+`klim project init` reads your `package.json`, `go.mod`, `Dockerfile`, CI workflows, Helm, Terraform, then writes a `.klim.yaml` that pins the toolchain. `klim project check` validates it locally and in CI, and `klim plan diff teammate.yaml` shows exactly what differs between two machines.
 
 ### 🤖 Manage your agents
-`klim agents` unifies **Claude Code** and **GitHub Copilot CLI** into one searchable inventory of plugins, skills, MCP servers, marketplaces, and live sessions.
+`klim agent` unifies **Claude Code** and **GitHub Copilot CLI** into one searchable inventory of plugins, skills, MCP servers, marketplaces, and live sessions.
 
 ### 🩺 Keep it healthy
-`klim plan` / `klim apply` / `klim rollback` give Terraform-style, checkpointed upgrades; `klim health` and `klim security audit` catch PATH conflicts and known vulnerabilities; `klim score` grades your environment.
+`klim plan show` / `klim plan apply` / `klim plan rollback` give Terraform-style, checkpointed upgrades; `klim doctor` and `klim security audit` catch PATH conflicts and known vulnerabilities; `klim security score` grades your environment.
 
 ## How is klim different?
 

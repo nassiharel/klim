@@ -17,9 +17,9 @@ import (
 // and audit.Analyze for the supplied tools, then assembles a
 // score.Result. Returns the result plus the audit warning / info
 // counts callers may want to surface separately (e.g. the audit
-// badge in klim badge).
+// badge in klim share badge).
 //
-// Extracted so klim score and klim badge cannot diverge on what
+// Extracted so klim security score and klim share badge cannot diverge on what
 // counts as a "canonical" score for a given scan — they share this
 // single assembly path. Compliance policy load errors are written
 // to stderr exactly once, here.

@@ -233,7 +233,7 @@ func Check(policy *Policy, tools []registry.Tool, vulnSeverityByTool map[string]
 		// threshold AND the caller supplied a severity map (typically
 		// read from the local vuln cache). If the cache hasn't been
 		// populated, this gate is silently skipped — that's a feature:
-		// `klim install` shouldn't refuse to run because the user
+		// `klim tool install` shouldn't refuse to run because the user
 		// hasn't run `klim security vuln` yet. Operators who want to
 		// require a fresh scan can run it in CI.
 		if thresholdRank > 0 && len(vulnSeverityByTool) > 0 {

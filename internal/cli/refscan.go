@@ -32,8 +32,8 @@ func samePath(a, b string) bool {
 
 // Reference describes a place where a tool is mentioned: the local
 // .klim.yaml, a registered project's .klim.yaml, a marketplace pack, or
-// a custom pack. It's the shared shape used by both `klim why` and
-// `klim info` so the two commands cannot drift out of sync.
+// a custom pack. It's the shared shape used by both `klim tool why` and
+// `klim tool info` so the two commands cannot drift out of sync.
 type Reference struct {
 	Kind        string `yaml:"kind"                            json:"kind"`
 	Name        string `yaml:"name,omitempty"                  json:"name,omitempty"`
@@ -44,7 +44,7 @@ type Reference struct {
 }
 
 // FormatReference renders a Reference as a single human-readable line
-// for the text output of `klim info` and `klim why`. Both surfaces
+// for the text output of `klim tool info` and `klim tool why`. Both surfaces
 // consume this directly so the surrounding wording — and any new
 // Reference.Kind that gets added — stays in lockstep across the two
 // commands. Required + optional refs both preserve their version
@@ -90,7 +90,7 @@ func roleWithConstraint(role, constraint string) string {
 }
 
 // PackageEntry is one populated package-manager ID for a tool. Shared
-// between `klim why` (AvailableVia) and `klim info` (Packages) so the
+// between `klim tool why` (AvailableVia) and `klim tool info` (Packages) so the
 // list of supported sources cannot drift between the two commands the
 // next time a package manager is added or renamed.
 type PackageEntry struct {
@@ -99,8 +99,8 @@ type PackageEntry struct {
 }
 
 // CollectPackageEntries returns the populated PackageEntries for pkgs in
-// canonical display order. Empty IDs are skipped. Both `klim why` and
-// `klim info` consume this so they list the same sources every time.
+// canonical display order. Empty IDs are skipped. Both `klim tool why` and
+// `klim tool info` consume this so they list the same sources every time.
 func CollectPackageEntries(pkgs registry.PackageIDs) []PackageEntry {
 	all := []PackageEntry{
 		{Source: "winget", ID: pkgs.Winget},

@@ -171,7 +171,7 @@ func TestForEachProvider_HonoursProviderFlag(t *testing.T) {
 }
 
 // TestAgentsResume_BadArgsReturnUsageError pins the convention that
-// argument/flag validation failures from `klim agents sessions resume`
+// argument/flag validation failures from `klim agent session resume`
 // surface as *UsageError so Run() maps them to exit code 2 (per
 // CLI-CONVENTIONS.md). Prior to this they were returned as plain
 // errors.New(...) which exited with code 1 — indistinguishable from

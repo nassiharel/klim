@@ -19,7 +19,7 @@ func TestShowFirstRunWelcome(t *testing.T) {
 		t.Fatalf("first call returned false, want true")
 	}
 	out := buf.String()
-	for _, want := range []string{"Welcome to klim", "klim onboard", "klim --help"} {
+	for _, want := range []string{"Welcome to klim", "klim tool onboard", "klim --help"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("welcome output missing %q\n---\n%s", want, out)
 		}

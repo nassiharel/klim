@@ -41,14 +41,14 @@ var proxySetupCmd = &cobra.Command{
 var proxyAddCmd = &cobra.Command{
 	Use:   "add <tool> [tool...]",
 	Short: "Create a shim for one or more tools",
-	Args:  requireMinArgs(1, "klim proxy add <tool> [tool...]"),
+	Args:  requireMinArgs(1, "klim shell proxy add <tool> [tool...]"),
 	RunE:  runProxyAdd,
 }
 
 var proxyRemoveCmd = &cobra.Command{
 	Use:   "remove <tool> [tool...]",
 	Short: "Remove a shim for one or more tools",
-	Args:  requireMinArgs(1, "klim proxy remove <tool> [tool...]"),
+	Args:  requireMinArgs(1, "klim shell proxy remove <tool> [tool...]"),
 	RunE:  runProxyRemove,
 }
 
@@ -62,7 +62,7 @@ var proxyRunCmd = &cobra.Command{
 	Use:    "run <tool> [-- args...]",
 	Short:  "Find or install a tool, then execute it",
 	Hidden: true,
-	Args:   requireMinArgs(1, "klim proxy run <tool> [-- args...]"),
+	Args:   requireMinArgs(1, "klim shell proxy run <tool> [-- args...]"),
 	RunE:   runProxyRun,
 }
 
@@ -107,7 +107,7 @@ func runProxySetup(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "Then create shims with:\n")
-	fmt.Fprintf(os.Stderr, "  klim proxy add kubectl terraform helm\n")
+	fmt.Fprintf(os.Stderr, "  klim shell proxy add kubectl terraform helm\n")
 	return nil
 }
 
@@ -221,7 +221,7 @@ func runProxyList(cmd *cobra.Command, args []string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Fprintln(os.Stderr, "No shims directory. Run 'klim proxy setup' first.")
+			fmt.Fprintln(os.Stderr, "No shims directory. Run 'klim shell proxy setup' first.")
 			return nil
 		}
 		return err
@@ -240,7 +240,7 @@ func runProxyList(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(shims) == 0 {
-		fmt.Fprintln(os.Stderr, "No active shims. Create one with 'klim proxy add <tool>'.")
+		fmt.Fprintln(os.Stderr, "No active shims. Create one with 'klim shell proxy add <tool>'.")
 		return nil
 	}
 
@@ -429,9 +429,9 @@ func shimFilePath(dir, name string) string {
 // Tool names are validated before reaching here via isValidShimName.
 func generateShim(binaryName, toolName string) string {
 	if runtime.GOOS == "windows" {
-		return fmt.Sprintf("@echo off\r\nclim proxy run %q -- %%*\r\n", toolName)
+		return fmt.Sprintf("@echo off\r\nklim shell proxy run %q -- %%*\r\n", toolName)
 	}
-	return fmt.Sprintf("#!/bin/sh\nexec klim proxy run %q -- \"$@\"\n", toolName)
+	return fmt.Sprintf("#!/bin/sh\nexec klim shell proxy run %q -- \"$@\"\n", toolName)
 }
 
 // isValidShimName checks that a name is a plain base name without path

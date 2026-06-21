@@ -19,13 +19,12 @@ For each target:
   · not installed → skipped (listed under "Not installed")
   · "klim" itself → refused (use the OS uninstaller for klim)
 
-Source precedence is the same as 'klim install'.
+Source precedence is the same as 'klim tool install'.
 
 Examples:
-  klim remove jq
-  klim remove --pack go-developer --yes
-  klim remove jq fzf --source brew --dry-run`,
-	GroupID: "tools",
+  klim tool remove jq
+  klim tool remove --pack go-developer --yes
+  klim tool remove jq fzf --source brew --dry-run`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAction(cmd, args, ActionRemove, removeFlags, removeOutputFmt)
 	},

@@ -74,7 +74,7 @@ func (g *Graph) Render(width, height int, opts ...RenderOpts) string {
 	canvas := newCanvas(width, height, o.Unstyled)
 
 	// Build an ID->Node lookup once per Render so edge resolution
-	// is O(1) per edge — critical for klim graph --tui which
+	// is O(1) per edge — critical for klim tool graph --tui which
 	// re-renders ~10fps over potentially dense edge sets.
 	byID := make(map[string]Node, len(g.Nodes))
 	for _, n := range g.Nodes {

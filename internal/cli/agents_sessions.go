@@ -24,7 +24,7 @@ import (
 // ----- sessions list -----
 
 // agentsSessionsListFlags collects every flag accepted by the
-// enriched `klim agents sessions list` command. Kept in one struct
+// enriched `klim agent session list` command. Kept in one struct
 // so the runner doesn't read from a wall of package-level globals
 // (the rest of this file follows the same pattern: tightly-scoped
 // state, dispatched explicitly into each runner).
@@ -62,12 +62,12 @@ Output is grouped by project (with a section header per group); use
 --group-by=none to flatten or --group-by=provider to group by provider.
 
 Examples:
-  klim agents sessions list
-  klim agents sessions list --status waiting
-  klim agents sessions list --since 2h --sort turns
-  klim agents sessions list --project klim --starred
-  klim agents sessions list --output json
-  klim agents sessions list --group-by provider`,
+  klim agent session list
+  klim agent session list --status waiting
+  klim agent session list --since 2h --sort turns
+  klim agent session list --project klim --starred
+  klim agent session list --output json
+  klim agent session list --group-by provider`,
 		RunE: runAgentsSessionsList,
 	}
 	cmd.Flags().StringVar(&agentsSessionsListFlags.status, "status", "", "filter by live state: working|thinking|waiting|idle|active|completed|stopped")
@@ -86,7 +86,7 @@ Examples:
 	return cmd
 }
 
-// runAgentsSessionsDefault handles the bare `klim agents sessions` form.
+// runAgentsSessionsDefault handles the bare `klim agent session` form.
 // When stdout is a TTY we launch the interactive dashboard; otherwise
 // we fall through to the one-shot list so pipes / redirects continue
 // working unchanged.
@@ -97,7 +97,7 @@ func runAgentsSessionsDefault(cmd *cobra.Command, args []string) error {
 	return runAgentsSessionsList(cmd, args)
 }
 
-// runAgentsSessionsList implements `klim agents sessions list`.
+// runAgentsSessionsList implements `klim agent session list`.
 //
 // The runner is intentionally linear: load → filter → sort → render.
 // Each stage operates on the slice it receives so the test harness
@@ -417,9 +417,9 @@ project, branch, live state, tool histogram, MCP servers, last N
 conversation turns from the transcript.
 
 Examples:
-  klim agents sessions view claude:3b4dc369-3956-43b0-a52b-cd066984d618
-  klim agents sessions view --turns 25 copilot:abcd
-  klim agents sessions view --output json claude:3b4dc369-…`,
+  klim agent session view claude:3b4dc369-3956-43b0-a52b-cd066984d618
+  klim agent session view --turns 25 copilot:abcd
+  klim agent session view --output json claude:3b4dc369-…`,
 		Args: cobra.ExactArgs(1),
 		RunE: runAgentsSessionsView,
 	}
@@ -682,8 +682,8 @@ most recent activity. Useful for keeping an eye on a long-running
 agent from another terminal.
 
 Examples:
-  klim agents sessions tail claude:3b4dc369-…
-  klim agents sessions tail --interval 5s copilot:abcd`,
+  klim agent session tail claude:3b4dc369-…
+  klim agent session tail --interval 5s copilot:abcd`,
 		Args: cobra.ExactArgs(1),
 		RunE: runAgentsSessionsTail,
 	}
@@ -771,9 +771,9 @@ session inventory. Use --since to scope the aggregation to a recent
 window.
 
 Examples:
-  klim agents sessions stats
-  klim agents sessions stats --since 7d
-  klim agents sessions stats --output json`,
+  klim agent session stats
+  klim agent session stats --since 7d
+  klim agent session stats --output json`,
 		RunE: runAgentsSessionsStats,
 	}
 	cmd.Flags().StringVar(&agentsSessionsStatsSince, "since", "", "only count sessions modified after this (e.g. 24h, 7d)")
@@ -969,9 +969,9 @@ transcript). Use --since to scope to a recent window and --top to
 control the row count.
 
 Examples:
-  klim agents sessions files
-  klim agents sessions files --top 5
-  klim agents sessions files --since 24h --output json`,
+  klim agent session files
+  klim agent session files --top 5
+  klim agent session files --since 24h --output json`,
 		RunE: runAgentsSessionsFiles,
 	}
 	cmd.Flags().IntVar(&agentsSessionsFilesTop, "top", 20, "cap output at N files (0 = all)")

@@ -81,7 +81,7 @@ type ComplianceConfig struct {
 }
 
 // DefaultsConfig holds user-preferred defaults consumed by action commands
-// (klim install / upgrade / remove). The values here are overridden by the
+// (klim tool install / upgrade / remove). The values here are overridden by the
 // per-invocation `--source` flag.
 type DefaultsConfig struct {
 	// PreferredSource is the package manager klim should prefer when a tool

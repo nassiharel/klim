@@ -20,7 +20,7 @@ import (
 	"github.com/nassiharel/klim/internal/agents/providers/copilotcli"
 )
 
-// newAgentsService builds the AgentService used by every `klim agents`
+// newAgentsService builds the AgentService used by every `klim agent`
 // subcommand. Kept as a function so future tests can swap in fakes.
 var newAgentsService = func() *agents.Service {
 	svc := agents.NewService(4,
@@ -69,12 +69,11 @@ func (a catalogAdapter) FetchAll(ctx context.Context) []agents.RemoteCatalogResu
 	return out
 }
 
-// agentsCmd is the top-level umbrella. With no args it runs `agents list`.
+// agentsCmd is the top-level umbrella. With no args it runs `agent list`.
 var agentsCmd = &cobra.Command{
-	Use:     "agents",
-	Short:   "Browse and manage agent plugins, skills, MCPs, and sessions",
-	GroupID: "tools",
-	Long: `agents discovers and manages the agent-tooling ecosystem across
+	Use:   "agent",
+	Short: "Browse and manage agent plugins, skills, MCPs, and sessions",
+	Long: `agent discovers and manages the agent-tooling ecosystem across
 multiple agent CLIs (Claude Code, GitHub Copilot CLI, and more).
 
 It surfaces five entity types — marketplaces, plugins, skills, MCPs, and
@@ -82,11 +81,11 @@ sessions — and lets you search, browse, install, launch, and remove them
 through a single set of subcommands.
 
 Examples:
-  klim agents                       # list everything detected on this host
-  klim agents search react          # global fuzzy search across all entities
-  klim agents plugins list
-  klim agents launch --provider claude-code --skill summarize
-  klim agents launch --print-only --session claude:home%2Fuser%2Frepo`,
+  klim agent                        # list everything detected on this host
+  klim agent search react           # global fuzzy search across all entities
+  klim agent plugin list
+  klim agent launch --provider claude-code --skill summarize
+  klim agent launch --print-only --session claude:home%2Fuser%2Frepo`,
 	RunE: func(cmd *cobra.Command, args []string) error { return runAgentsList(cmd, args, "") },
 }
 
@@ -121,40 +120,39 @@ var agentsSearchCmd = &cobra.Command{
 
 // ---------------- marketplaces / plugins / skills / mcps / sessions ----------------
 
-var agentsMarketplacesCmd = &cobra.Command{Use: "marketplaces", Aliases: []string{"market"}, Short: "Manage agent marketplaces"}
-var agentsPluginsCmd = &cobra.Command{Use: "plugins", Aliases: []string{"plugin"}, Short: "Manage agent plugins"}
-var agentsSkillsCmd = &cobra.Command{Use: "skills", Aliases: []string{"skill"}, Short: "Browse agent skills"}
-var agentsMCPsCmd = &cobra.Command{Use: "mcps", Aliases: []string{"mcp"}, Short: "Manage MCP servers"}
+var agentsMarketplacesCmd = &cobra.Command{Use: "marketplace", Aliases: []string{"market"}, Short: "Manage agent marketplaces"}
+var agentsPluginsCmd = &cobra.Command{Use: "plugin", Short: "Manage agent plugins"}
+var agentsSkillsCmd = &cobra.Command{Use: "skill", Short: "Browse agent skills"}
+var agentsMCPsCmd = &cobra.Command{Use: "mcp", Short: "Manage MCP servers"}
 
-// agentsSessionsCmd is the umbrella for `klim agents sessions …`.
+// agentsSessionsCmd is the umbrella for `klim agent session …`.
 // With no args it launches the focused sessions dashboard (Bubbletea
 // TUI) when stdout is a TTY, falling back to a one-shot list when the
-// output is piped — this keeps `klim agents sessions | head` and other
+// output is piped — this keeps `klim agent session | head` and other
 // scripting use cases working unchanged.
 //
 // Explicit subcommands (resume, view, tail, stats, files, star,
 // unstar, group, delete) handle the rest of the dashboard surface.
 var agentsSessionsCmd = &cobra.Command{
-	Use:     "sessions",
-	Aliases: []string{"session"},
-	Short:   "List, resume, view, and manage agent sessions",
+	Use:   "session",
+	Short: "List, resume, view, and manage agent sessions",
 	Long: `sessions inspects Claude Code and Copilot CLI session
 transcripts and presents them as a glanceable dashboard.
 
-Bare ` + "`klim agents sessions`" + ` opens a TUI dashboard when stdout
+Bare ` + "`klim agent session`" + ` opens a TUI dashboard when stdout
 is a TTY; when piped (or when stdout is not a terminal) it runs the
-equivalent of ` + "`klim agents sessions list`" + ` so existing
+equivalent of ` + "`klim agent session list`" + ` so existing
 pipelines keep working.
 
 Examples:
-  klim agents sessions
-  klim agents sessions list --status waiting --since 2h
-  klim agents sessions view claude:3b4dc369-…
-  klim agents sessions tail claude:3b4dc369-…
-  klim agents sessions stats --output json
-  klim agents sessions files --top 10
-  klim agents sessions star claude:3b4dc369-…
-  klim agents sessions group set klim=Klim`,
+  klim agent session
+  klim agent session list --status waiting --since 2h
+  klim agent session view claude:3b4dc369-…
+  klim agent session tail claude:3b4dc369-…
+  klim agent session stats --output json
+  klim agent session files --top 10
+  klim agent session star claude:3b4dc369-…
+  klim agent session group set klim=Klim`,
 	RunE: runAgentsSessionsDefault,
 }
 
@@ -209,15 +207,15 @@ func init() {
 	agentsListCmd.Flags().StringVar(&agentsListType, "type", "", "filter by entity type: marketplace|plugin|skill|mcp|session")
 	// PR #77 review #3: --provider is declared as a persistent flag on
 	// the parent (agentsCmd) below; we no longer redeclare it here so
-	// passing `klim agents list --provider X` and `klim agents --provider X list`
+	// passing `klim agent list --provider X` and `klim agent --provider X list`
 	// hit the same flag binding instead of fighting over the variable.
 	agentsListCmd.Flags().BoolVar(&agentsListInstalled, "installed", false, "show only installed entities (plugins/MCPs)")
 	agentsListCmd.Flags().BoolVar(&agentsListAvailable, "available", false, "show only available (non-installed) catalog entries")
-	agentsListCmd.Flags().StringVar(&agentsListSearch, "search", "", "filter by fuzzy match (same as `klim agents search …`)")
+	agentsListCmd.Flags().StringVar(&agentsListSearch, "search", "", "filter by fuzzy match (same as `klim agent search …`)")
 	agentsListCmd.Flags().BoolVar(&agentsListRefresh, "refresh", false, "ignore the cache and rescan")
 	agentsListFormatGetter = addOutputFlag(agentsListCmd, OutputText, OutputJSON, OutputYAML)
 
-	// inherit list flags on the parent so `klim agents --type plugin` works.
+	// inherit list flags on the parent so `klim agent --type plugin` works.
 	agentsCmd.Flags().AddFlagSet(agentsListCmd.Flags())
 
 	// search
@@ -260,9 +258,9 @@ func init() {
 		Long: `Resume a session by id, by fuzzy match on title/project, or by passing --last.
 
 Examples:
-  klim agents sessions resume claude:foo-bar
-  klim agents sessions resume "fix cron"   # fuzzy match on title/project
-  klim agents sessions resume --last        # most recently modified session`,
+  klim agent session resume claude:foo-bar
+  klim agent session resume "fix cron"   # fuzzy match on title/project
+  klim agent session resume --last        # most recently modified session`,
 		// usageArgs ensures `accepts at most 1 arg(s)` (cobra's
 		// MaximumNArgs message) surfaces as *UsageError → exit 2,
 		// matching the >1-args contract in CLI-CONVENTIONS.md.
@@ -290,13 +288,11 @@ Examples:
 	agentsCmd.AddCommand(agentsLaunchCmd)
 	agentsCmd.AddCommand(agentsRefreshCmd)
 	agentsCmd.AddCommand(agentsDoctorCmd)
-
-	rootCmd.AddCommand(agentsCmd)
 }
 
 // ---------------- list runners ----------------
 
-// runAgentsList resolves the snapshot for `klim agents list` and the
+// runAgentsList resolves the snapshot for `klim agent list` and the
 // per-entity convenience subcommands. `entityFilter`, when non-empty,
 // overrides the `--type` flag — this lets per-entity wrappers narrow
 // the result set without mutating the package-level flag variable
@@ -891,7 +887,7 @@ func parsePluginRef(arg string) agents.PluginRef {
 // forEachProvider walks providers (filtered by --provider when set)
 // and stops at the first non-NotSupported success. The PR #77 review
 // (#4) called this out as ambiguous: previously this walked every
-// registered provider in order, so `klim agents plugins install foo`
+// registered provider in order, so `klim agent plugin install foo`
 // would hit whichever provider happened to be registered first.
 // We now honor the persistent --provider flag: when set, only that
 // provider is considered; otherwise we fall back to the historical
