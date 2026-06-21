@@ -24,6 +24,11 @@ func showFirstRunWelcome(w io.Writer) bool {
 	}
 	if _, statErr := os.Stat(marker); statErr == nil {
 		return false // already welcomed
+	} else if !os.IsNotExist(statErr) {
+		// Some other Stat error (permission denied, I/O error). Fail open:
+		// don't show the welcome and don't risk overwriting an existing
+		// marker we simply couldn't read.
+		return false
 	}
 	// Best-effort marker write; if it fails, don't trap the user in a loop —
 	// just launch the TUI this time.
