@@ -66,7 +66,7 @@ see [Releases](https://github.com/nassiharel/klim/releases/latest).
 From zero to a fully set-up machine:
 
 ```bash
-klim onboard                          # pick your role → klim installs the pack
+klim onboard                          # pick your role → klim installs the recommended tools
 klim install ripgrep fzf gh           # or install individual tools by name
 klim search kubernetes                # browse 238 tools across every platform
 klim                                  # interactive TUI for everything else

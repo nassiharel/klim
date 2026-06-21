@@ -53,7 +53,7 @@ func showFirstRunWelcome(w io.Writer) bool {
 
 	_, _ = fmt.Fprintf(w, "\n  %s — set up any dev machine with one command.\n\n", b("Welcome to klim"))
 	_, _ = fmt.Fprintln(w, "  Start here:")
-	_, _ = fmt.Fprintf(w, "    %s   %s\n", teal("klim onboard"), gray("pick your role → klim installs the pack"))
+	_, _ = fmt.Fprintf(w, "    %s   %s\n", teal("klim onboard"), gray("pick your role → klim installs the recommended tools"))
 	_, _ = fmt.Fprintf(w, "    %s   %s\n", teal("klim install ripgrep fzf gh"), gray("install tools by name"))
 	_, _ = fmt.Fprintf(w, "    %s   %s\n", teal("klim search kubernetes"), gray("browse the marketplace"))
 	_, _ = fmt.Fprintf(w, "    %s   %s\n", teal("klim --help"), gray("every command"))
