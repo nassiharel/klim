@@ -25,8 +25,9 @@
 https://github.com/user-attachments/assets/54969cc1-47b7-47b7-af35-06d0649da466
 
 <p align="center">
-  <em>Single command. Every machine. Every package manager.<br>
-  klim is a cross-platform layer over the native package managers you already trust
+  <em>One command. Every machine. Every package manager.<br>
+  klim installs a whole toolchain on macOS, Linux, or Windows — picking the right native
+  package manager for you, so the same command just works everywhere.
   </em>
 </p>
 
@@ -62,29 +63,48 @@ see [Releases](https://github.com/nassiharel/klim/releases/latest).
 
 ## Quick start
 
-Five commands from zero to a reproducible environment:
+From zero to a fully set-up machine:
 
 ```bash
-klim                                  # interactive TUI
-klim check --output json              # validate this project's .klim.yaml
-klim install --pack go-developer      # install a curated bundle
-klim diff teammate.yaml               # compare environments
+klim onboard                          # pick your role → klim installs the recommended tools
+klim install ripgrep fzf gh           # or install individual tools by name
+klim search kubernetes                # browse 238 tools across every platform
+klim                                  # interactive TUI for everything else
 ```
 
 ## What it does
 
 ### 📦 One command. Every OS.
-`klim install --pack go-developer` and your whole toolchain — **162 tools, 24 curated packs** — lands on macOS, Linux, and Windows. klim picks the right native manager per platform, so the same pack ID just works everywhere.
+`klim install --pack go-developer` and your whole toolchain — **238 tools, 27 curated packs** — lands on macOS, Linux, and Windows. klim picks the right native manager per platform (brew, winget, scoop, apt, choco, snap, npm), so the same pack ID just works everywhere. No new runtime, no lock-in — just the package managers you already trust.
+
+## Grows with you
+
+Once your machine is set up, the same binary keeps it reproducible and healthy:
 
 ### 🧬 Standardize with one YAML
-`klim init` reads your `package.json`, `go.mod`, `Dockerfile`, CI workflows, Helm, Terraform, then writes a `.klim.yaml` that pins the toolchain. `klim check` validates it locally and in CI.
+`klim init` reads your `package.json`, `go.mod`, `Dockerfile`, CI workflows, Helm, Terraform, then writes a `.klim.yaml` that pins the toolchain. `klim check` validates it locally and in CI, and `klim diff teammate.yaml` shows exactly what differs between two machines.
 
 ### 🤖 Manage your agents
 `klim agents` unifies **Claude Code** and **GitHub Copilot CLI** into one searchable inventory of plugins, skills, MCP servers, marketplaces, and live sessions.
 
+### 🩺 Keep it healthy
+`klim plan` / `klim apply` / `klim rollback` give Terraform-style, checkpointed upgrades; `klim health` and `klim security audit` catch PATH conflicts and known vulnerabilities; `klim score` grades your environment.
+
+## How is klim different?
+
+|  | klim | brew / apt / winget | asdf / mise | devcontainers |
+|---|---|---|---|---|
+| Cross-platform (mac/Linux/Win) | ✅ one command | ❌ per-OS | ⚠️ runtimes only | ⚠️ needs Docker |
+| Covers *all* tools, not just languages | ✅ | ✅ | ❌ | ✅ |
+| Uses your native package managers | ✅ delegates | — | ❌ own shims | ❌ |
+| New runtime / lock-in | ✅ none | none | ⚠️ shims | ⚠️ container |
+| Reproducible `.klim.yaml` contract | ✅ | ❌ | ⚠️ `.tool-versions` | ✅ |
+
+klim doesn't replace your package manager — it's the cross-platform layer on top of it.
+
 ## Learn more
 
-[Docs](https://nassiharel.github.io/klim-web/docs) · [Website](https://nassiharel.github.io/klim-web) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Releases](https://github.com/nassiharel/klim/releases)
+[Docs](https://nassiharel.github.io/klim-web/docs) · [Website](https://nassiharel.github.io/klim-web) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Releases](https://github.com/nassiharel/klim/releases)
 
 ---
 

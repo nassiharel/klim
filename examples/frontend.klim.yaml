@@ -1,0 +1,13 @@
+# Node / web frontend toolchain.
+# Usage: copy to your project root as .klim.yaml, then run `klim check`.
+name: frontend
+tools:
+    - name: node
+      version: ">=20"
+    - name: npm
+    - name: git
+    - name: gh
+optional:
+    - name: pnpm
+    - name: bun
+    - name: deno

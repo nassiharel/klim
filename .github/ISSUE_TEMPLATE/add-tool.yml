@@ -1,0 +1,87 @@
+name: Add a tool
+description: Request a new tool for the klim marketplace (or get help opening the PR)
+title: "tool: add <name>"
+labels: [marketplace, good first issue]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for growing the klim marketplace! Fill in the fields below and a
+        maintainer will turn it into a PR — or, even faster, open the PR yourself by
+        copying `marketplace/tool-template.yaml` to `marketplace/tools/<name>.yaml`.
+        See [marketplace/README.md](https://github.com/nassiharel/klim/blob/main/marketplace/README.md).
+
+  - type: input
+    id: name
+    attributes:
+      label: Tool name (id)
+      description: Lowercase, used as the filename and unique id.
+      placeholder: ripgrep
+    validations:
+      required: true
+
+  - type: input
+    id: display_name
+    attributes:
+      label: Display name
+      placeholder: ripgrep
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - VCS
+        - Cloud
+        - Containers
+        - IaC
+        - Language
+        - PkgMgr
+        - Editor
+        - CLI
+        - Media
+        - Database
+        - Network
+        - Shell
+        - AI
+        - Security
+        - Testing
+        - Observability
+    validations:
+      required: true
+
+  - type: input
+    id: binary_names
+    attributes:
+      label: Binary name(s)
+      description: Comma-separated executables this tool puts on PATH.
+      placeholder: rg
+    validations:
+      required: true
+
+  - type: textarea
+    id: packages
+    attributes:
+      label: Package IDs per manager
+      description: Provide whichever apply — leave out managers that don't ship it.
+      value: |
+        brew:
+        winget:
+        scoop:
+        choco:
+        apt:
+        snap:
+        npm:
+    validations:
+      required: true
+
+  - type: input
+    id: github
+    attributes:
+      label: GitHub repo (optional)
+      description: owner/repo — enables stars/description enrichment in the catalog.
+      placeholder: BurntSushi/ripgrep
+    validations:
+      required: false

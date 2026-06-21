@@ -1,0 +1,12 @@
+# Go backend / CLI development toolchain.
+# Usage: copy to your project root as .klim.yaml, then run `klim check`.
+name: go-developer
+tools:
+    - name: go
+      version: ">=1.25"
+    - name: git
+    - name: gh
+    - name: golangci-lint
+optional:
+    - name: dlv          # debugger
+    - name: docker

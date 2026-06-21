@@ -101,6 +101,12 @@ func ShimsDir() (string, error) {
 	return Join("shims")
 }
 
+// FirstRunMarker returns the path to the marker file written after klim's
+// first interactive launch. Its presence means the welcome has been shown.
+func FirstRunMarker() (string, error) {
+	return Join(".welcomed")
+}
+
 // CompliancePolicy returns the path to the compliance policy file.
 func CompliancePolicy() (string, error) {
 	return Join("compliance", "policy.yaml")

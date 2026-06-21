@@ -1,0 +1,35 @@
+# Template for a new klim tool.
+#
+# To add a tool: copy this file to `marketplace/tools/<name>.yaml`, fill in the
+# fields below, then run `make marketplace-validate`. Open a PR — CI validates on
+# every push and publishes the catalog on merge to main.
+#
+# Required: name, display_name, category, binary_names (>= 1).
+# Everything else is optional but recommended.
+
+name: mytool                       # unique id, lowercase, matches the filename
+display_name: My Tool              # human-friendly name shown in the UI
+category: CLI                      # one of: VCS, Cloud, Containers, IaC, Language,
+                                   #   PkgMgr, Editor, CLI, Media, Database, Network,
+                                   #   Shell, AI, Security, Testing, Observability
+tags:                             # free-form search keywords
+    - example
+    - cli
+binary_names:                     # executables this tool puts on PATH (>= 1)
+    - mytool
+
+# Package IDs per manager. Provide as many as apply — klim picks the right one
+# per platform. Omit managers that don't ship this tool.
+packages:
+    brew: mytool                   # macOS / Linux
+    winget: Publisher.MyTool       # Windows
+    scoop: mytool                  # Windows (Scoop)
+    choco: mytool                  # Windows (Chocolatey)
+    apt: mytool                    # Debian / Ubuntu
+    snap: mytool                   # Linux (Snap)
+    npm: mytool                    # cross-platform (npm global)
+
+# Optional: when set, the marketplace build fetches stars/description/homepage/
+# license/topics from the GitHub REST API and emits them as `github_info:`.
+# NEVER set `github_info` by hand — it is build-time only.
+github: owner/repo

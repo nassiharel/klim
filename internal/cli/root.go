@@ -33,6 +33,13 @@ for non-interactive operation.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := cliCtxFrom(cmd.Context())
 		if term.IsTerminal(int(os.Stdout.Fd())) {
+			// On the very first interactive launch, show a short welcome that
+			// points at the install win instead of dropping a brand-new user
+			// straight into the multi-tab TUI. Printed before the TUI takes the
+			// alternate screen, then we exit so the hint stays on screen.
+			if showFirstRunWelcome(cmd.OutOrStdout()) {
+				return nil
+			}
 			return tui.RunWithConfig(c.Cfg, c.ConfigWarnings)
 		}
 		return runList(cmd, args)
