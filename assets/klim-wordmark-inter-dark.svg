@@ -5,8 +5,8 @@
   <path d="M48 28 L82 60 L48 92" fill="none" stroke="#00c8e6" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
   <text x="100" y="98" font-family="Inter, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
         font-size="96" font-weight="700" letter-spacing="-4" fill="#e6edf3">l</text>
-  <rect x="148" y="50" width="14" height="48" rx="3" fill="#e6edf3"/>
-  <circle cx="155" cy="34" r="9" fill="#00c8e6"/>
-  <text x="170" y="98" font-family="Inter, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
+  <rect x="133" y="50" width="14" height="48" rx="3" fill="#e6edf3"/>
+  <circle cx="140" cy="34" r="9" fill="#00c8e6"/>
+  <text x="156" y="98" font-family="Inter, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif"
         font-size="96" font-weight="700" letter-spacing="-4" fill="#e6edf3">m</text>
 </svg>
