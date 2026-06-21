@@ -51,12 +51,12 @@ func showFirstRunWelcome(w io.Writer) bool {
 		return s
 	}
 
-	fmt.Fprintf(w, "\n  %s — set up any dev machine with one command.\n\n", b("Welcome to klim"))
-	fmt.Fprintln(w, "  Start here:")
-	fmt.Fprintf(w, "    %s   %s\n", teal("klim onboard"), gray("pick your role → klim installs the pack"))
-	fmt.Fprintf(w, "    %s   %s\n", teal("klim install ripgrep fzf gh"), gray("install tools by name"))
-	fmt.Fprintf(w, "    %s   %s\n", teal("klim search kubernetes"), gray("browse the marketplace"))
-	fmt.Fprintf(w, "    %s   %s\n", teal("klim --help"), gray("every command"))
-	fmt.Fprintf(w, "\n  Run %s again to open the interactive TUI.\n\n", teal("klim"))
+	_, _ = fmt.Fprintf(w, "\n  %s — set up any dev machine with one command.\n\n", b("Welcome to klim"))
+	_, _ = fmt.Fprintln(w, "  Start here:")
+	_, _ = fmt.Fprintf(w, "    %s   %s\n", teal("klim onboard"), gray("pick your role → klim installs the pack"))
+	_, _ = fmt.Fprintf(w, "    %s   %s\n", teal("klim install ripgrep fzf gh"), gray("install tools by name"))
+	_, _ = fmt.Fprintf(w, "    %s   %s\n", teal("klim search kubernetes"), gray("browse the marketplace"))
+	_, _ = fmt.Fprintf(w, "    %s   %s\n", teal("klim --help"), gray("every command"))
+	_, _ = fmt.Fprintf(w, "\n  Run %s again to open the interactive TUI.\n\n", teal("klim"))
 	return true
 }

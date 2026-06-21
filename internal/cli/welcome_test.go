@@ -27,7 +27,7 @@ func TestShowFirstRunWelcome(t *testing.T) {
 
 	// Marker should now exist.
 	marker := filepath.Join(os.Getenv("KLIM_HOME"), ".welcomed")
-	if _, err := os.Stat(marker); err != nil {
+	if _, err := os.Stat(marker); err != nil { //nolint:gosec // G703: path built from the test's own KLIM_HOME temp dir; no taint
 		t.Errorf("marker not written: %v", err)
 	}
 
