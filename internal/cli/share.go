@@ -30,6 +30,11 @@ func init() {
 	shareOutputFmt = addOutputFlag(shareLinkCmd, OutputText, OutputJSON, OutputYAML)
 	shareLinkCmd.AddCommand(openCmd)
 	// shareLinkCmd is wired under the `share` group parent in root.go.
+
+	// Bare `klim share` mirrors `klim share link`: share the same
+	// --output flag binding so `klim share --output json` works on the
+	// parent too (it reuses runShare + the package-level getter).
+	shareCmd.Flags().AddFlagSet(shareLinkCmd.Flags())
 }
 
 func runShare(cmd *cobra.Command, args []string) error {

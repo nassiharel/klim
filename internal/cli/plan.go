@@ -52,6 +52,11 @@ func init() {
 	planShowCmd.Flags().BoolVar(&planRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	planShowCmd.Flags().StringVarP(&planFileFlag, "file", "f", "", "Plan against a .klim.yaml target manifest")
 	planShowCmd.Flags().BoolVar(&planDetailedExitFlag, "detailed-exitcode", false, "Exit 3 when changes are pending (mirrors 'terraform plan -detailed-exitcode')")
+
+	// Bare `klim plan` mirrors `klim plan show`: share the same flag
+	// bindings so --output/--refresh/--file/--detailed-exitcode work on
+	// the parent too (it reuses runPlan + the package-level getters).
+	planCmd.Flags().AddFlagSet(planShowCmd.Flags())
 }
 
 func runPlan(cmd *cobra.Command, args []string) error {
