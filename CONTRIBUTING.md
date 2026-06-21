@@ -4,7 +4,9 @@ Thank you for your interest in contributing! This document covers the developmen
 
 ## Code of Conduct
 
-Please be respectful and constructive in all interactions. We are committed to providing a welcoming and inclusive experience for everyone.
+This project adheres to the [Contributor Covenant](CODE_OF_CONDUCT.md). By participating, you
+are expected to uphold it. Please be respectful and constructive in all interactions — we are
+committed to a welcoming and inclusive experience for everyone.
 
 ## First-Time Contributors
 
@@ -54,11 +56,24 @@ make lint           # run golangci-lint
 - [ ] New code includes tests where appropriate
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, etc.)
 
-## Adding a Tool to the Marketplace
+## Adding a Tool to the Marketplace — the easiest first PR
 
-1. Create `marketplace/tools/mytool.yaml` (see existing files for the schema).
-2. Run `make marketplace-validate` to check your definition.
-3. Open a PR — CI validates automatically and publishes on merge.
+No Go required. Adding a tool is a single YAML file:
+
+1. Copy the template:
+   ```bash
+   cp marketplace/tool-template.yaml marketplace/tools/<name>.yaml
+   ```
+2. Fill in the fields (required: `name`, `display_name`, `category`, `binary_names`) and the
+   package IDs for whichever managers ship the tool.
+3. Validate locally:
+   ```bash
+   make marketplace-validate
+   ```
+4. Open a PR — CI validates automatically and publishes the catalog on merge.
+
+Prefer not to write YAML? Open an [Add a tool issue](https://github.com/nassiharel/klim/issues/new?template=add-tool.yml)
+and a maintainer will turn it into a PR. Full details: [marketplace/README.md](marketplace/README.md).
 
 ## Project Structure
 

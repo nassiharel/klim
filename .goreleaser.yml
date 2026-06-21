@@ -7,6 +7,9 @@ before:
     - go mod download
     - go generate ./...
     - go mod tidy
+    # Generate shell completions and man pages so they can be packaged into
+    # archives and Linux packages (see cmd/gen-docs).
+    - go run ./cmd/gen-docs -o dist/extras
 
 builds:
   - id: klim
@@ -43,6 +46,11 @@ archives:
     files:
       - README.md
       - LICENSE
+      - CHANGELOG.md
+      - src: dist/extras/completions/*
+        dst: completions
+      - src: dist/extras/man/*
+        dst: man
 
 nfpms:
   - id: packages
@@ -57,6 +65,15 @@ nfpms:
       - deb
       - rpm
     bindir: /usr/bin
+    contents:
+      - src: dist/extras/completions/klim.bash
+        dst: /usr/share/bash-completion/completions/klim
+      - src: dist/extras/completions/klim.zsh
+        dst: /usr/share/zsh/site-functions/_klim
+      - src: dist/extras/completions/klim.fish
+        dst: /usr/share/fish/vendor_completions.d/klim.fish
+      - src: dist/extras/man/*
+        dst: /usr/share/man/man1/
 
 homebrew_casks:
   - repository:

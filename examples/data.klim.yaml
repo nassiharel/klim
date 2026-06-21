@@ -1,0 +1,13 @@
+# Python data / ML toolchain.
+# Usage: copy to your project root as .klim.yaml, then run `klim check`.
+name: data
+tools:
+    - name: python
+      version: ">=3.11"
+    - name: uv
+    - name: git
+    - name: gh
+optional:
+    - name: poetry
+    - name: pipx
+    - name: docker

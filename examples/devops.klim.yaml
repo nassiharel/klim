@@ -1,0 +1,14 @@
+# Kubernetes / IaC / cloud toolchain.
+# Usage: copy to your project root as .klim.yaml, then run `klim check`.
+name: devops
+tools:
+    - name: kubectl
+    - name: helm
+    - name: terraform
+    - name: docker
+    - name: git
+    - name: gh
+optional:
+    - name: k9s
+    - name: kubectx
+    - name: aws
