@@ -32,9 +32,9 @@ persistent User PATH from the registry) to:
 This command makes those backups inspectable from the CLI. Common
 flows:
 
-  klim health path-backups list                    # browse them
-  klim health path-backups show <name>             # see the captured PATH
-  klim health path-backups restore-cmd <name>      # print the restore command
+  klim doctor path-backups list                    # browse them
+  klim doctor path-backups show <name>             # see the captured PATH
+  klim doctor path-backups restore-cmd <name>      # print the restore command
                                                    # (review, then run in your shell)
 
 The backup files are plain YAML and can also be opened with any
@@ -139,7 +139,7 @@ func runHealthPathBackupsShow(cmd *cobra.Command, args []string) error {
 		_, _ = fmt.Fprintln(os.Stdout, "  "+b.UserPATH)
 	}
 	_, _ = fmt.Fprintln(os.Stdout, "\nTo print the restore command:")
-	_, _ = fmt.Fprintln(os.Stdout, "  klim health path-backups restore-cmd "+args[0])
+	_, _ = fmt.Fprintln(os.Stdout, "  klim doctor path-backups restore-cmd "+args[0])
 	return nil
 }
 
@@ -197,7 +197,7 @@ func findPathBackup(query string) (pathbackup.Backup, error) {
 	}
 	switch len(matches) {
 	case 0:
-		return pathbackup.Backup{}, fmt.Errorf("no PATH backup matching %q (run `klim health path-backups list` to see what's available)", query)
+		return pathbackup.Backup{}, fmt.Errorf("no PATH backup matching %q (run `klim doctor path-backups list` to see what's available)", query)
 	case 1:
 		return matches[0], nil
 	default:

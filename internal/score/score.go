@@ -82,7 +82,7 @@ func BadgeURL(r Result) string {
 // BadgeColor returns the Shields.io color name for the given
 // percentage 0..100. Public so other packages can render
 // score-equivalent badges without duplicating the threshold table
-// (and silently drifting from `klim score --badge`'s colors).
+// (and silently drifting from `klim security score --badge`'s colors).
 func BadgeColor(pct int) string {
 	switch {
 	case pct < 50:

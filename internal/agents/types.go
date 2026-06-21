@@ -211,7 +211,7 @@ const (
 //
 // Fields after Source are optional enrichment derived from the
 // per-session event log (where available). They are populated by the
-// provider's enrich pass and used by `klim agents sessions` to render
+// provider's enrich pass and used by `klim agent session` to render
 // a glanceable dashboard. All such fields use `omitempty` so JSON /
 // YAML output stays compact for providers that can't fill them.
 type Session struct {

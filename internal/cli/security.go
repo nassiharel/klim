@@ -17,7 +17,7 @@ import (
 
 // ResolveVulnSourceKey returns the OSV endpoint string used as the
 // cache key for vulnerability scan results. Surfaces that read the
-// cache passively (`klim info`, web `/security`) must use the same
+// cache passively (`klim tool info`, web `/security`) must use the same
 // key as `klim security vuln`, otherwise they look at a different
 // file. Falls back to vuln.DefaultOSVURL when config is unreadable
 // or the URL is unset.
@@ -41,7 +41,7 @@ func ResolveVulnSourceKey() string {
 //	klim security compliance  — validate against policy
 //
 // Environment health (PATH conflicts, multi-installs, etc.) lives under
-// the top-level `klim health` command, not here.
+// the top-level `klim doctor` command, not here.
 var securityCmd = &cobra.Command{
 	Use:   "security",
 	Short: "Security checks: audit, vulnerabilities, compliance",
@@ -56,14 +56,13 @@ Subcommands:
   compliance  Validate installed tools against a compliance policy
 
 For environment health (PATH issues, multi-installs, missing PMs)
-use the top-level 'klim health' command.
+use the top-level 'klim doctor' command.
 
 Exit codes (bare 'klim security'):
   0  No audit warnings, no vulns
   1  Vuln lookup hard-failed (network, OSV down, etc.)
   3  Audit warnings or vulnerability findings present`,
-	GroupID: "health",
-	RunE:    runSecurityAggregate,
+	RunE: runSecurityAggregate,
 }
 
 func init() {
@@ -322,8 +321,8 @@ func runSecurityAggregate(cmd *cobra.Command, _ []string) error {
 
 	// Health and compliance left as a one-line "→ run subcommand"
 	// hint to keep the aggregator quick. Users can drill in with
-	// `klim security health` / `klim security compliance`.
-	fmt.Fprintln(os.Stderr, "  health:   run `klim security health` for full output")
+	// `klim doctor` / `klim security compliance`.
+	fmt.Fprintln(os.Stderr, "  health:   run `klim doctor` for full output")
 	fmt.Fprintln(os.Stderr, "  compliance: run `klim security compliance` for policy verdict")
 
 	// Aggregate exit code (PartialFailure = 3, the documented contract):

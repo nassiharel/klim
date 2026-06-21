@@ -104,7 +104,7 @@
 {{if $d.ShareToken}}
 <section class="card">
   <h2>Share token (current toolchain)</h2>
-  <p>Compact, copy-pasteable token. Recipient runs <code>klim open &lt;token&gt;</code> or pastes it under Restore / Import above.</p>
+  <p>Compact, copy-pasteable token. Recipient runs <code>klim share link open &lt;token&gt;</code> or pastes it under Restore / Import above.</p>
   <pre class="log">{{$d.ShareToken}}</pre>
 </section>
 {{else if $d.ShareErr}}

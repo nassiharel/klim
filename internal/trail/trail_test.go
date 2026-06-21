@@ -629,8 +629,8 @@ func TestDiff_SourceAndVersionChange(t *testing.T) {
 
 // TestCapture_RejectsControlCharLabels guards against tabs / newlines /
 // other control runes in labels. Such characters would corrupt the
-// `klim trail log` tabwriter output (tabs split columns, newlines inject
-// extra rows) or break terminal rendering of `klim trail show`.
+// `klim env trail log` tabwriter output (tabs split columns, newlines inject
+// extra rows) or break terminal rendering of `klim env trail show`.
 func TestCapture_RejectsControlCharLabels(t *testing.T) {
 	useTempDir(t)
 	cases := []string{

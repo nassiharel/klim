@@ -25,7 +25,7 @@ Generators:
 
 The generated files use the package IDs from the klim marketplace
 to produce install commands for each tool.`,
-	Args:      requireArgs(1, "klim generate <github-action|dockerfile|devcontainer>"),
+	Args:      requireArgs(1, "klim project generate <github-action|dockerfile|devcontainer>"),
 	ValidArgs: []string{"github-action", "dockerfile", "devcontainer"},
 	RunE:      runGenerate,
 }
@@ -55,7 +55,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		}
 		path = teamfile.Find(cwd)
 		if path == "" {
-			return fmt.Errorf("no .klim.yaml found (searched from %s to root)\n\nCreate one with: klim init", cwd)
+			return fmt.Errorf("no .klim.yaml found (searched from %s to root)\n\nCreate one with: klim project init", cwd)
 		}
 	}
 

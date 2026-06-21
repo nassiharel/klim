@@ -113,7 +113,7 @@ func NewWithConfig(cfg *config.Config) *ToolService {
 
 // LoadAndResolve loads the tool catalog, scans PATH, resolves versions,
 // and returns the tools sorted by name. This is the full pipeline used
-// by `klim list` and `klim export`.
+// by `klim tool list` and `klim share export`.
 func (s *ToolService) LoadAndResolve(ctx context.Context) ([]registry.Tool, *CatalogInfo, error) {
 	tools, info, err := s.Catalog.LoadTools(ctx)
 	if err != nil {
@@ -179,7 +179,7 @@ func (s *ToolService) RewalkPath(ctx context.Context, tools []registry.Tool) err
 }
 
 // ScanOnly loads the catalog and scans PATH without resolving versions.
-// Used by `klim import`, `klim open`, and the TUI import plan builder
+// Used by `klim share import`, `klim share link open`, and the TUI import plan builder
 // where only installed/not-installed status is needed.
 func (s *ToolService) ScanOnly(ctx context.Context) ([]registry.Tool, *CatalogInfo, error) {
 	tools, info, err := s.Catalog.LoadTools(ctx)

@@ -240,7 +240,7 @@ func sessionTileFallback(s agents.Session) string {
 }
 
 // stateDot returns the colored live-state indicator. Matches the
-// state-glyph scheme used by `klim agents sessions list` so the two
+// state-glyph scheme used by `klim agent session list` so the two
 // surfaces look at-a-glance identical.
 func stateDot(st agents.LiveState) string {
 	return lipgloss.NewStyle().Foreground(stateBarColor(st)).Render(stateGlyph(st))

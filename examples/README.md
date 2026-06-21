@@ -3,9 +3,9 @@
 Ready-to-use `.klim.yaml` toolchain contracts. Drop one into a project root, then:
 
 ```bash
-klim check                    # see what's installed vs missing for this contract
-klim install go gh            # install the tools it lists (by name)
-klim diff teammate.yaml       # compare your machine against another contract
+klim project check            # see what's installed vs missing for this contract
+klim tool install go gh       # install the tools it lists (by name)
+klim plan diff teammate.yaml  # compare your machine against another contract
 ```
 
 A `.klim.yaml` is a tiny, version-control-friendly contract:
@@ -17,10 +17,10 @@ tools:
       version: ">=1.25"   # optional version constraint
     - name: gh
 optional:
-    - name: golangci-lint   # nice-to-have, not enforced by `klim check`
+    - name: golangci-lint   # nice-to-have, not enforced by `klim project check`
 ```
 
-Generate one automatically for your own project with `klim init` (it reads `go.mod`,
+Generate one automatically for your own project with `klim project init` (it reads `go.mod`,
 `package.json`, `Dockerfile`, CI workflows, Helm, Terraform, and more).
 
 | File | For |

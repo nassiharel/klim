@@ -16,12 +16,12 @@ import (
 	"github.com/nassiharel/klim/internal/trail"
 )
 
-// --- root: klim trail ---
+// --- root: klim env trail ---
 
 var trailCmd = &cobra.Command{
 	Use:   "trail",
 	Short: "Inspect your environment history (git for your toolchain)",
-	Long: `klim trail records every captured environment state as a
+	Long: `klim env trail records every captured environment state as a
 content-addressed snapshot, exposing git-style history inspection.
 
 Two captures of an identical toolchain share storage. Each capture
@@ -38,9 +38,9 @@ A <ref> can be: HEAD (or latest, an alias), HEAD~N, @<index>, a content
 hash (full or 7+ char prefix), or an entry's --label.`,
 }
 
-// --- klim trail capture ---
+// --- klim env trail capture ---
 
-// trailCaptureFresh controls whether `klim trail capture` does a fresh
+// trailCaptureFresh controls whether `klim env trail capture` does a fresh
 // PATH scan (default true) or reuses the on-disk scan cache. Default is
 // true so captures match the user's current toolchain; pass
 // `--refresh=false` to opt into cached behavior for back-to-back klim
@@ -67,15 +67,15 @@ when you've just run another klim command that already populated the
 cache and want to capture the exact same view.
 
 Examples:
-  klim trail capture                            # snapshot current state
-  klim trail capture --label before-upgrade     # tag for later reference
-  klim trail capture --op install               # mark this as an install delta
-  klim trail capture --refresh=false            # reuse the scan cache`,
+  klim env trail capture                            # snapshot current state
+  klim env trail capture --label before-upgrade     # tag for later reference
+  klim env trail capture --op install               # mark this as an install delta
+  klim env trail capture --refresh=false            # reuse the scan cache`,
 	Args: cobra.NoArgs,
 	RunE: runTrailCapture,
 }
 
-// --- klim trail log ---
+// --- klim env trail log ---
 
 var (
 	trailLogLimit  int
@@ -93,15 +93,15 @@ var trailLogCmd = &cobra.Command{
   --output text|json|yaml
 
 Examples:
-  klim trail log                          # all entries, newest first
-  klim trail log --limit 10               # most recent 10
-  klim trail log --since 7d               # the last week of activity
-  klim trail log --output json | jq .     # machine-readable, scriptable`,
+  klim env trail log                          # all entries, newest first
+  klim env trail log --limit 10               # most recent 10
+  klim env trail log --since 7d               # the last week of activity
+  klim env trail log --output json | jq .     # machine-readable, scriptable`,
 	Args: cobra.NoArgs,
 	RunE: runTrailLog,
 }
 
-// --- klim trail show ---
+// --- klim env trail show ---
 
 var trailShowOutput func() (OutputFormat, error)
 
@@ -115,16 +115,16 @@ A <ref> is anything Resolve accepts: HEAD or latest, HEAD~N, @<index>,
 a content hash (full or 7+ char prefix), or an entry's --label.
 
 Examples:
-  klim trail show HEAD              # newest capture
-  klim trail show HEAD~3            # 3 captures back
-  klim trail show before-upgrade    # by label
-  klim trail show abcdef0           # 7-char hash prefix
-  klim trail show HEAD --output json   # machine-readable for scripts`,
-	Args: requireArgs(1, "klim trail show <ref>"),
+  klim env trail show HEAD              # newest capture
+  klim env trail show HEAD~3            # 3 captures back
+  klim env trail show before-upgrade    # by label
+  klim env trail show abcdef0           # 7-char hash prefix
+  klim env trail show HEAD --output json   # machine-readable for scripts`,
+	Args: requireArgs(1, "klim env trail show <ref>"),
 	RunE: runTrailShow,
 }
 
-// --- klim trail diff ---
+// --- klim env trail diff ---
 
 var trailDiffOutput func() (OutputFormat, error)
 
@@ -133,9 +133,9 @@ var trailDiffCmd = &cobra.Command{
 	Short: "Compare two trail entries (defaults the second arg to HEAD)",
 	Long: `Show the change set between two entries.
 
-  klim trail diff HEAD~1            # HEAD~1 vs HEAD
-  klim trail diff HEAD~3 HEAD       # explicit two-arg form
-  klim trail diff before-upgrade    # vs HEAD (label)`,
+  klim env trail diff HEAD~1            # HEAD~1 vs HEAD
+  klim env trail diff HEAD~3 HEAD       # explicit two-arg form
+  klim env trail diff before-upgrade    # vs HEAD (label)`,
 	Args: trailDiffArgs,
 	RunE: runTrailDiff,
 }
@@ -147,11 +147,11 @@ func trailDiffArgs(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	return &UsageError{Err: fmt.Errorf(
-		"requires 1 or 2 arguments, got %d\n\nUsage:\n  klim trail diff <ref> [<ref>]\n\nRun '%s --help' for more information",
+		"requires 1 or 2 arguments, got %d\n\nUsage:\n  klim env trail diff <ref> [<ref>]\n\nRun '%s --help' for more information",
 		len(args), cmd.CommandPath())}
 }
 
-// --- klim trail prune ---
+// --- klim env trail prune ---
 
 var (
 	trailPruneKeep      int
@@ -170,9 +170,9 @@ Both filters apply (AND). After log pruning, any object no entry
 references is deleted from disk.
 
 Examples:
-  klim trail prune --keep 50                  # keep just the 50 newest
-  klim trail prune --older-than 90d           # drop anything older than 3 months
-  klim trail prune --keep 50 --older-than 90d # both — newest 50 of the last 90 days`,
+  klim env trail prune --keep 50                  # keep just the 50 newest
+  klim env trail prune --older-than 90d           # drop anything older than 3 months
+  klim env trail prune --keep 50 --older-than 90d # both — newest 50 of the last 90 days`,
 	Args: cobra.NoArgs,
 	RunE: runTrailPrune,
 }
@@ -337,7 +337,7 @@ func runTrailLog(cmd *cobra.Command, _ []string) error {
 	}
 
 	if len(entries) == 0 {
-		fmt.Fprintln(os.Stderr, "No trail entries yet. Run `klim trail capture` to record one.")
+		fmt.Fprintln(os.Stderr, "No trail entries yet. Run `klim env trail capture` to record one.")
 		return nil
 	}
 
@@ -625,7 +625,7 @@ func refPrefixLenForObject(id trail.ObjectID, entries []trail.Entry) int {
 // replacing the dropped suffix with "…". Uses go-runewidth so wide
 // characters (CJK, emoji, etc.) count as 2 columns and combining marks
 // as 0 — that's the only definition of "fits in N columns" that keeps
-// `klim trail log`'s tabwriter columns aligned for non-ASCII labels.
+// `klim env trail log`'s tabwriter columns aligned for non-ASCII labels.
 //
 // Always emits valid UTF-8: drops whole runes, never bytes.
 func truncate(s string, n int) string {

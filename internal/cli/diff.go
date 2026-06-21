@@ -24,16 +24,16 @@ var diffCmd = &cobra.Command{
 	Short: "Compare your installed tools against a manifest or share token",
 	Long: `Compare your local tool environment against a reference:
 
-  klim diff my-tools.yaml            # compare against a manifest file
-  klim diff klim:v1:abc123...        # compare against a share token
-  klim diff my-tools.yaml --output json
+  klim plan diff my-tools.yaml            # compare against a manifest file
+  klim plan diff klim:v1:abc123...        # compare against a share token
+  klim plan diff my-tools.yaml --output json
 
 Shows which tools match, differ in version, or are missing on either side.
 
 Exit codes:
   0  Environments match
   1  Differences found`,
-	Args: requireArgs(1, "klim diff <manifest.yaml | share-token>"),
+	Args: requireArgs(1, "klim plan diff <manifest.yaml | share-token>"),
 	RunE: runDiff,
 }
 

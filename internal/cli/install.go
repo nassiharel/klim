@@ -26,12 +26,11 @@ without a package on the current OS are reported but do not stop the
 run.
 
 Examples:
-  klim install jq fzf
-  klim install --pack go-developer
-  klim install jq --source brew --yes
-  klim install --pack rust-dev --pack web-dev --dry-run
-  klim install jq --output json`,
-	GroupID: "tools",
+  klim tool install jq fzf
+  klim tool install --pack go-developer
+  klim tool install jq --source brew --yes
+  klim tool install --pack rust-dev --pack web-dev --dry-run
+  klim tool install jq --output json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAction(cmd, args, ActionInstall, installFlags, installOutputFmt)
 	},

@@ -35,10 +35,10 @@ By default the command prints a static snapshot to stdout, ready to
 paste into a README. Use --tui for an animated, fullscreen version.
 
 Examples:
-  klim graph                       # static snapshot, default --by category
-  klim graph --tui                 # animated 10fps fullscreen
-  klim graph --by tag              # connect tools that share any tag
-  klim graph --by pm               # connect tools that share an installed PM`,
+  klim tool graph                       # static snapshot, default --by category
+  klim tool graph --tui                 # animated 10fps fullscreen
+  klim tool graph --by tag              # connect tools that share any tag
+  klim tool graph --by pm               # connect tools that share an installed PM`,
 	Args: cobra.NoArgs,
 	RunE: runGraph,
 }
@@ -106,11 +106,11 @@ func runGraph(cmd *cobra.Command, _ []string) error {
 	// catalog tool on a cold cache.
 	tools, _, err := svc.ScanOnly(cmd.Context())
 	if err != nil {
-		return fmt.Errorf("klim graph: %w", err)
+		return fmt.Errorf("klim tool graph: %w", err)
 	}
 	installed := installedOnly(tools)
 	if len(installed) == 0 {
-		return errors.New("klim graph: no installed tools to draw")
+		return errors.New("klim tool graph: no installed tools to draw")
 	}
 
 	g := buildToolGraph(installed, by)
@@ -358,7 +358,7 @@ func (m graphModel) View() tea.View {
 		h = 22
 	}
 	body := m.g.Render(w, h)
-	footer := fmt.Sprintf("klim graph · %d nodes · frame %d · q to quit", len(m.g.Nodes), m.frame)
+	footer := fmt.Sprintf("klim tool graph · %d nodes · frame %d · q to quit", len(m.g.Nodes), m.frame)
 	v := tea.NewView(body + "\n" + footer)
 	v.AltScreen = true
 	return v

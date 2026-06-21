@@ -34,11 +34,11 @@ to overwrite. (No -f shorthand: CLI-CONVENTIONS.md reserves -f for
 --file paths.)
 
 Usage:
-  klim init                        # auto-detect from project files
-  klim init --all                  # include ALL installed tools (no detection)
-  klim init --min-version          # include >=X.Y version constraints
-  klim init --name my-project      # set project name
-  klim init --force                # overwrite an existing .klim.yaml`,
+  klim project init                        # auto-detect from project files
+  klim project init --all                  # include ALL installed tools (no detection)
+  klim project init --min-version          # include >=X.Y version constraints
+  klim project init --name my-project      # set project name
+  klim project init --force                # overwrite an existing .klim.yaml`,
 	RunE: runInit,
 }
 
@@ -57,7 +57,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Refuse to clobber an existing manifest unless --force is set.
 	// We use Lstat so a *dangling* .klim.yaml symlink still trips the
 	// safety check — Stat would follow the link, see ENOENT, and
-	// happily let `klim init` (no --force) replace the symlink.
+	// happily let `klim project init` (no --force) replace the symlink.
 	manifestExists := false
 	if _, err := os.Lstat(outPath); err == nil {
 		manifestExists = true
@@ -154,7 +154,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			for _, d := range notInstalled {
 				fmt.Fprintf(os.Stderr, "    · %s  (from %s)\n", d.Name, d.Source)
 			}
-			fmt.Fprintln(os.Stderr, "  Install them first, then re-run klim init to pin versions.")
+			fmt.Fprintln(os.Stderr, "  Install them first, then re-run klim project init to pin versions.")
 		}
 
 		// Ecosystem suggestions.
@@ -178,7 +178,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		// With --force on an existing file the user expects a
 		// replacement. Emitting "No tools to include" + exit 0 would
 		// silently leave the previous manifest in place — a script
-		// running `klim init --force` would believe the regenerate
+		// running `klim project init --force` would believe the regenerate
 		// succeeded. Surface this as an error instead, with a hint
 		// tailored to the mode that produced the empty result.
 		if initForceFlag && manifestExists {
@@ -214,6 +214,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	_ = teamfile.AddProject(filepath.Dir(abs), name, len(tf.Tools))
 
 	fmt.Fprintln(os.Stderr, "\nTeammates can now run:")
-	fmt.Fprintln(os.Stderr, "  klim check    # validate their environment")
+	fmt.Fprintln(os.Stderr, "  klim project check    # validate their environment")
 	return nil
 }

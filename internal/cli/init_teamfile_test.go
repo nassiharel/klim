@@ -221,7 +221,7 @@ func TestInit_ForceProjectDetectedButNoneInstalled(t *testing.T) {
 
 // TestInit_DanglingSymlinkRequiresForce verifies that a dangling
 // .klim.yaml symlink is recognised as "exists" by Lstat, so plain
-// `klim init` refuses to clobber it the same way it would refuse
+// `klim project init` refuses to clobber it the same way it would refuse
 // for a regular existing file.
 func TestInit_DanglingSymlinkRequiresForce(t *testing.T) {
 	resetInitFlags(t)

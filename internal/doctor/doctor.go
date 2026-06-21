@@ -412,7 +412,7 @@ func checkOutdatedSummary(tools []registry.Tool, meta ScanMeta) []Issue {
 		Category: CategoryTools,
 		Title:    fmt.Sprintf("%d update(s) available", outdated),
 		Detail:   detail,
-		Fix:      "Switch to the Updates tab or run klim list to see details",
+		Fix:      "Switch to the Updates tab or run klim tool list to see details",
 		Action: &Action{
 			Kind:  ActionJumpUpdates,
 			Label: "Jump to Updates tab",

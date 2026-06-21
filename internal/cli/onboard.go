@@ -28,9 +28,9 @@ Available roles:
   security  Security / Pen-testing
 
 Usage:
-  klim onboard              # interactive — shows role picker
-  klim onboard devops       # recommend tools for DevOps
-  klim onboard web --list   # just list, don't install`,
+  klim tool onboard              # interactive — shows role picker
+  klim tool onboard devops       # recommend tools for DevOps
+  klim tool onboard web --list   # just list, don't install`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runOnboard,
 }

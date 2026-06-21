@@ -112,7 +112,7 @@ func (s *Spinner) Done(msg string) {
 
 // Stop halts the spinner and clears the line WITHOUT printing a final
 // success message. Use this when the command's structured output
-// itself is the success signal (e.g. `klim info`, `klim list`) and a
+// itself is the success signal (e.g. `klim tool info`, `klim tool list`) and a
 // trailing "✓ Done" would be redundant noise.
 func (s *Spinner) Stop() {
 	if s.silent {

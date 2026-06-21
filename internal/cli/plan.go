@@ -17,13 +17,16 @@ var (
 	planOutput           func() (OutputFormat, error)
 )
 
-// planCmd computes a Terraform-plan-style preview of the changes klim
+// planShowCmd computes a Terraform-plan-style preview of the changes klim
 // would make. With no arguments it plans upgrades for every installed
 // tool that has a newer version available; with positional args it
 // scopes the plan to those tools; with --file it diffs against a
 // .klim.yaml manifest (install missing, upgrade where required).
-var planCmd = &cobra.Command{
-	Use:   "plan [tool...]",
+//
+// It is the `show` subcommand of the `plan` group (see groups.go); the
+// group parent is planCmd.
+var planShowCmd = &cobra.Command{
+	Use:   "show [tool...]",
 	Short: "Preview what klim would change (upgrades, installs, removes)",
 	Long: `Terraform-plan-style preview of toolchain changes klim would make.
 
@@ -41,16 +44,14 @@ target state (installs missing tools, upgrades where required).
 Exit codes:
   0  Default behaviour — succeeds whether or not there are changes
   3  When --detailed-exitcode is set and at least one change is pending`,
-	GroupID: "tools",
-	RunE:    runPlan,
+	RunE: runPlan,
 }
 
 func init() {
-	planOutput = addOutputFlag(planCmd, OutputText, OutputJSON, OutputYAML)
-	planCmd.Flags().BoolVar(&planRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
-	planCmd.Flags().StringVarP(&planFileFlag, "file", "f", "", "Plan against a .klim.yaml target manifest")
-	planCmd.Flags().BoolVar(&planDetailedExitFlag, "detailed-exitcode", false, "Exit 3 when changes are pending (mirrors 'terraform plan -detailed-exitcode')")
-	rootCmd.AddCommand(planCmd)
+	planOutput = addOutputFlag(planShowCmd, OutputText, OutputJSON, OutputYAML)
+	planShowCmd.Flags().BoolVar(&planRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
+	planShowCmd.Flags().StringVarP(&planFileFlag, "file", "f", "", "Plan against a .klim.yaml target manifest")
+	planShowCmd.Flags().BoolVar(&planDetailedExitFlag, "detailed-exitcode", false, "Exit 3 when changes are pending (mirrors 'terraform plan -detailed-exitcode')")
 }
 
 func runPlan(cmd *cobra.Command, args []string) error {

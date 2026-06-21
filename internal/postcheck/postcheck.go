@@ -1,5 +1,5 @@
 // Package postcheck verifies that a klim apply left the developer
-// machine in a working state. It is invoked by `klim apply` right
+// machine in a working state. It is invoked by `klim plan apply` right
 // after the PM commands return; failure surfaces a concrete rollback
 // affordance to the user.
 //
@@ -56,7 +56,7 @@ type Status string
 const (
 	StatusPass Status = "pass"
 	StatusWarn Status = "warn" // surfaced to the user but does not trip auto-rollback
-	StatusFail Status = "fail" // trips auto-rollback when invoked from `klim apply`
+	StatusFail Status = "fail" // trips auto-rollback when invoked from `klim plan apply`
 	StatusSkip Status = "skip" // not run (binary missing, no tools to probe, etc.)
 )
 

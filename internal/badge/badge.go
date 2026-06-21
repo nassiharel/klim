@@ -2,7 +2,7 @@
 // klim's environment state. Pure-go, no network — Shields.io URLs
 // are deterministic string formatting.
 //
-// klim badge prints four standard badges as ready-to-copy markdown
+// klim share badge prints four standard badges as ready-to-copy markdown
 // snippets:
 //
 //   - score: overall klim env score, X/Y (graded)
@@ -20,7 +20,7 @@
 // # Colour thresholds
 //
 // Score: routes through internal/score.BadgeColor so it always
-// matches `klim score --badge`. Callers should set Inputs.ScoreColor
+// matches `klim security score --badge`. Callers should set Inputs.ScoreColor
 // to score.BadgeColor(percent) for that alignment; when ScoreColor
 // is empty Build falls back to a local "good enough" table
 // (colorByPercent below) so the package stays usable without a
@@ -85,7 +85,7 @@ type Inputs struct {
 	// ScoreColor, when non-empty, overrides the colour the score
 	// badge would otherwise compute. Pass score.BadgeColor(percent)
 	// here to keep this package's score badge aligned with
-	// `klim score --badge`; leave empty to use the local table
+	// `klim security score --badge`; leave empty to use the local table
 	// (colorByPercent), which is intentionally separate so callers
 	// without a score dependency stay functional.
 	ScoreColor string

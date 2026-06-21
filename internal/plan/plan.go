@@ -51,7 +51,7 @@ type Change struct {
 	ToVersion   string                 `json:"to_version,omitempty"`
 	// Command is the human-readable command that would actually be
 	// executed (e.g. `brew upgrade terraform`). It's the same string
-	// `klim install` / `klim upgrade` / `klim remove` would invoke,
+	// `klim tool install` / `klim tool upgrade` / `klim tool remove` would invoke,
 	// so a user comparing the plan to the running output sees the
 	// same words.
 	Command string `json:"command,omitempty"`
@@ -137,7 +137,7 @@ type DesiredState struct {
 // Build computes a Plan from the current tool list and the supplied
 // Options. The function is pure: no IO, no exec, no PATH lookups.
 // Callers feed it a tool slice produced by service.LoadAndResolve
-// (which is what `klim list` / the TUI use).
+// (which is what `klim tool list` / the TUI use).
 func Build(tools []registry.Tool, opts Options) Plan {
 	if !opts.IncludeUpgrades && !opts.IncludeInstalls && !opts.IncludeRemoves {
 		// Default behaviour when nothing is requested: upgrades

@@ -12,7 +12,7 @@ humans can rely on consistent output, exit codes, and flag names.
   itself.
 * **errors** are always written to stderr with an `Error:` prefix.
 
-This split is deliberate: `klim export > my-tools.yaml` works as a Unix user
+This split is deliberate: `klim share export > my-tools.yaml` works as a Unix user
 expects, while the human-readable summary still prints to the terminal.
 
 ## Output format
@@ -35,16 +35,16 @@ Every command that produces structured data accepts a subset of:
 * Unknown values (e.g. `--output=jsno`) are usage errors and exit 2.
 
 Commands that wire `OutputText, OutputJSON, OutputYAML` (the full
-matrix — pick whichever format your tooling consumes): `apply`,
-`audit`, `check`, `config marketplace list`, `diff`, `health`,
-`health path`, `info`, `install`, `list`, `plan`, `remove`,
-`rollback`, `score`, `search`, `security compliance check`,
-`security vuln`, `share`, `tools path`, `trail log`, `trail show`,
-`trail diff`, `upgrade`, `watch`, `why`, plus `agents list`,
-`agents search`, `badge`, `env`. (`export` already emits YAML by
+matrix — pick whichever format your tooling consumes): `plan apply`,
+`security audit`, `project check`, `config marketplace list`, `plan diff`, `doctor`,
+`doctor path`, `tool info`, `tool install`, `tool list`, `plan show`, `tool remove`,
+`plan rollback`, `security score`, `tool search`, `security compliance check`,
+`security vuln`, `share link`, `tool catalog path`, `env trail log`, `env trail show`,
+`env trail diff`, `tool upgrade`, `tool watch`, `tool why`, plus `agent list`,
+`agent search`, `share badge`, `env`. (`share export` already emits YAML by
 design.)
 
-`graph` is text-only — its output is a force-directed terminal drawing,
+`tool graph` is text-only — its output is a force-directed terminal drawing,
 not structured data.
 
 ## Exit codes
@@ -54,9 +54,9 @@ not structured data.
 | 0 | Success |
 | 1 | Runtime error (network failure, file IO, etc.) |
 | 2 | Usage error — bad flags, missing/extra arguments, unknown command, unsupported `--output` value. Cobra's own flag-parse errors are wrapped via `SetFlagErrorFunc` and "unknown command/flag" errors that escape that hook are detected by message prefix in `cli.Run`. |
-| 3 | Partial failure (multi-item operation where some items failed, e.g. `klim import` with one or more install failures) |
+| 3 | Partial failure (multi-item operation where some items failed, e.g. `klim share import` with one or more install failures) |
 
-Commands like `audit`, `compliance check`, `check`, and `diff` may also exit
+Commands like `security audit`, `security compliance check`, `project check`, and `plan diff` may also exit
 non-zero (1) to signal "findings present" — see each command's `--help`.
 
 ## Flags

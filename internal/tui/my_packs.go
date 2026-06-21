@@ -355,7 +355,7 @@ func (m Model) renderMyPackDetailView() string {
 		if token != "" {
 			b.WriteString("    " + token + "\n")
 		}
-		b.WriteString("\n  " + dimVersion.Render("Recipients install with:") + " klim open <token>\n")
+		b.WriteString("\n  " + dimVersion.Render("Recipients install with:") + " klim share link open <token>\n")
 	}
 
 	return b.String()

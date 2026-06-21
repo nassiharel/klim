@@ -14,26 +14,24 @@ import (
 var doctorRefreshFlag bool
 var doctorOutput func() (OutputFormat, error)
 
-// doctorCmd is the underlying "run all health diagnostics" command. It
-// is reused by both `klim health` (the top-level user-facing command,
-// see health.go) and is no longer a child of `klim security` — Health
-// is its own concern alongside Security.
+// doctorCmd is the "run all health diagnostics" command, surfaced to
+// users as `klim doctor`. Health/diagnostics is its own concern,
+// separate from `klim security`.
 var doctorCmd = &cobra.Command{
-	Use:   "health",
+	Use:   "doctor",
 	Short: "Check environment health and diagnose common issues",
 	Long: `Run environment diagnostics to detect PATH problems, conflicting
 tool installations, missing package managers, stale caches, and
 available updates.
 
 Run with no arguments to print every diagnostic finding. Use
-'klim health path' for a focused PATH-conflict view (which binary
+'klim doctor path' for a focused PATH-conflict view (which binary
 wins, what's shadowed, version mismatches).
 
 Exit codes:
   0  No errors found (warnings and info may still be reported)
   1  One or more errors detected`,
-	GroupID: "health",
-	RunE:    runDoctor,
+	RunE: runDoctor,
 }
 
 func init() {

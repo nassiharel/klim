@@ -12,24 +12,24 @@ import (
 
 var shareOutputFmt func() (OutputFormat, error)
 
-var shareCmd = &cobra.Command{
-	Use:   "share",
+var shareLinkCmd = &cobra.Command{
+	Use:   "link",
 	Short: "Share your toolchain — generate tokens, install from tokens",
 	Long: `Share your installed tools as a compact token, or install tools from
 a token shared by a teammate.
 
 Usage:
-  klim share                         # generate a share token (text)
-  klim share --output json           # generate a share token (JSON)
-  klim share open <token>            # install from a share token`,
+  klim share link                    # generate a share token (text)
+  klim share link --output json      # generate a share token (JSON)
+  klim share link open <token>       # install from a share token`,
 	Args: cobra.NoArgs,
 	RunE: runShare,
 }
 
 func init() {
-	shareOutputFmt = addOutputFlag(shareCmd, OutputText, OutputJSON, OutputYAML)
-	shareCmd.AddCommand(openCmd)
-	// rootCmd.AddCommand done in root.go via group assignment.
+	shareOutputFmt = addOutputFlag(shareLinkCmd, OutputText, OutputJSON, OutputYAML)
+	shareLinkCmd.AddCommand(openCmd)
+	// shareLinkCmd is wired under the `share` group parent in root.go.
 }
 
 func runShare(cmd *cobra.Command, args []string) error {
@@ -90,6 +90,6 @@ func runShareGenerate(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "\nShare token (%d tools):\n\n", len(names))
 	fmt.Println(token)
-	fmt.Fprintf(os.Stderr, "\nRecipients can install with: klim share open <token>\n")
+	fmt.Fprintf(os.Stderr, "\nRecipients can install with: klim share link open <token>\n")
 	return nil
 }

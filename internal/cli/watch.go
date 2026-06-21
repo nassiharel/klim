@@ -18,14 +18,14 @@ Designed to run periodically (cron, Task Scheduler) or on-demand.
 Use --output=json for machine-readable output suitable for notifications.
 
 Examples:
-  klim watch                         # human-readable check
-  klim watch --output json           # JSON output for scripts
+  klim tool watch                         # human-readable check
+  klim tool watch --output json           # JSON output for scripts
 
   # Cron job (daily at 9am):
-  0 9 * * * klim watch --output json >> ~/.klim/watch.log
+  0 9 * * * klim tool watch --output json >> ~/.klim/watch.log
 
   # Windows Task Scheduler:
-  schtasks /create /tn "klim-watch" /tr "klim watch" /sc daily /st 09:00`,
+  schtasks /create /tn "klim-watch" /tr "klim tool watch" /sc daily /st 09:00`,
 	RunE: runWatch,
 }
 

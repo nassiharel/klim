@@ -64,7 +64,7 @@ func TestFromRegistryTool_NotInstalledLeavesVersionAndSourceEmpty(t *testing.T) 
 
 func TestManifest_RoundTrip(t *testing.T) {
 	original := Manifest{
-		GeneratedBy: "klim export",
+		GeneratedBy: "klim share export",
 		OS:          "windows",
 		Arch:        "amd64",
 		Tools: []Tool{

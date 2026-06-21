@@ -1,6 +1,6 @@
 // Package sessionstui provides the standalone Bubbletea dashboard
-// reachable via `klim agents sessions` (when stdout is a TTY) and
-// `klim agents sessions list --watch`.
+// reachable via `klim agent session` (when stdout is a TTY) and
+// `klim agent session list --watch`.
 //
 // The dashboard is intentionally narrow in scope — it does not
 // reproduce the full Agents tab's marketplace / plugin / skill

@@ -463,7 +463,7 @@ func hydrateSessionExtras(snap *Snapshot) {
 			s.Starred = true
 		}
 		// Always recompute Group so user mapping edits (saved via
-		// `klim agents sessions group set …`) take effect on the
+		// `klim agent session group set …`) take effect on the
 		// next list / TUI render even when the snapshot comes from
 		// cache.
 		s.Group = enrich.Resolve(s.ProjectPath, s.Repository, s.Title, home, mappings)

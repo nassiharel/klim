@@ -3,7 +3,7 @@ package cli
 import "testing"
 
 // TestFormatWhyRef_PreservesConstraint guards against the regression
-// where `klim why` showed version constraints only for required
+// where `klim tool why` showed version constraints only for required
 // teamfile pins, dropping them for optional teamfiles and all project
 // refs. CollectReferences preserves the constraint for every kind, so
 // the renderer must too.

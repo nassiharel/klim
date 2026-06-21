@@ -369,7 +369,7 @@ func (c *checkProviderInstalled) Run(_ context.Context, snap Snapshot) []Issue {
 			Provider: p.ID,
 			Title:    fmt.Sprintf("provider %q binary is not on PATH", p.ID),
 			Detail:   "klim can still display cached state, but mutations and launch will fail until the CLI is installed.",
-			Hint:     fmt.Sprintf("Install with `klim install %s` or follow the upstream docs.", providerInstallHint(p.ID)),
+			Hint:     fmt.Sprintf("Install with `klim tool install %s` or follow the upstream docs.", providerInstallHint(p.ID)),
 		})
 	}
 	return issues

@@ -75,8 +75,8 @@ func (o ObjectID) IsValid() bool {
 // are machine-specific (e.g. `C:\Users\alice\...`), so storing them
 // would either prevent cross-machine dedupe or — worse — let stale
 // paths from the first capture survive deduped re-captures and
-// mislead `klim trail show`. Per-binary paths still live in the
-// regular catalog/scan output (`klim list`, `klim info`); the trail
+// mislead `klim env trail show`. Per-binary paths still live in the
+// regular catalog/scan output (`klim tool list`, `klim tool info`); the trail
 // captures only the env-defining content.
 type Snapshot struct {
 	SchemaVersion int    `yaml:"schema_version" json:"schema_version"`

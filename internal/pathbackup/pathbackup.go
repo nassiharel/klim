@@ -70,8 +70,8 @@ func Save(b Backup) (string, error) {
 		path = filepath.Join(dir, fmt.Sprintf("path-%s-%d.yaml", stamp, i))
 	}
 	header := "# klim PATH backup — created before applying a Health fix.\n" +
-		"# Show:   klim health path-backups show " + strings.TrimSuffix(filepath.Base(path), ".yaml") + "\n" +
-		"# Restore: klim health path-backups restore-cmd " + strings.TrimSuffix(filepath.Base(path), ".yaml") + "\n"
+		"# Show:   klim doctor path-backups show " + strings.TrimSuffix(filepath.Base(path), ".yaml") + "\n" +
+		"# Restore: klim doctor path-backups restore-cmd " + strings.TrimSuffix(filepath.Base(path), ".yaml") + "\n"
 	if err := fileutil.WriteYAML(path, &b, header); err != nil {
 		return "", err
 	}

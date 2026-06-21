@@ -1,6 +1,6 @@
 // Package githubfmt formats GitHub project metadata (star counts, push
 // dates, repo URLs) for display. Both the TUI's tool detail view and the
-// `klim info` CLI command consume these helpers so the two surfaces
+// `klim tool info` CLI command consume these helpers so the two surfaces
 // cannot drift out of sync — a regression in either renderer fails the
 // shared tests in this package.
 package githubfmt
@@ -44,7 +44,7 @@ func FormatStars(n int) string {
 // means the input was generated on a machine with a skewed clock, and
 // pretending it's recent would mislead the user. Singular buckets
 // ("1 hour ago", "1 day ago", …) use the singular noun explicitly so
-// the output reads naturally in both `klim info` and the TUI detail
+// the output reads naturally in both `klim tool info` and the TUI detail
 // page that share this helper.
 func FormatDate(ts string) string {
 	if ts == "" {

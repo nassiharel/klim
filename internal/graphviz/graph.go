@@ -1,5 +1,5 @@
 // Package graphviz is a tiny force-directed layout + terminal
-// renderer used by `klim graph`. The simulator is intentionally
+// renderer used by `klim tool graph`. The simulator is intentionally
 // minimal: Coulomb repulsion between every pair of nodes, Hooke
 // attraction along edges, velocity damping per tick. No external
 // deps beyond lipgloss for the renderer styling.

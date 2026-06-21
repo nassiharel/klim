@@ -30,14 +30,14 @@ project / pack references, and related installed tools.
 This is the CLI counterpart to the TUI's tool detail page.
 
 Examples:
-  klim info kubectl                 # human-readable table
-  klim info terraform --output json # machine-readable for scripts`,
-	Args: requireArgs(1, "klim info <tool>"),
+  klim tool info kubectl                 # human-readable table
+  klim tool info terraform --output json # machine-readable for scripts`,
+	Args: requireArgs(1, "klim tool info <tool>"),
 	RunE: runInfo,
 }
 
 func init() {
-	// `klim info` does a fresh single-tool scan on every invocation
+	// `klim tool info` does a fresh single-tool scan on every invocation
 	// (ScanOnly + RefreshTool — see runInfo), so there is no scan
 	// cache to bypass. We deliberately do NOT expose a --refresh
 	// flag: it would have no effect, and accepting one as a no-op
@@ -55,7 +55,7 @@ type infoInstance struct {
 
 // infoReference is now an alias for the shared cli.Reference type to keep
 // the existing JSON shape stable while the underlying scanner lives in
-// refscan.go (shared with `klim why`).
+// refscan.go (shared with `klim tool why`).
 //
 //nolint:unused // kept as a documentation anchor; future code may reference it
 type infoReference = Reference
@@ -80,7 +80,7 @@ type infoGitHub struct {
 	LastPush    string   `json:"last_push,omitempty"`
 }
 
-// infoReport is the full JSON shape returned by `klim info <tool> --output json`.
+// infoReport is the full JSON shape returned by `klim tool info <tool> --output json`.
 type infoReport struct {
 	Name            string         `json:"name"`
 	DisplayName     string         `json:"display_name,omitempty"`
@@ -99,9 +99,9 @@ type infoReport struct {
 	Warnings        []string       `json:"warnings"`
 }
 
-// infoSecurity surfaces the current security verdict in `klim info`.
+// infoSecurity surfaces the current security verdict in `klim tool info`.
 // Vulnerability data comes from the local cache only — running
-// `klim info` should never make a network call. Encourage the user
+// `klim tool info` should never make a network call. Encourage the user
 // to run `klim security vuln` for fresh data when CacheLoaded is
 // false (which is what triggers the "vulnerability cache empty"
 // hint).
@@ -180,7 +180,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 // buildInfoReport assembles the full report from the tool, its instances,
 // the catalog, project references, and pack references. Errors that don't
 // fully prevent rendering are pushed into report.Warnings instead of
-// aborting (matches the convention used by `klim why`).
+// aborting (matches the convention used by `klim tool why`).
 func buildInfoReport(cmd *cobra.Command, t *registry.Tool, tools []registry.Tool) infoReport {
 	r := infoReport{
 		Name:            t.Name,
@@ -248,7 +248,7 @@ func buildInfoReport(cmd *cobra.Command, t *registry.Tool, tools []registry.Tool
 // computeInfoSecurity builds the per-tool security verdict for the
 // info report. Audit signals are computed from the in-memory tool
 // list (no I/O); vulnerability data is read from the cache only —
-// `klim info` never makes a network call. Returns nil when the tool
+// `klim tool info` never makes a network call. Returns nil when the tool
 // isn't installed (security verdict only makes sense for installed
 // tools).
 func computeInfoSecurity(t registry.Tool, allTools []registry.Tool) *infoSecurity {
@@ -256,7 +256,7 @@ func computeInfoSecurity(t registry.Tool, allTools []registry.Tool) *infoSecurit
 		return nil
 	}
 	findings, _ := audit.Analyze(allTools)
-	// Read the vuln cache passively — `klim info` never makes a
+	// Read the vuln cache passively — `klim tool info` never makes a
 	// network call. The cache key (resolved via ResolveVulnSourceKey)
 	// matches whatever URL `klim security vuln` writes under, so the
 	// CLI, web view, and TUI all see the same data. If the cache is
@@ -283,11 +283,11 @@ func computeInfoSecurity(t registry.Tool, allTools []registry.Tool) *infoSecurit
 
 // infoPackage is now an alias for cli.PackageEntry to keep the JSON
 // shape stable while the canonical helper lives in refscan.go (shared
-// with `klim why`).
+// with `klim tool why`).
 type infoPackage = PackageEntry
 
 // catalogPackagesFor returns the populated package IDs in display order.
-// Delegates to the shared helper so `klim info` and `klim why` cannot
+// Delegates to the shared helper so `klim tool info` and `klim tool why` cannot
 // drift out of sync.
 func catalogPackagesFor(p registry.PackageIDs) []infoPackage {
 	return CollectPackageEntries(p)
@@ -309,7 +309,7 @@ func closestToolName(tools []registry.Tool, q string) string {
 	return bestName
 }
 
-// notFoundError builds the error returned when `klim info <name>` is
+// notFoundError builds the error returned when `klim tool info <name>` is
 // given a tool name that isn't in the catalog. Wrapped in UsageError
 // so the CLI exits with code 2 (malformed user input) instead of 1
 // (runtime failure) — scripts can distinguish a typo from a genuine
@@ -366,9 +366,9 @@ func minInt(a, b int) int {
 func renderInfoText(r infoReport, t *registry.Tool) {
 	// Per CLI-CONVENTIONS.md, human-readable prose belongs on
 	// stderr so that stdout stays free for pipe-friendly machine output
-	// (e.g. `klim info foo --output json | jq`). `klim info` is the
+	// (e.g. `klim tool info foo --output json | jq`). `klim tool info` is the
 	// only command in the codebase that previously wrote rendered text
-	// to stdout — this aligns it with `klim list`, `klim why`, etc.
+	// to stdout — this aligns it with `klim tool list`, `klim tool why`, etc.
 	w := os.Stderr
 
 	// Header line.
@@ -505,15 +505,15 @@ func renderInfoText(r infoReport, t *registry.Tool) {
 }
 
 // formatInfoRef and formatWhyRef have been replaced by the shared
-// cli.FormatReference helper in refscan.go. Both `klim info` and
-// `klim why` call FormatReference directly so any new Reference.Kind
+// cli.FormatReference helper in refscan.go. Both `klim tool info` and
+// `klim tool why` call FormatReference directly so any new Reference.Kind
 // or wording change is a one-place edit.
 
 // Star-count and date formatting live in internal/githubfmt so the TUI
-// detail view and `klim info` share one implementation. Tests for the
+// detail view and `klim tool info` share one implementation. Tests for the
 // contract live in internal/githubfmt/githubfmt_test.go.
 
-// wordWrapStr delegates to internal/textwrap.Wrap so `klim info` and
+// wordWrapStr delegates to internal/textwrap.Wrap so `klim tool info` and
 // the TUI detail view wrap GitHub descriptions identically with full
 // display-width awareness (CJK / emoji / combining characters). The
 // previous local implementation measured raw bytes and would wrap

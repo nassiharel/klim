@@ -11,7 +11,7 @@ import (
 // GroupingMappings is the persisted set of user-supplied cwd → group
 // mappings. Stored as YAML at ~/.klim/agents/sessions-grouping.yaml.
 //
-// The file is hand-edited and rewritten by `klim agents sessions
+// The file is hand-edited and rewritten by `klim agent session
 // group set`; the store reads it on every Load and writes it
 // atomically via fileutil.WriteYAML so an interrupted edit can't
 // corrupt the file.
@@ -110,7 +110,7 @@ func (s *GroupingMappings) All() map[string]string {
 }
 
 // GroupingEntry is one (pattern, group) mapping in the persisted
-// store, used by `klim agents sessions group list`.
+// store, used by `klim agent session group list`.
 type GroupingEntry struct {
 	Pattern string
 	Group   string

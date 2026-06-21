@@ -23,30 +23,30 @@ var (
 
 // applyCmd is the post-plan execution verb with a safety wrapper.
 //
-// Lifecycle of `klim apply`:
+// Lifecycle of `klim plan apply`:
 //
 //  1. Scan + capture an automatic checkpoint named pre-apply-<UTC>.
-//  2. Run the upgrade pass — identical to klim upgrade.
+//  2. Run the upgrade pass — identical to klim tool upgrade.
 //  3. Re-scan and feed BOTH the pre-apply state AND the post-apply
 //     state into postcheck so true regressions can be distinguished
 //     from pre-existing issues.
-//  4. On regression: surface the exact `klim rollback <name>`
+//  4. On regression: surface the exact `klim plan rollback <name>`
 //     command and exit 3.
 //
 // We deliberately do NOT auto-execute a rollback. Downgrading is
 // PM-specific, can race against running processes, and would obscure
 // exactly which change broke things — the user gets one explicit
-// command, with the same modal confirmation klim upgrade already
+// command, with the same modal confirmation klim tool upgrade already
 // wraps each invocation in.
 var applyCmd = &cobra.Command{
 	Use:   "apply [tool...]",
 	Short: "Apply pending changes with checkpoint + postcheck safety net",
-	Long: `Execute the changes klim plan proposes. Wrapped in a safety net so
+	Long: `Execute the changes klim plan show proposes. Wrapped in a safety net so
 you can trust the result:
 
   1. A checkpoint named pre-apply-<UTC> is captured BEFORE anything
-     runs. Roll back any time with: klim rollback pre-apply-<UTC>.
-  2. The upgrade pass runs — same logic as klim upgrade.
+     runs. Roll back any time with: klim plan rollback pre-apply-<UTC>.
+  2. The upgrade pass runs — same logic as klim tool upgrade.
   3. Postcheck validates the resulting state:
        shell resolution     every installed tool resolves via PATH
        binary validation    each binary stats + responds to --version
@@ -54,24 +54,23 @@ you can trust the result:
        manager integrity    every PM (brew/winget/scoop/…) is healthy
      Regressions vs the pre-apply state are flagged Fail; pre-existing
      issues are flagged Warn so postcheck doesn't trip on them.
-  4. On regression: klim apply prints the exact command to roll
+  4. On regression: klim plan apply prints the exact command to roll
      back the auto-checkpoint and exits 3.
 
 Examples:
-  klim apply                 Upgrade every tool with the full safety net.
-  klim apply jq fzf          Apply specific tools only.
-  klim apply --no-postcheck  Skip validation (faster, no auto-rollback hint).
-  klim apply --no-checkpoint Skip the pre-apply checkpoint entirely.
+  klim plan apply                 Upgrade every tool with the full safety net.
+  klim plan apply jq fzf          Apply specific tools only.
+  klim plan apply --no-postcheck  Skip validation (faster, no auto-rollback hint).
+  klim plan apply --no-checkpoint Skip the pre-apply checkpoint entirely.
 
-Use 'klim upgrade' for the bare upgrade with none of this wrapper.
+Use 'klim tool upgrade' for the bare upgrade with none of this wrapper.
 
 Exit codes:
   0  Apply succeeded and every postcheck passed.
   3  Apply succeeded but postcheck detected one or more regressions.
-     A 'klim rollback <name>' command is printed; rerun the apply
+     A 'klim plan rollback <name>' command is printed; rerun the apply
      after rolling back, or use --no-postcheck to accept the warnings.`,
-	GroupID: "tools",
-	RunE:    runApplyWithSafety,
+	RunE: runApplyWithSafety,
 }
 
 func init() {
@@ -81,7 +80,6 @@ func init() {
 	applyCmd.Flags().BoolVar(&applyNoPostcheck, "no-postcheck", false, "Skip the post-apply validation pass")
 	applyCmd.Flags().IntVar(&applyPostcheckConcurrency, "postcheck-concurrency", 0, "Max parallel binary probes during postcheck (0 = NumCPU)")
 	applyCmd.Flags().DurationVar(&applyPostcheckBudget, "postcheck-budget", 60*time.Second, "Wall-clock ceiling for the postcheck pass")
-	rootCmd.AddCommand(applyCmd)
 }
 
 func runApplyWithSafety(cmd *cobra.Command, args []string) error {
@@ -102,7 +100,7 @@ func runApplyWithSafety(cmd *cobra.Command, args []string) error {
 			cpName = name
 			fmt.Fprintln(os.Stderr, "💾 Pre-apply checkpoint saved:", cpName)
 			fmt.Fprintln(os.Stderr, "   File:    "+path)
-			fmt.Fprintln(os.Stderr, "   Restore: klim rollback "+cpName)
+			fmt.Fprintln(os.Stderr, "   Restore: klim plan rollback "+cpName)
 			fmt.Fprintln(os.Stderr)
 		}
 	}
@@ -111,7 +109,7 @@ func runApplyWithSafety(cmd *cobra.Command, args []string) error {
 	if err := runAction(cmd, args, ActionUpgrade, applyFlags, applyOutputFmt); err != nil {
 		if cpName != "" {
 			fmt.Fprintln(os.Stderr, "\nApply failed before completion. Roll back with:")
-			fmt.Fprintln(os.Stderr, "  klim rollback "+cpName)
+			fmt.Fprintln(os.Stderr, "  klim plan rollback "+cpName)
 		}
 		return err
 	}
@@ -146,7 +144,7 @@ func runApplyWithSafety(cmd *cobra.Command, args []string) error {
 	if cpName != "" {
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Restore the pre-apply state with:")
-		fmt.Fprintln(os.Stderr, "  klim rollback "+cpName)
+		fmt.Fprintln(os.Stderr, "  klim plan rollback "+cpName)
 	}
 	return &PartialFailureError{
 		Op:        "apply postcheck",

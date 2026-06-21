@@ -27,9 +27,9 @@ Exit codes:
   1  One or more tools missing or outdated
 
 Usage:
-  klim check                      # auto-find .klim.yaml
-  klim check --file path/to/.klim.yaml
-  klim check --output json        # machine-readable output for CI`,
+  klim project check                      # auto-find .klim.yaml
+  klim project check --file path/to/.klim.yaml
+  klim project check --output json        # machine-readable output for CI`,
 	RunE: runCheck,
 }
 

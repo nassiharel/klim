@@ -18,7 +18,7 @@ var (
 
 // rollbackCmd renders a plan that, when applied, would bring the
 // currently installed toolchain back to the named checkpoint. It
-// never executes anything itself — the user pipes through `klim
+// never executes anything itself — the user pipes through `klim plan
 // apply` (or the recommended commands in the plan output) to do the
 // work, so a rollback is always a deliberate two-step.
 var rollbackCmd = &cobra.Command{
@@ -26,25 +26,23 @@ var rollbackCmd = &cobra.Command{
 	Short: "Produce a plan that rolls back to a saved checkpoint",
 	Long: `Compare the current toolchain to a saved checkpoint and emit a
 plan that would restore it. Read-only by default — review the diff
-first, then run the commands the plan recommends (or ` + "`klim apply`" + `
+first, then run the commands the plan recommends (or ` + "`klim plan apply`" + `
 when applicable).
 
-Sections shown are the same as klim plan: planned changes, upgrade
+Sections shown are the same as klim plan show: planned changes, upgrade
 confidence (with downgrade caveats), risk analysis, disk impact, and
 an estimated time.
 
 Use --remove-extras to also propose removing tools that were
 installed after the checkpoint (i.e. tools not in the snapshot).`,
-	GroupID: "tools",
-	Args:    cobra.ExactArgs(1),
-	RunE:    runRollback,
+	Args: cobra.ExactArgs(1),
+	RunE: runRollback,
 }
 
 func init() {
 	rollbackOutput = addOutputFlag(rollbackCmd, OutputText, OutputJSON, OutputYAML)
 	rollbackCmd.Flags().BoolVar(&rollbackRefreshFlag, "refresh", false, "Force fresh scan (ignore cache)")
 	rollbackCmd.Flags().BoolVar(&rollbackIncludeRemoveFlag, "remove-extras", false, "Also propose removing tools added after the checkpoint")
-	rootCmd.AddCommand(rollbackCmd)
 }
 
 func runRollback(cmd *cobra.Command, args []string) error {
@@ -109,7 +107,7 @@ func runRollback(cmd *cobra.Command, args []string) error {
 	_, _ = fmt.Fprint(os.Stdout, plan.RenderText(p))
 	if len(p.Changes) > 0 {
 		fmt.Fprintln(os.Stderr, "\nReview the plan above, then apply the suggested commands manually")
-		fmt.Fprintln(os.Stderr, "(or run `klim apply` for upgrade-only rollbacks).")
+		fmt.Fprintln(os.Stderr, "(or run `klim plan apply` for upgrade-only rollbacks).")
 	}
 	return nil
 }

@@ -7,7 +7,7 @@ import (
 )
 
 func TestFormatStars(t *testing.T) {
-	// These cases are the contract that both `klim info` and the TUI
+	// These cases are the contract that both `klim tool info` and the TUI
 	// detail view depend on. Drift here is a UX regression visible to
 	// users in two places at once.
 	tests := []struct {
@@ -116,7 +116,7 @@ func TestFormatDate_OneHourBoundary(t *testing.T) {
 
 // TestFormatDate_SingularGrammar guards against "1 days ago" / "1
 // months ago" / "1.0 years ago" output. The shared formatter feeds
-// both `klim info` and the TUI detail page, so awkward grammar
+// both `klim tool info` and the TUI detail page, so awkward grammar
 // surfaces in two UIs at once.
 func TestFormatDate_SingularGrammar(t *testing.T) {
 	cases := []struct {

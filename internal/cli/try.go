@@ -23,10 +23,10 @@ This lets you try tools without committing to a permanent install.
 After the tool exits, klim asks whether to keep or remove it.
 
 Examples:
-  klim try bat                       # install bat, open a shell, then offer cleanup
-  klim try bat -- README.md          # install bat, run 'bat README.md', then offer cleanup
-  klim try ripgrep -- -i "TODO" .    # install ripgrep, search, then offer cleanup`,
-	Args: requireMinArgs(1, "klim try <tool> [-- args...]"),
+  klim tool try bat                       # install bat, open a shell, then offer cleanup
+  klim tool try bat -- README.md          # install bat, run 'bat README.md', then offer cleanup
+  klim tool try ripgrep -- -i "TODO" .    # install ripgrep, search, then offer cleanup`,
+	Args: requireMinArgs(1, "klim tool try <tool> [-- args...]"),
 	RunE: runTry,
 }
 

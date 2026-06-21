@@ -12,6 +12,16 @@ summarises the highlights.
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING:** reorganized the CLI into noun-first command groups. Every command now lives under a
+  group — e.g. `klim install` → `klim tool install`, `klim check` → `klim project check`,
+  `klim apply` → `klim plan apply`, `klim trail` → `klim env trail`,
+  `klim export` / `klim import` → `klim share export` / `klim share import`,
+  `klim health` → `klim doctor`, `klim score` → `klim security score`,
+  `klim agents` → `klim agent`, and `klim proxy` → `klim shell proxy`. Tool self-management
+  (`klim update`, `klim version`, `klim browser`) stays at the top level. There are no
+  backward-compatible aliases — the old top-level names are removed.
+
 ### Added
 - `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
 - `CHANGELOG.md` (this file).
@@ -25,7 +35,7 @@ summarises the highlights.
 
 ## [0.1.5] — see GitHub Releases
 
-Marketplace growth, agent-management surface (`klim agents`), health/PATH diagnostics, and
+Marketplace growth, agent-management surface (`klim agent`), health/PATH diagnostics, and
 plan/apply/rollback safety net. Full notes:
 <https://github.com/nassiharel/klim/releases/tag/v0.1.5>
 

@@ -27,7 +27,7 @@ func (s *Server) jsonError(w http.ResponseWriter, status int, msg string) {
 	s.writeJSON(w, status, map[string]string{"error": msg})
 }
 
-// apiTools returns the resolved tool list. Same shape `klim list
+// apiTools returns the resolved tool list. Same shape `klim tool list
 // --output json` emits.
 func (s *Server) apiTools(w http.ResponseWriter, r *http.Request) {
 	tools, info, err := s.loader.LoadInstalled(r.Context())
@@ -42,7 +42,7 @@ func (s *Server) apiTools(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// apiTool returns one tool. Same shape `klim info --output json` emits.
+// apiTool returns one tool. Same shape `klim tool info --output json` emits.
 func (s *Server) apiTool(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	t, err := s.loader.LoadTool(r.Context(), name)
