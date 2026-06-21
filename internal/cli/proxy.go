@@ -429,7 +429,7 @@ func shimFilePath(dir, name string) string {
 // Tool names are validated before reaching here via isValidShimName.
 func generateShim(binaryName, toolName string) string {
 	if runtime.GOOS == "windows" {
-		return fmt.Sprintf("@echo off\r\nclim proxy run %q -- %%*\r\n", toolName)
+		return fmt.Sprintf("@echo off\r\nklim shell proxy run %q -- %%*\r\n", toolName)
 	}
 	return fmt.Sprintf("#!/bin/sh\nexec klim shell proxy run %q -- \"$@\"\n", toolName)
 }
