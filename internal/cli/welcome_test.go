@@ -26,10 +26,7 @@ func TestShowFirstRunWelcome(t *testing.T) {
 	}
 
 	// Marker should now exist.
-	marker, err := firstRunMarkerPath(t)
-	if err != nil {
-		t.Fatal(err)
-	}
+	marker := filepath.Join(os.Getenv("KLIM_HOME"), ".welcomed")
 	if _, err := os.Stat(marker); err != nil {
 		t.Errorf("marker not written: %v", err)
 	}
@@ -42,9 +39,4 @@ func TestShowFirstRunWelcome(t *testing.T) {
 	if buf.Len() != 0 {
 		t.Errorf("second call printed output: %q", buf.String())
 	}
-}
-
-func firstRunMarkerPath(t *testing.T) (string, error) {
-	t.Helper()
-	return filepath.Join(os.Getenv("KLIM_HOME"), ".welcomed"), nil
 }
