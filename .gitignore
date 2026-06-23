@@ -1,6 +1,9 @@
 # Binaries
 bin/
 dist/
+# Generated shell completions + man pages (produced by `go run ./cmd/gen-docs`
+# at release time; kept out of dist/ so GoReleaser's empty-dist check passes).
+extras/
 *.exe
 *.exe~
 *.dll

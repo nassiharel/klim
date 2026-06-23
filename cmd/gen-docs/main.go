@@ -3,9 +3,14 @@
 // run locally) so the artifacts can be packaged into archives and Linux
 // packages. Not shipped in the klim binary itself.
 //
+// The output directory MUST live outside GoReleaser's managed `dist/`
+// directory: GoReleaser cleans `dist/` and then asserts it is empty after
+// the `before` hooks run, so a hook writing into `dist/` makes the release
+// fail with "dist is not empty". We default to `extras/` at the repo root.
+//
 // Usage:
 //
-//	go run ./cmd/gen-docs -o dist/extras
+//	go run ./cmd/gen-docs -o extras
 package main
 
 import (
@@ -18,7 +23,7 @@ import (
 )
 
 func main() {
-	out := flag.String("o", "dist/extras", "output directory for completions/ and man/")
+	out := flag.String("o", "extras", "output directory for completions/ and man/")
 	flag.Parse()
 
 	completionsDir := filepath.Join(*out, "completions")
