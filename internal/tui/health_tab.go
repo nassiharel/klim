@@ -14,14 +14,13 @@ import (
 // instantly recognises severity icons regardless of which tab a row
 // shows up in.
 var (
-	healthHeader    = lipgloss.NewStyle().Bold(true).Foreground(cyberFG)
-	healthDim       = lipgloss.NewStyle().Foreground(cyberFGDim)
-	healthAccent    = lipgloss.NewStyle().Foreground(cyberPrimary)
-	healthWarn      = lipgloss.NewStyle().Foreground(cyberAccent)
-	healthBad       = lipgloss.NewStyle().Foreground(cyberAlert)
-	healthOK        = lipgloss.NewStyle().Foreground(cyberOK).Bold(true)
-	healthSelected  = lipgloss.NewStyle().Foreground(cyberFG).Background(cyberSelectedBg)
-	healthActiveTag = lipgloss.NewStyle().Foreground(cyberOK).Bold(true)
+	healthHeader   = lipgloss.NewStyle().Bold(true).Foreground(cyberFG)
+	healthDim      = lipgloss.NewStyle().Foreground(cyberFGDim)
+	healthAccent   = lipgloss.NewStyle().Foreground(cyberPrimary)
+	healthWarn     = lipgloss.NewStyle().Foreground(cyberAccent)
+	healthBad      = lipgloss.NewStyle().Foreground(cyberAlert)
+	healthOK       = lipgloss.NewStyle().Foreground(cyberOK).Bold(true)
+	healthSelected = lipgloss.NewStyle().Foreground(cyberFG).Background(cyberSelectedBg)
 )
 
 // renderHealthView renders the Health tab body (the diagnostics list).
