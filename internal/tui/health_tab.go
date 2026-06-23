@@ -30,8 +30,8 @@ var (
 func (m Model) renderHealthView() string {
 	var b strings.Builder
 
-	if m.healthPathStatus != "" {
-		b.WriteString("  " + healthAccent.Render(m.healthPathStatus) + "\n\n")
+	if m.healthStatus != "" {
+		b.WriteString("  " + healthAccent.Render(m.healthStatus) + "\n\n")
 	}
 
 	if !m.doctorChecked {
@@ -47,14 +47,14 @@ func (m Model) renderHealthView() string {
 // the Security → Health sub-tab). The text and severity classification
 // come from internal/doctor. Each issue is selectable: ↑/↓ moves the
 // cursor, `f`/Enter invokes the issue's structured Action — copy a
-// cleanup command, trigger a rescan, or jump to Updates.
+// command, trigger a rescan, or jump to Updates.
 func (m Model) renderHealthIssuesView() string {
 	var b strings.Builder
 
 	if len(m.doctorIssues) == 0 {
 		b.WriteString("  " + healthOK.Render("✓ No issues found — your environment looks healthy!") + "\n\n")
-		b.WriteString("  " + dashDim.Render("All PATH entries are valid, no version conflicts detected,") + "\n")
-		b.WriteString("  " + dashDim.Render("and your package managers are working correctly.") + "\n")
+		b.WriteString("  " + dashDim.Render("No version conflicts detected, and your package") + "\n")
+		b.WriteString("  " + dashDim.Render("managers are working correctly.") + "\n")
 		return b.String()
 	}
 
@@ -194,7 +194,7 @@ func (m Model) handleKeyHealth(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activeBatch != nil && m.activeBatch.isRunning() {
 			return m, nil
 		}
-		m.healthPathStatus = ""
+		m.healthStatus = ""
 		scan := m.startScan()
 		return m, scan
 	}
@@ -339,7 +339,7 @@ func clampScrollToCursor(scroll int, flat []doctor.Issue, cursor, visibleRows in
 // the user knows nothing happened (vs. assuming `f` is broken).
 func (m Model) applyIssueAction(issue doctor.Issue) (tea.Model, tea.Cmd) {
 	if issue.Action == nil || issue.Action.Kind == doctor.ActionNone {
-		m.healthPathStatus = "⚠ no automated fix for this issue"
+		m.healthStatus = "⚠ no automated fix for this issue"
 		return m, nil
 	}
 	m.openHealthFixModal(issue)

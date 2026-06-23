@@ -17,9 +17,9 @@ type ActionKind string
 const (
 	ActionNone ActionKind = ""
 	// ActionCopyCommand copies Action.Command verbatim to the user's
-	// clipboard. Used for PATH-cleanup snippets, "install this PM"
-	// commands, etc. The TUI shows the literal command in the
-	// confirmation hint so the user knows what they're copying.
+	// clipboard. Used for "install this PM" commands and similar
+	// copy-pasteable snippets. The TUI shows the literal command in
+	// the confirmation hint so the user knows what they're copying.
 	ActionCopyCommand ActionKind = "copy_command"
 	// ActionRescan triggers the standard klim rescan (the same
 	// effect as pressing `r`). Used for stale-cache and
@@ -34,8 +34,8 @@ type Action struct {
 	Kind    ActionKind `json:"kind,omitempty"`
 	Label   string     `json:"label,omitempty"`
 	Command string     `json:"command,omitempty"`
-	// Target carries kind-specific context: a tool name, a PATH
-	// entry for ActionCopyCommand on a PATH issue, etc.
+	// Target carries kind-specific context, e.g. a tool name or a
+	// package-manager source for the relevant action.
 	Target string `json:"target,omitempty"`
 	// TouchesPATH is true when running this action will modify the
 	// user's $PATH (or the persistent Windows User PATH). The TUI

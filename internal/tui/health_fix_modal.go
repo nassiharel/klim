@@ -76,7 +76,7 @@ func (m *Model) openHealthFixModal(issue doctor.Issue) {
 	if len(opts) == 0 {
 		// Issue has no action — surface a non-modal status so the
 		// user understands `f` wasn't ignored.
-		m.healthPathStatus = "⚠ No automated fix for this issue"
+		m.healthStatus = "⚠ No automated fix for this issue"
 		return
 	}
 	m.fixModal = fixModal{
@@ -158,7 +158,7 @@ func buildFixOptions(issue doctor.Issue) []fixModalOption {
 				Desc:  "Re-walk PATH and re-resolve every installed tool. The cache file is updated on success.",
 				Run: func(m Model) (Model, tea.Cmd) {
 					m.fixModal = fixModal{}
-					m.healthPathStatus = "Rescanning..."
+					m.healthStatus = "Rescanning..."
 					scan := m.startScan()
 					return m, scan
 				},
@@ -235,11 +235,11 @@ func (m Model) closeFixModalAfterDoneCmd() (Model, tea.Cmd) {
 
 	switch {
 	case wasRestore && didSucceed:
-		m.healthPathStatus = "↶ PATH restored — refreshing diagnostics..."
+		m.healthStatus = "↶ PATH restored — refreshing diagnostics..."
 	case didSucceed && backup != "":
-		m.healthPathStatus = "✓ Fix applied (backup at " + backup + ") — refreshing diagnostics..."
+		m.healthStatus = "✓ Fix applied (backup at " + backup + ") — refreshing diagnostics..."
 	case didSucceed:
-		m.healthPathStatus = "✓ Fix applied — refreshing diagnostics..."
+		m.healthStatus = "✓ Fix applied — refreshing diagnostics..."
 	default:
 		return m, nil
 	}
@@ -382,7 +382,7 @@ func (m Model) handleKeyHealthFixModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "esc":
 			m.fixModal = fixModal{}
-			m.healthPathStatus = "Fix cancelled (it may still be running in the background)"
+			m.healthStatus = "Fix cancelled (it may still be running in the background)"
 			return m, nil
 		}
 	case fixModalDone:

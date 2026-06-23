@@ -418,7 +418,7 @@ type Model struct {
 	// "Issues" list and its transient status banner.
 	healthScroll      int    // scroll offset for Health tab
 	healthIssueCursor int    // selected issue row (flat index across all categories)
-	healthPathStatus  string // transient banner: last fix-action result
+	healthStatus      string // transient banner: last fix-action result
 
 	// Agents tab — self-contained state. See agents_tab.go.
 	agents *agentsState
@@ -766,7 +766,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.doctorSubTab = doctorSubAudit
 	m.healthScroll = 0
 	m.healthIssueCursor = 0
-	m.healthPathStatus = ""
+	m.healthStatus = ""
 	m.onboardTools = nil // indices tied to old tools slice
 	// startScan brings phase back to phaseLoading, which means
 	// animationActive returns true. If the tick chain had paused
