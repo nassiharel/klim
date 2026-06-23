@@ -7,8 +7,6 @@ package doctor
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -29,7 +27,6 @@ const (
 
 // Category constants group issues by topic.
 const (
-	CategoryPATH  = "PATH"
 	CategoryTools = "Tools"
 	CategoryPM    = "Package Managers"
 	CategoryCache = "Cache"
@@ -44,9 +41,9 @@ type Issue struct {
 	Fix      string   `json:"fix,omitempty"`
 	// Action carries an optional structured remediation. The Health
 	// → Issues TUI dispatches on Action.Kind to provide one-key
-	// fixes (copy PATH-cleanup command, jump to PATH view, trigger
-	// rescan, etc.). CLI output only renders the legacy `Fix`
-	// summary, so Action stays purely additive.
+	// fixes (copy a command, trigger a rescan, jump to Updates,
+	// etc.). CLI output only renders the legacy `Fix` summary, so
+	// Action stays purely additive.
 	//
 	// Pointer rather than embedded struct so JSON `omitempty` can
 	// actually drop the field — encoding/json doesn't treat
@@ -63,10 +60,6 @@ type ScanMeta struct {
 // Diagnose runs all health checks and returns found issues.
 func Diagnose(tools []registry.Tool, meta ScanMeta) []Issue {
 	var issues []Issue
-	issues = append(issues, checkDuplicatePATH()...)
-	issues = append(issues, checkBrokenPATH()...)
-	issues = append(issues, checkPATHShadowing(tools)...)
-	issues = append(issues, checkUserWritablePathOrder()...)
 	issues = append(issues, checkMultipleInstallations(tools)...)
 	issues = append(issues, checkMissingPMs(tools)...)
 	issues = append(issues, checkStaleCache()...)
@@ -102,116 +95,6 @@ func CountBySeverity(issues []Issue) (int, int, int) {
 }
 
 // --- Individual checks ---
-
-// checkDuplicatePATH detects duplicate entries in PATH.
-func checkDuplicatePATH() []Issue {
-	raw := os.Getenv("PATH")
-	if raw == "" {
-		return nil
-	}
-	dirs := filepath.SplitList(raw)
-	seen := make(map[string]pathEntry) // normalized path → first occurrence
-	var issues []Issue
-
-	for i, dir := range dirs {
-		norm := normalizePath(dir)
-		if norm == "" {
-			continue
-		}
-		if first, ok := seen[norm]; ok {
-			detail := fmt.Sprintf("%q (position %d) duplicates %q (position %d)", dir, i+1, first.raw, first.index+1)
-			issues = append(issues, Issue{
-				Severity: SeverityWarning,
-				Category: CategoryPATH,
-				Title:    "Duplicate PATH entry",
-				Detail:   detail,
-				Fix:      "Remove the duplicate entry from your PATH",
-				Action: &Action{
-					Kind:        ActionCopyCommand,
-					Label:       "Copy command to remove duplicate from PATH",
-					Command:     dedupePathEntryCommand(dir),
-					Target:      dir,
-					TouchesPATH: true,
-				},
-			})
-		} else {
-			seen[norm] = pathEntry{raw: dir, index: i}
-		}
-	}
-	return issues
-}
-
-type pathEntry struct {
-	raw   string
-	index int
-}
-
-// checkBrokenPATH detects PATH entries that don't exist or aren't directories.
-func checkBrokenPATH() []Issue {
-	raw := os.Getenv("PATH")
-	if raw == "" {
-		return nil
-	}
-	dirs := filepath.SplitList(raw)
-	var issues []Issue
-
-	for _, dir := range dirs {
-		cleaned := strings.TrimSpace(dir)
-		if cleaned == "" {
-			continue
-		}
-		cleaned = filepath.Clean(cleaned)
-		info, err := os.Stat(cleaned)
-		switch {
-		case os.IsNotExist(err):
-			issues = append(issues, Issue{
-				Severity: SeverityWarning,
-				Category: CategoryPATH,
-				Title:    "Missing PATH directory",
-				Detail:   fmt.Sprintf("%q does not exist", dir),
-				Fix:      "Remove this entry from your PATH",
-				Action: &Action{
-					Kind:        ActionCopyCommand,
-					Label:       "Copy command to remove missing dir from PATH",
-					Command:     removePathEntryCommand(dir),
-					Target:      dir,
-					TouchesPATH: true,
-				},
-			})
-		case os.IsPermission(err):
-			issues = append(issues, Issue{
-				Severity: SeverityWarning,
-				Category: CategoryPATH,
-				Title:    "Inaccessible PATH directory",
-				Detail:   fmt.Sprintf("%q exists but permission denied", dir),
-				Fix:      "Fix permissions or remove from PATH",
-				Action: &Action{
-					Kind:        ActionCopyCommand,
-					Label:       "Copy command to remove inaccessible dir from PATH",
-					Command:     removePathEntryCommand(dir),
-					Target:      dir,
-					TouchesPATH: true,
-				},
-			})
-		case err == nil && !info.IsDir():
-			issues = append(issues, Issue{
-				Severity: SeverityWarning,
-				Category: CategoryPATH,
-				Title:    "Non-directory in PATH",
-				Detail:   fmt.Sprintf("%q is a file, not a directory", dir),
-				Fix:      "Remove this entry from your PATH",
-				Action: &Action{
-					Kind:        ActionCopyCommand,
-					Label:       "Copy command to remove non-directory from PATH",
-					Command:     removePathEntryCommand(dir),
-					Target:      dir,
-					TouchesPATH: true,
-				},
-			})
-		}
-	}
-	return issues
-}
 
 // checkMultipleInstallations detects tools with multiple instances that have
 // conflicting versions. Same tool at multiple paths with identical versions
@@ -259,11 +142,6 @@ func checkMultipleInstallations(tools []registry.Tool) []Issue {
 			Title:    fmt.Sprintf("%s has %d installations with different versions", t.DisplayName, len(t.Instances)),
 			Detail:   strings.Join(parts, "\n"),
 			Fix:      fix,
-			Action: &Action{
-				Kind:   ActionJumpPathView,
-				Label:  "Open PATH view to inspect & uninstall a copy",
-				Target: t.Name,
-			},
 		})
 	}
 	return issues
@@ -418,235 +296,6 @@ func checkOutdatedSummary(tools []registry.Tool, meta ScanMeta) []Issue {
 			Label: "Jump to Updates tab",
 		},
 	}}
-}
-
-// checkPATHShadowing detects tools with multiple Instances on PATH and
-// reports which path "wins" (first match per shell-style PATH lookup).
-// Mostly an info-level diagnostic, but bumps to warning when the
-// winning path is in a user-writable directory ahead of a system one
-// — that's a privilege-escalation pattern (an attacker with write
-// access to your bin/ dir can shadow sudo, kubectl, etc.).
-func checkPATHShadowing(tools []registry.Tool) []Issue {
-	var issues []Issue
-	for _, t := range tools {
-		if len(t.Instances) < 2 {
-			continue
-		}
-		// Build "tool found at A, B, C" — A wins.
-		paths := make([]string, 0, len(t.Instances))
-		for _, inst := range t.Instances {
-			paths = append(paths, inst.Path)
-		}
-		winner := paths[0]
-		shadowed := paths[1:]
-
-		// Severity: info by default; warning when the winner sits in a
-		// user-writable dir that precedes a system one for any of the
-		// shadowed paths.
-		sev := SeverityInfo
-		if winnerIsUserWritableShadowingSystem(winner, shadowed) {
-			sev = SeverityWarning
-		}
-		// DisplayName is optional in the catalog; fall back to the
-		// canonical name so titles are never " shadowed on PATH".
-		label := t.DisplayName
-		if label == "" {
-			label = t.Name
-		}
-		issues = append(issues, Issue{
-			Severity: sev,
-			Category: CategoryPATH,
-			Title:    label + " shadowed on PATH",
-			Detail:   fmt.Sprintf("Active: %s\nShadowed: %s", winner, strings.Join(shadowed, ", ")),
-			Fix:      "Reorder your PATH so the trusted location comes first, or remove duplicate copies",
-			Action: &Action{
-				Kind:   ActionJumpPathView,
-				Label:  "Open PATH view focused on " + label,
-				Target: t.Name,
-			},
-		})
-	}
-	return issues
-}
-
-// winnerIsUserWritableShadowingSystem reports whether the active path
-// sits in a user-writable directory while any of the shadowed paths
-// is in a system directory. Best-effort; missing files / unreadable
-// dirs return false.
-func winnerIsUserWritableShadowingSystem(winner string, shadowed []string) bool {
-	if !isUserWritableDir(filepath.Dir(winner)) {
-		return false
-	}
-	for _, p := range shadowed {
-		if isSystemDir(filepath.Dir(p)) {
-			return true
-		}
-	}
-	return false
-}
-
-// checkUserWritablePathOrder walks PATH left-to-right and flags
-// user-writable directories that precede system directories. This is
-// a privilege-escalation hardening check: if `~/.local/bin` is ahead
-// of `/usr/local/bin` on PATH, an attacker who lands a file in
-// `~/.local/bin/sudo` shadows the real sudo.
-func checkUserWritablePathOrder() []Issue {
-	raw := os.Getenv("PATH")
-	if raw == "" {
-		return nil
-	}
-	parts := filepath.SplitList(raw)
-	var issues []Issue
-	seenUserWritable := []string{}
-	for _, dir := range parts {
-		dir = strings.TrimSpace(dir)
-		if dir == "" {
-			continue
-		}
-		switch {
-		case isUserWritableDir(dir):
-			seenUserWritable = append(seenUserWritable, dir)
-		case isSystemDir(dir) && len(seenUserWritable) > 0:
-			issues = append(issues, Issue{
-				Severity: SeverityInfo,
-				Category: CategoryPATH,
-				Title:    "User-writable PATH dir precedes system dir",
-				Detail: fmt.Sprintf("System dir: %s\nUser-writable dirs ahead of it: %s",
-					dir, strings.Join(seenUserWritable, ", ")),
-				Fix: "Move user-writable bin dirs after system dirs to avoid shadowing trusted binaries",
-				Action: &Action{
-					Kind:        ActionCopyCommand,
-					Label:       "Copy command to reorder PATH (system dirs first)",
-					Command:     reorderPathCommand(),
-					TouchesPATH: true,
-				},
-			})
-			// Only report the first system dir; one warning per
-			// problematic ordering is enough to make the point.
-			return issues
-		}
-	}
-	return issues
-}
-
-// hasPathPrefix reports whether dir is the same path as parent or a
-// descendant of it, with proper path-boundary handling. Avoids false
-// positives like HasPrefix("/home/joel/bin", "/home/joe"). Both inputs
-// are cleaned; comparison is case-insensitive on Windows (filesystem
-// semantics) and exact elsewhere.
-func hasPathPrefix(dir, parent string) bool {
-	if parent == "" {
-		return false
-	}
-	dirClean := filepath.Clean(dir)
-	parentClean := filepath.Clean(parent)
-	if runtime.GOOS == "windows" {
-		dirClean = strings.ToLower(dirClean)
-		parentClean = strings.ToLower(parentClean)
-	}
-	if dirClean == parentClean {
-		return true
-	}
-	rel, err := filepath.Rel(parentClean, dirClean)
-	if err != nil {
-		return false
-	}
-	if rel == "." {
-		return true
-	}
-	if strings.HasPrefix(rel, "..") {
-		return false
-	}
-	return true
-}
-
-// isUserWritableDir reports whether dir is in a location an
-// unprivileged user can drop binaries into. This is intentionally a
-// heuristic, not an authoritative permission check:
-//
-//   - World-writable dirs (mode bits include 0o002) always count.
-//   - Dirs under $HOME with the owner-write bit set count, on the
-//     assumption that the calling user owns their own home tree.
-//     We don't syscall to compare the dir's stat UID against EUID
-//     (would require platform-specific syscall.Stat_t and pull in
-//     extra build constraints) — accuracy isn't worth the
-//     complexity for what's already a hardening *suggestion*.
-//   - On Windows, the heuristic is "lives under USERPROFILE".
-//
-// False positives just inflate severity on the PATH-shadowing
-// diagnostic; they don't break installs or fail builds.
-func isUserWritableDir(dir string) bool {
-	dir = strings.TrimSpace(dir)
-	if dir == "" {
-		return false
-	}
-	info, err := os.Stat(dir) //nolint:gosec // G304/G703: dir originates from PATH; checking PATH integrity is the purpose.
-	if err != nil || !info.IsDir() {
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		// Heuristic: directories under the user profile are typically
-		// user-writable. The ACL machinery to check properly isn't
-		// worth the complexity for what's already a hardening
-		// suggestion.
-		return hasPathPrefix(dir, os.Getenv("USERPROFILE"))
-	}
-	mode := info.Mode().Perm()
-	// World-writable always counts.
-	if mode&0o002 != 0 {
-		return true
-	}
-	// Owner-writable counts when current user owns the dir. On non-
-	// Windows we can't easily get the file owner without syscalls; a
-	// good-enough heuristic is "user dir under HOME".
-	if hasPathPrefix(dir, os.Getenv("HOME")) {
-		return mode&0o200 != 0
-	}
-	return false
-}
-
-// isSystemDir reports whether dir is one of the canonical OS-trusted
-// PATH entries. Hard-coded list keeps the check predictable; missing
-// a non-standard system dir just means we don't flag a potential
-// shadowing — preferable to false positives.
-func isSystemDir(dir string) bool {
-	dir = filepath.Clean(strings.TrimSpace(dir))
-	switch runtime.GOOS {
-	case "windows":
-		dl := strings.ToLower(dir)
-		for _, sys := range []string{
-			`c:\windows`, `c:\windows\system32`, `c:\windows\syswow64`,
-			`c:\program files`, `c:\program files (x86)`,
-		} {
-			if strings.HasPrefix(dl, sys) {
-				return true
-			}
-		}
-		return false
-	default:
-		switch dir {
-		case "/usr/local/sbin", "/usr/local/bin",
-			"/usr/sbin", "/usr/bin",
-			"/sbin", "/bin",
-			"/opt/homebrew/bin", "/opt/homebrew/sbin":
-			return true
-		}
-		return false
-	}
-}
-
-// normalizePath normalizes a path for deduplication. On Windows, it
-// lowercases and cleans the path. On Unix, it just cleans it.
-func normalizePath(p string) string {
-	p = strings.TrimSpace(p)
-	if p == "" {
-		return ""
-	}
-	p = filepath.Clean(p)
-	if runtime.GOOS == "windows" {
-		p = strings.ToLower(p)
-	}
-	return p
 }
 
 // hasPkgID checks whether a tool has a package ID for the given source.

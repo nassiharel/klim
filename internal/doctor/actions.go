@@ -1,9 +1,7 @@
 package doctor
 
 import (
-	"fmt"
 	"runtime"
-	"strings"
 
 	"github.com/nassiharel/klim/internal/registry"
 )
@@ -19,19 +17,14 @@ type ActionKind string
 const (
 	ActionNone ActionKind = ""
 	// ActionCopyCommand copies Action.Command verbatim to the user's
-	// clipboard. Used for PATH-cleanup snippets, "install this PM"
-	// commands, etc. The TUI shows the literal command in the
-	// confirmation hint so the user knows what they're copying.
+	// clipboard. Used for "install this PM" commands and similar
+	// copy-pasteable snippets. The TUI shows the literal command in
+	// the confirmation hint so the user knows what they're copying.
 	ActionCopyCommand ActionKind = "copy_command"
 	// ActionRescan triggers the standard klim rescan (the same
 	// effect as pressing `r`). Used for stale-cache and
 	// unresolved-version issues.
 	ActionRescan ActionKind = "rescan"
-	// ActionJumpPathView switches to the Health → PATH sub-tab and
-	// focuses the tool named in Target. Used for PATH-shadowing and
-	// multi-install-conflict issues so the user lands directly on
-	// the relevant row.
-	ActionJumpPathView ActionKind = "jump_path"
 	// ActionJumpUpdates switches to My Tools → Updates.
 	ActionJumpUpdates ActionKind = "jump_updates"
 )
@@ -41,9 +34,8 @@ type Action struct {
 	Kind    ActionKind `json:"kind,omitempty"`
 	Label   string     `json:"label,omitempty"`
 	Command string     `json:"command,omitempty"`
-	// Target carries kind-specific context: a tool name for
-	// ActionJumpPathView, a PATH entry for ActionCopyCommand on a
-	// PATH issue, etc.
+	// Target carries kind-specific context, e.g. a tool name or a
+	// package-manager source for the relevant action.
 	Target string `json:"target,omitempty"`
 	// TouchesPATH is true when running this action will modify the
 	// user's $PATH (or the persistent Windows User PATH). The TUI
@@ -51,122 +43,6 @@ type Action struct {
 	// just before exec so the user can roll back from inside the
 	// fix modal.
 	TouchesPATH bool `json:"touches_path,omitempty"`
-}
-
-// removePathEntryCommand returns a shell snippet that removes every
-// occurrence of a single directory from $PATH for the current shell
-// session. Persisting the change is intentionally left to the user —
-// we don't know which startup file owns their PATH and silently
-// editing ~/.bashrc / ~/.zshrc / the Windows registry would be a
-// footgun.
-//
-// Use this for the "missing dir" / "non-directory in PATH" /
-// "inaccessible dir" issues, where every occurrence is bad. For
-// "Duplicate PATH entry" use dedupePathEntryCommand instead — that
-// keeps the first occurrence and drops only later duplicates.
-//
-// On Windows the snippet additionally calls [Environment]::
-// SetEnvironmentVariable so the change survives across sessions —
-// that's safe because the persistent User PATH is well-defined and
-// owned by the current user.
-func removePathEntryCommand(entry string) string {
-	if entry == "" {
-		return ""
-	}
-	if runtime.GOOS == "windows" {
-		// PowerShell. Use single quotes to avoid interpolation
-		// surprises in paths that contain $ or `.
-		esc := strings.ReplaceAll(entry, "'", "''")
-		return fmt.Sprintf(`$new = ($env:PATH -split ';' | Where-Object { $_ -ne '%s' }) -join ';'; $env:PATH = $new; [Environment]::SetEnvironmentVariable('PATH', $new, 'User')`, esc)
-	}
-	// POSIX shells. awk + RS=: keeps ordering stable and tolerates
-	// duplicates (every matching entry is dropped). The entry is
-	// inlined as a quoted awk string literal — both backslashes and
-	// double quotes must be escaped for awk's parser. The
-	// surrounding awk program is single-quoted, so the shell passes
-	// the awk literal through verbatim.
-	return fmt.Sprintf(
-		`export PATH="$(printf '%%s' "$PATH" | awk -v RS=: -v ORS=: '$0 != %s' | sed 's/:$//')"`,
-		awkStringLiteral(entry),
-	)
-}
-
-// dedupePathEntryCommand returns a shell snippet that keeps the
-// FIRST occurrence of entry in $PATH and removes every later one.
-// Used by the "Duplicate PATH entry" issue so the resolution order
-// for tools that rely on that directory is preserved.
-func dedupePathEntryCommand(entry string) string {
-	if entry == "" {
-		return ""
-	}
-	if runtime.GOOS == "windows" {
-		esc := strings.ReplaceAll(entry, "'", "''")
-		// Single pass over the split PATH: emit each entry once,
-		// only suppressing later duplicates of $target.
-		return fmt.Sprintf(`$target = '%s'; $seen = $false; $new = (@($env:PATH -split ';' | ForEach-Object { if ($_ -eq $target) { if (-not $seen) { $seen = $true; $_ } } else { $_ } })) -join ';'; $env:PATH = $new; [Environment]::SetEnvironmentVariable('PATH', $new, 'User')`, esc)
-	}
-	// POSIX awk: print the target on first match, suppress on
-	// subsequent matches; pass non-matching entries through
-	// unchanged.
-	return fmt.Sprintf(
-		`export PATH="$(printf '%%s' "$PATH" | awk -v RS=: -v ORS=: -v t=%s 'BEGIN{seen=0} { if ($0 == t) { if (!seen) { seen=1; print } } else { print } }' | sed 's/:$//')"`,
-		awkStringLiteral(entry),
-	)
-}
-
-// awkStringLiteral wraps s in double quotes for an awk program,
-// escaping backslashes and double quotes per awk's literal grammar.
-// Caller must place the result inside a single-quoted shell-level
-// awk program so the shell doesn't re-interpret the escapes.
-func awkStringLiteral(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
-	return `"` + s + `"`
-}
-
-// reorderPathCommand returns a shell snippet that re-emits PATH with
-// every system directory placed ahead of every user-writable dir.
-// Best-effort and intentionally conservative — system entries are
-// detected via the same list used by checkUserWritablePathOrder so
-// the result is consistent with the warning.
-func reorderPathCommand() string {
-	if runtime.GOOS == "windows" {
-		// The StartsWith check appends a backslash to the system
-		// dir before comparing, so look-alike siblings like
-		// C:\WindowsApps or C:\Windows.old are NOT classified as
-		// system dirs. An exact-equality check covers the case
-		// where the entry IS one of the system dirs itself.
-		return `# Reorder Windows User PATH so system dirs precede user-writable dirs.
-$systemDirs = @('C:\Windows', 'C:\Windows\System32', 'C:\Windows\SysWow64', 'C:\Program Files', 'C:\Program Files (x86)')
-function Test-IsSystemDir([string]$d) {
-  $dl = $d.ToLower()
-  foreach ($s in $systemDirs) {
-    $sl = $s.ToLower()
-    if ($dl -eq $sl -or $dl.StartsWith($sl + '\')) { return $true }
-  }
-  return $false
-}
-$entries = $env:PATH -split ';' | Where-Object { $_ -ne '' }
-$systemFirst = @($entries | Where-Object { Test-IsSystemDir $_ })
-$userLast    = @($entries | Where-Object { -not (Test-IsSystemDir $_) })
-$new = ($systemFirst + $userLast) -join ';'
-$env:PATH = $new
-[Environment]::SetEnvironmentVariable('PATH', $new, 'User')`
-	}
-	return `# Reorder PATH so system bin dirs precede user-writable ones for this shell session.
-# Persist by appending the resulting "export PATH=…" line to ~/.bashrc / ~/.zshrc.
-sys="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin:/opt/homebrew/sbin"
-keep=""; rest=""
-IFS=':'
-for d in $PATH; do
-  case ":$sys:" in
-    *":$d:"*) keep="$keep:$d" ;;
-    *)        rest="$rest:$d" ;;
-  esac
-done
-unset IFS
-export PATH="${keep#:}:${rest#:}"
-echo "$PATH"`
 }
 
 // installPMCommand returns a copy-pasteable command to install the

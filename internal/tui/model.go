@@ -414,18 +414,11 @@ type Model struct {
 	doctorChecked    bool               // true after first doctor check completed
 	doctorSubTab     int                // Security: 0=audit, 1=compliance
 
-	// Health tab state (separate from Security: PATH conflicts +
-	// the legacy "Issues" view; sub-tab cycling lives in its own
-	// scroll/state slot so cycling between Health and Security
-	// keeps each tab's last view).
-	healthSubTab        int    // 0=Issues, 1=PATH
-	healthScroll        int    // scroll offset for Health tab
-	healthIssueCursor   int    // selected issue row (flat index across all categories)
-	healthPathView      int    // 0=By tool, 1=By PATH dir
-	healthPathToolIdx   int    // selected row in By-tool view
-	healthPathShadowIdx int    // selected shadowed copy under that tool
-	healthPathDirIdx    int    // selected row in By-PATH-dir view
-	healthPathStatus    string // transient banner: last uninstall result
+	// Health tab state (separate from Security): the diagnostics
+	// "Issues" list and its transient status banner.
+	healthScroll      int    // scroll offset for Health tab
+	healthIssueCursor int    // selected issue row (flat index across all categories)
+	healthStatus      string // transient banner: last fix-action result
 
 	// Agents tab — self-contained state. See agents_tab.go.
 	agents *agentsState
@@ -771,14 +764,9 @@ func (m *Model) startScan() tea.Cmd {
 	m.doctorChecked = false
 	m.doctorScroll = 0
 	m.doctorSubTab = doctorSubAudit
-	m.healthSubTab = healthSubIssues
 	m.healthScroll = 0
 	m.healthIssueCursor = 0
-	m.healthPathView = healthPathByTool
-	m.healthPathToolIdx = 0
-	m.healthPathShadowIdx = 0
-	m.healthPathDirIdx = 0
-	m.healthPathStatus = ""
+	m.healthStatus = ""
 	m.onboardTools = nil // indices tied to old tools slice
 	// startScan brings phase back to phaseLoading, which means
 	// animationActive returns true. If the tick chain had paused

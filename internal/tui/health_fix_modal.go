@@ -12,7 +12,6 @@ import (
 
 	"github.com/nassiharel/klim/internal/doctor"
 	"github.com/nassiharel/klim/internal/pathbackup"
-	"github.com/nassiharel/klim/internal/pathconflict"
 )
 
 // fixModalState tracks where the user is inside the Health → Issues
@@ -77,7 +76,7 @@ func (m *Model) openHealthFixModal(issue doctor.Issue) {
 	if len(opts) == 0 {
 		// Issue has no action — surface a non-modal status so the
 		// user understands `f` wasn't ignored.
-		m.healthPathStatus = "⚠ No automated fix for this issue"
+		m.healthStatus = "⚠ No automated fix for this issue"
 		return
 	}
 	m.fixModal = fixModal{
@@ -151,20 +150,6 @@ func buildFixOptions(issue doctor.Issue) []fixModalOption {
 		opts = append(opts, fixModalOptionCancel())
 		return opts
 
-	case doctor.ActionJumpPathView:
-		return []fixModalOption{
-			{
-				Key:   "open",
-				Label: "Open PATH view",
-				Desc:  "Switch to Health → PATH, focused on the offending tool.",
-				Run: func(m Model) (Model, tea.Cmd) {
-					m.fixModal = fixModal{}
-					return m.applyJumpPathFromIssue(issue), nil
-				},
-			},
-			fixModalOptionCancel(),
-		}
-
 	case doctor.ActionRescan:
 		return []fixModalOption{
 			{
@@ -173,7 +158,7 @@ func buildFixOptions(issue doctor.Issue) []fixModalOption {
 				Desc:  "Re-walk PATH and re-resolve every installed tool. The cache file is updated on success.",
 				Run: func(m Model) (Model, tea.Cmd) {
 					m.fixModal = fixModal{}
-					m.healthPathStatus = "Rescanning..."
+					m.healthStatus = "Rescanning..."
 					scan := m.startScan()
 					return m, scan
 				},
@@ -250,11 +235,11 @@ func (m Model) closeFixModalAfterDoneCmd() (Model, tea.Cmd) {
 
 	switch {
 	case wasRestore && didSucceed:
-		m.healthPathStatus = "↶ PATH restored — refreshing diagnostics..."
+		m.healthStatus = "↶ PATH restored — refreshing diagnostics..."
 	case didSucceed && backup != "":
-		m.healthPathStatus = "✓ Fix applied (backup at " + backup + ") — refreshing diagnostics..."
+		m.healthStatus = "✓ Fix applied (backup at " + backup + ") — refreshing diagnostics..."
 	case didSucceed:
-		m.healthPathStatus = "✓ Fix applied — refreshing diagnostics..."
+		m.healthStatus = "✓ Fix applied — refreshing diagnostics..."
 	default:
 		return m, nil
 	}
@@ -327,28 +312,6 @@ func fixModalOptionCancel() fixModalOption {
 	}
 }
 
-// applyJumpPathFromIssue moves the user to Health → PATH with the
-// cursor on the offending tool. Extracted so the modal "Open PATH
-// view" button can re-use the same routing logic the direct-action
-// path used.
-func (m Model) applyJumpPathFromIssue(issue doctor.Issue) Model {
-	m.healthSubTab = healthSubPath
-	m.healthPathView = healthPathByTool
-	m.healthPathShadowIdx = 0
-	m.healthScroll = 0
-	if issue.Action != nil && issue.Action.Target != "" {
-		report := pathconflict.Analyze(m.tools)
-		for i, tv := range report.ByTool {
-			if tv.Name == issue.Action.Target {
-				m.healthPathToolIdx = i
-				break
-			}
-		}
-		m.healthPathStatus = "→ Opened PATH view focused on " + issue.Action.Target
-	}
-	return m
-}
-
 // runHealthFixCmd executes a shell snippet in the user's default shell
 // and reports captured stdout+stderr via healthFixResultMsg. On
 // Windows the snippet runs through PowerShell because the action
@@ -419,7 +382,7 @@ func (m Model) handleKeyHealthFixModal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "esc":
 			m.fixModal = fixModal{}
-			m.healthPathStatus = "Fix cancelled (it may still be running in the background)"
+			m.healthStatus = "Fix cancelled (it may still be running in the background)"
 			return m, nil
 		}
 	case fixModalDone:
@@ -579,8 +542,6 @@ func renderFixCommandBlock(issue doctor.Issue, width int) string {
 	if issue.Action.Kind != doctor.ActionCopyCommand {
 		var label string
 		switch issue.Action.Kind {
-		case doctor.ActionJumpPathView:
-			label = "Open the interactive PATH view for " + issue.Action.Target
 		case doctor.ActionRescan:
 			label = "Re-walk PATH and re-resolve every tool's version"
 		case doctor.ActionJumpUpdates:

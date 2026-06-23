@@ -15,8 +15,7 @@ var healthPathRefreshFlag bool
 var healthPathOutput func() (OutputFormat, error)
 
 // healthPathCmd renders the PATH-conflict visualization in text or JSON
-// form. The TUI shows the same model through a two-pane interactive view
-// under Health → PATH; this command is the script-friendly counterpart.
+// form for scripting and quick CLI inspection.
 var healthPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "Visualize PATH conflicts: which binary wins, what's shadowed",
@@ -29,8 +28,7 @@ Output sections:
   By dir    — every PATH entry with the tools it provides and whether
               this dir wins or loses the PATH lookup for each one
 
-Use --output=json for the machine-readable model (same schema the TUI
-renders).
+Use --output=json for the machine-readable model.
 
 Exit codes:
   0  No conflicts (every tool has at most one copy, or all versions match)
