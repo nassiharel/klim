@@ -102,8 +102,14 @@ scoops:
 
 # winget-pkgs PR: GoReleaser pushes a feature branch to the personal
 # fork (nassiharel/winget-pkgs) and opens a PR back to
-# microsoft/winget-pkgs:master. The WINGET_PAT secret needs Contents +
-# Pull requests: read & write on the fork.
+# microsoft/winget-pkgs:master.
+#
+# WINGET_PAT MUST be a *classic* PAT with the `public_repo` scope — NOT a
+# fine-grained token. The `microsoft` org enforces SAML and has not opted
+# into fine-grained PATs, so a fine-grained token can push the branch to
+# the fork but gets `403 Resource not accessible by personal access token`
+# when it tries to POST the cross-repo pull request to microsoft/winget-pkgs.
+# A classic token with `public_repo` is the only thing that can open that PR.
 winget:
   - name: klim
     publisher: nassiharel
