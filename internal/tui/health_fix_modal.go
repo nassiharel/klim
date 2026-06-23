@@ -12,7 +12,6 @@ import (
 
 	"github.com/nassiharel/klim/internal/doctor"
 	"github.com/nassiharel/klim/internal/pathbackup"
-	"github.com/nassiharel/klim/internal/pathconflict"
 )
 
 // fixModalState tracks where the user is inside the Health → Issues
@@ -150,20 +149,6 @@ func buildFixOptions(issue doctor.Issue) []fixModalOption {
 		}
 		opts = append(opts, fixModalOptionCancel())
 		return opts
-
-	case doctor.ActionJumpPathView:
-		return []fixModalOption{
-			{
-				Key:   "open",
-				Label: "Open PATH view",
-				Desc:  "Switch to Health → PATH, focused on the offending tool.",
-				Run: func(m Model) (Model, tea.Cmd) {
-					m.fixModal = fixModal{}
-					return m.applyJumpPathFromIssue(issue), nil
-				},
-			},
-			fixModalOptionCancel(),
-		}
 
 	case doctor.ActionRescan:
 		return []fixModalOption{
@@ -325,28 +310,6 @@ func fixModalOptionCancel() fixModalOption {
 			return m, nil
 		},
 	}
-}
-
-// applyJumpPathFromIssue moves the user to Health → PATH with the
-// cursor on the offending tool. Extracted so the modal "Open PATH
-// view" button can re-use the same routing logic the direct-action
-// path used.
-func (m Model) applyJumpPathFromIssue(issue doctor.Issue) Model {
-	m.healthSubTab = healthSubPath
-	m.healthPathView = healthPathByTool
-	m.healthPathShadowIdx = 0
-	m.healthScroll = 0
-	if issue.Action != nil && issue.Action.Target != "" {
-		report := pathconflict.Analyze(m.tools)
-		for i, tv := range report.ByTool {
-			if tv.Name == issue.Action.Target {
-				m.healthPathToolIdx = i
-				break
-			}
-		}
-		m.healthPathStatus = "→ Opened PATH view focused on " + issue.Action.Target
-	}
-	return m
 }
 
 // runHealthFixCmd executes a shell snippet in the user's default shell
@@ -579,8 +542,6 @@ func renderFixCommandBlock(issue doctor.Issue, width int) string {
 	if issue.Action.Kind != doctor.ActionCopyCommand {
 		var label string
 		switch issue.Action.Kind {
-		case doctor.ActionJumpPathView:
-			label = "Open the interactive PATH view for " + issue.Action.Target
 		case doctor.ActionRescan:
 			label = "Re-walk PATH and re-resolve every tool's version"
 		case doctor.ActionJumpUpdates:

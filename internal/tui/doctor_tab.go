@@ -24,18 +24,6 @@ const (
 	doctorSubCompliance = 1
 )
 
-// Health (top-level) sub-tab indices.
-const (
-	healthSubIssues = 0
-	healthSubPath   = 1
-)
-
-// Health → PATH sub-views.
-const (
-	healthPathByTool = 0
-	healthPathByDir  = 1
-)
-
 // Doctor view color palette — cyber tokens.
 var (
 	doctorError   = lipgloss.NewStyle().Foreground(cyberAlert)

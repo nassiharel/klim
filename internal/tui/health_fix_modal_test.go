@@ -25,7 +25,7 @@ func TestBuildFixOptions_CopyCommandHasRunAndCopy(t *testing.T) {
 }
 
 func TestBuildFixOptions_JumpKindsSingleConfirmPlusCancel(t *testing.T) {
-	for _, kind := range []doctor.ActionKind{doctor.ActionJumpPathView, doctor.ActionRescan, doctor.ActionJumpUpdates} {
+	for _, kind := range []doctor.ActionKind{doctor.ActionRescan, doctor.ActionJumpUpdates} {
 		opts := buildFixOptions(doctor.Issue{Action: &doctor.Action{Kind: kind, Target: "node"}})
 		if len(opts) != 2 {
 			t.Fatalf("kind %q: want 2 options, got %d", kind, len(opts))

@@ -667,9 +667,6 @@ func (m Model) subtabRows() int {
 	if m.activeTab == tabProfile {
 		return 1
 	}
-	if m.activeTab == tabHealth {
-		return 1
-	}
 	return 0
 }
 
@@ -733,25 +730,6 @@ func (m Model) renderTabBar() string {
 
 	if m.activeTab == tabProfile {
 		bar += "\n  " + cyberSubtabActive("Env Profile")
-	}
-
-	if m.activeTab == tabHealth {
-		subs := []struct {
-			label string
-			idx   int
-		}{
-			{"Issues", healthSubIssues},
-			{"PATH", healthSubPath},
-		}
-		var subParts []string
-		for _, s := range subs {
-			if s.idx == m.healthSubTab {
-				subParts = append(subParts, cyberSubtabActive(s.label))
-			} else {
-				subParts = append(subParts, cyberSubtabInactive(s.label))
-			}
-		}
-		bar += "\n  " + strings.Join(subParts, "  ")
 	}
 
 	return bar

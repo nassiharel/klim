@@ -47,14 +47,14 @@ internal/
   config/      config.yaml: logging, marketplace URL, performance, UI prefs
   custompacks/ User-created pack definitions → ~/.klim/marketplace/custom-packs.yaml
   detector/    Fallback version detection (Go buildinfo, Windows PE resources)
-  doctor/      Health diagnostics — duplicate/missing/inaccessible PATH, multi-installs, shadowing, missing PMs, stale cache, unresolved versions, outdated summary. Every Issue carries an interactive Action (CopyCommand/JumpPathView/Rescan/JumpUpdates) + a TouchesPATH flag for the modal's PATH-backup capture.
+  doctor/      Health diagnostics — multi-installs, missing PMs, stale cache, unresolved versions, outdated summary. Every Issue carries an interactive Action (CopyCommand/Rescan/JumpUpdates) + a TouchesPATH flag for the modal's PATH-backup capture.
   favorites/   Favorites list persistence → ~/.klim/favorites/favorites.yaml
   fileutil/    Shared file I/O: AtomicWrite, EnsureDir, ReadYAML, WriteYAML
   finder/      PATH scanning, install source detection (brew/winget/scoop/apt/manual)
   logging/     slog structured logging + lumberjack file rotation
   manifest/    YAML schema for export/import manifests + FromRegistryTool converter
   pathbackup/  Captures $PATH (+ Windows User PATH from registry) before any Health-tab fix touches it → ~/.klim/backups/path/path-<UTC>.yaml; generates platform-specific restore commands
-  pathconflict/ Read-only analyzer powering `klim doctor path` and the TUI Health → PATH view; produces Report{ByTool, ByDir} with version-conflict + privilege-risk flags. Reads $PATH and does best-effort os.Stat on entries; no scanning, no version resolution.
+  pathconflict/ Read-only analyzer powering `klim doctor path`; produces Report{ByTool, ByDir} with version-conflict + privilege-risk flags. Reads $PATH and does best-effort os.Stat on entries; no scanning, no version resolution.
   paths/       Single source of truth for all ~/.klim/* paths (BackupsDir, PathBackupsDir, CheckpointsDir, …)
   pkgmgr/      Package manager queries (installed + latest versions)
   plan/        `klim plan show` engine: Build/Render/AnalyseRisks/computeConfidence. Confidence factors include semver delta, tool-specific fragility, plugin ecosystem detection, foundational-runtime size.
@@ -68,7 +68,7 @@ internal/
   tui/         Bubbletea Model (model.go), commands (commands.go), rendering (view.go),
                  sidebar/filter helpers (sidebar.go), pure utilities (util.go),
                  favorites (favorites.go), styles, my_score.go (My Profile → My Score panel),
-                 health_tab.go (Health Issues + PATH views), health_fix_modal.go (interactive
+                 health_tab.go (Health Issues view), health_fix_modal.go (interactive
                  fix wizard with PATH backups + restore), health_refresh_cmd.go (fast
                  path-only refresh after a PATH fix), plan_view.go (Plan modal opened with
                  `P` from any tab — preview pending changes, apply through `klim plan apply`,
@@ -102,7 +102,7 @@ Number keys 1-9 + 0 jump straight to a parent tab. Tab/Shift-Tab and Left/Right 
 | Dashboard  | 4 | — | Aggregate stats, gauges, category/tag/platform breakdowns. (The Environment Score has moved to **My Profile → My Score**.) |
 | **Agents** | **5** | Marketplaces, Plugins, Skills, MCPs, Sessions | Browse and manage the agent ecosystem across Claude Code and GitHub Copilot CLI. `/` scoped search, `l` launch session, `r` refresh, `enter` detail. See `klim agent …` for the matching CLI surface. |
 | My Profile | 6 | Env Profile | Generate / inspect / compare / apply env profile, plus the **My Score** breakdown (overall environment grade with per-category points: Tools up to date, Doctor health, Audit clean, Compliance, Managed sources). |
-| Health     | 7 | Issues, PATH | Environment diagnostics (PATH problems, multi-installs, missing PMs, stale cache) and a visual PATH conflict explorer (Active vs Shadowed, By tool / By PATH dir, `t` to switch view, `u` to uninstall a shadowed copy through its PM). |
+| Health     | 7 | — | Environment diagnostics (multi-installs, missing PMs, stale cache, unresolved versions, outdated summary) as a selectable Issues list with one-key fixes. |
 | Security   | 8 | Audit, Compliance | Vulnerability scans and compliance policies. |
 | Backup     | 9 | — | Export/import toolchain; share tokens; Trail; My Packs; My Backups. |
 | Config     | 0 | — | View/edit config.yaml settings. |

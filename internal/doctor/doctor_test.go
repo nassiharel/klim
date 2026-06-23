@@ -1,9 +1,6 @@
 package doctor
 
 import (
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -145,73 +142,6 @@ func TestCheckOutdatedSummary_none(t *testing.T) {
 	}
 }
 
-func TestCheckBrokenPATH(t *testing.T) {
-	// Create a temp dir with a file (non-directory) to test that case.
-	tmpDir := t.TempDir()
-	fakePath := filepath.Join(tmpDir, "not-a-dir")
-	if err := os.WriteFile(fakePath, []byte("hello"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	nonExist := filepath.Join(tmpDir, "does-not-exist")
-
-	sep := string(os.PathListSeparator)
-	t.Setenv("PATH", tmpDir+sep+fakePath+sep+nonExist)
-
-	issues := checkBrokenPATH()
-
-	var foundNonDir, foundMissing bool
-	for _, i := range issues {
-		if strings.Contains(i.Title, "Non-directory") {
-			foundNonDir = true
-		}
-		if strings.Contains(i.Title, "Missing") {
-			foundMissing = true
-		}
-	}
-	if !foundNonDir {
-		t.Error("expected non-directory PATH issue")
-	}
-	if !foundMissing {
-		t.Error("expected missing PATH issue")
-	}
-}
-
-func TestCheckDuplicatePATH(t *testing.T) {
-	tmpDir := t.TempDir()
-	sep := string(os.PathListSeparator)
-
-	path := tmpDir + sep + tmpDir
-	t.Setenv("PATH", path)
-
-	issues := checkDuplicatePATH()
-	if len(issues) != 1 {
-		t.Fatalf("expected 1 duplicate issue, got %d", len(issues))
-	}
-	if issues[0].Severity != SeverityWarning {
-		t.Errorf("expected warning severity, got %s", issues[0].Severity)
-	}
-}
-
-func TestNormalizePath(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"  ", ""},
-		{"/usr/local/bin", filepath.Clean("/usr/local/bin")},
-		{"/usr/local/bin/", filepath.Clean("/usr/local/bin")},
-	}
-	for _, tt := range tests {
-		got := normalizePath(tt.input)
-		if runtime.GOOS == "windows" {
-			tt.want = strings.ToLower(tt.want)
-		}
-		if got != tt.want {
-			t.Errorf("normalizePath(%q) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
 func TestCountBySeverity(t *testing.T) {
 	issues := []Issue{
 		{Severity: SeverityError},
@@ -253,71 +183,5 @@ func TestCheckMissingPMs_noInstalledTools(t *testing.T) {
 		if i.Category == CategoryPM {
 			t.Errorf("should not flag PMs for non-installed tools: %s", i.Title)
 		}
-	}
-}
-
-func TestCheckPATHShadowing_singleInstance(t *testing.T) {
-	tools := []registry.Tool{
-		{Name: "git", DisplayName: "git", Instances: []registry.Instance{
-			{Path: "/usr/bin/git", Version: "2.40", Source: registry.SourceApt},
-		}},
-	}
-	if got := checkPATHShadowing(tools); len(got) != 0 {
-		t.Errorf("expected no issues for single-instance, got %d", len(got))
-	}
-}
-
-func TestCheckPATHShadowing_multipleInstances(t *testing.T) {
-	tools := []registry.Tool{
-		{Name: "git", DisplayName: "git", Instances: []registry.Instance{
-			{Path: "/usr/local/bin/git", Version: "2.43", Source: registry.SourceBrew},
-			{Path: "/usr/bin/git", Version: "2.40", Source: registry.SourceApt},
-		}},
-	}
-	got := checkPATHShadowing(tools)
-	if len(got) != 1 {
-		t.Fatalf("expected 1 issue, got %d", len(got))
-	}
-	if !strings.Contains(got[0].Title, "shadowed") {
-		t.Errorf("title = %q", got[0].Title)
-	}
-	if !strings.Contains(got[0].Detail, "/usr/local/bin/git") {
-		t.Errorf("detail should mention winner: %q", got[0].Detail)
-	}
-}
-
-func TestIsSystemDir(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		if !isSystemDir("C:\\Windows\\System32") {
-			t.Error("System32 should be a system dir")
-		}
-		if isSystemDir("C:\\Users\\joe\\bin") {
-			t.Error("user bin should not be system")
-		}
-	} else {
-		if !isSystemDir("/usr/bin") {
-			t.Error("/usr/bin should be a system dir")
-		}
-		if isSystemDir("/home/joe/bin") {
-			t.Error("/home/joe/bin should not be system")
-		}
-	}
-}
-
-func TestCheckUserWritablePathOrder_emptyPath(t *testing.T) {
-	t.Setenv("PATH", "")
-	if got := checkUserWritablePathOrder(); len(got) != 0 {
-		t.Errorf("empty PATH should produce no issues, got %d", len(got))
-	}
-}
-
-func TestCheckUserWritablePathOrder_systemOnly(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Setenv("PATH", "C:\\Windows\\System32")
-	} else {
-		t.Setenv("PATH", "/usr/bin:/bin")
-	}
-	if got := checkUserWritablePathOrder(); len(got) != 0 {
-		t.Errorf("system-only PATH should produce no issues, got %d", len(got))
 	}
 }
