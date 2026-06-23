@@ -41,9 +41,9 @@ type Issue struct {
 	Fix      string   `json:"fix,omitempty"`
 	// Action carries an optional structured remediation. The Health
 	// → Issues TUI dispatches on Action.Kind to provide one-key
-	// fixes (copy PATH-cleanup command, jump to PATH view, trigger
-	// rescan, etc.). CLI output only renders the legacy `Fix`
-	// summary, so Action stays purely additive.
+	// fixes (copy a command, trigger a rescan, jump to Updates,
+	// etc.). CLI output only renders the legacy `Fix` summary, so
+	// Action stays purely additive.
 	//
 	// Pointer rather than embedded struct so JSON `omitempty` can
 	// actually drop the field — encoding/json doesn't treat
