@@ -81,6 +81,27 @@ func TestRenderSessionBody_TokenLine(t *testing.T) {
 	}
 }
 
+// TestSessionCostMsg_RoutesThroughUpdate is the regression for the
+// infinite "computing…" hang: agentSessionCostMsg must be in Update's
+// agent-message allowlist, otherwise the result is silently dropped and
+// sessionCostLoading never clears. Drives the REAL runtime path (Update)
+// — testing handleAgentsMsg directly would mask the bug.
+func TestSessionCostMsg_RoutesThroughUpdate(t *testing.T) {
+	m := NewModel()
+	m.activeTab = tabAgents
+	m.agents = newAgentsState()
+	m.agents.sessionCostLoading = map[string]bool{"claude:proj": true}
+
+	updated, _ := m.Update(agentSessionCostMsg{id: "claude:proj", totals: costs.Totals{Input: 100, Output: 20}})
+	mm := updated.(Model)
+	if mm.agents.sessionCostLoading["claude:proj"] {
+		t.Error("loading not cleared — agentSessionCostMsg was dropped by Update's allowlist")
+	}
+	if got := mm.agents.sessionCost["claude:proj"]; got.Input != 100 || got.Output != 20 {
+		t.Errorf("totals not applied via Update: %+v", got)
+	}
+}
+
 // TestRenderSessionBody_RendersAllPopulatedInvocations pins the
 // five labelled rows that appear when each kind has entries. Each
 // row uses the kind's lowercase label and lists `name ×count`

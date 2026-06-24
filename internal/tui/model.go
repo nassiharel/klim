@@ -821,6 +821,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		agentsSearchIndexLoadedMsg,
 		agentsBulkResultMsg,
 		agentTranscriptMsg,
+		agentSessionCostMsg,
 		agentLaunchPlanMsg,
 		agentActionResultMsg,
 		agentViewMarketplacePluginsMsg,
