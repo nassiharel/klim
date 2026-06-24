@@ -64,8 +64,17 @@ func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.
 			continue
 		}
 		dir := filepath.Join(projects, e.Name())
-		// Each session's transcript may be one .jsonl file or many;
-		// walk them all so we don't miss the right one.
+
+		// The session list (Sessions()) shows one row per PROJECT DIR
+		// with ID "claude:"+<dir>, and the cost cache keys by the same
+		// id. A dir can hold many transcript files, so we key the whole
+		// dir by its NEWEST .jsonl mtime: collect the files + newest
+		// mtime first, then skip or parse the dir as a unit. Keying
+		// per-file (by UUID) would split one project's cost across
+		// thousands of non-existent session ids and diverge from the
+		// skip key.
+		var files []string
+		var newest time.Time
 		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil
@@ -77,37 +86,33 @@ func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.
 			if statErr != nil {
 				return nil
 			}
-			mtime := info.ModTime().Truncate(time.Second)
-
-			// The Claude transcript filename is the session UUID, which
-			// is exactly the in-file sessionId — so we can identify the
-			// session (and thus its cache key) without parsing. Fall
-			// back to the project dir name to match claudeSampleFromLine.
-			sid := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
-			if sid == "" {
-				sid = e.Name()
+			files = append(files, path)
+			if mt := info.ModTime().Truncate(time.Second); newest.Before(mt) {
+				newest = mt
 			}
-			sessionKey := "claude:" + sid
+			return nil
+		})
+		if len(files) == 0 {
+			continue
+		}
 
-			// Record the newest mtime per session for Seen.
-			if res.Seen[sessionKey].Before(mtime) {
-				res.Seen[sessionKey] = mtime
-			}
+		sessionKey := "claude:" + e.Name()
+		res.Seen[sessionKey] = newest
 
-			// Skip re-parsing when the file hasn't changed since the
-			// cached scan. !mtime.After(prior) means mtime <= prior:
-			// equal mtimes (the common case) skip; a strictly-newer
-			// file forces a fresh parse.
-			if prior, ok := in.Prior[sessionKey]; ok && !mtime.After(prior) {
-				return nil
-			}
+		// Skip re-parsing the whole dir when its newest file is no newer
+		// than the cached scan. !newest.After(prior) means newest <=
+		// prior: equal mtimes (the common case) skip; a strictly-newer
+		// file forces a fresh parse of the dir.
+		if prior, ok := in.Prior[sessionKey]; ok && !newest.After(prior) {
+			continue
+		}
 
+		for _, path := range files {
 			samples, err := parseClaudeTranscript(path, e.Name(), p.ID())
 			if err == nil {
 				res.Samples = append(res.Samples, samples...)
 			}
-			return nil
-		})
+		}
 	}
 	return res, nil
 }
@@ -143,14 +148,14 @@ func claudeSampleFromLine(l claudeTranscriptLine, projectName string, providerID
 	if in == 0 && out == 0 {
 		return costs.TokenSample{}, false
 	}
-	sessionID := l.SessionID
-	if sessionID == "" {
-		sessionID = l.SessionIDAlt
-	}
-	if sessionID == "" {
-		// Fall back to project dir name so we still get a unique key.
-		sessionID = projectName
-	}
+	// Key cost samples by the project DIRECTORY name, not the in-file
+	// sessionId. The session list (Sessions()) shows one row per project
+	// dir with ID "claude:"+<dir>, and a single dir holds many
+	// transcript files; keying by the per-file UUID would (a) split one
+	// project's cost across thousands of ids that don't exist in the
+	// session list (breaking Enter-to-open) and (b) diverge from the
+	// dir-derived Seen/Prior skip key, breaking incremental skipping.
+	sessionID := projectName
 	ts, _ := time.Parse(time.RFC3339, l.Timestamp)
 	if ts.IsZero() {
 		ts = time.Now()
