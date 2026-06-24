@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -97,7 +98,7 @@ func TestActionFailedFlash(t *testing.T) {
 	if strings.Contains(got, "deleted session") && !strings.Contains(got, "failed") {
 		t.Errorf("failure flash should not read as success: %q", got)
 	}
-	if !strings.Contains(got, "not on PATH") {
+	if !strings.Contains(got, "on your PATH") {
 		t.Errorf("ErrProviderNotInstalled should get a PATH hint: %q", got)
 	}
 
@@ -111,6 +112,29 @@ func TestActionFailedFlash(t *testing.T) {
 }
 
 var errTestGeneric = errors.New("boom")
+
+// TestTruncateMessageBytes pins the rune-safe truncation: a cut that
+// would land mid-rune must back up to a valid boundary so the result
+// stays valid UTF-8 (no mojibake, no broken clipboard copy).
+func TestTruncateMessageBytes(t *testing.T) {
+	t.Parallel()
+	if got := truncateMessageBytes("hello", 100); got != "hello" {
+		t.Errorf("within budget should be unchanged; got %q", got)
+	}
+	// "héllo" — 'é' is 2 bytes (0xC3 0xA9). A byte budget that lands
+	// between them must not split the rune.
+	s := "héllo world"
+	for budget := 1; budget <= len(s)+2; budget++ {
+		got := truncateMessageBytes(s, budget)
+		if !utf8.ValidString(got) {
+			t.Errorf("budget=%d produced invalid UTF-8: %q", budget, got)
+		}
+		if len(got) > budget && budget >= len("…") {
+			// allow the ellipsis to sit within budget; never exceed it
+			t.Errorf("budget=%d produced %d bytes (over budget): %q", budget, len(got), got)
+		}
+	}
+}
 
 func TestNextSortMode_CyclesThroughList(t *testing.T) {
 	modes := []agentsSortMode{agentsSortDefault, agentsSortName, agentsSortModified}

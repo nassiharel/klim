@@ -30,7 +30,7 @@ func actionFailedFlash(label string, err error) string {
 	msg := "✗ failed — " + label
 	switch {
 	case errors.Is(err, agents.ErrProviderNotInstalled):
-		return msg + ": the provider CLI isn't installed or not on PATH"
+		return msg + ": the provider CLI isn't installed or isn't on your PATH"
 	case errors.Is(err, agents.ErrNotSupported):
 		return msg + ": not supported by this provider"
 	default:

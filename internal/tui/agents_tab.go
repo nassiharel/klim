@@ -16,6 +16,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -2124,7 +2125,9 @@ func renderTranscriptViewer(title string, messages []transcriptMessage, cursor, 
 func renderTranscriptMessage(msg transcriptMessage, innerW int, selected bool) []string {
 	chip := transcriptMessageChip(msg.role)
 	textStyle := lipgloss.NewStyle().Foreground(cyberFG)
-	if msg.role == "tool" {
+	// Tool calls and raw/fall-through lines (role == "") render dimmed
+	// so the user/assistant conversation stays visually prominent.
+	if msg.role == "tool" || msg.role == "" {
 		textStyle = textStyle.Foreground(cyberFGDim)
 	}
 
@@ -3466,9 +3469,7 @@ func readSessionTranscript(path string, limit int) ([]transcriptMessage, error) 
 			continue
 		}
 		role, text := splitTranscriptRolePrefix(rendered)
-		if len(text) > maxMessageLen {
-			text = text[:maxMessageLen-1] + "…"
-		}
+		text = truncateMessageBytes(text, maxMessageLen)
 		msgs = append(msgs, transcriptMessage{role: role, text: text})
 	}
 	// Surface a scan error (e.g. a line longer than the 8 MiB buffer)
@@ -3477,6 +3478,26 @@ func readSessionTranscript(path string, limit int) ([]transcriptMessage, error) 
 		return msgs, fmt.Errorf("reading transcript %s: %w", path, err)
 	}
 	return msgs, nil
+}
+
+// truncateMessageBytes caps text to a byte budget without splitting a
+// UTF-8 rune. Slicing on a raw byte index can land mid-rune, producing
+// invalid UTF-8 that renders as mojibake and copies broken text to the
+// clipboard; we back up to the last valid boundary and append an
+// ellipsis. Returns text unchanged when it's already within budget.
+func truncateMessageBytes(text string, maxBytes int) string {
+	if len(text) <= maxBytes {
+		return text
+	}
+	cut := maxBytes - len("…")
+	if cut < 0 {
+		cut = 0
+	}
+	// Back up off the middle of a multi-byte rune.
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + "…"
 }
 
 // renderTranscriptLine turns one raw JSONL transcript line into a
