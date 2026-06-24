@@ -505,11 +505,21 @@ func TestHandleViewerScrollKey(t *testing.T) {
 	})
 
 	t.Run("c copies selected message", func(t *testing.T) {
+		// Inject a fake clipboard so this is deterministic on headless
+		// CI (Linux runners have no system clipboard, which would make
+		// the real clipboard.WriteAll fail and leave viewerCopied false).
+		fake := &fakeClipboard{}
+		restore := swapClipboard(fake)
+		defer restore()
+
 		st := mkState(20)
 		st.viewerCursor = 3
 		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'c', Text: "c"}), 10)
 		if !st.viewerCopied {
 			t.Errorf("c should set viewerCopied")
+		}
+		if fake.text != "m3" {
+			t.Errorf("clipboard text = %q, want %q", fake.text, "m3")
 		}
 	})
 

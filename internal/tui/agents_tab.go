@@ -2260,8 +2260,7 @@ func copySelectedTranscriptMessage(st *agentsState) {
 		st.flashEnd = time.Now().Add(2 * time.Second)
 		return
 	}
-	cb := systemClipboard{}
-	if err := cb.WriteAll(text); err != nil {
+	if err := defaultClipboard.WriteAll(text); err != nil {
 		st.viewerCopied = false
 		st.flash = "clipboard error: " + err.Error()
 		st.flashEnd = time.Now().Add(2 * time.Second)
