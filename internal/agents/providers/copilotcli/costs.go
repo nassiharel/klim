@@ -113,10 +113,12 @@ func copilotSampleFromLine(l copilotEventLine, sessionDir string, providerID age
 	if in == 0 && out == 0 {
 		return costs.TokenSample{}, false
 	}
-	sessionID := l.Data.SessionID
-	if sessionID == "" {
-		sessionID = sessionDir
-	}
+	// Key the sample by the directory id, NOT the in-file
+	// data.sessionId. The incremental cost cache and the search index
+	// (SessionTexts) both key on "copilot:"+sessionDir; if costs used a
+	// different in-file id the Seen/Prior skip keys would diverge from
+	// the emitted sample ids, breaking incremental skipping and pruning.
+	sessionID := sessionDir
 	ts, _ := time.Parse(time.RFC3339, l.Timestamp)
 	if ts.IsZero() {
 		ts = time.Now()

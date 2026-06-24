@@ -635,6 +635,8 @@ func TestDeleteSessionDir_RejectsPathTraversal(t *testing.T) {
 		".",
 		"sub/dir",
 		"",
+		"C:",         // Windows volume name — filepath.Join would drop the root
+		`C:\Windows`, // volume + path
 	} {
 		if err := p.deleteSessionDir(id); err == nil {
 			t.Errorf("id %q: expected an error, got nil", id)

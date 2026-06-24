@@ -437,6 +437,25 @@ func TestRenderTranscriptViewer_ScrollsToOffset(t *testing.T) {
 	}
 }
 
+// TestRenderTranscriptViewer_KeepsCursorVisibleOnBottomEdge pins the
+// renderer's own bottom-edge clamp: even when scroll is stale (0) and
+// the cursor is far down with a small window, the selected message
+// must render on screen. Guards against a terminal-shrink leaving the
+// selection off the bottom.
+func TestRenderTranscriptViewer_KeepsCursorVisibleOnBottomEdge(t *testing.T) {
+	t.Parallel()
+	msgs := make([]transcriptMessage, 100)
+	for i := range msgs {
+		msgs[i] = transcriptMessage{role: "user", text: fmt.Sprintf("line-%d", i)}
+	}
+	// cursor=80 but scroll=0 (stale) on a short terminal — the renderer
+	// must advance the window so line-80 is visible.
+	got := stripANSIForTest(renderTranscriptViewer("/x", msgs, 80, 0, 120, 30, false))
+	if !strings.Contains(got, "line-80") {
+		t.Errorf("selected message (cursor=80) must be visible despite stale scroll=0:\n%s", got)
+	}
+}
+
 // TestRenderTranscriptViewer_ExpandsSelectedMessage asserts the
 // selected message is shown in full (word-wrapped, no "…") while a
 // non-selected long message is truncated. This is the core fix for

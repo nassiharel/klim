@@ -82,7 +82,12 @@ func loadCostSamples() ([]costs.TokenSample, error) {
 			continue
 		}
 		// Every session the provider saw on disk stays in the cache;
-		// the rest get pruned below.
+		// the rest get pruned below. mtimeBySession is sourced ONLY from
+		// res.Seen (the real transcript file mtime) — never from a
+		// sample's Day bucket, which is derived from in-transcript
+		// timestamps and can be future-dated (clock skew). A future
+		// mtime in the cache would make later scans wrongly skip real
+		// changes until wall-clock catches up.
 		for sessionID, mt := range res.Seen {
 			present[sessionID] = true
 			if mtimeBySession[sessionID].Before(mt) {
@@ -92,11 +97,10 @@ func loadCostSamples() ([]costs.TokenSample, error) {
 		for _, s := range res.Samples {
 			freshBySession[s.SessionID] = append(freshBySession[s.SessionID], s)
 			// A provider that didn't populate Seen (older impl) still
-			// counts as present so its sessions aren't pruned.
+			// counts as present so its sessions aren't pruned. Its
+			// mtime stays zero, which means "always rescan" — safe, if
+			// not incremental.
 			present[s.SessionID] = true
-			if mtimeBySession[s.SessionID].Before(s.Day) {
-				mtimeBySession[s.SessionID] = s.Day
-			}
 		}
 	}
 

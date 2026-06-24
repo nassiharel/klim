@@ -1212,6 +1212,7 @@ func (p *Provider) deleteSessionDir(dir string) error {
 	}
 	if dir == "." || dir == ".." ||
 		strings.ContainsAny(dir, `/\`) ||
+		filepath.VolumeName(dir) != "" ||
 		filepath.Base(dir) != dir ||
 		filepath.Clean(dir) != dir {
 		return fmt.Errorf("delete: invalid session id %q", dir)

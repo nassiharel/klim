@@ -2069,12 +2069,23 @@ func renderTranscriptViewer(title string, messages []transcriptMessage, cursor, 
 		cursor = len(messages) - 1
 	}
 	// Clamp scroll so a stale value doesn't render a blank viewer, and
-	// keep the cursor within the visible window.
+	// keep the cursor within the visible window on BOTH edges: above the
+	// window (scroll > cursor) the selection would render off the top;
+	// more than visRows-1 rows below (cursor - scroll > visRows-1) it
+	// would render off the bottom. This is the renderer's own guard, so
+	// a terminal-shrink between key events (which changes visRows) can't
+	// leave the selected message off-screen.
 	if scroll < 0 {
 		scroll = 0
 	}
 	if scroll > cursor {
 		scroll = cursor
+	}
+	if cursor-scroll > visRows-1 {
+		scroll = cursor - (visRows - 1)
+	}
+	if scroll < 0 {
+		scroll = 0
 	}
 	if scroll >= len(messages) {
 		scroll = len(messages) - 1
@@ -3456,6 +3467,11 @@ func readSessionTranscript(path string, limit int) ([]transcriptMessage, error) 
 			text = text[:maxMessageLen-1] + "…"
 		}
 		msgs = append(msgs, transcriptMessage{role: role, text: text})
+	}
+	// Surface a scan error (e.g. a line longer than the 8 MiB buffer)
+	// rather than silently returning a partial transcript with nil err.
+	if err := scanner.Err(); err != nil {
+		return msgs, fmt.Errorf("reading transcript %s: %w", path, err)
 	}
 	return msgs, nil
 }
