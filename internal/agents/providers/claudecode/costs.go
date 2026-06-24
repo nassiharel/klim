@@ -61,6 +61,9 @@ func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.
 	}
 	res := costs.ScanResult{Seen: map[string]time.Time{}}
 	for _, e := range entries {
+		if ctx.Err() != nil {
+			return res, ctx.Err()
+		}
 		if !e.IsDir() {
 			continue
 		}

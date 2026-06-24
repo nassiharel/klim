@@ -3557,18 +3557,29 @@ func readSessionTranscript(path string, limit int) ([]transcriptMessage, error) 
 // clipboard; we back up to the last valid boundary and append an
 // ellipsis. Returns text unchanged when it's already within budget.
 func truncateMessageBytes(text string, maxBytes int) string {
+	if maxBytes <= 0 {
+		return ""
+	}
 	if len(text) <= maxBytes {
 		return text
 	}
-	cut := maxBytes - len("…")
-	if cut < 0 {
-		cut = 0
+	const ellipsis = "…"
+	// When the budget can't even fit the ellipsis plus one byte, drop
+	// the ellipsis and hard-truncate to the budget (still on a rune
+	// boundary) — appending "…" here would exceed maxBytes.
+	if maxBytes <= len(ellipsis) {
+		cut := maxBytes
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+		return text[:cut]
 	}
+	cut := maxBytes - len(ellipsis)
 	// Back up off the middle of a multi-byte rune.
 	for cut > 0 && !utf8.RuneStart(text[cut]) {
 		cut--
 	}
-	return text[:cut] + "…"
+	return text[:cut] + ellipsis
 }
 
 // renderTranscriptLine turns one raw JSONL transcript line into a

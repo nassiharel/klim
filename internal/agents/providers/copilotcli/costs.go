@@ -48,6 +48,9 @@ type copilotEventLine struct {
 func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.ScanResult, error) {
 	res := costs.ScanResult{Seen: map[string]time.Time{}}
 	for _, d := range p.sessionDirs() {
+		if ctx.Err() != nil {
+			return res, ctx.Err()
+		}
 		path := filepath.Join(d.Path, "events.jsonl")
 		info, statErr := os.Stat(path)
 		if statErr != nil {

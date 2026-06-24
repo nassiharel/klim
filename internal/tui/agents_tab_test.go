@@ -121,16 +121,19 @@ func TestTruncateMessageBytes(t *testing.T) {
 	if got := truncateMessageBytes("hello", 100); got != "hello" {
 		t.Errorf("within budget should be unchanged; got %q", got)
 	}
-	// "héllo" — 'é' is 2 bytes (0xC3 0xA9). A byte budget that lands
-	// between them must not split the rune.
+	if got := truncateMessageBytes("hello", 0); got != "" {
+		t.Errorf("zero budget should be empty; got %q", got)
+	}
+	// "héllo" — 'é' is 2 bytes (0xC3 0xA9). At EVERY byte budget the
+	// result must stay valid UTF-8 AND never exceed the budget (even
+	// when the budget is smaller than the 3-byte ellipsis).
 	s := "héllo world"
 	for budget := 1; budget <= len(s)+2; budget++ {
 		got := truncateMessageBytes(s, budget)
 		if !utf8.ValidString(got) {
 			t.Errorf("budget=%d produced invalid UTF-8: %q", budget, got)
 		}
-		if len(got) > budget && budget >= len("…") {
-			// allow the ellipsis to sit within budget; never exceed it
+		if len(got) > budget {
 			t.Errorf("budget=%d produced %d bytes (over budget): %q", budget, len(got), got)
 		}
 	}

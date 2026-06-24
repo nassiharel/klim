@@ -92,3 +92,24 @@ func TestTokenSamples_SessionStateLayout(t *testing.T) {
 		t.Errorf("got input/output %d/%d, want 200/40", samples[0].Input, samples[0].Output)
 	}
 }
+
+// TestTokenSamples_CancelledContext pins that a cancelled context stops
+// the scan and surfaces an error instead of scanning the whole corpus.
+func TestTokenSamples_CancelledContext(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "session-state", "abc")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"),
+		[]byte(`{"type":"model.response","data":{"sessionId":"abc","usage":{"inputTokens":1,"outputTokens":1}}}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	p := &Provider{HomeOverride: home}
+	if _, err := p.TokenSamples(ctx, costs.ScanInput{}); err == nil {
+		t.Errorf("expected an error from a cancelled context")
+	}
+}
