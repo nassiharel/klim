@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/costs"
 )
 
 func TestWindowDetailList(t *testing.T) {
@@ -44,9 +45,39 @@ func TestRenderSessionBody_OmitsInvocationsBlockWhenEmpty(t *testing.T) {
 		Title:     "fix tile renderer",
 		TurnCount: 5,
 	}
-	out := renderSessionBody(s)
+	out := renderSessionBody(&Model{agents: newAgentsState()}, agentRow{id: s.ID, session: s})
 	if strings.Contains(out, "Invocations") {
 		t.Errorf("renderSessionBody must omit Invocations block when all sub-maps empty; got:\n%s", out)
+	}
+}
+
+// TestRenderSessionBody_TokenLine pins the per-session cost line: it
+// shows a placeholder while loading, the total + in/out once known,
+// and an error message when the load failed.
+func TestRenderSessionBody_TokenLine(t *testing.T) {
+	t.Parallel()
+	s := &agents.Session{ID: "claude:proj", Provider: agents.ProviderClaudeCode, Title: "x"}
+	row := agentRow{id: s.ID, session: s, provider: s.Provider}
+
+	loading := &Model{agents: newAgentsState()}
+	loading.agents.sessionCostLoading = map[string]bool{"claude:proj": true}
+	if out := stripANSIForTest(renderSessionBody(loading, row)); !strings.Contains(out, "tokens: computing") {
+		t.Errorf("loading state should show a computing placeholder; got:\n%s", out)
+	}
+
+	loaded := &Model{agents: newAgentsState()}
+	loaded.agents.sessionCost = map[string]costs.Totals{"claude:proj": {Input: 982345, Output: 251456}}
+	out := stripANSIForTest(renderSessionBody(loaded, row))
+	for _, want := range []string{"tokens:", "1.2M", "982.3K in", "251.5K out"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("loaded token line missing %q; got:\n%s", want, out)
+		}
+	}
+
+	failed := &Model{agents: newAgentsState()}
+	failed.agents.sessionCostErr = map[string]string{"claude:proj": "boom"}
+	if out := stripANSIForTest(renderSessionBody(failed, row)); !strings.Contains(out, "unavailable") {
+		t.Errorf("error state should show 'unavailable'; got:\n%s", out)
 	}
 }
 
@@ -67,7 +98,7 @@ func TestRenderSessionBody_RendersAllPopulatedInvocations(t *testing.T) {
 			MCPTools:      map[string]int{"ado-tools::repo_pull_request": 4},
 		},
 	}
-	out := renderSessionBody(s)
+	out := renderSessionBody(&Model{agents: newAgentsState()}, agentRow{id: s.ID, session: s})
 	if !strings.Contains(out, "Invocations") {
 		t.Fatalf("expected Invocations header; got:\n%s", out)
 	}
@@ -103,7 +134,7 @@ func TestRenderSessionBody_PartialInvocationsOnlyRendersPopulatedRows(t *testing
 			Hooks: map[string]int{"postToolUse": 5},
 		},
 	}
-	out := renderSessionBody(s)
+	out := renderSessionBody(&Model{agents: newAgentsState()}, agentRow{id: s.ID, session: s})
 	if !strings.Contains(out, "Invocations") {
 		t.Fatalf("expected Invocations header for hooks-only session; got:\n%s", out)
 	}

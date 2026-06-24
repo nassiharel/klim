@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/costs"
 	"github.com/nassiharel/klim/internal/agents/promote"
 )
 
@@ -423,6 +424,31 @@ type agentTranscriptMsg struct {
 	path     string
 	messages []transcriptMessage
 	err      error
+}
+
+// agentSessionCostCmd computes one session's token totals off the main
+// loop (a session can be many MB of transcript) and returns the result
+// in agentSessionCostMsg. Keyed by session id so the detail page can
+// match it back to the right session.
+func agentSessionCostCmd(provider agents.ProviderID, id string) tea.Cmd {
+	return func() tea.Msg {
+		p := agentsService().ProviderFor(provider)
+		if p == nil {
+			return agentSessionCostMsg{id: id, err: fmt.Errorf("provider %q not registered", provider)}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		totals, err := p.SessionTokens(ctx, id)
+		return agentSessionCostMsg{id: id, totals: totals, err: err}
+	}
+}
+
+// agentSessionCostMsg lands in handleAgentsMsg with a session's token
+// totals.
+type agentSessionCostMsg struct {
+	id     string
+	totals costs.Totals
+	err    error
 }
 
 // launchFromDetailCmd builds a launch plan from inside the detail page

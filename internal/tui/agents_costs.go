@@ -169,7 +169,7 @@ func (m *Model) handleAgentsCostsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			subTab:   agentsSubSessions,
 			entityID: sc.SessionID,
 		}}
-		return true, nil
+		return true, m.agentsSessionCostCmd(agents.ProviderID(sc.Provider), sc.SessionID)
 	case "r":
 		st.flash = "refreshing token cache…"
 		st.flashEnd = time.Now().Add(2 * time.Second)

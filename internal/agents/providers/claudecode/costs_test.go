@@ -201,4 +201,52 @@ func TestTokenSamples_MultiFileDirAggregatesUnderDirKey(t *testing.T) {
 	}
 }
 
+// TestSessionTokens_SumsOneProjectDir covers the per-session token
+// total used by the session detail page: it parses only the named
+// project dir and sums input/output across its files, and rejects a
+// path-traversal id.
+func TestSessionTokens_SumsOneProjectDir(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "C--dev-klim")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	mk := func(name string, in, out int) {
+		line := `{"type":"assistant","timestamp":"2026-05-15T08:00:01Z","sessionId":"x","message":{"role":"assistant","model":"m","usage":{"input_tokens":` +
+			strconv.Itoa(in) + `,"output_tokens":` + strconv.Itoa(out) + `}}}` + "\n"
+		if err := os.WriteFile(filepath.Join(projDir, name), []byte(line), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	mk("a.jsonl", 100, 10)
+	mk("b.jsonl", 200, 20)
+	// An unrelated project must NOT contribute.
+	other := filepath.Join(home, ".claude", "projects", "other")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatalf("mkdir other: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(other, "c.jsonl"),
+		[]byte(`{"type":"assistant","message":{"usage":{"input_tokens":9999,"output_tokens":9999}}}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write other: %v", err)
+	}
+
+	p := &Provider{HomeOverride: home}
+	tot, err := p.SessionTokens(context.Background(), "claude:C--dev-klim")
+	if err != nil {
+		t.Fatalf("SessionTokens: %v", err)
+	}
+	if tot.Input != 300 || tot.Output != 30 {
+		t.Errorf("totals in/out = %d/%d, want 300/30", tot.Input, tot.Output)
+	}
+
+	// Path-traversal id must be rejected.
+	if _, err := p.SessionTokens(context.Background(), "claude:../other"); err == nil {
+		t.Errorf("expected an error for a traversal id")
+	}
+	// Missing session → error, not a silent zero.
+	if _, err := p.SessionTokens(context.Background(), "claude:nope"); err == nil {
+		t.Errorf("expected an error for a missing session")
+	}
+}
+
 var _ = agents.ProviderClaudeCode

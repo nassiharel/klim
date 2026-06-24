@@ -24,6 +24,7 @@ import (
 	"github.com/nassiharel/klim/internal/agents"
 	"github.com/nassiharel/klim/internal/agents/bookmarks"
 	"github.com/nassiharel/klim/internal/agents/catalog"
+	"github.com/nassiharel/klim/internal/agents/costs"
 	"github.com/nassiharel/klim/internal/agents/providers/claudecode"
 	"github.com/nassiharel/klim/internal/agents/providers/copilotcli"
 )
@@ -87,6 +88,15 @@ type agentsState struct {
 	viewerCursor   int
 	viewerScroll   int
 	viewerCopied   bool
+
+	// sessionCost caches the per-session token totals shown on the
+	// session detail page, keyed by session id. Loaded lazily (and
+	// asynchronously — a session can be many MB of transcript) when a
+	// session detail page opens; see agentsSessionCostCmd. A nil entry
+	// value with the id present in sessionCostLoading means "in flight".
+	sessionCost        map[string]costs.Totals
+	sessionCostLoading map[string]bool
+	sessionCostErr     map[string]string
 
 	flash    string
 	flashEnd time.Time
@@ -668,11 +678,16 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			return true, nil
 		}
 		st.detailPage = true
+		row := rows[st.cursor]
 		st.detailStack = []agentDetailFrame{{
 			subTab:     st.subTab,
-			entityID:   rows[st.cursor].id,
+			entityID:   row.id,
 			listCursor: st.cursor,
 		}}
+		// Sessions show a token-cost line; kick off its async load.
+		if row.session != nil {
+			return true, m.agentsSessionCostCmd(row.provider, row.id)
+		}
 		return true, nil
 	case "D":
 		// Legacy inline-detail toggle (Shift+D).
@@ -1083,6 +1098,29 @@ func (m *Model) agentsSubTabEnterCmd(sub int) tea.Cmd {
 	return nil
 }
 
+// agentsSessionCostCmd lazily kicks off the per-session token-cost load
+// for a session detail page. Returns nil when the cost is already
+// loaded or in flight for this id (so re-entering the page doesn't
+// re-parse). Marks the id as loading so the detail body can show a
+// placeholder until agentSessionCostMsg lands.
+func (m *Model) agentsSessionCostCmd(provider agents.ProviderID, id string) tea.Cmd {
+	st := m.agents
+	if st == nil || id == "" {
+		return nil
+	}
+	if _, done := st.sessionCost[id]; done {
+		return nil
+	}
+	if st.sessionCostLoading[id] {
+		return nil
+	}
+	if st.sessionCostLoading == nil {
+		st.sessionCostLoading = map[string]bool{}
+	}
+	st.sessionCostLoading[id] = true
+	return agentSessionCostCmd(provider, id)
+}
+
 func (st *agentsState) setSubTab(i int) {
 	if st.subTab != i {
 		// Tab change clears the previous tab's selection set so checks
@@ -1240,6 +1278,22 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		st.viewerCursor = 0
 		st.viewerScroll = 0
 		st.viewerCopied = false
+		return true, nil
+	case agentSessionCostMsg:
+		if st.sessionCostLoading != nil {
+			delete(st.sessionCostLoading, v.id)
+		}
+		if v.err != nil {
+			if st.sessionCostErr == nil {
+				st.sessionCostErr = map[string]string{}
+			}
+			st.sessionCostErr[v.id] = v.err.Error()
+			return true, nil
+		}
+		if st.sessionCost == nil {
+			st.sessionCost = map[string]costs.Totals{}
+		}
+		st.sessionCost[v.id] = v.totals
 		return true, nil
 	case agentLaunchPlanMsg:
 		st.actionRunning = ""

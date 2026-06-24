@@ -110,6 +110,9 @@ func (s *stubProvider) UpdatePlugin(_ context.Context, _ string) error         {
 func (s *stubProvider) TokenSamples(_ context.Context, _ costs.ScanInput) (costs.ScanResult, error) {
 	return costs.ScanResult{}, nil
 }
+func (s *stubProvider) SessionTokens(_ context.Context, _ string) (costs.Totals, error) {
+	return costs.Totals{}, nil
+}
 func (s *stubProvider) SessionTexts(_ context.Context) ([]search.SessionText, error) {
 	return nil, nil
 }

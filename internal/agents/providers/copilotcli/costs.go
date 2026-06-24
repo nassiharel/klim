@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,6 +70,37 @@ func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.
 		}
 	}
 	return res, nil
+}
+
+// SessionTokens sums the input/output token usage for ONE session by
+// parsing only that session's events.jsonl — used by the session detail
+// page. The id is the session list id ("copilot:"+<dir>); we locate the
+// matching session directory via sessionDirs (which already enumerates
+// the on-disk layouts) so a crafted id can't reach an arbitrary path.
+func (p *Provider) SessionTokens(ctx context.Context, id string) (costs.Totals, error) {
+	want := strings.TrimPrefix(id, "copilot:")
+	if want == "" {
+		return costs.Totals{}, errors.New("session tokens: empty session id")
+	}
+	for _, d := range p.sessionDirs() {
+		if d.ID != want {
+			continue
+		}
+		if ctx.Err() != nil {
+			return costs.Totals{}, ctx.Err()
+		}
+		samples, err := parseCopilotTranscript(filepath.Join(d.Path, "events.jsonl"), d.ID, p.ID())
+		if err != nil {
+			return costs.Totals{}, err
+		}
+		var total costs.Totals
+		for _, s := range samples {
+			total.Input += s.Input
+			total.Output += s.Output
+		}
+		return total, nil
+	}
+	return costs.Totals{}, fmt.Errorf("session tokens: session %q not found", id)
 }
 
 func parseCopilotTranscript(path, sessionDir string, providerID agents.ProviderID) ([]costs.TokenSample, error) {

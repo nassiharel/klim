@@ -95,6 +95,9 @@ func (f *fakeProvider) UpdatePlugin(_ context.Context, _ string) error          
 func (f *fakeProvider) TokenSamples(_ context.Context, _ costs.ScanInput) (costs.ScanResult, error) {
 	return costs.ScanResult{}, nil
 }
+func (f *fakeProvider) SessionTokens(_ context.Context, _ string) (costs.Totals, error) {
+	return costs.Totals{}, nil
+}
 func (f *fakeProvider) SessionTexts(_ context.Context) ([]search.SessionText, error) {
 	return nil, nil
 }

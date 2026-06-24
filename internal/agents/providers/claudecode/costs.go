@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,6 +116,52 @@ func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.
 		}
 	}
 	return res, nil
+}
+
+// SessionTokens sums the input/output token usage for ONE session by
+// parsing only that session's transcripts — used by the session detail
+// page so it doesn't have to scan every project. The id is the session
+// list id ("claude:"+<dir>); a Claude session is a project directory,
+// so we parse every .jsonl under ~/.claude/projects/<dir>.
+//
+// The dir component is validated as a plain directory name (no path
+// separators / volume / parent refs) before joining, so a crafted id
+// can't escape the projects root.
+func (p *Provider) SessionTokens(ctx context.Context, id string) (costs.Totals, error) {
+	dir := strings.TrimPrefix(id, "claude:")
+	if dir == "" || dir == "." || dir == ".." ||
+		strings.ContainsAny(dir, `/\`) ||
+		filepath.VolumeName(dir) != "" ||
+		filepath.Base(dir) != dir ||
+		filepath.Clean(dir) != dir {
+		return costs.Totals{}, fmt.Errorf("session tokens: invalid session id %q", id)
+	}
+	projectDir := filepath.Join(p.claudeDir(), "projects", dir)
+	if _, err := os.Stat(projectDir); err != nil {
+		return costs.Totals{}, err
+	}
+	var total costs.Totals
+	_ = filepath.WalkDir(projectDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if !strings.HasSuffix(strings.ToLower(d.Name()), ".jsonl") {
+			return nil
+		}
+		samples, perr := parseClaudeTranscript(path, dir, p.ID())
+		if perr != nil {
+			return nil
+		}
+		for _, s := range samples {
+			total.Input += s.Input
+			total.Output += s.Output
+		}
+		return nil
+	})
+	return total, nil
 }
 
 func parseClaudeTranscript(path, projectName string, providerID agents.ProviderID) ([]costs.TokenSample, error) {

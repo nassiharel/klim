@@ -537,7 +537,7 @@ func renderAgentDetailBody(m *Model, frame agentDetailFrame, row agentRow) strin
 	case row.mcp != nil:
 		return renderMCPBody(m, frame, row.mcp)
 	case row.session != nil:
-		return renderSessionBody(row.session)
+		return renderSessionBody(m, row)
 	case row.skill != nil:
 		return renderSkillBody(row.skill)
 	}
@@ -673,7 +673,8 @@ func renderMCPBody(m *Model, frame agentDetailFrame, mc *agents.MCP) string {
 	return b.String()
 }
 
-func renderSessionBody(s *agents.Session) string {
+func renderSessionBody(m *Model, row agentRow) string {
+	s := row.session
 	var b strings.Builder
 	header := lipgloss.NewStyle().Bold(true).Foreground(cyberInfo)
 	fmt.Fprintf(&b, "  %s\n", header.Render("Session metadata"))
@@ -689,6 +690,7 @@ func renderSessionBody(s *agents.Session) string {
 	if s.TurnCount > 0 {
 		b.WriteString(fmt.Sprintf("    turns: %d\n", s.TurnCount))
 	}
+	b.WriteString("    tokens: " + sessionTokenLine(m, row.id) + "\n")
 	if !s.Invocations.IsEmpty() {
 		fmt.Fprintf(&b, "  %s\n", header.Render("Invocations"))
 		// Render in a fixed order so the layout is stable across
@@ -701,6 +703,34 @@ func renderSessionBody(s *agents.Session) string {
 		renderInvocationsRow(&b, "mcp tools", s.Invocations.MCPTools)
 	}
 	return b.String()
+}
+
+// sessionTokenLine renders the per-session token cost for the detail
+// page. The cost loads asynchronously (a session can be many MB of
+// transcript), so this returns a placeholder until agentSessionCostMsg
+// lands: "computing…" while in flight, the error while it failed, the
+// total + in/out breakdown once known.
+func sessionTokenLine(m *Model, id string) string {
+	st := m.agents
+	if st == nil {
+		return dimVersion.Render("—")
+	}
+	if t, ok := st.sessionCost[id]; ok {
+		if t.Total() == 0 {
+			return dimVersion.Render("none recorded")
+		}
+		return fmt.Sprintf("%s  %s",
+			lipgloss.NewStyle().Bold(true).Foreground(cyberPrimary).Render(formatTokens(t.Total())),
+			dimVersion.Render(fmt.Sprintf("(%s in / %s out)", formatTokens(t.Input), formatTokens(t.Output))),
+		)
+	}
+	if msg, ok := st.sessionCostErr[id]; ok {
+		return dimVersion.Render("unavailable (" + msg + ")")
+	}
+	if st.sessionCostLoading[id] {
+		return dimVersion.Render("computing…")
+	}
+	return dimVersion.Render("—")
 }
 
 // renderInvocationsRow writes a single per-kind row of the

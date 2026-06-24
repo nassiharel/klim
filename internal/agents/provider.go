@@ -66,6 +66,13 @@ type Provider interface {
 	// vanished ones). A nil/empty in.Prior forces a full parse.
 	TokenSamples(ctx context.Context, in costs.ScanInput) (costs.ScanResult, error)
 
+	// SessionTokens sums the input/output token usage for a single
+	// session (by its session-list id), parsing only that session's
+	// transcripts. Used by the session detail page so it can show a
+	// cost line without scanning every session. Providers without usable
+	// token data return ErrNotSupported.
+	SessionTokens(ctx context.Context, id string) (costs.Totals, error)
+
 	// SessionTexts returns the searchable transcript content for every
 	// local session this provider knows about. Used by the Agents
 	// search overlay. Providers with no transcripts return
