@@ -147,3 +147,30 @@ func TestCachePruneMissing(t *testing.T) {
 		t.Errorf("keep should remain")
 	}
 }
+
+// TestCacheSessionTotal covers the per-session total lookup used by the
+// session detail page for an instant (cache-first) cost read.
+func TestCacheSessionTotal(t *testing.T) {
+	c := &Cache{
+		Sessions: map[string]CachedEntry{
+			"claude:proj": {Days: map[string]Totals{
+				"2026-05-15": {Input: 100, Output: 10},
+				"2026-05-16": {Input: 200, Output: 20},
+			}},
+		},
+	}
+	got, ok := c.SessionTotal("claude:proj")
+	if !ok {
+		t.Fatal("expected the session to be present")
+	}
+	if got.Input != 300 || got.Output != 30 {
+		t.Errorf("total in/out = %d/%d, want 300/30", got.Input, got.Output)
+	}
+	if _, ok := c.SessionTotal("claude:absent"); ok {
+		t.Errorf("absent session should report ok=false")
+	}
+	var nilCache *Cache
+	if _, ok := nilCache.SessionTotal("x"); ok {
+		t.Errorf("nil cache should report ok=false")
+	}
+}

@@ -426,12 +426,23 @@ type agentTranscriptMsg struct {
 	err      error
 }
 
-// agentSessionCostCmd computes one session's token totals off the main
-// loop (a session can be many MB of transcript) and returns the result
-// in agentSessionCostMsg. Keyed by session id so the detail page can
-// match it back to the right session.
+// agentSessionCostCmd resolves one session's token totals off the main
+// loop and returns the result in agentSessionCostMsg (keyed by session
+// id so the detail page can match it back).
+//
+// It is CACHE-FIRST: the Costs tab persists per-session totals to
+// ~/.klim/agents/costs.yaml keyed by the same session id, so we read
+// that instantly when present. Only when a session isn't cached do we
+// fall back to parsing its transcripts on demand — which for a busy
+// Claude project (a "session" is a whole project dir, sometimes
+// thousands of files) can take a minute, so it stays the exception.
 func agentSessionCostCmd(provider agents.ProviderID, id string) tea.Cmd {
 	return func() tea.Msg {
+		if cache, err := costs.LoadCache(); err == nil {
+			if totals, ok := cache.SessionTotal(id); ok {
+				return agentSessionCostMsg{id: id, totals: totals}
+			}
+		}
 		p := agentsService().ProviderFor(provider)
 		if p == nil {
 			return agentSessionCostMsg{id: id, err: fmt.Errorf("provider %q not registered", provider)}
