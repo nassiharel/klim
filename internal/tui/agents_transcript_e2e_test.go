@@ -56,25 +56,25 @@ func TestRenderTranscriptLine_RealOnDiskTranscript(t *testing.T) {
 		t.Skip("no real .jsonl transcripts to test against")
 	}
 
-	lines, err := readSessionTranscript(picked, 60)
+	msgs, err := readSessionTranscript(picked, 60)
 	if err != nil {
 		t.Fatalf("readSessionTranscript: %v", err)
 	}
-	// We expect at least a few rendered lines from a real session.
-	if len(lines) < 3 {
-		t.Errorf("only %d rendered lines from %s — viewer would look empty.\nlines: %v", len(lines), picked, lines)
+	// We expect at least a few parsed messages from a real session.
+	if len(msgs) < 3 {
+		t.Errorf("only %d parsed messages from %s — viewer would look empty.\nmessages: %v", len(msgs), picked, msgs)
 	}
-	// We expect at least one [user] OR [assistant] line — the bug
-	// was that strings-as-content dropped every [user] line, so we
+	// We expect at least one user OR assistant message — the bug
+	// was that strings-as-content dropped every user message, so we
 	// can't be too strict here, but completely-empty conversation
 	// content is the failure mode.
 	conversational := 0
-	for _, ln := range lines {
-		if strings.HasPrefix(ln, "[user]") || strings.HasPrefix(ln, "[assistant]") {
+	for _, m := range msgs {
+		if m.role == "user" || m.role == "assistant" {
 			conversational++
 		}
 	}
 	if conversational == 0 {
-		t.Errorf("no [user]/[assistant] lines in %d rendered lines — viewer shows tool noise only", len(lines))
+		t.Errorf("no user/assistant messages in %d parsed messages — viewer shows tool noise only", len(msgs))
 	}
 }

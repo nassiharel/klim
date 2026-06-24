@@ -30,7 +30,7 @@ func (m *Model) handleAgentsDetailKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	// input the same way the list view does. The viewer also gets
 	// the arrow / page / Home / End keys for scrolling.
 	if st.viewerOpen {
-		handleViewerScrollKey(st, msg)
+		handleViewerScrollKey(st, msg, transcriptVisibleRows(m.height))
 		return true, nil
 	}
 	if st.launchPrompt != "" {
@@ -296,7 +296,7 @@ func (m *Model) renderAgentsDetailPage() string {
 	// nothing when they triggered View Transcript. Render it
 	// inline now so it sits within the visible body window.
 	if st.viewerOpen {
-		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines, st.viewerScroll, m.width, m.height))
+		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerMessages, st.viewerCursor, st.viewerScroll, m.width, m.height, st.viewerCopied))
 	} else {
 		// Metadata section
 		b.WriteString(renderAgentDetailFull(row, st.snapshot))

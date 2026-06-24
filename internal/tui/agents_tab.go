@@ -72,15 +72,20 @@ type agentsState struct {
 	deleteTarget string
 	deleteAction tea.Cmd
 
-	// viewerLines holds the first N lines of a session transcript so the
-	// user can peek at it without leaving the TUI. viewerScroll is the
-	// zero-based index into viewerLines of the topmost VISIBLE row;
-	// the modal renders `viewerLines[viewerScroll : viewerScroll+window]`.
-	// Wired to ↑/↓/PgUp/PgDn/Home/End in the modal's input handler.
-	viewerOpen   bool
-	viewerTitle  string
-	viewerLines  []string
-	viewerScroll int
+	// Transcript viewer state. viewerMessages holds the parsed session
+	// transcript (one entry per conversation event, full untruncated
+	// text). viewerCursor is the index of the SELECTED message, which
+	// the modal expands to full word-wrapped text while every other
+	// message stays a single truncated line. viewerScroll is the index
+	// of the topmost VISIBLE message. viewerCopied is set after a
+	// successful clipboard copy so the footer can confirm it.
+	// Wired to ↑/↓/PgUp/PgDn/Home/End/c in the modal's input handler.
+	viewerOpen     bool
+	viewerTitle    string
+	viewerMessages []transcriptMessage
+	viewerCursor   int
+	viewerScroll   int
+	viewerCopied   bool
 
 	flash    string
 	flashEnd time.Time
@@ -485,7 +490,7 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	// Viewer modal owns input while open: Esc/Enter/q close, the
 	// arrow / page / Home / End family scrolls the transcript.
 	if st.viewerOpen {
-		handleViewerScrollKey(st, msg)
+		handleViewerScrollKey(st, msg, transcriptVisibleRows(m.height))
 		return true, nil
 	}
 	// Bulk-confirmation prompt owns input while open.
@@ -882,7 +887,7 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 			st.flashEnd = time.Now().Add(2 * time.Second)
 			return true, nil
 		}
-		lines, err := readSessionTranscript(path, transcriptReadLimit)
+		msgs, err := readSessionTranscript(path, transcriptReadLimit)
 		if err != nil {
 			st.flash = "view error: " + err.Error()
 			st.flashEnd = time.Now().Add(3 * time.Second)
@@ -890,8 +895,10 @@ func (m *Model) handleAgentsKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		st.viewerOpen = true
 		st.viewerTitle = path
-		st.viewerLines = lines
+		st.viewerMessages = msgs
+		st.viewerCursor = 0
 		st.viewerScroll = 0
+		st.viewerCopied = false
 		return true, nil
 	case "o":
 		// Open the current row's primary URL in the user's browser.
@@ -1228,8 +1235,10 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		}
 		st.viewerOpen = true
 		st.viewerTitle = v.path
-		st.viewerLines = v.lines
+		st.viewerMessages = v.messages
+		st.viewerCursor = 0
 		st.viewerScroll = 0
+		st.viewerCopied = false
 		return true, nil
 	case agentLaunchPlanMsg:
 		st.actionRunning = ""
@@ -1529,13 +1538,45 @@ func filterAgentRows(rows []agentRow, q string) []agentRow {
 	}
 	out := make([]agentRow, 0, len(rows))
 	for _, r := range rows {
-		nameScore, _ := agents.FuzzyMatch(q, r.name)
-		subScore, _ := agents.FuzzyMatch(q, r.subtitle)
-		if nameScore > 0 || subScore > 0 {
+		if rowMatchesQuery(r, q) {
 			out = append(out, r)
 		}
 	}
 	return out
+}
+
+// rowMatchesQuery reports whether a row fuzzy-matches q across the
+// fields the user can actually see. Every row matches on name +
+// subtitle; session rows additionally match the metadata shown in the
+// tile (title = first user message, recent activity, repository,
+// branch, group) so `/goal` finds a session titled "...the goal..."
+// even though the row's `name` is just the short id. Without this,
+// `/` only matched the session id/short-id and project path, which is
+// almost never what the user typed.
+func rowMatchesQuery(r agentRow, q string) bool {
+	if score, _ := agents.FuzzyMatch(q, r.name); score > 0 {
+		return true
+	}
+	if score, _ := agents.FuzzyMatch(q, r.subtitle); score > 0 {
+		return true
+	}
+	if r.session != nil {
+		for _, field := range []string{
+			r.session.Title,
+			r.session.RecentActivity,
+			r.session.Repository,
+			r.session.Branch,
+			r.session.Group,
+		} {
+			if field == "" {
+				continue
+			}
+			if score, _ := agents.FuzzyMatch(q, field); score > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // agentsSortModesFor returns the sort modes available for a sub-tab.
@@ -1775,7 +1816,7 @@ func (m *Model) renderAgentsView() string {
 	// off-screen. Render it as the body instead so it always sits
 	// inside the visible viewport.
 	if st.viewerOpen {
-		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerLines, st.viewerScroll, m.width, m.height))
+		b.WriteString(renderTranscriptViewer(st.viewerTitle, st.viewerMessages, st.viewerCursor, st.viewerScroll, m.width, m.height, st.viewerCopied))
 		if st.flash != "" && time.Now().Before(st.flashEnd) {
 			b.WriteString("\n  " + st.flash + "\n")
 		}
@@ -1948,30 +1989,40 @@ func renderAgentNotePrompt(st *agentsState) string {
 // Both the list view (renderAgentsView) and the detail page
 // (renderAgentsDetailPage) call this when st.viewerOpen is true.
 //
-// History: the original implementation drew a hand-rolled box with
-// hard-coded 56-char top/bottom borders and 80-char content
-// truncation, then was APPENDED at the very bottom of the body —
-// past the height-padding in renderAgentsDetailPage and past
-// fitToVisibleRows' bottom-clip in renderAgentsView. Both paths
-// pushed the modal off-screen entirely.
+// Each message renders as a single truncated line EXCEPT the selected
+// one (cursor), which expands to its full text word-wrapped to the
+// inner width with a left gutter bar, so the user can read a long
+// message in full without leaving the TUI and without any "…". The
+// box uses lipgloss' RoundedBorder()/Width so the borders always
+// align with the terminal width; callers render it in place of the
+// body content so it always lands inside the visible viewport.
 //
-// The current implementation uses lipgloss' `RoundedBorder()` and
-// `Width(totalWidth - 4)` so the borders always align with the
-// terminal width, drops the hard-coded truncation in favour of
-// truncating to the actual available content width, and colours
-// each row by its role chip (`user` / `assistant` / `tool`) for
-// the same hierarchy the search-overlay viewer provides. Callers
-// render the box in place of the body content (like the existing
-// searchOverlay pattern) so it always lands inside the visible
-// viewport.
-//
-// scroll is the zero-based index of the topmost visible row;
-// totalHeight is the terminal height (used to budget how many
-// transcript rows fit). Both are bounded internally — scroll past
-// the end pins to the last visible window; a zero/unknown height
-// falls back to a sensible default so a hidden terminal-size
-// resize doesn't blank the modal.
-func renderTranscriptViewer(title string, lines []string, scroll, totalWidth, totalHeight int) string {
+// cursor is the index of the selected (expanded) message; scroll is
+// the index of the topmost visible message; totalHeight budgets how
+// many rows fit. All are bounded internally — a zero/unknown height
+// falls back to a sensible default so a hidden terminal-size resize
+// doesn't blank the modal. copied toggles the footer's copy
+// confirmation after the user presses `c`.
+// transcriptVisibleRows budgets how many content rows the viewer can
+// show: terminal height minus surrounding chrome (tab strip + sub-tab
+// + status + filter + footer = ~10 rows) minus the box's own header /
+// blank / footer / border (~7 rows). Floors at 5 so very small
+// terminals still show something useful; defaults to 20 when the
+// height is unknown (0, e.g. in tests). Shared by the renderer and
+// the key handler so the cursor stays in the same window the box
+// draws.
+func transcriptVisibleRows(totalHeight int) int {
+	if totalHeight <= 0 {
+		return 20
+	}
+	visRows := totalHeight - 17
+	if visRows < 5 {
+		visRows = 5
+	}
+	return visRows
+}
+
+func renderTranscriptViewer(title string, messages []transcriptMessage, cursor, scroll, totalWidth, totalHeight int, copied bool) string {
 	if totalWidth <= 0 {
 		totalWidth = 80
 	}
@@ -1982,25 +2033,13 @@ func renderTranscriptViewer(title string, lines []string, scroll, totalWidth, to
 	boxWidth := totalWidth - 4
 	// Inner content width: lipgloss Padding(0, 1) eats 1 cell each
 	// side, the rounded border eats 1 cell each side. Used to size
-	// the per-row text so a "[user] …" line fits without wrapping.
+	// the per-row text so a "user …" line fits without wrapping.
 	innerW := boxWidth - 4
 	if innerW < 20 {
 		innerW = 20
 	}
 
-	// Budget the visible rows: terminal height minus surrounding
-	// chrome (tab strip + sub-tab + status + filter + footer = ~10
-	// rows) minus the box's own header / blank / footer / border
-	// (~7 rows). Floor at 5 so very small terminals still show
-	// something useful. Default to 20 when totalHeight is 0 (e.g.
-	// in tests).
-	visRows := totalHeight - 17
-	if totalHeight <= 0 {
-		visRows = 20
-	}
-	if visRows < 5 {
-		visRows = 5
-	}
+	visRows := transcriptVisibleRows(totalHeight)
 
 	box := lipgloss.NewStyle().
 		Foreground(cyberFG).
@@ -2015,62 +2054,103 @@ func renderTranscriptViewer(title string, lines []string, scroll, totalWidth, to
 
 	out := []string{header, ""}
 
-	if len(lines) == 0 {
+	if len(messages) == 0 {
 		out = append(out,
 			dimVersion.Render("(empty transcript — no events recorded yet)"),
 			"",
-			dimVersion.Render("0 lines · Esc / Enter / q = close"))
+			dimVersion.Render("0 messages · Esc / Enter / q = close"))
 		return box.Render(strings.Join(out, "\n"))
 	}
 
-	// Clamp scroll so a stale value doesn't render a blank viewer.
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= len(messages) {
+		cursor = len(messages) - 1
+	}
+	// Clamp scroll so a stale value doesn't render a blank viewer, and
+	// keep the cursor within the visible window.
 	if scroll < 0 {
 		scroll = 0
 	}
-	if scroll >= len(lines) {
-		scroll = len(lines) - 1
+	if scroll > cursor {
+		scroll = cursor
 	}
-	end := scroll + visRows
-	if end > len(lines) {
-		end = len(lines)
-	}
-
-	for i := scroll; i < end; i++ {
-		out = append(out, renderTranscriptRow(lines[i], innerW))
+	if scroll >= len(messages) {
+		scroll = len(messages) - 1
 	}
 
-	// Surface scroll position + key hints in the footer so the user
-	// always knows where they are in the conversation and how to
-	// move. Mirrors the dimVersion hint pattern used elsewhere.
-	hint := fmt.Sprintf("lines %d-%d / %d · ↑/↓ scroll · PgUp/PgDn page · g/G top/bottom · Esc close",
-		scroll+1, end, len(lines))
+	// Render visible messages until we run out of row budget. The
+	// expanded (selected) message can span several rows, so we count
+	// rows rather than messages.
+	rows := 0
+	last := scroll
+	for i := scroll; i < len(messages) && rows < visRows; i++ {
+		block := renderTranscriptMessage(messages[i], innerW, i == cursor)
+		out = append(out, block...)
+		rows += len(block)
+		last = i
+	}
+
+	// Footer: position + key hints, or a copy confirmation.
+	var hint string
+	if copied {
+		hint = "✓ copied message to clipboard · ↑/↓ select · c copy · Esc close"
+	} else {
+		hint = fmt.Sprintf("msg %d/%d (showing %d-%d) · ↑/↓ select · PgUp/PgDn page · c copy · g/G top/bottom · Esc close",
+			cursor+1, len(messages), scroll+1, last+1)
+	}
 	out = append(out, "", dimVersion.Render(hint))
 	return box.Render(strings.Join(out, "\n"))
 }
 
-// renderTranscriptRow colours a single transcript line based on the
-// role prefix that renderTranscriptLine emits (`[user]`, `[assistant]`,
-// `[tool]`). Lines without a recognised prefix fall through with
-// the dim foreground so JSONL noise (rare in practice) is still
-// readable but visually demoted.
-func renderTranscriptRow(line string, innerW int) string {
-	role, rest := splitTranscriptRolePrefix(line)
-	if role == "" {
-		// No recognised prefix — render as dim raw text.
-		return lipgloss.NewStyle().Foreground(cyberFGDim).
-			Render(truncAgentRow(line, innerW))
-	}
-	chip := transcriptRoleChip(role)
-	// innerW budget: chip + 1-space gap + text.
-	textW := innerW - lipgloss.Width(chip) - 1
-	if textW < 8 {
-		textW = 8
-	}
+// renderTranscriptMessage renders one message as one or more rows. A
+// non-selected message is a single truncated line ("chip text…");
+// the selected message expands to its full text word-wrapped to the
+// inner width, each wrapped row prefixed with a highlighted gutter
+// bar so the selection is obvious. Returns the rows as a slice so the
+// caller can budget vertical space.
+func renderTranscriptMessage(msg transcriptMessage, innerW int, selected bool) []string {
+	chip := transcriptMessageChip(msg.role)
 	textStyle := lipgloss.NewStyle().Foreground(cyberFG)
-	if role == "tool" {
+	if msg.role == "tool" {
 		textStyle = textStyle.Foreground(cyberFGDim)
 	}
-	return chip + " " + textStyle.Render(truncAgentRow(rest, textW))
+
+	if !selected {
+		// Single truncated line: chip + space + text.
+		textW := innerW - lipgloss.Width(chip) - 1
+		if textW < 8 {
+			textW = 8
+		}
+		oneLine := collapseWhitespace(msg.text)
+		return []string{chip + " " + textStyle.Render(truncAgentRow(oneLine, textW))}
+	}
+
+	// Expanded: a header row with the chip, then the full text wrapped
+	// under a gutter bar. The gutter (▌) + space eats 2 cells.
+	gutter := lipgloss.NewStyle().Foreground(cyberAccent).Render("▌") + " "
+	wrapW := innerW - 2
+	if wrapW < 8 {
+		wrapW = 8
+	}
+	selStyle := textStyle.Bold(true)
+	rows := []string{gutter + chip}
+	wrapped := lipgloss.Wrap(msg.text, wrapW, "")
+	for _, ln := range strings.Split(wrapped, "\n") {
+		rows = append(rows, gutter+selStyle.Render(ln))
+	}
+	return rows
+}
+
+// transcriptMessageChip renders the role chip for a message, or a dim
+// "·" placeholder for messages without a recognised role (raw
+// fall-through lines).
+func transcriptMessageChip(role string) string {
+	if role == "" {
+		return lipgloss.NewStyle().Foreground(cyberFGDim).Render("·")
+	}
+	return transcriptRoleChip(role)
 }
 
 // splitTranscriptRolePrefix splits a "[role] body" line produced by
@@ -2093,53 +2173,101 @@ func splitTranscriptRolePrefix(line string) (role, rest string) {
 
 // handleViewerScrollKey routes a keypress while the transcript
 // viewer modal is open. Esc/Enter/q close the modal; the cursor
-// keys + Page/Home/End move viewerScroll. Called by both the
-// list-view and the detail-page input handlers so they share the
-// same scroll semantics.
+// keys + Page/Home/End move the SELECTED message (viewerCursor); `c`
+// copies the selected message's text to the clipboard. Called by
+// both the list-view and the detail-page input handlers so they
+// share the same semantics.
 //
-// The page step is a heuristic (8 lines): the viewer renders an
-// arbitrary slice of viewerLines and doesn't know its visible
-// height at input time (terminal size lives on the Model, not on
-// agentsState). 8 is large enough to feel like a page on small
-// terminals and short enough that the cursor doesn't jump past
-// the visible window on tall ones.
-func handleViewerScrollKey(st *agentsState, msg tea.KeyMsg) {
+// visRows is the viewer's visible row budget (from
+// transcriptVisibleRows) so the cursor scrolls the window to stay in
+// view on both edges. The page step is a heuristic (8 messages) —
+// large enough to feel like a page on small terminals, short enough
+// that the cursor doesn't jump past the window on tall ones.
+func handleViewerScrollKey(st *agentsState, msg tea.KeyMsg, visRows int) {
 	const pageStep = 8
+	// Any movement clears a prior copy confirmation so the footer
+	// reverts to the position/keys hint.
 	switch msg.String() {
 	case "esc", "enter", "q":
 		st.viewerOpen = false
 		return
+	case "c":
+		copySelectedTranscriptMessage(st)
+		return
 	case "down", "j":
-		clampViewerScroll(st, st.viewerScroll+1)
+		st.viewerCopied = false
+		moveViewerCursor(st, st.viewerCursor+1, visRows)
 	case "up", "k":
-		clampViewerScroll(st, st.viewerScroll-1)
+		st.viewerCopied = false
+		moveViewerCursor(st, st.viewerCursor-1, visRows)
 	case "pgdown", "pagedown", "ctrl+f", " ":
-		clampViewerScroll(st, st.viewerScroll+pageStep)
+		st.viewerCopied = false
+		moveViewerCursor(st, st.viewerCursor+pageStep, visRows)
 	case "pgup", "pageup", "ctrl+b":
-		clampViewerScroll(st, st.viewerScroll-pageStep)
+		st.viewerCopied = false
+		moveViewerCursor(st, st.viewerCursor-pageStep, visRows)
 	case "home", "g":
-		st.viewerScroll = 0
+		st.viewerCopied = false
+		moveViewerCursor(st, 0, visRows)
 	case "end", "G":
-		// Scroll to bottom — clampViewerScroll pins to a sane max.
-		clampViewerScroll(st, len(st.viewerLines))
+		st.viewerCopied = false
+		moveViewerCursor(st, len(st.viewerMessages)-1, visRows)
 	}
 }
 
-// clampViewerScroll constrains viewerScroll to a valid index. It
-// never lets the user scroll past the last line (which would
-// render an empty viewer); the lower bound is always 0.
-func clampViewerScroll(st *agentsState, want int) {
+// moveViewerCursor selects the message at `want` (clamped to a valid
+// index) and keeps the scroll window so the selection stays visible:
+// scroll never sits above the cursor by more than (visRows-1) rows
+// (which would push the selection off the bottom) and never below the
+// cursor (which would push it off the top). The expanded message can
+// be taller than one row, so this keeps at least the START of the
+// selected message in view; the renderer budgets the rest.
+func moveViewerCursor(st *agentsState, want, visRows int) {
+	n := len(st.viewerMessages)
+	if n == 0 {
+		st.viewerCursor = 0
+		st.viewerScroll = 0
+		return
+	}
 	if want < 0 {
 		want = 0
 	}
-	maxScroll := len(st.viewerLines) - 1
-	if maxScroll < 0 {
-		maxScroll = 0
+	if want > n-1 {
+		want = n - 1
 	}
-	if want > maxScroll {
-		want = maxScroll
+	st.viewerCursor = want
+	if visRows < 1 {
+		visRows = 1
 	}
-	st.viewerScroll = want
+	if st.viewerScroll > want {
+		st.viewerScroll = want
+	}
+	if want-st.viewerScroll > visRows-1 {
+		st.viewerScroll = want - (visRows - 1)
+	}
+}
+
+// copySelectedTranscriptMessage writes the selected message's full
+// text (without the role prefix) to the system clipboard and toggles
+// the footer confirmation. No-op when there's no message selected.
+func copySelectedTranscriptMessage(st *agentsState) {
+	if st.viewerCursor < 0 || st.viewerCursor >= len(st.viewerMessages) {
+		return
+	}
+	text := st.viewerMessages[st.viewerCursor].text
+	if text == "" {
+		st.flash = "nothing to copy for this message"
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return
+	}
+	cb := systemClipboard{}
+	if err := cb.WriteAll(text); err != nil {
+		st.viewerCopied = false
+		st.flash = "clipboard error: " + err.Error()
+		st.flashEnd = time.Now().Add(2 * time.Second)
+		return
+	}
+	st.viewerCopied = true
 }
 
 // renderConfirmModal renders the shared yes/no confirmation card
@@ -3253,7 +3381,17 @@ func cycleMarketplaceFilter(current string, available []string) string {
 	return available[0]
 }
 
-// readSessionTranscript reads at most `max` rendered lines from a
+// transcriptMessage is one conversation event parsed for the viewer:
+// a role chip ("user" / "assistant" / "tool" / "" for raw) and the
+// full, untruncated message text. The viewer truncates for the
+// single-line list rows but keeps the full text so the selected
+// message can be expanded and copied in full.
+type transcriptMessage struct {
+	role string
+	text string
+}
+
+// readSessionTranscript reads up to `limit` conversation events from a
 // session transcript and returns them ready for the viewer modal.
 //
 // When given a directory, looks for the canonical Copilot
@@ -3265,17 +3403,17 @@ func cycleMarketplaceFilter(current string, available []string) string {
 // need the raw envelope — it needs the conversation. We parse each
 // line and extract just the user-friendly bits:
 //
-//   - Claude `user` / `assistant` messages → `[role] <first text>`
-//   - Claude `tool_use` blocks → `[tool] <name>(<arg-summary>)`
+//   - Claude `user` / `assistant` messages → role "user"/"assistant"
+//   - Claude `tool_use` blocks → role "tool", text `<name>(<arg-summary>)`
 //   - Copilot `user.message` / `assistant.message` → same shape
 //   - Other event types (queue-operation, hook_success, telemetry)
 //     → skipped, since they're noise to the human reader
 //
 // Lines that don't parse as JSON fall through unchanged (capped at
 // 4 KiB) so non-JSONL transcripts (legacy formats) still show up.
-// Each rendered line is capped at 200 chars so a single event with
-// a multi-megabyte payload can't blow up the viewer's layout.
-func readSessionTranscript(path string, limit int) ([]string, error) {
+// Each message keeps its full text (capped at 32 KiB) so the viewer
+// can expand and copy it; the modal handles truncation for display.
+func readSessionTranscript(path string, limit int) ([]transcriptMessage, error) {
 	st, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -3296,20 +3434,25 @@ func readSessionTranscript(path string, limit int) ([]string, error) {
 	defer func() { _ = f.Close() }()
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
-	const maxRenderedLine = 200
-	var lines []string
-	for scanner.Scan() && len(lines) < limit {
+	// Keep the full message text (untruncated) so the viewer can expand
+	// and copy it, but cap each message so a single multi-megabyte
+	// payload can't blow up wrapping/clipboard. 32 KiB is far longer
+	// than any human-readable turn yet bounds worst-case memory.
+	const maxMessageLen = 32 * 1024
+	var msgs []transcriptMessage
+	for scanner.Scan() && len(msgs) < limit {
 		raw := scanner.Bytes()
 		rendered := renderTranscriptLine(raw)
 		if rendered == "" {
 			continue
 		}
-		if len(rendered) > maxRenderedLine {
-			rendered = rendered[:maxRenderedLine-1] + "…"
+		role, text := splitTranscriptRolePrefix(rendered)
+		if len(text) > maxMessageLen {
+			text = text[:maxMessageLen-1] + "…"
 		}
-		lines = append(lines, rendered)
+		msgs = append(msgs, transcriptMessage{role: role, text: text})
 	}
-	return lines, nil
+	return msgs, nil
 }
 
 // renderTranscriptLine turns one raw JSONL transcript line into a
