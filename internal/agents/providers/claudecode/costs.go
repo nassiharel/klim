@@ -40,18 +40,25 @@ type claudeTranscriptLine struct {
 // without parsable transcripts contribute zero samples; missing dirs
 // are not an error.
 //
+// Scanning is incremental: a transcript whose mtime matches the value
+// in.Prior already recorded for its session is NOT re-read — only its
+// session id + mtime are reported in Seen so the caller keeps the
+// cached entry. This is the hot path: a heavy user can have thousands
+// of multi-MB transcripts, and re-parsing all of them on every Costs
+// scan is what made the tab slow.
+//
 // The transcript layout is best-effort: Claude Code's session
 // transcript format is undocumented, so the parser scans every .jsonl
 // file under each project directory and looks for the common usage
 // shape used by recent CLI builds.
-func (p *Provider) TokenSamples(ctx context.Context) ([]costs.TokenSample, error) {
+func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.ScanResult, error) {
 	projects := filepath.Join(p.claudeDir(), "projects")
 	entries, err := os.ReadDir(projects)
 	if err != nil {
 		// No transcripts yet — that's fine.
-		return nil, nil
+		return costs.ScanResult{}, nil
 	}
-	var out []costs.TokenSample
+	res := costs.ScanResult{Seen: map[string]time.Time{}}
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -66,14 +73,43 @@ func (p *Provider) TokenSamples(ctx context.Context) ([]costs.TokenSample, error
 			if !strings.HasSuffix(strings.ToLower(d.Name()), ".jsonl") {
 				return nil
 			}
+			info, statErr := d.Info()
+			if statErr != nil {
+				return nil
+			}
+			mtime := info.ModTime().Truncate(time.Second)
+
+			// The Claude transcript filename is the session UUID, which
+			// is exactly the in-file sessionId — so we can identify the
+			// session (and thus its cache key) without parsing. Fall
+			// back to the project dir name to match claudeSampleFromLine.
+			sid := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
+			if sid == "" {
+				sid = e.Name()
+			}
+			sessionKey := "claude:" + sid
+
+			// Record the newest mtime per session for Seen.
+			if res.Seen[sessionKey].Before(mtime) {
+				res.Seen[sessionKey] = mtime
+			}
+
+			// Skip re-parsing when the file hasn't changed since the
+			// cached scan. !mtime.After(prior) means mtime <= prior:
+			// equal mtimes (the common case) skip; a strictly-newer
+			// file forces a fresh parse.
+			if prior, ok := in.Prior[sessionKey]; ok && !mtime.After(prior) {
+				return nil
+			}
+
 			samples, err := parseClaudeTranscript(path, e.Name(), p.ID())
 			if err == nil {
-				out = append(out, samples...)
+				res.Samples = append(res.Samples, samples...)
 			}
 			return nil
 		})
 	}
-	return out, nil
+	return res, nil
 }
 
 func parseClaudeTranscript(path, projectName string, providerID agents.ProviderID) ([]costs.TokenSample, error) {

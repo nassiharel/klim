@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/nassiharel/klim/internal/agents/costs"
 )
 
 func TestTokenSamples_ParsesUsageBlocks(t *testing.T) {
@@ -22,10 +24,11 @@ func TestTokenSamples_ParsesUsageBlocks(t *testing.T) {
 	}
 
 	p := &Provider{HomeOverride: home}
-	samples, err := p.TokenSamples(context.Background())
+	res, err := p.TokenSamples(context.Background(), costs.ScanInput{})
 	if err != nil {
 		t.Fatalf("TokenSamples: %v", err)
 	}
+	samples := res.Samples
 	if len(samples) != 2 {
 		t.Fatalf("expected 2 samples, got %d: %+v", len(samples), samples)
 	}
@@ -50,12 +53,12 @@ func TestTokenSamples_ParsesUsageBlocks(t *testing.T) {
 
 func TestTokenSamples_MissingSessionsDir(t *testing.T) {
 	p := &Provider{HomeOverride: t.TempDir()}
-	samples, err := p.TokenSamples(context.Background())
+	res, err := p.TokenSamples(context.Background(), costs.ScanInput{})
 	if err != nil {
 		t.Errorf("err = %v", err)
 	}
-	if len(samples) != 0 {
-		t.Errorf("expected zero, got %d", len(samples))
+	if len(res.Samples) != 0 {
+		t.Errorf("expected zero, got %d", len(res.Samples))
 	}
 }
 
@@ -77,10 +80,11 @@ func TestTokenSamples_SessionStateLayout(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 	p := &Provider{HomeOverride: home}
-	samples, err := p.TokenSamples(context.Background())
+	res, err := p.TokenSamples(context.Background(), costs.ScanInput{})
 	if err != nil {
 		t.Fatalf("TokenSamples: %v", err)
 	}
+	samples := res.Samples
 	if len(samples) != 1 {
 		t.Fatalf("expected 1 sample under session-state/, got %d", len(samples))
 	}

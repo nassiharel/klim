@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/costs"
 )
 
 func TestTokenSamples_ParsesUsageBlocks(t *testing.T) {
@@ -24,10 +26,11 @@ func TestTokenSamples_ParsesUsageBlocks(t *testing.T) {
 	}
 
 	p := &Provider{HomeOverride: home}
-	samples, err := p.TokenSamples(context.Background())
+	res, err := p.TokenSamples(context.Background(), costs.ScanInput{})
 	if err != nil {
 		t.Fatalf("TokenSamples: %v", err)
 	}
+	samples := res.Samples
 	if len(samples) != 1 {
 		t.Fatalf("expected 1 sample with non-zero usage, got %d: %+v", len(samples), samples)
 	}
@@ -44,16 +47,20 @@ func TestTokenSamples_ParsesUsageBlocks(t *testing.T) {
 	if s.SessionID != "claude:abc" {
 		t.Errorf("session id = %q", s.SessionID)
 	}
+	// The transcript filename ("session.jsonl") is the skip/cache key.
+	if _, ok := res.Seen["claude:session"]; !ok {
+		t.Errorf("Seen should record the session by filename; got %v", res.Seen)
+	}
 }
 
 func TestTokenSamples_MissingProjectsDir_NoError(t *testing.T) {
 	p := &Provider{HomeOverride: t.TempDir()}
-	samples, err := p.TokenSamples(context.Background())
+	res, err := p.TokenSamples(context.Background(), costs.ScanInput{})
 	if err != nil {
 		t.Errorf("err = %v", err)
 	}
-	if len(samples) != 0 {
-		t.Errorf("expected zero samples, got %d", len(samples))
+	if len(res.Samples) != 0 {
+		t.Errorf("expected zero samples, got %d", len(res.Samples))
 	}
 }
 
@@ -68,12 +75,66 @@ func TestTokenSamples_FallsBackToProjectNameWhenSessionIDMissing(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 	p := &Provider{HomeOverride: home}
-	samples, err := p.TokenSamples(context.Background())
-	if err != nil || len(samples) != 1 {
-		t.Fatalf("samples=%d err=%v", len(samples), err)
+	res, err := p.TokenSamples(context.Background(), costs.ScanInput{})
+	if err != nil || len(res.Samples) != 1 {
+		t.Fatalf("samples=%d err=%v", len(res.Samples), err)
 	}
-	if samples[0].SessionID != "claude:myproj" {
-		t.Errorf("session id = %q, want claude:myproj", samples[0].SessionID)
+	if res.Samples[0].SessionID != "claude:myproj" {
+		t.Errorf("session id = %q, want claude:myproj", res.Samples[0].SessionID)
+	}
+}
+
+// TestTokenSamples_SkipsUnchangedTranscript pins the incremental
+// behavior: a transcript whose mtime is already in ScanInput.Prior is
+// reported in Seen but NOT re-parsed (no fresh samples). This is the
+// fix for the slow Costs tab.
+func TestTokenSamples_SkipsUnchangedTranscript(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "proj")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	line := `{"type":"assistant","timestamp":"2026-05-15T08:00:01Z","sessionId":"sess","message":{"role":"assistant","model":"m","usage":{"input_tokens":5,"output_tokens":7}}}` + "\n"
+	tr := filepath.Join(projDir, "sess.jsonl")
+	if err := os.WriteFile(tr, []byte(line), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	p := &Provider{HomeOverride: home}
+
+	// Cold scan parses the file.
+	cold, err := p.TokenSamples(context.Background(), costs.ScanInput{})
+	if err != nil || len(cold.Samples) != 1 {
+		t.Fatalf("cold: samples=%d err=%v", len(cold.Samples), err)
+	}
+	mt, ok := cold.Seen["claude:sess"]
+	if !ok {
+		t.Fatalf("cold scan should report Seen[claude:sess]; got %v", cold.Seen)
+	}
+
+	// Warm scan with the prior mtime must skip parsing (no samples)
+	// but still report the session in Seen so it isn't pruned.
+	warm, err := p.TokenSamples(context.Background(), costs.ScanInput{Prior: map[string]time.Time{"claude:sess": mt}})
+	if err != nil {
+		t.Fatalf("warm: %v", err)
+	}
+	if len(warm.Samples) != 0 {
+		t.Errorf("warm scan should skip unchanged file; got %d samples", len(warm.Samples))
+	}
+	if _, ok := warm.Seen["claude:sess"]; !ok {
+		t.Errorf("warm scan must still report the session in Seen; got %v", warm.Seen)
+	}
+
+	// Touch the file forward → it must be re-parsed.
+	newer := mt.Add(2 * time.Second)
+	if err := os.Chtimes(tr, newer, newer); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	changed, err := p.TokenSamples(context.Background(), costs.ScanInput{Prior: map[string]time.Time{"claude:sess": mt}})
+	if err != nil {
+		t.Fatalf("changed: %v", err)
+	}
+	if len(changed.Samples) != 1 {
+		t.Errorf("a newer transcript must be re-parsed; got %d samples", len(changed.Samples))
 	}
 }
 

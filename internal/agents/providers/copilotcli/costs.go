@@ -43,16 +43,31 @@ type copilotEventLine struct {
 // `model.response` / `model.usage` event types, but we don't filter
 // by type — any line with usage tokens counts. Missing files /
 // missing usage are tolerated silently.
-func (p *Provider) TokenSamples(ctx context.Context) ([]costs.TokenSample, error) {
-	var out []costs.TokenSample
+func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.ScanResult, error) {
+	res := costs.ScanResult{Seen: map[string]time.Time{}}
 	for _, d := range p.sessionDirs() {
 		path := filepath.Join(d.Path, "events.jsonl")
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			continue
+		}
+		mtime := info.ModTime().Truncate(time.Second)
+		// The session dir name is the session id in the common case
+		// (copilotSampleFromLine falls back to it when the in-file id
+		// is absent). Use it as the skip/cache key without parsing.
+		sessionKey := "copilot:" + d.ID
+		if res.Seen[sessionKey].Before(mtime) {
+			res.Seen[sessionKey] = mtime
+		}
+		if prior, ok := in.Prior[sessionKey]; ok && !mtime.After(prior) {
+			continue
+		}
 		samples, err := parseCopilotTranscript(path, d.ID, p.ID())
 		if err == nil {
-			out = append(out, samples...)
+			res.Samples = append(res.Samples, samples...)
 		}
 	}
-	return out, nil
+	return res, nil
 }
 
 func parseCopilotTranscript(path, sessionDir string, providerID agents.ProviderID) ([]costs.TokenSample, error) {

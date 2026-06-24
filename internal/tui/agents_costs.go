@@ -50,9 +50,15 @@ func (m *Model) agentsCostsLoadCmd() tea.Cmd {
 }
 
 // loadCostSamples walks every provider's transcripts (via the
-// TokenSamples capability), merges the result with the on-disk cache,
-// and returns the merged sample slice. The cache is refreshed and
-// saved synchronously.
+// TokenSamples capability) incrementally: transcripts whose mtime is
+// unchanged since the last scan are NOT re-parsed — their token totals
+// are reused straight from the on-disk cache. Only new or changed
+// transcripts are read and re-aggregated. The cache is refreshed and
+// saved synchronously, and entries for sessions that vanished from
+// disk are pruned.
+//
+// This is what keeps the Costs tab fast on a heavy machine: without
+// the mtime skip every scan re-read gigabytes of static transcripts.
 func loadCostSamples() ([]costs.TokenSample, error) {
 	cache, _ := costs.LoadCache()
 
@@ -60,30 +66,44 @@ func loadCostSamples() ([]costs.TokenSample, error) {
 	defer cancel()
 	svc := agentsService()
 
+	// Prior mtimes feed the providers' incremental skip.
+	prior := make(map[string]time.Time, len(cache.Sessions))
+	for id, e := range cache.Sessions {
+		prior[id] = e.TranscriptMtime
+	}
+
 	freshBySession := map[string][]costs.TokenSample{}
 	mtimeBySession := map[string]time.Time{}
+	present := map[string]bool{}
 
 	for _, p := range svc.Registry().Providers() {
-		samples, err := p.TokenSamples(ctx)
+		res, err := p.TokenSamples(ctx, costs.ScanInput{Prior: prior})
 		if err != nil {
 			continue
 		}
-		for _, s := range samples {
+		// Every session the provider saw on disk stays in the cache;
+		// the rest get pruned below.
+		for sessionID, mt := range res.Seen {
+			present[sessionID] = true
+			if mtimeBySession[sessionID].Before(mt) {
+				mtimeBySession[sessionID] = mt
+			}
+		}
+		for _, s := range res.Samples {
 			freshBySession[s.SessionID] = append(freshBySession[s.SessionID], s)
+			// A provider that didn't populate Seen (older impl) still
+			// counts as present so its sessions aren't pruned.
+			present[s.SessionID] = true
 			if mtimeBySession[s.SessionID].Before(s.Day) {
 				mtimeBySession[s.SessionID] = s.Day
 			}
 		}
 	}
 
-	present := map[string]bool{}
+	// Re-aggregate only the sessions whose transcripts changed; the
+	// untouched ones keep their existing cache entry verbatim.
 	for sessionID, samples := range freshBySession {
-		entry := costs.AggregateSession(samples, mtimeBySession[sessionID])
-		cache.Sessions[sessionID] = entry
-		present[sessionID] = true
-	}
-	for id := range cache.Sessions {
-		present[id] = true
+		cache.Sessions[sessionID] = costs.AggregateSession(samples, mtimeBySession[sessionID])
 	}
 	cache.PruneMissing(present)
 	_ = cache.Save()
@@ -297,8 +317,8 @@ func renderTopSessions(sessions []costs.SessionCost, cursor, totalWidth int) str
 	cols := computeColumnWidths([]column{
 		{header: "SOURCE", width: 10},
 		{header: "TITLE", grow: true},
-		{header: "MODEL", width: 24},
-		{header: "TOKENS", width: 24},
+		{header: "MODEL", width: 22},
+		{header: "TOKENS", width: 26},
 	}, totalWidth)
 	var b strings.Builder
 	b.WriteString(renderHeader(cols, -1))
@@ -311,15 +331,23 @@ func renderTopSessions(sessions []costs.SessionCost, cursor, totalWidth int) str
 			agentsProviderChip(agents.ProviderID(sc.Provider)),
 			truncAgentRow(title, cols[1].width),
 			truncAgentRow(sc.Model, cols[2].width),
-			fmt.Sprintf("%s · in %s out %s",
-				formatTokens(sc.Totals.Total()),
-				formatTokens(sc.Totals.Input),
-				formatTokens(sc.Totals.Output),
-			),
+			formatTokenCell(sc.Totals),
 		}
 		b.WriteString(renderRow(cells, cols, rowLead(i, cursor), i == cursor, totalWidth))
 	}
 	return b.String()
+}
+
+// formatTokenCell renders a compact "<total> (<in>↓ <out>↑)" summary
+// that fits the TOKENS column without wrapping. The arrows read as
+// input (down/received) and output (up/generated); using K/M suffixes
+// keeps the worst case ("999.9M (999.9M↓ 999.9M↑)") within the column.
+func formatTokenCell(t costs.Totals) string {
+	return fmt.Sprintf("%s (%s↓ %s↑)",
+		formatTokens(t.Total()),
+		formatTokens(t.Input),
+		formatTokens(t.Output),
+	)
 }
 
 func renderSparkline(buckets []int) string {

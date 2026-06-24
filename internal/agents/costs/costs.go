@@ -42,6 +42,28 @@ type Totals struct {
 	Output int
 }
 
+// ScanResult is what a provider returns from TokenSamples. It supports
+// incremental scanning: the provider checks each transcript's mtime
+// against Prior and only parses files that are new or changed.
+//
+//   - Samples holds freshly-parsed samples for changed/new transcripts
+//     only (unchanged files are NOT re-read).
+//   - Seen maps every session id that exists on disk to its current
+//     transcript mtime — including the unchanged ones the provider
+//     skipped. Callers use it to (a) keep cached entries for skipped
+//     sessions and (b) prune cache entries whose session vanished.
+type ScanResult struct {
+	Samples []TokenSample
+	Seen    map[string]time.Time
+}
+
+// ScanInput carries the prior per-session transcript mtimes into a
+// provider scan so it can skip files that haven't changed. A nil/empty
+// Prior forces a full parse (cold start).
+type ScanInput struct {
+	Prior map[string]time.Time
+}
+
 // Total returns input + output as a single number for ranking.
 func (t Totals) Total() int { return t.Input + t.Output }
 

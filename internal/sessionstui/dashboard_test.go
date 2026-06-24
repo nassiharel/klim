@@ -113,7 +113,9 @@ func (f *fakeProvider) InstallPlugin(_ context.Context, _ agents.PluginRef) erro
 func (f *fakeProvider) UninstallPlugin(_ context.Context, _ string) error            { return nil }
 func (f *fakeProvider) EnablePlugin(_ context.Context, _ string, _ bool) error       { return nil }
 func (f *fakeProvider) UpdatePlugin(_ context.Context, _ string) error               { return nil }
-func (f *fakeProvider) TokenSamples(_ context.Context) ([]costs.TokenSample, error)  { return nil, nil }
+func (f *fakeProvider) TokenSamples(_ context.Context, _ costs.ScanInput) (costs.ScanResult, error) {
+	return costs.ScanResult{}, nil
+}
 func (f *fakeProvider) SessionTexts(_ context.Context) ([]search.SessionText, error) {
 	return nil, nil
 }

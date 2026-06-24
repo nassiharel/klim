@@ -56,7 +56,15 @@ type Provider interface {
 	// effort: missing usage fields are tolerated. Providers without
 	// usable token data return ErrNotSupported and the costs roll-up
 	// silently skips them.
-	TokenSamples(ctx context.Context) ([]costs.TokenSample, error)
+	//
+	// Scanning is incremental: in.Prior carries the per-session
+	// transcript mtimes from the last scan, and the provider skips
+	// re-parsing any transcript whose mtime is unchanged. The returned
+	// ScanResult.Samples therefore covers only new/changed transcripts,
+	// while ScanResult.Seen lists every session present on disk (so the
+	// caller can keep cached entries for skipped sessions and prune the
+	// vanished ones). A nil/empty in.Prior forces a full parse.
+	TokenSamples(ctx context.Context, in costs.ScanInput) (costs.ScanResult, error)
 
 	// SessionTexts returns the searchable transcript content for every
 	// local session this provider knows about. Used by the Agents
