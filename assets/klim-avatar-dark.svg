@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="t d">
   <title id="t">klim</title>
-  <desc id="d">klim avatar — dark theme. Charcoal rounded tile, white stem, cyan chevron.</desc>
+  <desc id="d">klim avatar — dark theme. Charcoal rounded tile, white stem, cyan chevron pointing left (reads as k).</desc>
   <rect width="120" height="120" rx="24" fill="#0b1220"/>
   <rect x="34" y="24" width="12" height="72" rx="2.5" fill="#e6edf3"/>
-  <path d="M56 32 L86 60 L56 88" fill="none" stroke="#00c8e6" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M86 32 L56 60 L86 88" fill="none" stroke="#00c8e6" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
