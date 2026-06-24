@@ -665,26 +665,30 @@ func TestDeleteSessionDir_MissingDir(t *testing.T) {
 	}
 }
 
-// TestDeleteSession_RoutesToDirFallback verifies DeleteSession invokes
-// the directory fallback when the CLI reports ErrProviderNotInstalled.
-// We can't force exec.LookPath to fail deterministically, so this
-// asserts the routing contract by giving DeleteSession a real missing
-// session under a home whose `claude` binary is absent: the only way
-// the project dir disappears is via the fallback path.
-func TestDeleteSession_StripsPrefixForFallback(t *testing.T) {
+// TestDeleteSession_RoutesToDirFallback verifies the real DeleteSession
+// path: with no `claude` binary on PATH, runCLISilent returns
+// ErrProviderNotInstalled and DeleteSession must fall back to removing
+// the project directory. PATH is cleared so exec.LookPath("claude")
+// fails deterministically regardless of the host — exercising the
+// prefix-strip + ErrProviderNotInstalled → fallback contract end to end.
+func TestDeleteSession_RoutesToDirFallback(t *testing.T) {
+	t.Setenv("PATH", "")
 	home := t.TempDir()
 	projDir := filepath.Join(home, ".claude", "projects", "C--dev")
 	if err := os.MkdirAll(projDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	// deleteSessionDir is fed the claude:-stripped id by DeleteSession;
-	// assert the stripping + join is correct end to end.
 	p := &Provider{HomeOverride: home}
-	if err := p.deleteSessionDir(strings.TrimPrefix("claude:C--dev", "claude:")); err != nil {
-		t.Fatalf("deleteSessionDir: %v", err)
+	// Sanity: with PATH empty the binary really is unresolved, so the
+	// fallback is the path under test.
+	if p.binary() != "" {
+		t.Fatalf("expected no claude binary with empty PATH; got %q", p.binary())
+	}
+	if err := p.DeleteSession(context.Background(), "claude:C--dev"); err != nil {
+		t.Fatalf("DeleteSession: %v", err)
 	}
 	if _, err := os.Stat(projDir); !os.IsNotExist(err) {
-		t.Errorf("project dir should be removed; stat err = %v", err)
+		t.Errorf("project dir should be removed via the fallback; stat err = %v", err)
 	}
 }
 

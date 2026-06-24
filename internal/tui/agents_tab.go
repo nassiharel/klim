@@ -3502,10 +3502,12 @@ type transcriptMessage struct {
 //   - Other event types (queue-operation, hook_success, telemetry)
 //     → skipped, since they're noise to the human reader
 //
-// Lines that don't parse as JSON fall through unchanged (capped at
-// 4 KiB) so non-JSONL transcripts (legacy formats) still show up.
-// Each message keeps its full text (capped at 32 KiB) so the viewer
-// can expand and copy it; the modal handles truncation for display.
+// Lines that don't parse as JSON fall through unchanged so non-JSONL
+// transcripts (legacy formats) still show up — non-JSON lines (no `{`
+// prefix) are capped at 200 bytes, while malformed JSON is capped at
+// 4 KiB. Each message keeps its full text (capped at 32 KiB) so the
+// viewer can expand and copy it; the modal handles truncation for
+// display.
 func readSessionTranscript(path string, limit int) ([]transcriptMessage, error) {
 	st, err := os.Stat(path)
 	if err != nil {
