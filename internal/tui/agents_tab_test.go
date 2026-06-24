@@ -480,6 +480,32 @@ func TestRenderTranscriptViewer_KeepsCursorVisibleOnBottomEdge(t *testing.T) {
 	}
 }
 
+// TestRenderTranscriptViewer_FooterVisibleWithHugeSelectedMessage pins
+// the row-budget clip: a selected message whose expanded block is far
+// taller than the terminal must not push the footer (key hints) off
+// the bottom of the box. The footer hint must still appear.
+func TestRenderTranscriptViewer_FooterVisibleWithHugeSelectedMessage(t *testing.T) {
+	t.Parallel()
+	// One enormous message that, expanded + wrapped, is way more rows
+	// than any terminal height.
+	huge := strings.Repeat("the quick brown fox jumps over the lazy dog ", 400)
+	msgs := []transcriptMessage{
+		{role: "user", text: "short before"},
+		{role: "assistant", text: huge},
+		{role: "user", text: "short after"},
+	}
+	got := stripANSIForTest(renderTranscriptViewer("/x", msgs, 1, 0, 100, 30, false))
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	// The whole box (incl. borders) must fit the terminal height.
+	if len(lines) > 30 {
+		t.Errorf("box height %d exceeds terminal height 30 — footer pushed off-screen", len(lines))
+	}
+	// The footer hint must still be present.
+	if !strings.Contains(got, "Esc close") {
+		t.Errorf("footer hint must remain visible:\n%s", got)
+	}
+}
+
 // TestRenderTranscriptViewer_ExpandsSelectedMessage asserts the
 // selected message is shown in full (word-wrapped, no "…") while a
 // non-selected long message is truncated. This is the core fix for
@@ -511,7 +537,9 @@ func TestRenderTranscriptViewer_ExpandsSelectedMessage(t *testing.T) {
 // range, and copies on `c`. Mirrors the same key map both list-view
 // and detail-page handlers delegate to.
 func TestHandleViewerScrollKey(t *testing.T) {
-	t.Parallel()
+	// NOT parallel: the "c copies" subtests swap the package-level
+	// defaultClipboard via swapClipboard, which would race other
+	// parallel tests under `go test -race`.
 	mkState := func(n int) *agentsState {
 		msgs := make([]transcriptMessage, n)
 		for i := range msgs {

@@ -2070,20 +2070,27 @@ func renderTranscriptViewer(title string, messages []transcriptMessage, cursor, 
 		cursor = len(messages) - 1
 	}
 	// Clamp scroll so a stale value doesn't render a blank viewer, and
-	// keep the cursor within the visible window on BOTH edges: above the
-	// window (scroll > cursor) the selection would render off the top;
-	// more than visRows-1 rows below (cursor - scroll > visRows-1) it
-	// would render off the bottom. This is the renderer's own guard, so
-	// a terminal-shrink between key events (which changes visRows) can't
-	// leave the selected message off-screen.
+	// keep the SELECTED message fully visible on both edges. The
+	// selected message is expanded (a header row + wrapped text), so it
+	// can be several rows tall; the bottom-edge clamp reserves that full
+	// height (not just one row) so its content can't be clipped off the
+	// bottom. This is the renderer's own guard, so a terminal-shrink
+	// between key events (which changes visRows) can't leave the
+	// selection off-screen.
+	selectedBlock := renderTranscriptMessage(messages[cursor], innerW, true)
+	selHeight := len(selectedBlock)
+	headroom := visRows - selHeight // rows available above the selection
+	if headroom < 0 {
+		headroom = 0 // selection alone fills (or overflows) the window
+	}
 	if scroll < 0 {
 		scroll = 0
 	}
 	if scroll > cursor {
 		scroll = cursor
 	}
-	if cursor-scroll > visRows-1 {
-		scroll = cursor - (visRows - 1)
+	if cursor-scroll > headroom {
+		scroll = cursor - headroom
 	}
 	if scroll < 0 {
 		scroll = 0
@@ -2094,11 +2101,21 @@ func renderTranscriptViewer(title string, messages []transcriptMessage, cursor, 
 
 	// Render visible messages until we run out of row budget. The
 	// expanded (selected) message can span several rows, so we count
-	// rows rather than messages.
+	// rows rather than messages — and clip a block that would overflow
+	// the remaining budget, so the modal never grows taller than the
+	// terminal and pushes the footer (key hints) off-screen.
 	rows := 0
 	last := scroll
 	for i := scroll; i < len(messages) && rows < visRows; i++ {
-		block := renderTranscriptMessage(messages[i], innerW, i == cursor)
+		var block []string
+		if i == cursor {
+			block = selectedBlock // already rendered above
+		} else {
+			block = renderTranscriptMessage(messages[i], innerW, false)
+		}
+		if remaining := visRows - rows; len(block) > remaining {
+			block = block[:remaining]
+		}
 		out = append(out, block...)
 		rows += len(block)
 		last = i
