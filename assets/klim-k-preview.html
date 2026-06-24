@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>klim logo — k variant &amp; animation preview</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; font: 15px/1.5 Inter, system-ui, sans-serif; background: #f5f7fa; color: #0b1220; }
+    header { padding: 32px; text-align: center; }
+    header h1 { margin: 0 0 6px; font-size: 22px; }
+    header p { margin: 0; opacity: .65; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; padding: 24px; max-width: 1100px; margin: 0 auto; }
+    .card { border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.12); display: flex; flex-direction: column; }
+    .stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 36px; min-height: 160px; }
+    .light { background: #ffffff; }
+    .dark  { background: #0b1220; }
+    .stage img { max-width: 100%; height: auto; max-height: 120px; }
+    .label { padding: 10px 14px; font-size: 13px; font-weight: 600; background: rgba(0,0,0,.04); }
+    .dark + .label { }
+    .note { text-align: center; opacity: .6; font-size: 13px; padding-bottom: 40px; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #060a12; color: #e6edf3; }
+      .label { background: rgba(255,255,255,.06); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>klim — “k” mark &amp; animation</h1>
+    <p>Chevron points left so <code>|&gt;lim</code> now reads as <code>|&lt;lim</code> → <strong>klim</strong>.</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <div class="stage light"><img src="klim-k-light.svg" alt="static k mark, light"></div>
+      <div class="label">Static mark — light (klim-k-light.svg)</div>
+    </div>
+    <div class="card">
+      <div class="stage dark"><img src="klim-k-dark.svg" alt="static k mark, dark"></div>
+      <div class="label">Static mark — dark (klim-k-dark.svg)</div>
+    </div>
+
+    <div class="card">
+      <div class="stage light"><img src="klim-animated-light.svg" alt="animated mark, light"></div>
+      <div class="label">Animated mark — light (klim-animated-light.svg)</div>
+    </div>
+    <div class="card">
+      <div class="stage dark"><img src="klim-animated-dark.svg" alt="animated mark, dark"></div>
+      <div class="label">Animated mark — dark (klim-animated-dark.svg)</div>
+    </div>
+
+    <div class="card">
+      <div class="stage light"><img src="klim-wordmark-k-light.svg" alt="static wordmark, light"></div>
+      <div class="label">Static wordmark — light (klim-wordmark-k-light.svg)</div>
+    </div>
+    <div class="card">
+      <div class="stage dark"><img src="klim-wordmark-k-dark.svg" alt="static wordmark, dark"></div>
+      <div class="label">Static wordmark — dark (klim-wordmark-k-dark.svg)</div>
+    </div>
+
+    <div class="card">
+      <div class="stage light"><img src="klim-wordmark-animated-light.svg" alt="animated wordmark, light"></div>
+      <div class="label">Animated wordmark — light (klim-wordmark-animated-light.svg)</div>
+    </div>
+    <div class="card">
+      <div class="stage dark"><img src="klim-wordmark-animated-dark.svg" alt="animated wordmark, dark"></div>
+      <div class="label">Animated wordmark — dark (klim-wordmark-animated-dark.svg)</div>
+    </div>
+  </div>
+
+  <p class="note">Animations use SMIL <code>&lt;animate&gt;</code> and play in browsers and GitHub-rendered SVGs.</p>
+</body>
+</html>
