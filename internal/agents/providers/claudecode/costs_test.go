@@ -272,3 +272,25 @@ func TestSessionTokens_CancelledContextErrors(t *testing.T) {
 }
 
 var _ = agents.ProviderClaudeCode
+
+// TestTokenSamples_CancelledContext pins that a cancelled context stops
+// the scan (it honors ctx in the WalkDir + parse loops) instead of
+// walking the whole projects tree.
+func TestTokenSamples_CancelledContext(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "proj")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(projDir, "a.jsonl"),
+		[]byte(`{"type":"assistant","message":{"usage":{"input_tokens":1,"output_tokens":1}}}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	p := &Provider{HomeOverride: home}
+	if _, err := p.TokenSamples(ctx, costs.ScanInput{}); err == nil {
+		t.Errorf("expected an error from a cancelled context")
+	}
+}

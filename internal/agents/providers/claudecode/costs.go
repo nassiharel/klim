@@ -79,8 +79,14 @@ func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.
 		// skip key.
 		var files []string
 		var newest time.Time
-		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
+		walkErr := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if d.IsDir() {
 				return nil
 			}
 			if !strings.HasSuffix(strings.ToLower(d.Name()), ".jsonl") {
@@ -96,6 +102,9 @@ func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.
 			}
 			return nil
 		})
+		if walkErr != nil {
+			return res, walkErr
+		}
 		if len(files) == 0 {
 			continue
 		}
@@ -112,6 +121,9 @@ func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.
 		}
 
 		for _, path := range files {
+			if ctx.Err() != nil {
+				return res, ctx.Err()
+			}
 			samples, err := parseClaudeTranscript(path, e.Name(), p.ID())
 			if err == nil {
 				res.Samples = append(res.Samples, samples...)
