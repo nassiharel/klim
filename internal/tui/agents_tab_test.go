@@ -570,6 +570,24 @@ func TestHandleViewerScrollKey(t *testing.T) {
 		}
 	})
 
+	t.Run("c on an empty message clears a stale copied confirmation", func(t *testing.T) {
+		fake := &fakeClipboard{}
+		restore := swapClipboard(fake)
+		defer restore()
+
+		st := mkState(20)
+		st.viewerMessages[5].text = "" // selected message has no text
+		st.viewerCursor = 5
+		st.viewerCopied = true // a prior copy left the confirmation on
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'c', Text: "c"}), 10)
+		if st.viewerCopied {
+			t.Errorf("copying an empty message must clear viewerCopied")
+		}
+		if fake.text != "" {
+			t.Errorf("nothing should be written to the clipboard; got %q", fake.text)
+		}
+	})
+
 	t.Run("esc closes", func(t *testing.T) {
 		st := mkState(20)
 		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape, Text: "esc"}), 10)

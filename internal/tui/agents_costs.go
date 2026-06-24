@@ -76,9 +76,16 @@ func loadCostSamples() ([]costs.TokenSample, error) {
 	mtimeBySession := map[string]time.Time{}
 	present := map[string]bool{}
 
+	allOK := true
 	for _, p := range svc.Registry().Providers() {
 		res, err := p.TokenSamples(ctx, costs.ScanInput{Prior: prior})
 		if err != nil {
+			// A transient read error/timeout must NOT cause this
+			// provider's still-on-disk sessions to be pruned (which
+			// would wipe valid cache and force a cold rescan). We can't
+			// tell which cached sessions belong to a provider that
+			// failed, so skip the prune entirely this round.
+			allOK = false
 			continue
 		}
 		// Every session the provider saw on disk stays in the cache;
@@ -109,7 +116,12 @@ func loadCostSamples() ([]costs.TokenSample, error) {
 	for sessionID, samples := range freshBySession {
 		cache.Sessions[sessionID] = costs.AggregateSession(samples, mtimeBySession[sessionID])
 	}
-	cache.PruneMissing(present)
+	// Only prune when every provider scan succeeded — otherwise a
+	// transient failure would delete sessions that are still on disk
+	// but missing from `present` because their provider errored out.
+	if allOK {
+		cache.PruneMissing(present)
+	}
 	_ = cache.Save()
 
 	return cache.Samples(), nil

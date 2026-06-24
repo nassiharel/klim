@@ -2267,6 +2267,9 @@ func copySelectedTranscriptMessage(st *agentsState) {
 	}
 	text := st.viewerMessages[st.viewerCursor].text
 	if text == "" {
+		// Clear any prior "✓ copied" confirmation so the footer doesn't
+		// claim a copy happened when nothing was copied this time.
+		st.viewerCopied = false
 		st.flash = "nothing to copy for this message"
 		st.flashEnd = time.Now().Add(2 * time.Second)
 		return
