@@ -20,6 +20,24 @@ type agentActionResultMsg struct {
 	err   error
 }
 
+// actionFailedFlash builds the flash shown when a provider action
+// fails. The label is a past-tense SUCCESS phrase ("deleted session
+// X", "installed Y"); on failure we must not render it as if it
+// happened — the old "✗ deleted session X: ..." read as a
+// contradiction (done, but also an error). We frame it as a failure
+// and translate the known sentinel errors into an actionable hint.
+func actionFailedFlash(label string, err error) string {
+	msg := "✗ failed — " + label
+	switch {
+	case errors.Is(err, agents.ErrProviderNotInstalled):
+		return msg + ": the provider CLI isn't installed or not on PATH"
+	case errors.Is(err, agents.ErrNotSupported):
+		return msg + ": not supported by this provider"
+	default:
+		return msg + ": " + err.Error()
+	}
+}
+
 // agentAction describes one button on the detail-page action bar.
 type agentAction struct {
 	label     string // short verb shown on the bar

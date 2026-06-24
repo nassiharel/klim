@@ -84,6 +84,33 @@ func TestFilterAgentRows_SessionMetadata(t *testing.T) {
 	}
 }
 
+// TestActionFailedFlash pins the fix for the contradictory
+// "✗ deleted session X: provider binary not installed" message — a
+// failed action must not render as if it succeeded, and the known
+// sentinel errors get an actionable hint instead of the raw text.
+func TestActionFailedFlash(t *testing.T) {
+	t.Parallel()
+	label := "deleted session claude:C--dev"
+
+	got := actionFailedFlash(label, agents.ErrProviderNotInstalled)
+	if strings.Contains(got, "deleted session") && !strings.Contains(got, "failed") {
+		t.Errorf("failure flash should not read as success: %q", got)
+	}
+	if !strings.Contains(got, "not on PATH") {
+		t.Errorf("ErrProviderNotInstalled should get a PATH hint: %q", got)
+	}
+
+	if got := actionFailedFlash(label, agents.ErrNotSupported); !strings.Contains(got, "not supported") {
+		t.Errorf("ErrNotSupported hint missing: %q", got)
+	}
+
+	if got := actionFailedFlash(label, errTestGeneric); !strings.Contains(got, "boom") {
+		t.Errorf("generic error text should pass through: %q", got)
+	}
+}
+
+var errTestGeneric = fmt.Errorf("boom")
+
 func TestNextSortMode_CyclesThroughList(t *testing.T) {
 	modes := []agentsSortMode{agentsSortDefault, agentsSortName, agentsSortModified}
 	seen := map[agentsSortMode]bool{}

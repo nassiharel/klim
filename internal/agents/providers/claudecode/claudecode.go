@@ -1177,13 +1177,64 @@ func (p *Provider) EnableMCP(ctx context.Context, name string, enabled bool) err
 // stdout/stderr are CAPTURED (not inherited) for the same reason; on
 // failure the captured output becomes part of the returned error so
 // users still see what went wrong.
+//
+// When the `claude` CLI isn't on PATH we fall back to removing the
+// project directory directly (~/.claude/projects/<dir>). A session is
+// just that directory of transcripts — the same thing `project purge`
+// clears — so deletion still works for users who run Claude Code but
+// don't have the standalone CLI installed. This mirrors the Copilot
+// provider, which deletes by directory removal too.
 func (p *Provider) DeleteSession(ctx context.Context, id string) error {
 	id = strings.TrimPrefix(id, "claude:")
 	cwd := p.resolveProjectCwd(id)
 	if cwd == "" {
 		cwd = decodeProjectPath(id)
 	}
-	return p.runCLISilent(ctx, "project", "purge", cwd, "-y")
+	err := p.runCLISilent(ctx, "project", "purge", cwd, "-y")
+	if errors.Is(err, agents.ErrProviderNotInstalled) {
+		return p.deleteSessionDir(id)
+	}
+	return err
+}
+
+// deleteSessionDir removes ~/.claude/projects/<dir> directly. Used as
+// the fallback when the `claude` CLI isn't installed. `dir` is the
+// raw (claude:-stripped) session id, which is exactly the project
+// directory name under ~/.claude/projects/.
+//
+// The id is validated to be a plain directory name before joining:
+// path separators, drive letters, `.` and `..` would otherwise let a
+// crafted id escape the projects root and let os.RemoveAll wipe an
+// arbitrary directory. Same guard as the Copilot provider.
+func (p *Provider) deleteSessionDir(dir string) error {
+	if dir == "" {
+		return errors.New("delete: session id is required")
+	}
+	if dir == "." || dir == ".." ||
+		strings.ContainsAny(dir, `/\`) ||
+		filepath.Base(dir) != dir ||
+		filepath.Clean(dir) != dir {
+		return fmt.Errorf("delete: invalid session id %q", dir)
+	}
+	root := p.claudeDir()
+	if root == "" {
+		return agents.ErrProviderNotInstalled
+	}
+	target := filepath.Join(root, "projects", dir)
+	info, err := os.Stat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("delete: session %q not found under %s", dir, filepath.Join(root, "projects"))
+		}
+		return fmt.Errorf("delete: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("delete: %q is not a session directory", dir)
+	}
+	if err := os.RemoveAll(target); err != nil {
+		return fmt.Errorf("delete: %w", err)
+	}
+	return nil
 }
 
 // resolveProjectCwd returns the authoritative project path for a

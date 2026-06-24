@@ -1215,7 +1215,7 @@ func (m *Model) handleAgentsMsg(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 	case agentActionResultMsg:
 		st.actionRunning = ""
 		if v.err != nil {
-			st.flash = "✗ " + v.label + ": " + v.err.Error()
+			st.flash = actionFailedFlash(v.label, v.err)
 			st.flashEnd = time.Now().Add(5 * time.Second)
 			// Same recovery pattern as agentsDeletedMsg: refresh on
 			// error so a stale row whose backing state already
@@ -2477,7 +2477,13 @@ func renderRow(cells []string, cols []column, lead string, selected bool, totalW
 		if w == 0 {
 			inner.WriteString(c)
 		} else {
-			inner.WriteString(lipgloss.NewStyle().Width(w).Render(c))
+			// MaxHeight(1) prevents a too-long cell from wrapping onto a
+			// second visual row (lipgloss.Width WRAPS rather than
+			// truncates). A wrapped cell breaks the one-line-per-row
+			// layout — e.g. the Costs table's TOKENS column spilled
+			// "out 251.5K" onto its own row. Clamp to a single line so
+			// the table stays aligned regardless of content length.
+			inner.WriteString(lipgloss.NewStyle().Width(w).MaxHeight(1).Render(c))
 		}
 		if i < len(cells)-1 {
 			inner.WriteString("  ")
