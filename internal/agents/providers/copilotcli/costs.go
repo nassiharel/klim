@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,16 +45,65 @@ type copilotEventLine struct {
 // `model.response` / `model.usage` event types, but we don't filter
 // by type — any line with usage tokens counts. Missing files /
 // missing usage are tolerated silently.
-func (p *Provider) TokenSamples(ctx context.Context) ([]costs.TokenSample, error) {
-	var out []costs.TokenSample
+func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.ScanResult, error) {
+	res := costs.ScanResult{Seen: map[string]time.Time{}}
 	for _, d := range p.sessionDirs() {
+		if ctx.Err() != nil {
+			return res, ctx.Err()
+		}
 		path := filepath.Join(d.Path, "events.jsonl")
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			continue
+		}
+		mtime := info.ModTime().Truncate(time.Second)
+		// The session dir name is the session id in the common case
+		// (copilotSampleFromLine falls back to it when the in-file id
+		// is absent). Use it as the skip/cache key without parsing.
+		sessionKey := "copilot:" + d.ID
+		if res.Seen[sessionKey].Before(mtime) {
+			res.Seen[sessionKey] = mtime
+		}
+		if prior, ok := in.Prior[sessionKey]; ok && !mtime.After(prior) {
+			continue
+		}
 		samples, err := parseCopilotTranscript(path, d.ID, p.ID())
 		if err == nil {
-			out = append(out, samples...)
+			res.Samples = append(res.Samples, samples...)
 		}
 	}
-	return out, nil
+	return res, nil
+}
+
+// SessionTokens sums the input/output token usage for ONE session by
+// parsing only that session's events.jsonl — used by the session detail
+// page. The id is the session list id ("copilot:"+<dir>); we locate the
+// matching session directory via sessionDirs (which already enumerates
+// the on-disk layouts) so a crafted id can't reach an arbitrary path.
+func (p *Provider) SessionTokens(ctx context.Context, id string) (costs.Totals, error) {
+	want := strings.TrimPrefix(id, "copilot:")
+	if want == "" {
+		return costs.Totals{}, errors.New("session tokens: empty session id")
+	}
+	for _, d := range p.sessionDirs() {
+		if d.ID != want {
+			continue
+		}
+		if ctx.Err() != nil {
+			return costs.Totals{}, ctx.Err()
+		}
+		samples, err := parseCopilotTranscript(filepath.Join(d.Path, "events.jsonl"), d.ID, p.ID())
+		if err != nil {
+			return costs.Totals{}, err
+		}
+		var total costs.Totals
+		for _, s := range samples {
+			total.Input += s.Input
+			total.Output += s.Output
+		}
+		return total, nil
+	}
+	return costs.Totals{}, fmt.Errorf("session tokens: session %q not found", id)
 }
 
 func parseCopilotTranscript(path, sessionDir string, providerID agents.ProviderID) ([]costs.TokenSample, error) {
@@ -98,10 +149,12 @@ func copilotSampleFromLine(l copilotEventLine, sessionDir string, providerID age
 	if in == 0 && out == 0 {
 		return costs.TokenSample{}, false
 	}
-	sessionID := l.Data.SessionID
-	if sessionID == "" {
-		sessionID = sessionDir
-	}
+	// Key the sample by the directory id, NOT the in-file
+	// data.sessionId. The incremental cost cache and the search index
+	// (SessionTexts) both key on "copilot:"+sessionDir; if costs used a
+	// different in-file id the Seen/Prior skip keys would diverge from
+	// the emitted sample ids, breaking incremental skipping and pruning.
+	sessionID := sessionDir
 	ts, _ := time.Parse(time.RFC3339, l.Timestamp)
 	if ts.IsZero() {
 		ts = time.Now()

@@ -62,6 +62,26 @@ func (c *Cache) Save() error {
 	return fileutil.WriteYAML(path, c, "# klim agent-costs cache - auto-generated\n")
 }
 
+// SessionTotal sums the cached input/output token totals for one
+// session id across its daily buckets, plus whether the session is
+// present in the cache. Lets callers (the session detail page) read a
+// session's cost instantly instead of re-parsing its transcripts.
+func (c *Cache) SessionTotal(id string) (Totals, bool) {
+	if c == nil {
+		return Totals{}, false
+	}
+	e, ok := c.Sessions[id]
+	if !ok {
+		return Totals{}, false
+	}
+	var total Totals
+	for _, t := range e.Days {
+		total.Input += t.Input
+		total.Output += t.Output
+	}
+	return total, true
+}
+
 // Samples flattens every cached entry into a TokenSample slice, one
 // sample per (session, day) bucket. Used by Build() so the Costs
 // report sees the full historical record.

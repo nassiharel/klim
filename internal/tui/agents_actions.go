@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nassiharel/klim/internal/agents"
+	"github.com/nassiharel/klim/internal/agents/costs"
 	"github.com/nassiharel/klim/internal/agents/promote"
 )
 
@@ -18,6 +19,24 @@ import (
 type agentActionResultMsg struct {
 	label string
 	err   error
+}
+
+// actionFailedFlash builds the flash shown when a provider action
+// fails. The label is a past-tense SUCCESS phrase ("deleted session
+// X", "installed Y"); on failure we must not render it as if it
+// happened — the old "✗ deleted session X: ..." read as a
+// contradiction (done, but also an error). We frame it as a failure
+// and translate the known sentinel errors into an actionable hint.
+func actionFailedFlash(label string, err error) string {
+	msg := "✗ failed — " + label
+	switch {
+	case errors.Is(err, agents.ErrProviderNotInstalled):
+		return msg + ": the provider CLI isn't installed or isn't on your PATH"
+	case errors.Is(err, agents.ErrNotSupported):
+		return msg + ": not supported by this provider"
+	default:
+		return msg + ": " + err.Error()
+	}
 }
 
 // agentAction describes one button on the detail-page action bar.
@@ -383,28 +402,64 @@ func copyTextCmd(text, label string) tea.Cmd {
 	}
 }
 
-// transcriptReadLimit caps how many rendered transcript lines we
-// load when the viewer opens. The modal supports scrolling, so a
-// reasonably high cap lets users walk back through the whole
-// conversation without re-reading. 500 lines fits a typical long
-// session and stays cheap to render (~10ms on commodity hardware).
+// transcriptReadLimit caps how many conversation events we load when
+// the viewer opens. The modal supports scrolling, so a reasonably
+// high cap lets users walk back through the whole conversation
+// without re-reading. 500 messages fits a typical long session and
+// stays cheap to render (~10ms on commodity hardware).
 const transcriptReadLimit = 500
 
-// viewTranscriptCmd reads up to transcriptReadLimit lines of a
+// viewTranscriptCmd reads up to transcriptReadLimit messages of a
 // session transcript and opens the viewer modal. Result lands in
 // agentTranscriptMsg.
 func viewTranscriptCmd(path string) tea.Cmd {
 	return func() tea.Msg {
-		lines, err := readSessionTranscript(path, transcriptReadLimit)
-		return agentTranscriptMsg{path: path, lines: lines, err: err}
+		msgs, err := readSessionTranscript(path, transcriptReadLimit)
+		return agentTranscriptMsg{path: path, messages: msgs, err: err}
 	}
 }
 
-// agentTranscriptMsg lands in handleAgentsMsg with the loaded lines.
+// agentTranscriptMsg lands in handleAgentsMsg with the loaded messages.
 type agentTranscriptMsg struct {
-	path  string
-	lines []string
-	err   error
+	path     string
+	messages []transcriptMessage
+	err      error
+}
+
+// agentSessionCostCmd resolves one session's token totals off the main
+// loop and returns the result in agentSessionCostMsg (keyed by session
+// id so the detail page can match it back).
+//
+// It is CACHE-FIRST: the Costs tab persists per-session totals to
+// ~/.klim/agents/costs.yaml keyed by the same session id, so we read
+// that instantly when present. Only when a session isn't cached do we
+// fall back to parsing its transcripts on demand — which for a busy
+// Claude project (a "session" is a whole project dir, sometimes
+// thousands of files) can take a minute, so it stays the exception.
+func agentSessionCostCmd(provider agents.ProviderID, id string) tea.Cmd {
+	return func() tea.Msg {
+		if cache, err := costs.LoadCache(); err == nil {
+			if totals, ok := cache.SessionTotal(id); ok {
+				return agentSessionCostMsg{id: id, totals: totals}
+			}
+		}
+		p := agentsService().ProviderFor(provider)
+		if p == nil {
+			return agentSessionCostMsg{id: id, err: fmt.Errorf("provider %q not registered", provider)}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		totals, err := p.SessionTokens(ctx, id)
+		return agentSessionCostMsg{id: id, totals: totals, err: err}
+	}
+}
+
+// agentSessionCostMsg lands in handleAgentsMsg with a session's token
+// totals.
+type agentSessionCostMsg struct {
+	id     string
+	totals costs.Totals
+	err    error
 }
 
 // launchFromDetailCmd builds a launch plan from inside the detail page

@@ -1173,6 +1173,7 @@ func (p *Provider) DeleteSession(ctx context.Context, id string) error {
 	// across both POSIX and Windows path semantics.
 	if id == "." || id == ".." ||
 		strings.ContainsAny(id, `/\`) ||
+		filepath.VolumeName(id) != "" ||
 		filepath.Base(id) != id ||
 		filepath.Clean(id) != id {
 		return fmt.Errorf("delete: invalid session id %q", id)

@@ -14,3 +14,10 @@ type systemClipboard struct{}
 func (systemClipboard) WriteAll(text string) error {
 	return clipboard.WriteAll(text)
 }
+
+// defaultClipboard is the Clipboard used by clipboard-writing actions
+// that need to be exercised in tests (e.g. the transcript viewer's
+// copy key). It is swappable so headless CI — which has no system
+// clipboard — can inject a fake instead of failing the real
+// clipboard.WriteAll call. Mirrors the swappable agentsService factory.
+var defaultClipboard Clipboard = systemClipboard{}

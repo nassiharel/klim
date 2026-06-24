@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -47,6 +49,93 @@ func TestSortAgentRows_Sessions(t *testing.T) {
 	got = sortAgentRows(append([]agentRow(nil), rows...), agentsSubSessions, agentsSortDefault)
 	if got[0].name != "c" {
 		t.Errorf("default should preserve input order; got %v", names(got))
+	}
+}
+
+// TestFilterAgentRows_SessionMetadata pins the fix for "/ search in
+// the Sessions tab doesn't find sessions" — the `/` filter must match
+// the session metadata the user actually sees in the tile (title =
+// first user message, recent activity, repository, branch, group),
+// not just the row name (short id) and project path.
+func TestFilterAgentRows_SessionMetadata(t *testing.T) {
+	t.Parallel()
+	mk := func(id, title, activity, repo string) agentRow {
+		return agentRow{
+			id: id, name: sessionShortID(id), subtitle: "/some/path",
+			session: &agents.Session{ID: id, Title: title, RecentActivity: activity, Repository: repo},
+		}
+	}
+	rows := []agentRow{
+		mk("a1", "achieve the goal of X", "working", "klim"),
+		mk("b2", "unrelated session", "idle", "other"),
+		mk("c3", "", "pursuing the goal now", "repo3"),
+	}
+	cases := []struct {
+		q    string
+		want int
+	}{
+		{"goal", 2},      // a1 (title) + c3 (recent activity)
+		{"klim", 1},      // a1 (repository)
+		{"unrelated", 1}, // b2 (title)
+		{"zzz", 0},       // no match anywhere
+	}
+	for _, tc := range cases {
+		if got := len(filterAgentRows(rows, tc.q)); got != tc.want {
+			t.Errorf("filterAgentRows(%q) = %d matches, want %d", tc.q, got, tc.want)
+		}
+	}
+}
+
+// TestActionFailedFlash pins the fix for the contradictory
+// "✗ deleted session X: provider binary not installed" message — a
+// failed action must not render as if it succeeded, and the known
+// sentinel errors get an actionable hint instead of the raw text.
+func TestActionFailedFlash(t *testing.T) {
+	t.Parallel()
+	label := "deleted session claude:C--dev"
+
+	got := actionFailedFlash(label, agents.ErrProviderNotInstalled)
+	if strings.Contains(got, "deleted session") && !strings.Contains(got, "failed") {
+		t.Errorf("failure flash should not read as success: %q", got)
+	}
+	if !strings.Contains(got, "on your PATH") {
+		t.Errorf("ErrProviderNotInstalled should get a PATH hint: %q", got)
+	}
+
+	if got := actionFailedFlash(label, agents.ErrNotSupported); !strings.Contains(got, "not supported") {
+		t.Errorf("ErrNotSupported hint missing: %q", got)
+	}
+
+	if got := actionFailedFlash(label, errTestGeneric); !strings.Contains(got, "boom") {
+		t.Errorf("generic error text should pass through: %q", got)
+	}
+}
+
+var errTestGeneric = errors.New("boom")
+
+// TestTruncateMessageBytes pins the rune-safe truncation: a cut that
+// would land mid-rune must back up to a valid boundary so the result
+// stays valid UTF-8 (no mojibake, no broken clipboard copy).
+func TestTruncateMessageBytes(t *testing.T) {
+	t.Parallel()
+	if got := truncateMessageBytes("hello", 100); got != "hello" {
+		t.Errorf("within budget should be unchanged; got %q", got)
+	}
+	if got := truncateMessageBytes("hello", 0); got != "" {
+		t.Errorf("zero budget should be empty; got %q", got)
+	}
+	// "héllo" — 'é' is 2 bytes (0xC3 0xA9). At EVERY byte budget the
+	// result must stay valid UTF-8 AND never exceed the budget (even
+	// when the budget is smaller than the 3-byte ellipsis).
+	s := "héllo world"
+	for budget := 1; budget <= len(s)+2; budget++ {
+		got := truncateMessageBytes(s, budget)
+		if !utf8.ValidString(got) {
+			t.Errorf("budget=%d produced invalid UTF-8: %q", budget, got)
+		}
+		if len(got) > budget {
+			t.Errorf("budget=%d produced %d bytes (over budget): %q", budget, len(got), got)
+		}
 	}
 }
 
@@ -312,7 +401,7 @@ func TestWindowAgentRowsAligned_DefaultMatchesOriginal(t *testing.T) {
 	}
 }
 
-// TestRenderTranscriptViewer_RendersTitleAndLines pins the inline
+// TestRenderTranscriptViewer_RendersTitleAndMessages pins the inline
 // modal renderer used by both renderAgentsView and
 // renderAgentsDetailPage. The previous implementation appended the
 // modal at the very bottom of the rendered body — outside the
@@ -320,13 +409,14 @@ func TestWindowAgentRowsAligned_DefaultMatchesOriginal(t *testing.T) {
 // height-padding for the detail page — so the user saw nothing.
 // We now render the modal in-band; this test asserts the modal
 // content actually appears in the rendered string.
-func TestRenderTranscriptViewer_RendersTitleAndLines(t *testing.T) {
+func TestRenderTranscriptViewer_RendersTitleAndMessages(t *testing.T) {
 	t.Parallel()
-	got := stripANSIForTest(renderTranscriptViewer("/tmp/session/foo.jsonl", []string{
-		"[user] hello there",
-		"[assistant] hi back",
-		"[tool]      Bash(command=\"ls -la\")",
-	}, 0, 120, 40))
+	msgs := []transcriptMessage{
+		{role: "user", text: "hello there"},
+		{role: "assistant", text: "hi back"},
+		{role: "tool", text: "Bash(command=\"ls -la\")"},
+	}
+	got := stripANSIForTest(renderTranscriptViewer("/tmp/session/foo.jsonl", msgs, 0, 0, 120, 40, false))
 	for _, want := range []string{
 		"Transcript",
 		"/tmp/session/foo.jsonl",
@@ -334,9 +424,9 @@ func TestRenderTranscriptViewer_RendersTitleAndLines(t *testing.T) {
 		"hi back",
 		"Bash(command=",
 		"Esc close",
-		// Scroll position hint shows up in the footer so the user
-		// sees how many lines are loaded and where they are.
-		"lines 1-3 / 3",
+		// Message position hint shows up in the footer so the user
+		// sees how many messages are loaded and where they are.
+		"msg 1/3",
 		// Role chips are rendered through transcriptRoleChip, which
 		// applies background colour + padding. The plain-text strip
 		// preserves the words.
@@ -351,82 +441,211 @@ func TestRenderTranscriptViewer_RendersTitleAndLines(t *testing.T) {
 }
 
 // TestRenderTranscriptViewer_ScrollsToOffset asserts that passing a
-// non-zero scroll offset hides the leading lines and shifts the
-// "lines X-Y / N" footer accordingly. This is the regression test
-// for "the View Transcript is not scrollable".
+// non-zero scroll/cursor hides the leading messages and shifts the
+// "msg X/N" footer accordingly. This is the regression test for "the
+// View Transcript is not scrollable".
 func TestRenderTranscriptViewer_ScrollsToOffset(t *testing.T) {
 	t.Parallel()
-	lines := make([]string, 100)
-	for i := range lines {
-		lines[i] = fmt.Sprintf("[user] line-%d", i)
+	msgs := make([]transcriptMessage, 100)
+	for i := range msgs {
+		msgs[i] = transcriptMessage{role: "user", text: fmt.Sprintf("line-%d", i)}
 	}
-	// Tall terminal so we get a generous visible window; scroll
-	// by 40 lines and assert lines 0-39 are GONE and line 40 is
-	// shown.
-	got := stripANSIForTest(renderTranscriptViewer("/x", lines, 40, 120, 60))
+	// Tall terminal so we get a generous visible window; scroll/select
+	// message 40 and assert messages 0-39 are GONE and 40 is shown.
+	got := stripANSIForTest(renderTranscriptViewer("/x", msgs, 40, 40, 120, 60, false))
 	if strings.Contains(got, "line-0\n") || strings.Contains(got, "line-0 ") {
 		t.Errorf("scroll=40 should hide line-0; got:\n%s", got)
 	}
 	if !strings.Contains(got, "line-40") {
 		t.Errorf("scroll=40 should show line-40 at the top:\n%s", got)
 	}
-	if !strings.Contains(got, "lines 41-") {
-		t.Errorf("scroll=40 should advertise the lines window in the footer:\n%s", got)
+	if !strings.Contains(got, "msg 41/") {
+		t.Errorf("scroll=40 should advertise the message position in the footer:\n%s", got)
+	}
+}
+
+// TestRenderTranscriptViewer_KeepsCursorVisibleOnBottomEdge pins the
+// renderer's own bottom-edge clamp: even when scroll is stale (0) and
+// the cursor is far down with a small window, the selected message
+// must render on screen. Guards against a terminal-shrink leaving the
+// selection off the bottom.
+func TestRenderTranscriptViewer_KeepsCursorVisibleOnBottomEdge(t *testing.T) {
+	t.Parallel()
+	msgs := make([]transcriptMessage, 100)
+	for i := range msgs {
+		msgs[i] = transcriptMessage{role: "user", text: fmt.Sprintf("line-%d", i)}
+	}
+	// cursor=80 but scroll=0 (stale) on a short terminal — the renderer
+	// must advance the window so line-80 is visible.
+	got := stripANSIForTest(renderTranscriptViewer("/x", msgs, 80, 0, 120, 30, false))
+	if !strings.Contains(got, "line-80") {
+		t.Errorf("selected message (cursor=80) must be visible despite stale scroll=0:\n%s", got)
+	}
+}
+
+// TestRenderTranscriptViewer_FooterVisibleWithHugeSelectedMessage pins
+// the row-budget clip: a selected message whose expanded block is far
+// taller than the terminal must not push the footer (key hints) off
+// the bottom of the box. The footer hint must still appear.
+func TestRenderTranscriptViewer_FooterVisibleWithHugeSelectedMessage(t *testing.T) {
+	t.Parallel()
+	// One enormous message that, expanded + wrapped, is way more rows
+	// than any terminal height.
+	huge := strings.Repeat("the quick brown fox jumps over the lazy dog ", 400)
+	msgs := []transcriptMessage{
+		{role: "user", text: "short before"},
+		{role: "assistant", text: huge},
+		{role: "user", text: "short after"},
+	}
+	got := stripANSIForTest(renderTranscriptViewer("/x", msgs, 1, 0, 100, 30, false))
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	// The whole box (incl. borders) must fit the terminal height.
+	if len(lines) > 30 {
+		t.Errorf("box height %d exceeds terminal height 30 — footer pushed off-screen", len(lines))
+	}
+	// The footer hint must still be present.
+	if !strings.Contains(got, "Esc close") {
+		t.Errorf("footer hint must remain visible:\n%s", got)
+	}
+}
+
+// TestRenderTranscriptViewer_ExpandsSelectedMessage asserts the
+// selected message is shown in full (word-wrapped, no "…") while a
+// non-selected long message is truncated. This is the core fix for
+// "most text lines are truncated with ...".
+func TestRenderTranscriptViewer_ExpandsSelectedMessage(t *testing.T) {
+	t.Parallel()
+	long := "the quick brown fox jumps over the lazy dog and then keeps on running across the entire width of the terminal and beyond so it must wrap"
+	msgs := []transcriptMessage{
+		{role: "user", text: long},
+		{role: "assistant", text: long},
+	}
+	// Select message 0 (expanded), narrow-ish width so it must wrap.
+	got := stripANSIForTest(renderTranscriptViewer("/x", msgs, 0, 0, 80, 40, false))
+	// The full ending word of the selected message must be present —
+	// proves it was NOT truncated with an ellipsis.
+	if !strings.Contains(got, "beyond so it must wrap") {
+		t.Errorf("selected message should render in full; got:\n%s", got)
+	}
+	// The non-selected copy (message 1) is a single line and should be
+	// truncated, so its ending word must NOT appear a second time.
+	if strings.Count(got, "beyond so it must wrap") != 1 {
+		t.Errorf("non-selected message should be truncated (ending should appear once); got:\n%s", got)
 	}
 }
 
 // TestHandleViewerScrollKey covers the input handler that the
-// viewer modal owns — closes on Esc/Enter/q, advances on the
-// arrow / page / Home / End keys, clamps the scroll to a sane
-// range. Mirrors the same key map both list-view and detail-page
-// handlers delegate to.
+// viewer modal owns — closes on Esc/Enter/q, moves the selected
+// message on the arrow / page / Home / End keys, clamps to a sane
+// range, and copies on `c`. Mirrors the same key map both list-view
+// and detail-page handlers delegate to.
 func TestHandleViewerScrollKey(t *testing.T) {
-	t.Parallel()
+	// NOT parallel: the "c copies" subtests swap the package-level
+	// defaultClipboard via swapClipboard, which would race other
+	// parallel tests under `go test -race`.
 	mkState := func(n int) *agentsState {
-		lines := make([]string, n)
-		for i := range lines {
-			lines[i] = "x"
+		msgs := make([]transcriptMessage, n)
+		for i := range msgs {
+			msgs[i] = transcriptMessage{role: "user", text: fmt.Sprintf("m%d", i)}
 		}
-		return &agentsState{viewerOpen: true, viewerLines: lines}
+		return &agentsState{viewerOpen: true, viewerMessages: msgs}
 	}
 
 	t.Run("down advances", func(t *testing.T) {
 		st := mkState(20)
-		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'j', Text: "j"}))
-		if st.viewerScroll != 1 {
-			t.Errorf("down: scroll = %d, want 1", st.viewerScroll)
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'j', Text: "j"}), 10)
+		if st.viewerCursor != 1 {
+			t.Errorf("down: cursor = %d, want 1", st.viewerCursor)
 		}
 	})
 
 	t.Run("up clamps at 0", func(t *testing.T) {
 		st := mkState(20)
-		st.viewerScroll = 0
-		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'k', Text: "k"}))
-		if st.viewerScroll != 0 {
-			t.Errorf("up at 0: scroll = %d, want 0", st.viewerScroll)
+		st.viewerCursor = 0
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'k', Text: "k"}), 10)
+		if st.viewerCursor != 0 {
+			t.Errorf("up at 0: cursor = %d, want 0", st.viewerCursor)
 		}
 	})
 
-	t.Run("end pins to last line", func(t *testing.T) {
+	t.Run("end pins to last message", func(t *testing.T) {
 		st := mkState(20)
-		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'G', Text: "G"}))
-		if st.viewerScroll != 19 {
-			t.Errorf("end: scroll = %d, want 19", st.viewerScroll)
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'G', Text: "G"}), 10)
+		if st.viewerCursor != 19 {
+			t.Errorf("end: cursor = %d, want 19", st.viewerCursor)
+		}
+	})
+
+	t.Run("scroll follows cursor past the bottom of the window", func(t *testing.T) {
+		// visRows=5: stepping the cursor down to 8 must advance scroll
+		// so the selection stays inside the visible window (the
+		// regression where the cursor scrolled off the bottom).
+		st := mkState(20)
+		for i := 0; i < 8; i++ {
+			handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'j', Text: "j"}), 5)
+		}
+		if st.viewerCursor != 8 {
+			t.Fatalf("cursor = %d, want 8", st.viewerCursor)
+		}
+		if st.viewerCursor-st.viewerScroll > 4 {
+			t.Errorf("cursor %d is %d rows below scroll %d (visRows=5) — off-screen",
+				st.viewerCursor, st.viewerCursor-st.viewerScroll, st.viewerScroll)
 		}
 	})
 
 	t.Run("home returns to top", func(t *testing.T) {
 		st := mkState(20)
+		st.viewerCursor = 10
 		st.viewerScroll = 10
-		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'g', Text: "g"}))
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'g', Text: "g"}), 10)
+		if st.viewerCursor != 0 {
+			t.Errorf("home: cursor = %d, want 0", st.viewerCursor)
+		}
 		if st.viewerScroll != 0 {
 			t.Errorf("home: scroll = %d, want 0", st.viewerScroll)
 		}
 	})
 
+	t.Run("c copies selected message", func(t *testing.T) {
+		// Inject a fake clipboard so this is deterministic on headless
+		// CI (Linux runners have no system clipboard, which would make
+		// the real clipboard.WriteAll fail and leave viewerCopied false).
+		fake := &fakeClipboard{}
+		restore := swapClipboard(fake)
+		defer restore()
+
+		st := mkState(20)
+		st.viewerCursor = 3
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'c', Text: "c"}), 10)
+		if !st.viewerCopied {
+			t.Errorf("c should set viewerCopied")
+		}
+		if fake.text != "m3" {
+			t.Errorf("clipboard text = %q, want %q", fake.text, "m3")
+		}
+	})
+
+	t.Run("c on an empty message clears a stale copied confirmation", func(t *testing.T) {
+		fake := &fakeClipboard{}
+		restore := swapClipboard(fake)
+		defer restore()
+
+		st := mkState(20)
+		st.viewerMessages[5].text = "" // selected message has no text
+		st.viewerCursor = 5
+		st.viewerCopied = true // a prior copy left the confirmation on
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: 'c', Text: "c"}), 10)
+		if st.viewerCopied {
+			t.Errorf("copying an empty message must clear viewerCopied")
+		}
+		if fake.text != "" {
+			t.Errorf("nothing should be written to the clipboard; got %q", fake.text)
+		}
+	})
+
 	t.Run("esc closes", func(t *testing.T) {
 		st := mkState(20)
-		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape, Text: "esc"}))
+		handleViewerScrollKey(st, tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape, Text: "esc"}), 10)
 		if st.viewerOpen {
 			t.Errorf("esc should close viewer")
 		}
@@ -443,7 +662,7 @@ func TestHandleViewerScrollKey(t *testing.T) {
 func TestRenderTranscriptViewer_BorderAlignsToTerminalWidth(t *testing.T) {
 	t.Parallel()
 	for _, w := range []int{80, 120, 200} {
-		out := renderTranscriptViewer("/x", []string{"[user] hi"}, 0, w, 30)
+		out := renderTranscriptViewer("/x", []transcriptMessage{{role: "user", text: "hi"}}, 0, 0, w, 30, false)
 		rows := strings.Split(strings.TrimRight(out, "\n"), "\n")
 		want := w - 4
 		for i, r := range rows {
@@ -457,13 +676,13 @@ func TestRenderTranscriptViewer_BorderAlignsToTerminalWidth(t *testing.T) {
 
 // TestRenderTranscriptViewer_EmptyTranscriptShowsHint guards against
 // silent "the box is just borders" output when readSessionTranscript
-// returns zero lines (e.g. a brand-new session whose first event
+// returns zero messages (e.g. a brand-new session whose first event
 // hasn't been written yet). The viewer should make it obvious to
 // the user that the file is empty rather than just rendering a
 // hollow border.
 func TestRenderTranscriptViewer_EmptyTranscriptShowsHint(t *testing.T) {
 	t.Parallel()
-	got := stripANSIForTest(renderTranscriptViewer("/tmp/empty.jsonl", nil, 0, 120, 30))
+	got := stripANSIForTest(renderTranscriptViewer("/tmp/empty.jsonl", nil, 0, 0, 120, 30, false))
 	if !strings.Contains(got, "empty transcript") {
 		t.Errorf("empty transcript should surface a hint; got:\n%s", got)
 	}

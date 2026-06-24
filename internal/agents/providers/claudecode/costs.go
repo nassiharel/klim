@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,40 +41,148 @@ type claudeTranscriptLine struct {
 // without parsable transcripts contribute zero samples; missing dirs
 // are not an error.
 //
+// Scanning is incremental: a transcript whose mtime matches the value
+// in.Prior already recorded for its session is NOT re-read — only its
+// session id + mtime are reported in Seen so the caller keeps the
+// cached entry. This is the hot path: a heavy user can have thousands
+// of multi-MB transcripts, and re-parsing all of them on every Costs
+// scan is what made the tab slow.
+//
 // The transcript layout is best-effort: Claude Code's session
 // transcript format is undocumented, so the parser scans every .jsonl
 // file under each project directory and looks for the common usage
 // shape used by recent CLI builds.
-func (p *Provider) TokenSamples(ctx context.Context) ([]costs.TokenSample, error) {
+func (p *Provider) TokenSamples(ctx context.Context, in costs.ScanInput) (costs.ScanResult, error) {
 	projects := filepath.Join(p.claudeDir(), "projects")
 	entries, err := os.ReadDir(projects)
 	if err != nil {
 		// No transcripts yet — that's fine.
-		return nil, nil
+		return costs.ScanResult{}, nil
 	}
-	var out []costs.TokenSample
+	res := costs.ScanResult{Seen: map[string]time.Time{}}
 	for _, e := range entries {
+		if ctx.Err() != nil {
+			return res, ctx.Err()
+		}
 		if !e.IsDir() {
 			continue
 		}
 		dir := filepath.Join(projects, e.Name())
-		// Each session's transcript may be one .jsonl file or many;
-		// walk them all so we don't miss the right one.
-		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
+
+		// The session list (Sessions()) shows one row per PROJECT DIR
+		// with ID "claude:"+<dir>, and the cost cache keys by the same
+		// id. A dir can hold many transcript files, so we key the whole
+		// dir by its NEWEST .jsonl mtime: collect the files + newest
+		// mtime first, then skip or parse the dir as a unit. Keying
+		// per-file (by UUID) would split one project's cost across
+		// thousands of non-existent session ids and diverge from the
+		// skip key.
+		var files []string
+		var newest time.Time
+		walkErr := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if d.IsDir() {
 				return nil
 			}
 			if !strings.HasSuffix(strings.ToLower(d.Name()), ".jsonl") {
 				return nil
 			}
-			samples, err := parseClaudeTranscript(path, e.Name(), p.ID())
-			if err == nil {
-				out = append(out, samples...)
+			info, statErr := d.Info()
+			if statErr != nil {
+				return nil
+			}
+			files = append(files, path)
+			if mt := info.ModTime().Truncate(time.Second); newest.Before(mt) {
+				newest = mt
 			}
 			return nil
 		})
+		if walkErr != nil {
+			return res, walkErr
+		}
+		if len(files) == 0 {
+			continue
+		}
+
+		sessionKey := "claude:" + e.Name()
+		res.Seen[sessionKey] = newest
+
+		// Skip re-parsing the whole dir when its newest file is no newer
+		// than the cached scan. !newest.After(prior) means newest <=
+		// prior: equal mtimes (the common case) skip; a strictly-newer
+		// file forces a fresh parse of the dir.
+		if prior, ok := in.Prior[sessionKey]; ok && !newest.After(prior) {
+			continue
+		}
+
+		for _, path := range files {
+			if ctx.Err() != nil {
+				return res, ctx.Err()
+			}
+			samples, err := parseClaudeTranscript(path, e.Name(), p.ID())
+			if err == nil {
+				res.Samples = append(res.Samples, samples...)
+			}
+		}
 	}
-	return out, nil
+	return res, nil
+}
+
+// SessionTokens sums the input/output token usage for ONE session by
+// parsing only that session's transcripts — used by the session detail
+// page so it doesn't have to scan every project. The id is the session
+// list id ("claude:"+<dir>); a Claude session is a project directory,
+// so we parse every .jsonl under ~/.claude/projects/<dir>.
+//
+// The dir component is validated as a plain directory name (no path
+// separators / volume / parent refs) before joining, so a crafted id
+// can't escape the projects root.
+func (p *Provider) SessionTokens(ctx context.Context, id string) (costs.Totals, error) {
+	dir := strings.TrimPrefix(id, "claude:")
+	if dir == "" || dir == "." || dir == ".." ||
+		strings.ContainsAny(dir, `/\`) ||
+		filepath.VolumeName(dir) != "" ||
+		filepath.Base(dir) != dir ||
+		filepath.Clean(dir) != dir {
+		return costs.Totals{}, fmt.Errorf("session tokens: invalid session id %q", id)
+	}
+	projectDir := filepath.Join(p.claudeDir(), "projects", dir)
+	if _, err := os.Stat(projectDir); err != nil {
+		return costs.Totals{}, err
+	}
+	var total costs.Totals
+	walkErr := filepath.WalkDir(projectDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if !strings.HasSuffix(strings.ToLower(d.Name()), ".jsonl") {
+			return nil
+		}
+		samples, perr := parseClaudeTranscript(path, dir, p.ID())
+		if perr != nil {
+			return nil
+		}
+		for _, s := range samples {
+			total.Input += s.Input
+			total.Output += s.Output
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return costs.Totals{}, walkErr
+	}
+	return total, nil
 }
 
 func parseClaudeTranscript(path, projectName string, providerID agents.ProviderID) ([]costs.TokenSample, error) {
@@ -107,14 +216,14 @@ func claudeSampleFromLine(l claudeTranscriptLine, projectName string, providerID
 	if in == 0 && out == 0 {
 		return costs.TokenSample{}, false
 	}
-	sessionID := l.SessionID
-	if sessionID == "" {
-		sessionID = l.SessionIDAlt
-	}
-	if sessionID == "" {
-		// Fall back to project dir name so we still get a unique key.
-		sessionID = projectName
-	}
+	// Key cost samples by the project DIRECTORY name, not the in-file
+	// sessionId. The session list (Sessions()) shows one row per project
+	// dir with ID "claude:"+<dir>, and a single dir holds many
+	// transcript files; keying by the per-file UUID would (a) split one
+	// project's cost across thousands of ids that don't exist in the
+	// session list (breaking Enter-to-open) and (b) diverge from the
+	// dir-derived Seen/Prior skip key, breaking incremental skipping.
+	sessionID := projectName
 	ts, _ := time.Parse(time.RFC3339, l.Timestamp)
 	if ts.IsZero() {
 		ts = time.Now()

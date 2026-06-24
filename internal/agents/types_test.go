@@ -107,8 +107,11 @@ func (s *stubProvider) InstallPlugin(_ context.Context, _ PluginRef) error     {
 func (s *stubProvider) UninstallPlugin(_ context.Context, _ string) error      { return nil }
 func (s *stubProvider) EnablePlugin(_ context.Context, _ string, _ bool) error { return nil }
 func (s *stubProvider) UpdatePlugin(_ context.Context, _ string) error         { return nil }
-func (s *stubProvider) TokenSamples(_ context.Context) ([]costs.TokenSample, error) {
-	return nil, nil
+func (s *stubProvider) TokenSamples(_ context.Context, _ costs.ScanInput) (costs.ScanResult, error) {
+	return costs.ScanResult{}, nil
+}
+func (s *stubProvider) SessionTokens(_ context.Context, _ string) (costs.Totals, error) {
+	return costs.Totals{}, nil
 }
 func (s *stubProvider) SessionTexts(_ context.Context) ([]search.SessionText, error) {
 	return nil, nil
