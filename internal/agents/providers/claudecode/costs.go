@@ -141,8 +141,11 @@ func (p *Provider) SessionTokens(ctx context.Context, id string) (costs.Totals, 
 		return costs.Totals{}, err
 	}
 	var total costs.Totals
-	_ = filepath.WalkDir(projectDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+	walkErr := filepath.WalkDir(projectDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
 			return nil
 		}
 		if ctx.Err() != nil {
@@ -161,6 +164,9 @@ func (p *Provider) SessionTokens(ctx context.Context, id string) (costs.Totals, 
 		}
 		return nil
 	})
+	if walkErr != nil {
+		return costs.Totals{}, walkErr
+	}
 	return total, nil
 }
 

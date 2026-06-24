@@ -249,4 +249,26 @@ func TestSessionTokens_SumsOneProjectDir(t *testing.T) {
 	}
 }
 
+// TestSessionTokens_CancelledContextErrors pins that a cancelled
+// context surfaces as an error rather than silent partial totals — the
+// walk must not swallow ctx.Err().
+func TestSessionTokens_CancelledContextErrors(t *testing.T) {
+	home := t.TempDir()
+	projDir := filepath.Join(home, ".claude", "projects", "proj")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(projDir, "a.jsonl"),
+		[]byte(`{"type":"assistant","message":{"usage":{"input_tokens":1,"output_tokens":1}}}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+
+	p := &Provider{HomeOverride: home}
+	if _, err := p.SessionTokens(ctx, "claude:proj"); err == nil {
+		t.Errorf("expected an error from a cancelled context, got nil")
+	}
+}
+
 var _ = agents.ProviderClaudeCode
