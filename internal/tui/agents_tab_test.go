@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -109,7 +110,7 @@ func TestActionFailedFlash(t *testing.T) {
 	}
 }
 
-var errTestGeneric = fmt.Errorf("boom")
+var errTestGeneric = errors.New("boom")
 
 func TestNextSortMode_CyclesThroughList(t *testing.T) {
 	modes := []agentsSortMode{agentsSortDefault, agentsSortName, agentsSortModified}
