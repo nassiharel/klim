@@ -1,3 +1,176 @@
+version: 2
+
+project_name: klim
+
+before:
+  hooks:
+    - go mod download
+    - go generate ./...
+    - go mod tidy
+    # Generate shell completions and man pages so they can be packaged into
+    # archives and Linux packages (see cmd/gen-docs).
+    - go run ./cmd/gen-docs -o extras
+
+builds:
+  - id: klim
+    main: ./cmd/klim
+    binary: klim
+    env:
+      - CGO_ENABLED=0
+      - SOURCE_DATE_EPOCH={{ .CommitTimestamp }}
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/nassiharel/klim/internal/build.Version={{.Version}}
+      - -X github.com/nassiharel/klim/internal/build.Commit={{.ShortCommit}}
+      - -X github.com/nassiharel/klim/internal/build.Date={{.CommitDate}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+      - src: extras/completions/*
+        dst: completions
+      - src: extras/man/*
+        dst: man
+
+nfpms:
+  - id: packages
+    package_name: klim
+    vendor: nassiharel
+    homepage: https://github.com/nassiharel/klim
+    maintainer: nassiharel
+    description: >-
+      Ultimate dev tools manager
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: extras/completions/klim.bash
+        dst: /usr/share/bash-completion/completions/klim
+      - src: extras/completions/klim.zsh
+        dst: /usr/share/zsh/site-functions/_klim
+      - src: extras/completions/klim.fish
+        dst: /usr/share/fish/vendor_completions.d/klim.fish
+      - src: extras/man/*
+        dst: /usr/share/man/man1/
+
+homebrew_casks:
+  - repository:
+      owner: nassiharel
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/nassiharel/klim
+    description: >-
+      Ultimate dev tools manager
+    license: MIT
+
+# Scoop bucket: Windows users add the bucket once and `scoop install klim`
+# from then on. Manifest is written to nassiharel/scoop-bucket on every
+# release; the SCOOP_TAP_TOKEN secret needs Contents: read & write on
+# that bucket repo.
+scoops:
+  - repository:
+      owner: nassiharel
+      name: scoop-bucket
+      token: "{{ .Env.SCOOP_TAP_TOKEN }}"
+    directory: bucket
+    homepage: https://github.com/nassiharel/klim
+    description: >-
+      Ultimate dev tools manager
+    license: MIT
+
+# winget-pkgs PR: GoReleaser pushes a feature branch to the personal
+# fork (nassiharel/winget-pkgs) and opens a PR back to
+# microsoft/winget-pkgs:master. The WINGET_PAT secret needs Contents +
+# Pull requests: read & write on the fork.
+winget:
+  - name: klim
+    publisher: nassiharel
+    publisher_url: https://github.com/nassiharel
+    publisher_support_url: https://github.com/nassiharel/klim/issues
+    package_identifier: nassiharel.klim
+    homepage: https://github.com/nassiharel/klim
+    short_description: >-
+      Ultimate dev tools manager
+    description: |
+      klim is a productivity booster for dev tools: a cross-platform
+      layer for discovering, standardising, securing, and automating the tools every
+      project depends on.
+    license: MIT
+    license_url: https://github.com/nassiharel/klim/blob/main/LICENSE
+    copyright: Copyright (c) 2026 Nassi Harel
+    release_notes_url: https://github.com/nassiharel/klim/releases/tag/v{{ .Version }}
+    tags:
+      - cli
+      - developer-tools
+      - package-manager
+      - devops
+      - productivity
+    repository:
+      owner: nassiharel
+      name: winget-pkgs
+      branch: "klim-{{ .Version }}"
+      token: "{{ .Env.WINGET_PAT }}"
+      pull_request:
+        enabled: true
+        draft: false
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
+
+sboms:
+  - artifacts: archive
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ .Tag }}-devel"
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))?\!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\(.+\))?\!?:.+$'
+      order: 1
+    - title: Dependencies
+      regexp: '^.*?(deps|build\(deps\))(\(.+\))?\!?:.+$'
+      order: 2
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
 release:
   github:
     owner: nassiharel
