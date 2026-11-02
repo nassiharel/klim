@@ -154,7 +154,7 @@ changelog:
   use: github
   groups:
     - title: Features
-      regexp: '^.*?feat(\(.+\))?\!?:.+$'
+      regexp: '^.*?(feat|feature)(\(.+\))?\!?:.+$'
       order: 0
     - title: Bug Fixes
       regexp: '^.*?fix(\(.+\))?\!?:.+$'
