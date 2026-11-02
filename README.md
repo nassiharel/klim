@@ -10,9 +10,9 @@
 
 <p align="center">
   <a href="https://github.com/nassiharel/klim/releases/latest"><img src="https://img.shields.io/github/v/release/nassiharel/klim?style=flat-square&color=brightgreen&label=release" alt="Release"></a>
-  <a href="https://github.com/nassiharel/klim/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/klim/ci.yml?style=flat-square&label=build" alt="CI"></a>
+  <a href="https://github.com/nassiharel/klim/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/klim/ci.yml?style=flat-square&label=build" alt="Build"></a>
   <a href="https://github.com/nassiharel/klim/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/nassiharel/klim/codeql.yml?style=flat-square&label=CodeQL" alt="CodeQL"></a>
-<a href="LICENSE"><img src="https://img.shields.io/github/license/nassiharel/klim?style=flat-square" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ https://github.com/user-attachments/assets/54969cc1-47b7-47b7-af35-06d0649da466
 ## Install
 
 ```bash
-brew install nassiharel/tap/klim                       # macOS / Linux
+brew install --cask nassiharel/tap/klim            # macOS / Linux
 winget install nassiharel.klim                         # Windows
 scoop install klim                                     # Windows (Scoop)
 go install github.com/nassiharel/klim/cmd/klim@latest  # any Go 1.25+
@@ -54,7 +54,7 @@ sudo dpkg -i klim_<version>_linux_<arch>.deb    # Debian / Ubuntu
 sudo rpm -i  klim_<version>_linux_<arch>.rpm    # Fedora / CentOS / RHEL
 
 # Pin a version
-brew install nassiharel/tap/klim@0.1.2
+brew install --cask --version 0.1.2 nassiharel/tap/klim
 go install github.com/nassiharel/klim/cmd/klim@v0.1.2
 ```
 
@@ -104,7 +104,7 @@ klim doesn't replace your package manager — it's the cross-platform layer on t
 
 ## Learn more
 
-[Docs](https://nassiharel.github.io/klim-web/docs) · [Website](https://nassiharel.github.io/klim-web) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Releases](https://github.com/nassiharel/klim/releases)
+[Docs](https://nassiharel.github.io/klim-web/docs) · [Website](https://nassiharel.github.io/klim-web) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
 
 ---
 

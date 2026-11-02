@@ -154,7 +154,7 @@ changelog:
   use: github
   groups:
     - title: Features
-      regexp: '^.*?feat(\(.+\))?\!?:.+$'
+      regexp: '^.*?(feat|feature)(\(.+\))?\!?:.+$'
       order: 0
     - title: Bug Fixes
       regexp: '^.*?fix(\(.+\))?\!?:.+$'
@@ -191,7 +191,7 @@ release:
     irm https://raw.githubusercontent.com/nassiharel/klim/main/install.ps1 | iex
     ```
 
-    **Homebrew**: `brew install nassiharel/tap/klim`
+    **Homebrew (cask)**: `brew install --cask nassiharel/tap/klim`
     **winget**: `winget install nassiharel.klim`
     **Scoop**: `scoop bucket add nassiharel https://github.com/nassiharel/scoop-bucket`, then `scoop install klim`
     **Go**: `go install github.com/nassiharel/klim/cmd/klim@v{{ .Version }}`
